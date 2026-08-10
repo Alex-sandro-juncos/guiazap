@@ -141,3 +141,61 @@
   .btn-salvar { background: var(--verde-whats); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
   .btn-cancelar { background: transparent; color: #555; border: 1.5px solid #ccc; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
   .form-msg { font-size: 0.78rem; color: #a4402f; }
+
+/* Autenticação */
+.auth-box, .auth-box-logged {
+  background: var(--cinza-card);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.auth-box-logged {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.auth-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.auth-row input {
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.auth-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn-auth {
+  background: var(--verde-whats);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.btn-auth-outline {
+  background: transparent;
+  color: var(--verde-escuro);
+  border: 1.5px solid var(--verde-escuro);
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.auth-msg { font-size: 0.75rem; color: #a4402f; }
+
+/* Ações do dono no card */
+.owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.owner-actions .icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--verde-escuro);
+}
+.owner-actions .icon-btn:hover { background: var(--cinza-fundo); }

@@ -1,6 +1,7 @@
 let supabaseClient;
 let entries = [];
 let loaded = false;
+let currentUser = null;
 
 function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('SUA-URL') || SUPABASE_ANON_KEY.includes('SUA-CHAVE')){
@@ -11,6 +12,68 @@ function initSupabase(){
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   return true;
 }
+
+// ---------- AUTENTICAÇÃO ----------
+
+async function initAuth(){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  currentUser = session ? session.user : null;
+  updateAuthUI();
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    currentUser = session ? session.user : null;
+    updateAuthUI();
+    render();
+  });
+}
+
+function updateAuthUI(){
+  const loggedOutBox = document.getElementById('auth-logged-out');
+  const loggedInBox = document.getElementById('auth-logged-in');
+  const addBtn = document.getElementById('add-btn');
+
+  if(currentUser){
+    loggedOutBox.style.display = 'none';
+    loggedInBox.style.display = 'flex';
+    document.getElementById('auth-email-display').textContent = currentUser.email;
+    addBtn.style.display = 'block';
+  } else {
+    loggedOutBox.style.display = 'block';
+    loggedInBox.style.display = 'none';
+    addBtn.style.display = 'none';
+    closeForm();
+  }
+}
+
+async function signUp(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const msg = document.getElementById('auth-msg');
+  if(!email || !password){ msg.textContent = 'preencha e-mail e senha'; return; }
+
+  msg.textContent = 'criando conta...';
+  const { error } = await supabaseClient.auth.signUp({ email, password });
+  if(error){ msg.textContent = error.message; return; }
+  msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
+}
+
+async function signIn(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const msg = document.getElementById('auth-msg');
+  if(!email || !password){ msg.textContent = 'preencha e-mail e senha'; return; }
+
+  msg.textContent = 'entrando...';
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if(error){ msg.textContent = error.message; return; }
+  msg.textContent = '';
+}
+
+async function signOut(){
+  await supabaseClient.auth.signOut();
+}
+
+// ---------- DADOS ----------
 
 async function loadEntries(){
   const { data, error } = await supabaseClient.from('profissionais').select('*').order('name', { ascending: true });
@@ -51,6 +114,7 @@ function onCidadeChange(){
 }
 
 function openForm(entry){
+  if(!currentUser) return;
   const form = document.getElementById('cadastro-form');
   form.classList.add('open');
   document.getElementById('form-msg').textContent = '';
@@ -68,11 +132,13 @@ function openForm(entry){
 
 function closeForm(){
   document.getElementById('cadastro-form').classList.remove('open');
-  document.getElementById('add-btn').style.display = 'block';
+  if(currentUser) document.getElementById('add-btn').style.display = 'block';
 }
 
 async function saveEntry(e){
   e.preventDefault();
+  if(!currentUser){ alert('Você precisa entrar na sua conta para cadastrar.'); return false; }
+
   const id = document.getElementById('edit-id').value;
   const payload = {
     name: document.getElementById('f-name').value.trim(),
@@ -92,12 +158,25 @@ async function saveEntry(e){
   if(id){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
+    payload.user_id = currentUser.id;
     ({ error } = await supabaseClient.from('profissionais').insert(payload));
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
   closeForm();
   await loadEntries();
   return false;
+}
+
+function editEntry(id){
+  const en = entries.find(x => x.id === id);
+  if(en) openForm(en);
+}
+
+async function deleteEntry(id){
+  if(!confirm('Excluir este cadastro?')) return;
+  const { error } = await supabaseClient.from('profissionais').delete().eq('id', id);
+  if(error){ console.error(error); alert('Erro ao excluir.'); return; }
+  await loadEntries();
 }
 
 function starString(rating){
@@ -130,18 +209,26 @@ function render(){
     return;
   }
 
-  list.innerHTML = filtered.map(e => `
+  list.innerHTML = filtered.map(e => {
+    const isOwner = currentUser && e.user_id === currentUser.id;
+    return `
     <div class="card-profissional">
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
-        <h3>${escapeHtml(e.name)}</h3>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <h3>${escapeHtml(e.name)}</h3>
+          ${isOwner ? `<span class="owner-actions">
+            <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
+            <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
+          </span>` : ''}
+        </div>
         <div class="categoria">${escapeHtml(e.cat)}</div>
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
         <div class="stars">${starString(e.rating)} <span class="num">${e.rating.toFixed(1)}</span></div>
         <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
       </div>
     </div>
-  `).join('');
+  `; }).join('');
 }
 
 function escapeHtml(str){
@@ -151,5 +238,6 @@ function escapeHtml(str){
 }
 
 if(initSupabase()){
+  initAuth();
   loadEntries();
 }
