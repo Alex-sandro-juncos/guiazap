@@ -73,6 +73,18 @@ async function signOut(){
   await supabaseClient.auth.signOut();
 }
 
+async function forgotPassword(){
+  const email = document.getElementById('auth-email').value.trim();
+  const msg = document.getElementById('auth-msg');
+  if(!email){ msg.textContent = 'digite seu e-mail no campo acima primeiro'; return; }
+
+  msg.textContent = 'enviando e-mail...';
+  const redirectTo = window.location.origin + '/reset-password.html';
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+  if(error){ msg.textContent = error.message; return; }
+  msg.textContent = 'e-mail enviado! verifique sua caixa de entrada.';
+}
+
 // ---------- DADOS ----------
 
 async function loadEntries(){
