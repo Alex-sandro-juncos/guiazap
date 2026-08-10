@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuiaZap — Encontre profissionais</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">GuiaZap</div>
+  <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
+</header>
+
+<div class="wrap">
+  <div id="config-warning" class="config-warning" style="display:none;">
+    ⚠ Configuração pendente — preencha SUPABASE_URL e SUPABASE_ANON_KEY no arquivo config.js. Veja o README.md.
+  </div>
+
+  <div class="busca-container">
+    <div class="busca-row">
+      <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()">
+    </div>
+    <div class="filtros">
+      <select id="filter-estado" onchange="onEstadoChange()"><option value="">Estado</option></select>
+      <select id="filter-cidade" onchange="onCidadeChange()"><option value="">Cidade</option></select>
+      <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
+    </div>
+  </div>
+
+  <button class="btn-cadastro" id="add-btn" onclick="openForm()">+ Cadastrar minha empresa grátis</button>
+
+  <form id="cadastro-form" onsubmit="return saveEntry(event)">
+    <input type="hidden" id="edit-id">
+    <div class="field">
+      <label>Nome</label>
+      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Categoria</label>
+        <input id="f-cat" required placeholder="Ex: Dentista">
+      </div>
+      <div class="field">
+        <label>Nota (0 a 5)</label>
+        <input id="f-rating" type="number" min="0" max="5" step="0.1" value="5">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Estado</label>
+        <input id="f-estado" required placeholder="Ex: SP">
+      </div>
+      <div class="field">
+        <label>Cidade</label>
+        <input id="f-cidade" required placeholder="Ex: São Paulo">
+      </div>
+      <div class="field">
+        <label>Bairro</label>
+        <input id="f-bairro" required placeholder="Ex: Vila Mariana">
+      </div>
+    </div>
+    <div class="field">
+      <label>WhatsApp (com DDD, só números)</label>
+      <input id="f-whatsapp" required placeholder="Ex: 11912345678">
+    </div>
+    <div class="field">
+      <label>Link da foto (opcional)</label>
+      <input id="f-foto" placeholder="https://...">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Salvar</button>
+      <button type="button" class="btn-cancelar" onclick="closeForm()">Cancelar</button>
+      <span class="form-msg" id="form-msg"></span>
+    </div>
+  </form>
+
+  <div class="result-header" id="count"></div>
+  <div id="list"></div>
+  <div class="loading" id="loading">carregando profissionais...</div>
+</div>
+
+<script src="config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

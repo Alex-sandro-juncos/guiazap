@@ -1,0 +1,143 @@
+:root {
+    --verde-whats: #25D366;
+    --verde-escuro: #128C7E;
+    --cinza-fundo: #F0F2F5;
+    --cinza-card: #FFFFFF;
+    --amarelo: #FFB020;
+    --texto-sub: #6b7280;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+  body { background: var(--cinza-fundo); padding-bottom: 40px; }
+
+  header {
+    background: var(--verde-whats);
+    color: white;
+    padding: 28px 15px 22px;
+    text-align: center;
+  }
+  header .logo { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+  header p { font-size: 0.9rem; opacity: 0.95; margin-top: 4px; }
+
+  .wrap { max-width: 480px; margin: 0 auto; padding: 0 15px; }
+
+  .busca-container {
+    background: var(--cinza-card);
+    padding: 16px;
+    margin-top: -14px;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 2;
+  }
+  .busca-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .busca-container input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  .busca-container input:focus, .busca-container select:focus { outline: 2px solid var(--verde-whats); }
+  .filtros { display: flex; gap: 8px; }
+  .filtros select {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: white;
+  }
+
+  .btn-cadastro {
+    display: block;
+    width: 100%;
+    background: var(--verde-whats);
+    color: white;
+    text-align: center;
+    padding: 15px;
+    margin: 18px 0;
+    border-radius: 12px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+
+  .result-header {
+    font-size: 0.95rem;
+    color: #1c1c1c;
+    margin: 4px 0 12px;
+  }
+  .result-header b { color: var(--verde-escuro); }
+
+  .card-profissional {
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .card-profissional img.avatar {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #eee;
+    flex-shrink: 0;
+  }
+  .card-profissional .info { flex: 1; min-width: 0; }
+  .card-profissional .info h3 { font-size: 1.02rem; color: #1c1c1c; }
+  .card-profissional .info .categoria { color: var(--verde-escuro); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
+  .card-profissional .info .local { color: var(--texto-sub); font-size: 0.8rem; margin-top: 2px; }
+  .stars { color: var(--amarelo); font-size: 0.85rem; margin-top: 4px; }
+  .stars .num { color: #444; font-weight: 600; margin-left: 3px; }
+  .btn-zap {
+    display: inline-block;
+    background: var(--verde-whats);
+    color: white;
+    border: none;
+    padding: 9px 12px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-top: 8px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--texto-sub); }
+  .loading { text-align: center; padding: 30px; color: var(--texto-sub); font-size: 0.85rem; }
+
+  .config-warning {
+    background: #fff3cd;
+    border: 1.5px solid #d97706;
+    color: #7c4a03;
+    font-size: 0.78rem;
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin: 15px 0;
+    line-height: 1.5;
+  }
+
+  #cadastro-form {
+    display: none;
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 18px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  #cadastro-form.open { display: block; }
+  #cadastro-form .field { margin-bottom: 10px; }
+  #cadastro-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  #cadastro-form input, #cadastro-form select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  }
+  #cadastro-form .row2 { display: flex; gap: 8px; }
+  #cadastro-form .row2 .field { flex: 1; }
+  .form-actions { display: flex; gap: 10px; margin-top: 8px; align-items: center; }
+  .btn-salvar { background: var(--verde-whats); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+  .btn-cancelar { background: transparent; color: #555; border: 1.5px solid #ccc; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .form-msg { font-size: 0.78rem; color: #a4402f; }
