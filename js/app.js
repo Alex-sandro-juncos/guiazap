@@ -1,4 +1,4 @@
-let supabase;
+let supabaseClient;
 let entries = [];
 let loaded = false;
 
@@ -8,12 +8,12 @@ function initSupabase(){
     document.getElementById('loading').style.display = 'none';
     return false;
   }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   return true;
 }
 
 async function loadEntries(){
-  const { data, error } = await supabase.from('profissionais').select('*').order('name', { ascending: true });
+  const { data, error } = await supabaseClient.from('profissionais').select('*').order('name', { ascending: true });
   if(error){
     console.error(error);
     document.getElementById('loading').textContent = 'Erro ao carregar. Confira o config.js e as políticas do Supabase.';
@@ -90,9 +90,9 @@ async function saveEntry(e){
   msg.textContent = 'salvando...';
   let error;
   if(id){
-    ({ error } = await supabase.from('profissionais').update(payload).eq('id', id));
+    ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
-    ({ error } = await supabase.from('profissionais').insert(payload));
+    ({ error } = await supabaseClient.from('profissionais').insert(payload));
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
   closeForm();
