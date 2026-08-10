@@ -23,11 +23,11 @@
   .busca-container {
     background: var(--cinza-card);
     padding: 16px;
-    margin-top: -14px;
+    margin-top: 14px;
     border-radius: 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.12);
     position: relative;
-    z-index: 2;
+    z-index: 1;
   }
   .busca-row { display: flex; gap: 8px; margin-bottom: 12px; }
   .busca-container input {
@@ -147,8 +147,10 @@
   background: var(--cinza-card);
   border-radius: 12px;
   padding: 12px 14px;
-  margin-top: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin-top: -14px;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
 }
 .auth-box-logged {
   display: flex;
