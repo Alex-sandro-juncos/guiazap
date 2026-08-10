@@ -71,6 +71,9 @@ async function signIn(){
 
 async function signOut(){
   await supabaseClient.auth.signOut();
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-msg').textContent = '';
 }
 
 async function forgotPassword(){
