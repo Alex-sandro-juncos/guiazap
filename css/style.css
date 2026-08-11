@@ -209,3 +209,15 @@
   color: var(--verde-escuro);
   text-decoration: underline;
 }
+
+.card-pendente { opacity: 0.85; border: 1.5px dashed #d97706; }
+.badge-pendente {
+  background: #fff3cd;
+  color: #7c4a03;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  display: inline-block;
+}

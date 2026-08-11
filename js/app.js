@@ -128,8 +128,17 @@ function onCidadeChange(){
   render();
 }
 
+const LINK_ASSINATURA = "https://mpago.la/1Ddksty";
+
 function openForm(entry){
   if(!currentUser) return;
+  if(!entry){
+    const jaAssinou = confirm("Para cadastrar, é necessário assinar o plano de R$5/mês. Clique em OK para ir até o pagamento (você pode voltar aqui depois para preencher os dados).");
+    if(jaAssinou){
+      window.open(LINK_ASSINATURA, "_blank");
+    }
+    return;
+  }
   const form = document.getElementById('cadastro-form');
   form.classList.add('open');
   document.getElementById('form-msg').textContent = '';
@@ -174,6 +183,7 @@ async function saveEntry(e){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
     payload.user_id = currentUser.id;
+    payload.status_pagamento = 'pendente';
     ({ error } = await supabaseClient.from('profissionais').insert(payload));
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
@@ -207,6 +217,7 @@ function render(){
   const bairro = document.getElementById('filter-bairro').value;
 
   const filtered = entries
+    .filter(e => e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id))
     .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidade || e.cidade === cidade)
@@ -226,8 +237,10 @@ function render(){
 
   list.innerHTML = filtered.map(e => {
     const isOwner = currentUser && e.user_id === currentUser.id;
+    const pendente = e.status_pagamento !== 'ativo';
     return `
-    <div class="card-profissional">
+    <div class="card-profissional${pendente ? ' card-pendente' : ''}">
+      ${isOwner && pendente ? '<div class="badge-pendente">Pagamento pendente — só você vê este cadastro</div>' : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
