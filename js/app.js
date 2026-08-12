@@ -51,10 +51,16 @@ async function signUp(){
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
   const msg = document.getElementById('auth-msg');
+  const aceitou = document.getElementById('aceite-termos').checked;
+
   if(!email || !password){ msg.textContent = 'preencha e-mail e senha'; return; }
+  if(!aceitou){ msg.textContent = 'você precisa aceitar os Termos de Uso e a Política de Privacidade'; return; }
 
   msg.textContent = 'criando conta...';
-  const { error } = await supabaseClient.auth.signUp({ email, password });
+  const { error } = await supabaseClient.auth.signUp({
+    email, password,
+    options: { data: { termos_aceitos_em: new Date().toISOString() } }
+  });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
 }

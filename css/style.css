@@ -318,3 +318,18 @@
 }
 .review-actions { display: flex; align-items: center; gap: 10px; }
 .review-msg { font-size: 0.75rem; color: var(--verde-escuro); }
+
+.termos-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #555;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.termos-check input { margin-top: 2px; }
+.termos-check a { color: var(--verde-escuro); font-weight: 600; }
+
+.rodape-legal { text-align: center; font-size: 0.75rem; color: #8a8270; margin: 30px 0 10px; }
+.rodape-legal a { color: #8a8270; margin: 0 6px; }

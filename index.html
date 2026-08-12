@@ -32,6 +32,10 @@
       <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
       <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
     </div>
+    <label class="termos-check">
+      <input type="checkbox" id="aceite-termos">
+      Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a>
+    </label>
     <div class="auth-actions">
       <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
       <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
@@ -151,6 +155,9 @@
   <div class="result-header" id="count"></div>
   <div id="list"></div>
   <div class="loading" id="loading">carregando profissionais...</div>
+  <div class="rodape-legal">
+    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a>
+  </div>
 </div>
 
 <script src="config.js"></script>
