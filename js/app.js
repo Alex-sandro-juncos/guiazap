@@ -617,7 +617,7 @@ function render(){
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
-    .sort((a,b) => mediaDe(b.id).media - mediaDe(a.id).media);
+    .sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   document.getElementById('count').innerHTML = loaded
     ? (cadastroCompartilhadoId
