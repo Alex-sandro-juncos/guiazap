@@ -41,30 +41,79 @@
   .passos ol { padding-left: 20px; margin: 0; }
   .passos li { margin-bottom: 6px; }
   .voltar { display: inline-block; margin-top: 20px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .abas-sistema { display: flex; gap: 8px; margin-bottom: 18px; }
+  .aba-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1.5px solid var(--verde-escuro);
+    background: transparent;
+    color: var(--verde-escuro);
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .aba-btn.ativa { background: var(--verde-escuro); color: white; }
 </style>
+<script>
+  // Detecta iPhone/iPad automaticamente e já mostra a aba certa
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    document.addEventListener('DOMContentLoaded', () => mostrarAba('iphone'));
+  }
+</script>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Baixe o app para Android</p></header>
+<header><div class="logo">GuiaZap</div><p>Baixe o app</p></header>
 <div class="app-wrap">
   <div class="app-card">
     <img src="favicon-192.png" alt="GuiaZap">
     <h1>GuiaZap</h1>
-    <p class="desc">Encontre qualquer profissional e fale direto no WhatsApp. Instale no seu Android e acesse com um toque.</p>
-    <a class="btn-baixar" href="GuiaZap.apk" download>⬇ Baixar app (Android)</a>
-    <div class="versao">Versão 1.0 · ~1 MB</div>
+    <p class="desc">Encontre qualquer profissional e fale direto no WhatsApp. Instale no seu celular e acesse com um toque.</p>
 
-    <div class="passos">
-      <h3>Como instalar:</h3>
-      <ol>
-        <li>Toque em "Baixar app" acima</li>
-        <li>Abra o arquivo baixado (geralmente na pasta "Downloads")</li>
-        <li>Se aparecer um aviso sobre "fontes desconhecidas", toque em "Configurações" e permita a instalação para este arquivo</li>
-        <li>Volte e toque em "Instalar"</li>
-        <li>Pronto! O ícone do GuiaZap aparece na sua tela inicial</li>
-      </ol>
+    <div class="abas-sistema">
+      <button type="button" class="aba-btn ativa" id="aba-android" onclick="mostrarAba('android')">Android</button>
+      <button type="button" class="aba-btn" id="aba-iphone" onclick="mostrarAba('iphone')">iPhone</button>
+    </div>
+
+    <div id="conteudo-android">
+      <a class="btn-baixar" href="GuiaZap.apk" download>⬇ Baixar app (Android)</a>
+      <div class="versao">Versão 1.0 · ~1 MB</div>
+
+      <div class="passos">
+        <h3>Como instalar:</h3>
+        <ol>
+          <li>Toque em "Baixar app" acima</li>
+          <li>Abra o arquivo baixado (geralmente na pasta "Downloads")</li>
+          <li>Se aparecer um aviso sobre "fontes desconhecidas", toque em "Configurações" e permita a instalação para este arquivo</li>
+          <li>Volte e toque em "Instalar"</li>
+          <li>Pronto! O ícone do GuiaZap aparece na sua tela inicial</li>
+        </ol>
+        <p style="margin-top:10px;">Também dá pra instalar direto pelo Chrome: toque no menu (⋮) → "Instalar app".</p>
+      </div>
+    </div>
+
+    <div id="conteudo-iphone" style="display:none;">
+      <div class="passos" style="background:#e8f4fd; color:#0a4a6b;">
+        <h3>Como instalar no iPhone:</h3>
+        <ol>
+          <li>Abra <b>guiazap.shop</b> pelo navegador <b>Safari</b> (precisa ser o Safari, outros navegadores no iPhone não funcionam para isso)</li>
+          <li>Toque no botão de compartilhar (o quadrado com uma seta para cima), na parte de baixo da tela</li>
+          <li>Role para baixo e toque em <b>"Adicionar à Tela de Início"</b></li>
+          <li>Toque em <b>"Adicionar"</b> no canto superior direito</li>
+          <li>Pronto! O ícone do GuiaZap aparece na sua tela inicial, e abre como um app</li>
+        </ol>
+      </div>
     </div>
   </div>
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
+<script>
+function mostrarAba(sistema){
+  document.getElementById('aba-android').classList.toggle('ativa', sistema === 'android');
+  document.getElementById('aba-iphone').classList.toggle('ativa', sistema === 'iphone');
+  document.getElementById('conteudo-android').style.display = sistema === 'android' ? 'block' : 'none';
+  document.getElementById('conteudo-iphone').style.display = sistema === 'iphone' ? 'block' : 'none';
+}
+</script>
 </body>
-</html>
+</html>s
