@@ -82,6 +82,11 @@
       </div>
     </div>
     <div class="field">
+      <label>Outras categorias (opcional)</label>
+      <div id="categorias-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
+    </div>
+    <div class="field">
       <label>CEP</label>
       <input id="f-cep" placeholder="Ex: 01310-100" onblur="buscarCep()">
       <span class="cep-msg" id="cep-msg"></span>
@@ -100,11 +105,6 @@
         <label>Bairro</label>
         <input id="f-bairro" required placeholder="Ex: Vila Mariana">
       </div>
-    </div>
-    <div class="field">
-      <label>Outras categorias (opcional)</label>
-      <div id="categorias-extra-list"></div>
-      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
     </div>
     <div class="field">
       <label>WhatsApp (com DDD, só números)</label>
