@@ -179,23 +179,20 @@ function selecionarNota(id, nota){
 }
 
 async function enviarAvaliacao(id){
-  const nomeInput = document.getElementById('review-nome-' + id);
   const comentarioInput = document.getElementById('review-comentario-' + id);
   const msg = document.getElementById('review-msg-' + id);
 
-  const nome = nomeInput.value.trim();
   const nota = notaSelecionada[id];
   const comentario = comentarioInput.value.trim();
 
-  if(!nome || !nota){ msg.textContent = 'Preencha seu nome e escolha uma nota.'; return; }
+  if(!nota){ msg.textContent = 'Escolha uma nota.'; return; }
 
   msg.textContent = 'enviando...';
   const { error } = await supabaseClient.from('avaliacoes').insert({
-    profissional_id: id, nome, nota, comentario: comentario || null
+    profissional_id: id, nota, comentario: comentario || null
   });
   if(error){ console.error(error); msg.textContent = 'erro ao enviar avaliação'; return; }
 
-  nomeInput.value = '';
   comentarioInput.value = '';
   delete notaSelecionada[id];
   msg.textContent = 'avaliação enviada, obrigado!';
@@ -645,7 +642,6 @@ function render(){
           <div class="review-stars" id="review-stars-${e.id}">
             ${[1,2,3,4,5].map(n => `<span onclick="selecionarNota('${e.id}', ${n})">☆</span>`).join('')}
           </div>
-          <input type="text" id="review-nome-${e.id}" placeholder="Seu nome" class="review-input">
           <textarea id="review-comentario-${e.id}" placeholder="Comentário (opcional)" class="review-input" rows="2"></textarea>
           <div class="review-actions">
             <button type="button" class="btn-auth" onclick="enviarAvaliacao('${e.id}')">Enviar avaliação</button>
