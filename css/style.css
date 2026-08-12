@@ -283,3 +283,35 @@
   .filtros { flex-direction: column; }
   .filtros select, .filtros input { width: 100%; }
 }
+
+.review-count { font-size: 0.72rem; color: #8a8270; }
+.sem-avaliacao { font-size: 0.8rem; color: #8a8270; font-style: italic; }
+.link-avaliar {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0;
+}
+.review-box {
+  background: var(--cinza-fundo);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.review-stars { font-size: 1.4rem; color: var(--amarelo); cursor: pointer; margin-bottom: 6px; }
+.review-stars span { margin-right: 2px; }
+.review-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.review-actions { display: flex; align-items: center; gap: 10px; }
+.review-msg { font-size: 0.75rem; color: var(--verde-escuro); }

@@ -2,6 +2,7 @@ let supabaseClient;
 let entries = [];
 let loaded = false;
 let currentUser = null;
+let avaliacoesMap = {};
 
 function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('SUA-URL') || SUPABASE_ANON_KEY.includes('SUA-CHAVE')){
@@ -101,6 +102,63 @@ async function loadEntries(){
   loaded = true;
   document.getElementById('loading').style.display = 'none';
   populateEstados();
+  await loadAvaliacoes();
+  render();
+}
+
+async function loadAvaliacoes(){
+  const { data, error } = await supabaseClient.from('avaliacoes').select('profissional_id, nota');
+  if(error){ console.error(error); return; }
+
+  avaliacoesMap = {};
+  data.forEach(a => {
+    if(!avaliacoesMap[a.profissional_id]) avaliacoesMap[a.profissional_id] = { soma: 0, count: 0 };
+    avaliacoesMap[a.profissional_id].soma += a.nota;
+    avaliacoesMap[a.profissional_id].count += 1;
+  });
+}
+
+function mediaDe(id){
+  const dados = avaliacoesMap[id];
+  if(!dados || dados.count === 0) return { media: 0, count: 0 };
+  return { media: dados.soma / dados.count, count: dados.count };
+}
+
+function abrirAvaliacao(id){
+  const box = document.getElementById('review-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+let notaSelecionada = {};
+
+function selecionarNota(id, nota){
+  notaSelecionada[id] = nota;
+  const stars = document.querySelectorAll('#review-stars-' + id + ' span');
+  stars.forEach((s, i) => { s.textContent = (i < nota) ? '★' : '☆'; });
+}
+
+async function enviarAvaliacao(id){
+  const nomeInput = document.getElementById('review-nome-' + id);
+  const comentarioInput = document.getElementById('review-comentario-' + id);
+  const msg = document.getElementById('review-msg-' + id);
+
+  const nome = nomeInput.value.trim();
+  const nota = notaSelecionada[id];
+  const comentario = comentarioInput.value.trim();
+
+  if(!nome || !nota){ msg.textContent = 'Preencha seu nome e escolha uma nota.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClient.from('avaliacoes').insert({
+    profissional_id: id, nome, nota, comentario: comentario || null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar avaliação'; return; }
+
+  nomeInput.value = '';
+  comentarioInput.value = '';
+  delete notaSelecionada[id];
+  msg.textContent = 'avaliação enviada, obrigado!';
+  await loadAvaliacoes();
   render();
 }
 
@@ -197,7 +255,6 @@ function openForm(entry){
   document.getElementById('f-name').value = entry ? entry.name : '';
   document.getElementById('f-documento').value = entry ? (entry.documento || '') : '';
   document.getElementById('f-cat').value = entry ? entry.cat : '';
-  document.getElementById('f-rating').value = entry ? entry.rating : 5;
   document.getElementById('f-estado').value = entry ? entry.estado : '';
   if(entry && entry.estado) buscarCidadesIBGE(entry.estado, document.getElementById('cidades-cadastro-list'));
   document.getElementById('f-cidade').value = entry ? entry.cidade : '';
@@ -348,7 +405,6 @@ async function saveEntry(e){
     name: document.getElementById('f-name').value.trim(),
     documento: document.getElementById('f-documento').value.replace(/\D/g,''),
     cat: document.getElementById('f-cat').value.trim(),
-    rating: parseFloat(document.getElementById('f-rating').value) || 0,
     estado: document.getElementById('f-estado').value.trim().toUpperCase(),
     cidade: document.getElementById('f-cidade').value.trim(),
     bairro: document.getElementById('f-bairro').value.trim(),
@@ -438,7 +494,7 @@ function render(){
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
-    .sort((a,b) => b.rating - a.rating);
+    .sort((a,b) => mediaDe(b.id).media - mediaDe(a.id).media);
 
   document.getElementById('count').innerHTML = loaded ? `Profissionais próximos a você · <b>${filtered.length} resultados</b>` : '';
 
@@ -454,6 +510,7 @@ function render(){
   list.innerHTML = filtered.map(e => {
     const isOwner = currentUser && e.user_id === currentUser.id;
     const pendente = e.status_pagamento !== 'ativo';
+    const { media, count } = mediaDe(e.id);
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
       ${isOwner && pendente ? `<div class="badge-pendente">Pagamento pendente — só você vê este cadastro
@@ -470,7 +527,21 @@ function render(){
         </div>
         <div class="categoria">${escapeHtml(e.cat)}${e.categorias_extra ? ' · ' + e.categorias_extra.split('\n').map(c=>escapeHtml(c.trim())).filter(Boolean).join(', ') : ''}</div>
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
-        <div class="stars">${starString(e.rating)} <span class="num">${e.rating.toFixed(1)}</span></div>
+        <div class="stars">
+          ${count > 0 ? `${starString(media)} <span class="num">${media.toFixed(1)}</span> <span class="review-count">(${count} avaliação${count > 1 ? 'ões' : ''})</span>` : '<span class="sem-avaliacao">Ainda sem avaliações</span>'}
+          <button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>
+        </div>
+        <div class="review-box" id="review-box-${e.id}" style="display:none;">
+          <div class="review-stars" id="review-stars-${e.id}">
+            ${[1,2,3,4,5].map(n => `<span onclick="selecionarNota('${e.id}', ${n})">☆</span>`).join('')}
+          </div>
+          <input type="text" id="review-nome-${e.id}" placeholder="Seu nome" class="review-input">
+          <textarea id="review-comentario-${e.id}" placeholder="Comentário (opcional)" class="review-input" rows="2"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarAvaliacao('${e.id}')">Enviar avaliação</button>
+            <span class="review-msg" id="review-msg-${e.id}"></span>
+          </div>
+        </div>
         <div class="contatos-row">
           <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
           ${renderContatosExtra(e.contatos_extra)}
