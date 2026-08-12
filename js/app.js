@@ -137,6 +137,7 @@ function openForm(entry){
   document.getElementById('form-msg').textContent = '';
   document.getElementById('edit-id').value = entry ? entry.id : '';
   document.getElementById('f-name').value = entry ? entry.name : '';
+  document.getElementById('f-documento').value = entry ? (entry.documento || '') : '';
   document.getElementById('f-cat').value = entry ? entry.cat : '';
   document.getElementById('f-rating').value = entry ? entry.rating : 5;
   document.getElementById('f-estado').value = entry ? entry.estado : '';
@@ -144,7 +145,35 @@ function openForm(entry){
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
+  document.getElementById('f-contatos-extra').value = entry ? (entry.contatos_extra || '') : '';
   document.getElementById('add-btn').style.display = 'none';
+}
+
+async function buscarCep(){
+  const cepInput = document.getElementById('f-cep');
+  const msg = document.getElementById('cep-msg');
+  const cep = cepInput.value.replace(/\D/g,'');
+
+  if(cep.length !== 8){
+    msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : '';
+    return;
+  }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro){
+      msg.textContent = 'CEP não encontrado';
+      return;
+    }
+    document.getElementById('f-estado').value = data.uf || '';
+    document.getElementById('f-cidade').value = data.localidade || '';
+    document.getElementById('f-bairro').value = data.bairro || '';
+    msg.textContent = 'endereço preenchido';
+  } catch(e){
+    msg.textContent = 'erro ao buscar CEP, preencha manualmente';
+  }
 }
 
 function closeForm(){
@@ -159,15 +188,17 @@ async function saveEntry(e){
   const id = document.getElementById('edit-id').value;
   const payload = {
     name: document.getElementById('f-name').value.trim(),
+    documento: document.getElementById('f-documento').value.replace(/\D/g,''),
     cat: document.getElementById('f-cat').value.trim(),
     rating: parseFloat(document.getElementById('f-rating').value) || 0,
     estado: document.getElementById('f-estado').value.trim().toUpperCase(),
     cidade: document.getElementById('f-cidade').value.trim(),
     bairro: document.getElementById('f-bairro').value.trim(),
     whatsapp: document.getElementById('f-whatsapp').value.replace(/\D/g,''),
-    foto: document.getElementById('f-foto').value.trim()
+    foto: document.getElementById('f-foto').value.trim(),
+    contatos_extra: document.getElementById('f-contatos-extra').value.trim()
   };
-  if(!payload.name || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
+  if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
 
   const msg = document.getElementById('form-msg');
   msg.textContent = 'salvando...';
@@ -175,6 +206,19 @@ async function saveEntry(e){
   if(id){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
+    const { data: existentes } = await supabaseClient
+      .from('profissionais')
+      .select('id, name')
+      .eq('documento', payload.documento)
+      .eq('estado', payload.estado)
+      .eq('cidade', payload.cidade)
+      .eq('bairro', payload.bairro);
+
+    if(existentes && existentes.length > 0){
+      msg.textContent = 'Ja existe um cadastro com esse CNPJ/CPF neste endereco (' + existentes[0].name + '). Edite esse cadastro e adicione o contato em "Outros contatos", em vez de criar um novo.';
+      return false;
+    }
+
     payload.user_id = currentUser.id;
     payload.user_email = currentUser.email;
     payload.status_pagamento = 'pendente';
@@ -201,6 +245,18 @@ async function deleteEntry(id){
   const { error } = await supabaseClient.from('profissionais').delete().eq('id', id);
   if(error){ console.error(error); alert('Erro ao excluir.'); return; }
   await loadEntries();
+}
+
+function renderContatosExtra(texto){
+  if(!texto) return '';
+  const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+  return linhas.map(linha => {
+    const [label, numeroRaw] = linha.split(':');
+    if(!numeroRaw) return '';
+    const numero = numeroRaw.replace(/\D/g,'');
+    if(!numero) return '';
+    return `<a class="btn-zap btn-zap-extra" href="https://wa.me/55${numero}" target="_blank">${escapeHtml(label.trim())}</a>`;
+  }).join('');
 }
 
 function starString(rating){
@@ -254,7 +310,10 @@ function render(){
         <div class="categoria">${escapeHtml(e.cat)}</div>
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
         <div class="stars">${starString(e.rating)} <span class="num">${e.rating.toFixed(1)}</span></div>
-        <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
+        <div class="contatos-row">
+          <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
+          ${renderContatosExtra(e.contatos_extra)}
+        </div>
       </div>
     </div>
   `; }).join('');

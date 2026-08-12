@@ -221,3 +221,16 @@
   margin-bottom: 6px;
   display: inline-block;
 }
+
+.link-pagar {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--verde-escuro);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.contatos-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.btn-zap-extra { background: var(--verde-escuro); font-size: 0.75rem; padding: 8px 11px; }
+
+.cep-msg { font-size: 0.75rem; color: var(--verde-escuro); margin-top: 4px; display: block; }
