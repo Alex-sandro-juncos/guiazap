@@ -28,6 +28,8 @@
     font-size: 0.9rem;
   }
   .contato-btn.email { background: var(--verde-escuro); }
+  .contato-btn.copiar { background: transparent; border: 1.5px solid var(--verde-escuro); color: var(--verde-escuro); margin-left: 8px; }
+  .copiar-msg { display: block; font-size: 0.78rem; color: var(--verde-escuro); margin-top: 8px; }
   .voltar { display: inline-block; margin-top: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
 </style>
 </head>
@@ -46,9 +48,18 @@
     <div class="rotulo">E-mail</div>
     <div class="valor">contato@guiazap.shop</div>
     <a class="contato-btn email" href="mailto:contato@guiazap.shop">Enviar e-mail</a>
+    <button class="contato-btn copiar" onclick="copiarEmail()">Copiar e-mail</button>
+    <span id="copiar-msg" class="copiar-msg"></span>
   </div>
 
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
+<script>
+function copiarEmail(){
+  navigator.clipboard.writeText('contato@guiazap.shop').then(() => {
+    document.getElementById('copiar-msg').textContent = 'e-mail copiado!';
+  });
+}
+</script>
 </body>
 </html>
