@@ -393,3 +393,16 @@
 }
 
 .ja-avaliou { font-size: 0.72rem; color: #8a8270; font-style: italic; margin-left: 6px; }
+
+.btn-baixar-app {
+  display: block;
+  text-align: center;
+  background: var(--verde-escuro);
+  color: white;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-decoration: none;
+  margin: 12px 0;
+}
