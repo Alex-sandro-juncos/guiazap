@@ -209,7 +209,35 @@ function openForm(entry){
   if(entry && entry.foto){ preview.src = entry.foto; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
   carregarContatosExtra(entry ? (entry.contatos_extra || '') : '');
+  carregarCategoriasExtra(entry ? (entry.categorias_extra || '') : '');
   document.getElementById('add-btn').style.display = 'none';
+}
+
+function adicionarLinhaCategoria(nome){
+  const container = document.getElementById('categorias-extra-list');
+  const linha = document.createElement('div');
+  linha.className = 'contato-extra-linha';
+  linha.innerHTML = `
+    <input type="text" class="cat-extra-nome" placeholder="Ex: Manicure" value="${nome ? escapeHtml(nome) : ''}">
+    <button type="button" class="ce-remover" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(linha);
+}
+
+function carregarCategoriasExtra(texto){
+  document.getElementById('categorias-extra-list').innerHTML = '';
+  if(!texto) return;
+  texto.split('\n').map(l => l.trim()).filter(Boolean).forEach(nome => adicionarLinhaCategoria(nome));
+}
+
+function coletarCategoriasExtra(){
+  const linhas = document.querySelectorAll('#categorias-extra-list .contato-extra-linha');
+  const partes = [];
+  linhas.forEach(linha => {
+    const nome = linha.querySelector('.cat-extra-nome').value.trim();
+    if(nome) partes.push(nome);
+  });
+  return partes.join('\n');
 }
 
 function adicionarLinhaContato(rotulo, numero){
@@ -326,7 +354,8 @@ async function saveEntry(e){
     bairro: document.getElementById('f-bairro').value.trim(),
     whatsapp: document.getElementById('f-whatsapp').value.replace(/\D/g,''),
     foto: document.getElementById('f-foto').value.trim(),
-    contatos_extra: coletarContatosExtra()
+    contatos_extra: coletarContatosExtra(),
+    categorias_extra: coletarCategoriasExtra()
   };
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
 
@@ -405,7 +434,7 @@ function render(){
   const cidadeBusca = cidade.toLowerCase();
   const filtered = entries
     .filter(e => e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id))
-    .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query))
+    .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query) || (e.categorias_extra || '').toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
@@ -439,7 +468,7 @@ function render(){
             <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
           </span>` : ''}
         </div>
-        <div class="categoria">${escapeHtml(e.cat)}</div>
+        <div class="categoria">${escapeHtml(e.cat)}${e.categorias_extra ? ' · ' + e.categorias_extra.split('\n').map(c=>escapeHtml(c.trim())).filter(Boolean).join(', ') : ''}</div>
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
         <div class="stars">${starString(e.rating)} <span class="num">${e.rating.toFixed(1)}</span></div>
         <div class="contatos-row">

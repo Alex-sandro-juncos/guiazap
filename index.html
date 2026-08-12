@@ -73,7 +73,7 @@
     </div>
     <div class="row2">
       <div class="field">
-        <label>Categoria</label>
+        <label>Categoria principal</label>
         <input id="f-cat" required placeholder="Ex: Dentista">
       </div>
       <div class="field">
@@ -100,6 +100,11 @@
         <label>Bairro</label>
         <input id="f-bairro" required placeholder="Ex: Vila Mariana">
       </div>
+    </div>
+    <div class="field">
+      <label>Outras categorias (opcional)</label>
+      <div id="categorias-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
     </div>
     <div class="field">
       <label>WhatsApp (com DDD, só números)</label>
