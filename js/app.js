@@ -505,6 +505,31 @@ async function cancelarAssinatura(){
   }
 }
 
+function abrirDenuncia(id){
+  const box = document.getElementById('denuncia-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarDenuncia(id){
+  const motivo = document.getElementById('denuncia-motivo-' + id).value;
+  const descricao = document.getElementById('denuncia-descricao-' + id).value.trim();
+  const msg = document.getElementById('denuncia-msg-' + id);
+
+  if(!motivo){ msg.textContent = 'Selecione um motivo.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClient.from('denuncias').insert({
+    profissional_id: id,
+    motivo,
+    descricao: descricao || null,
+    denunciante_email: currentUser ? currentUser.email : null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar denúncia'; return; }
+
+  msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o GuiaZap seguro.';
+  setTimeout(() => { document.getElementById('denuncia-box-' + id).style.display = 'none'; }, 2500);
+}
+
 function editEntry(id){
   const en = entries.find(x => x.id === id);
   if(en) openForm(en);
@@ -586,6 +611,22 @@ function render(){
           <button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>
         </div>
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
+        ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
+        <div class="denuncia-box" id="denuncia-box-${e.id}" style="display:none;">
+          <select id="denuncia-motivo-${e.id}" class="review-input">
+            <option value="">Selecione o motivo</option>
+            <option value="Golpe ou fraude suspeita">Golpe ou fraude suspeita</option>
+            <option value="Cadastro falso">Cadastro falso</option>
+            <option value="Conteudo ofensivo">Conteúdo ofensivo</option>
+            <option value="Categoria incorreta">Categoria incorreta</option>
+            <option value="Outro">Outro</option>
+          </select>
+          <textarea id="denuncia-descricao-${e.id}" class="review-input" rows="2" placeholder="Descreva o problema (opcional)"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarDenuncia('${e.id}')">Enviar denúncia</button>
+            <span class="review-msg" id="denuncia-msg-${e.id}"></span>
+          </div>
+        </div>
         <div class="review-box" id="review-box-${e.id}" style="display:none;">
           <div class="review-stars" id="review-stars-${e.id}">
             ${[1,2,3,4,5].map(n => `<span onclick="selecionarNota('${e.id}', ${n})">☆</span>`).join('')}

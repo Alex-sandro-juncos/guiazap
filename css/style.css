@@ -345,3 +345,21 @@
   margin-top: 4px;
   display: block;
 }
+
+.link-denunciar {
+  background: none;
+  border: none;
+  color: #8a8270;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+.denuncia-box {
+  background: #fff3cd;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
