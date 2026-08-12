@@ -104,28 +104,86 @@ async function loadEntries(){
   render();
 }
 
-function populateEstados(){
-  const sel = document.getElementById('filter-estado');
-  const estados = [...new Set(entries.map(e => e.estado))].sort();
-  sel.innerHTML = '<option value="">Estado</option>' + estados.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-  onEstadoChange();
+const UFS = [
+  {sigla:'AC',nome:'Acre'},{sigla:'AL',nome:'Alagoas'},{sigla:'AP',nome:'Amapá'},{sigla:'AM',nome:'Amazonas'},
+  {sigla:'BA',nome:'Bahia'},{sigla:'CE',nome:'Ceará'},{sigla:'DF',nome:'Distrito Federal'},{sigla:'ES',nome:'Espírito Santo'},
+  {sigla:'GO',nome:'Goiás'},{sigla:'MA',nome:'Maranhão'},{sigla:'MT',nome:'Mato Grosso'},{sigla:'MS',nome:'Mato Grosso do Sul'},
+  {sigla:'MG',nome:'Minas Gerais'},{sigla:'PA',nome:'Pará'},{sigla:'PB',nome:'Paraíba'},{sigla:'PR',nome:'Paraná'},
+  {sigla:'PE',nome:'Pernambuco'},{sigla:'PI',nome:'Piauí'},{sigla:'RJ',nome:'Rio de Janeiro'},{sigla:'RN',nome:'Rio Grande do Norte'},
+  {sigla:'RS',nome:'Rio Grande do Sul'},{sigla:'RO',nome:'Rondônia'},{sigla:'RR',nome:'Roraima'},{sigla:'SC',nome:'Santa Catarina'},
+  {sigla:'SP',nome:'São Paulo'},{sigla:'SE',nome:'Sergipe'},{sigla:'TO',nome:'Tocantins'}
+];
+
+function preencherSelectUF(selectEl){
+  selectEl.innerHTML = '<option value="">Selecione</option>' +
+    UFS.map(u => `<option value="${u.sigla}">${u.sigla} - ${u.nome}</option>`).join('');
 }
 
-function onEstadoChange(){
-  const estado = document.getElementById('filter-estado').value;
-  const cidadeSel = document.getElementById('filter-cidade');
-  const cidades = [...new Set(entries.filter(e => !estado || e.estado === estado).map(e => e.cidade))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  cidadeSel.innerHTML = '<option value="">Cidade</option>' + cidades.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  onCidadeChange();
+async function buscarCidadesIBGE(uf, datalistEl){
+  datalistEl.innerHTML = '';
+  if(!uf) return;
+  try{
+    const resp = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+    const cidades = await resp.json();
+    datalistEl.innerHTML = cidades.map(c => `<option value="${escapeHtml(c.nome)}">`).join('');
+  } catch(e){
+    console.error('erro ao buscar cidades do IBGE', e);
+  }
 }
 
-function onCidadeChange(){
+function onEstadoCadastroChange(){
+  const uf = document.getElementById('f-estado').value;
+  buscarCidadesIBGE(uf, document.getElementById('cidades-cadastro-list'));
+}
+
+function onEstadoFiltroChange(){
+  const uf = document.getElementById('filter-estado').value;
+  buscarCidadesIBGE(uf, document.getElementById('cidades-filtro-list'));
+  document.getElementById('filter-cidade').value = '';
+  onCidadeFiltroChange();
+}
+
+function onCidadeFiltroChange(){
+  populateBairrosFiltro();
+  render();
+}
+
+function populateBairrosFiltro(){
   const estado = document.getElementById('filter-estado').value;
   const cidade = document.getElementById('filter-cidade').value;
   const bairroSel = document.getElementById('filter-bairro');
   const bairros = [...new Set(entries.filter(e => (!estado || e.estado === estado) && (!cidade || e.cidade === cidade)).map(e => e.bairro))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   bairroSel.innerHTML = '<option value="">Bairro</option>' + bairros.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
-  render();
+}
+
+async function buscarCepFiltro(){
+  const cepInput = document.getElementById('filter-cep');
+  const msg = document.getElementById('filter-cep-msg');
+  const cep = cepInput.value.replace(/\D/g,'');
+  if(cep.length !== 8){ msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : ''; return; }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
+
+    document.getElementById('filter-estado').value = data.uf || '';
+    await buscarCidadesIBGE(data.uf, document.getElementById('cidades-filtro-list'));
+    document.getElementById('filter-cidade').value = data.localidade || '';
+    populateBairrosFiltro();
+    document.getElementById('filter-bairro').value = data.bairro || '';
+    msg.textContent = 'filtro aplicado';
+    render();
+  } catch(e){
+    msg.textContent = 'erro ao buscar CEP';
+  }
+}
+
+function populateEstados(){
+  preencherSelectUF(document.getElementById('filter-estado'));
+  preencherSelectUF(document.getElementById('f-estado'));
+  populateBairrosFiltro();
 }
 
 const LINK_ASSINATURA = "https://mpago.la/1Ddksty";
@@ -141,6 +199,7 @@ function openForm(entry){
   document.getElementById('f-cat').value = entry ? entry.cat : '';
   document.getElementById('f-rating').value = entry ? entry.rating : 5;
   document.getElementById('f-estado').value = entry ? entry.estado : '';
+  if(entry && entry.estado) buscarCidadesIBGE(entry.estado, document.getElementById('cidades-cadastro-list'));
   document.getElementById('f-cidade').value = entry ? entry.cidade : '';
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
@@ -298,6 +357,7 @@ async function saveEntry(e){
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
   closeForm();
   await loadEntries();
+  populateBairrosFiltro();
 
   if(!id){
     alert("Cadastro salvo! Ele fica visível só para você até o pagamento ser confirmado. Você será levado até a página de pagamento agora.");

@@ -47,9 +47,14 @@
     <div class="busca-row">
       <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()">
     </div>
+    <div class="field" style="margin-bottom:10px;">
+      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" onblur="buscarCepFiltro()">
+      <span class="cep-msg" id="filter-cep-msg"></span>
+    </div>
     <div class="filtros">
-      <select id="filter-estado" onchange="onEstadoChange()"><option value="">Estado</option></select>
-      <select id="filter-cidade" onchange="onCidadeChange()"><option value="">Cidade</option></select>
+      <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
+      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" oninput="render()" onchange="onCidadeFiltroChange()">
+      <datalist id="cidades-filtro-list"></datalist>
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
   </div>
@@ -84,11 +89,12 @@
     <div class="row2">
       <div class="field">
         <label>Estado</label>
-        <input id="f-estado" required placeholder="Ex: SP">
+        <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
       </div>
       <div class="field">
         <label>Cidade</label>
-        <input id="f-cidade" required placeholder="Ex: São Paulo">
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione">
+        <datalist id="cidades-cadastro-list"></datalist>
       </div>
       <div class="field">
         <label>Bairro</label>
