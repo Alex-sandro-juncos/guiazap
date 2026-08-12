@@ -182,9 +182,15 @@ function selecionarNota(id, nota){
   stars.forEach((s, i) => { s.textContent = (i < nota) ? '★' : '☆'; });
 }
 
+function jaAvaliou(id){
+  return localStorage.getItem('avaliado_' + id) === '1';
+}
+
 async function enviarAvaliacao(id){
   const comentarioInput = document.getElementById('review-comentario-' + id);
   const msg = document.getElementById('review-msg-' + id);
+
+  if(jaAvaliou(id)){ msg.textContent = 'Você já avaliou este cadastro neste dispositivo.'; return; }
 
   const nota = notaSelecionada[id];
   const comentario = comentarioInput.value.trim();
@@ -197,6 +203,7 @@ async function enviarAvaliacao(id){
   });
   if(error){ console.error(error); msg.textContent = 'erro ao enviar avaliação'; return; }
 
+  localStorage.setItem('avaliado_' + id, '1');
   comentarioInput.value = '';
   delete notaSelecionada[id];
   msg.textContent = 'avaliação enviada, obrigado!';
@@ -651,7 +658,7 @@ function render(){
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
         <div class="stars">
           ${count > 0 ? `${starString(media)} <span class="num">${media.toFixed(1)}</span> <span class="review-count">(${count} avaliação${count > 1 ? 'ões' : ''})</span>` : '<span class="sem-avaliacao">Ainda sem avaliações</span>'}
-          <button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>
+          ${jaAvaliou(e.id) ? '<span class="ja-avaliou">Você já avaliou</span>' : `<button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>`}
         </div>
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
         <div class="card-acoes-extra">
