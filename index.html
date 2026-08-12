@@ -106,7 +106,16 @@
     </div>
     <div class="field">
       <label>Foto (opcional)</label>
-      <input type="file" id="f-foto-arquivo" accept="image/*" onchange="enviarFoto(event)">
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+      </div>
       <span class="foto-msg" id="foto-msg"></span>
       <img id="foto-preview" class="foto-preview" style="display:none;">
       <label class="foto-ou">ou cole um link de foto já existente</label>

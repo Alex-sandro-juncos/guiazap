@@ -262,3 +262,18 @@
 .foto-preview { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin-top: 8px; border: 2px solid var(--verde-whats); }
 
 .foto-ou { display: block; font-size: 0.75rem; color: #8a8270; margin: 8px 0 4px; text-transform: none; letter-spacing: normal; font-family: 'Segoe UI', sans-serif; }
+
+.foto-botoes { display: flex; gap: 8px; }
+.btn-foto-opcao {
+  flex: 1;
+  text-align: center;
+  background: transparent;
+  border: 1.5px dashed var(--verde-escuro);
+  color: var(--verde-escuro);
+  padding: 10px 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-foto-opcao:hover { background: var(--cinza-fundo); }
