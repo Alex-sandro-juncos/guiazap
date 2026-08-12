@@ -111,6 +111,7 @@ async function trocarSenha(){
   msg.textContent = 'senha alterada com sucesso!';
   document.getElementById('nova-senha').value = '';
   document.getElementById('confirmar-nova-senha').value = '';
+  setTimeout(() => { toggleTrocarSenha(); }, 1500);
 }
 
 // ---------- DADOS ----------
