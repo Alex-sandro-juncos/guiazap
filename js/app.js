@@ -3,6 +3,7 @@ let entries = [];
 let loaded = false;
 let currentUser = null;
 let avaliacoesMap = {};
+let mostrandoApenasMeus = false;
 
 function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('SUA-URL') || SUPABASE_ANON_KEY.includes('SUA-CHAVE')){
@@ -43,6 +44,7 @@ function updateAuthUI(){
     loggedInBox.style.display = 'none';
     addBtn.style.display = 'none';
     document.getElementById('trocar-senha-box').style.display = 'none';
+    mostrandoApenasMeus = false;
     closeForm();
   }
 }
@@ -94,6 +96,14 @@ async function forgotPassword(){
   const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = 'e-mail enviado! verifique sua caixa de entrada.';
+}
+
+function toggleMeusCadastros(){
+  mostrandoApenasMeus = !mostrandoApenasMeus;
+  const btn = document.getElementById('meus-cadastros-btn');
+  btn.textContent = mostrandoApenasMeus ? 'Ver todos' : 'Meus cadastros';
+  btn.classList.toggle('ativo', mostrandoApenasMeus);
+  render();
 }
 
 function toggleTrocarSenha(){
@@ -568,14 +578,18 @@ function render(){
 
   const cidadeBusca = cidade.toLowerCase();
   const filtered = entries
-    .filter(e => e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id))
+    .filter(e => mostrandoApenasMeus ? (currentUser && e.user_id === currentUser.id) : (e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id)))
     .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query) || (e.categorias_extra || '').toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
     .sort((a,b) => mediaDe(b.id).media - mediaDe(a.id).media);
 
-  document.getElementById('count').innerHTML = loaded ? `Profissionais próximos a você · <b>${filtered.length} resultados</b>` : '';
+  document.getElementById('count').innerHTML = loaded
+    ? (mostrandoApenasMeus
+        ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
+        : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
+    : '';
 
   if(!loaded){ list.innerHTML = ''; return; }
 
