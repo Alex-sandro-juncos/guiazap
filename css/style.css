@@ -333,3 +333,15 @@
 
 .rodape-legal { text-align: center; font-size: 0.75rem; color: #8a8270; margin: 30px 0 10px; }
 .rodape-legal a { color: #8a8270; margin: 0 6px; }
+
+.link-cancelar {
+  background: none;
+  border: none;
+  color: var(--danger, #a4402f);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}

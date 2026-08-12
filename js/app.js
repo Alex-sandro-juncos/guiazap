@@ -482,6 +482,29 @@ async function saveEntry(e){
   return false;
 }
 
+async function cancelarAssinatura(){
+  if(!confirm('Tem certeza que deseja cancelar sua assinatura? Seu cadastro deixará de aparecer na busca até você assinar novamente.')) return;
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session){ alert('Sessão expirada, faça login novamente.'); return; }
+
+  try{
+    const resp = await fetch('/.netlify/functions/cancelar-assinatura', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      alert('Erro ao cancelar: ' + (data.error || 'tente novamente'));
+      return;
+    }
+    alert('Assinatura cancelada. Seu cadastro ficou pendente até uma nova assinatura.');
+    await loadEntries();
+  } catch(e){
+    alert('Erro ao cancelar assinatura. Tente novamente.');
+  }
+}
+
 function editEntry(id){
   const en = entries.find(x => x.id === id);
   if(en) openForm(en);
@@ -562,6 +585,7 @@ function render(){
           ${count > 0 ? `${starString(media)} <span class="num">${media.toFixed(1)}</span> <span class="review-count">(${count} avaliação${count > 1 ? 'ões' : ''})</span>` : '<span class="sem-avaliacao">Ainda sem avaliações</span>'}
           <button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>
         </div>
+        ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
         <div class="review-box" id="review-box-${e.id}" style="display:none;">
           <div class="review-stars" id="review-stars-${e.id}">
             ${[1,2,3,4,5].map(n => `<span onclick="selecionarNota('${e.id}', ${n})">☆</span>`).join('')}
