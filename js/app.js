@@ -239,7 +239,9 @@ function render(){
     const pendente = e.status_pagamento !== 'ativo';
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
-      ${isOwner && pendente ? '<div class="badge-pendente">Pagamento pendente — só você vê este cadastro</div>' : ''}
+      ${isOwner && pendente ? `<div class="badge-pendente">Pagamento pendente — só você vê este cadastro
+        <a href="${LINK_ASSINATURA}" class="link-pagar">Pagar agora</a>
+      </div>` : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
