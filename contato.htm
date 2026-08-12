@@ -29,6 +29,7 @@
   }
   .contato-btn.email { background: var(--verde-escuro); }
   .contato-btn.copiar { background: transparent; border: 1.5px solid var(--verde-escuro); color: var(--verde-escuro); margin-left: 8px; }
+  .contato-btn.copiar-solo { background: var(--verde-escuro); border: none; }
   .copiar-msg { display: block; font-size: 0.78rem; color: var(--verde-escuro); margin-top: 8px; }
   .voltar { display: inline-block; margin-top: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
 </style>
@@ -47,8 +48,7 @@
   <div class="contato-card">
     <div class="rotulo">E-mail</div>
     <div class="valor">contato@guiazap.shop</div>
-    <a class="contato-btn email" href="mailto:contato@guiazap.shop">Enviar e-mail</a>
-    <button class="contato-btn copiar" onclick="copiarEmail()">Copiar e-mail</button>
+    <button class="contato-btn copiar-solo" onclick="copiarEmail()">Copiar e-mail</button>
     <span id="copiar-msg" class="copiar-msg"></span>
   </div>
 
