@@ -186,7 +186,7 @@ async function saveEntry(e){
 
   if(!id){
     alert("Cadastro salvo! Ele fica visível só para você até o pagamento ser confirmado. Você será levado até a página de pagamento agora.");
-    window.open(LINK_ASSINATURA, "_blank");
+    window.location.href = LINK_ASSINATURA;
   }
   return false;
 }
