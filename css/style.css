@@ -38,9 +38,10 @@
     font-size: 0.95rem;
   }
   .busca-container input:focus, .busca-container select:focus { outline: 2px solid var(--verde-whats); }
-  .filtros { display: flex; gap: 8px; }
-  .filtros select {
-    flex: 1;
+  .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filtros select, .filtros input {
+    flex: 1 1 30%;
+    min-width: 90px;
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -277,3 +278,8 @@
   cursor: pointer;
 }
 .btn-foto-opcao:hover { background: var(--cinza-fundo); }
+
+@media (max-width: 380px) {
+  .filtros { flex-direction: column; }
+  .filtros select, .filtros input { width: 100%; }
+}

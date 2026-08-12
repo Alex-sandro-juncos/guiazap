@@ -402,11 +402,12 @@ function render(){
   const cidade = document.getElementById('filter-cidade').value;
   const bairro = document.getElementById('filter-bairro').value;
 
+  const cidadeBusca = cidade.toLowerCase();
   const filtered = entries
     .filter(e => e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id))
     .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
-    .filter(e => !cidade || e.cidade === cidade)
+    .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
     .sort((a,b) => b.rating - a.rating);
 
