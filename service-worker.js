@@ -1,39 +1,42 @@
-// Service Worker básico do GuiaZap — permite instalação como app (PWA)
-// e guarda em cache os arquivos principais para abrir mais rápido depois da primeira visita.
+// Service worker do GuiaZap (baseado no modelo do PWABuilder, com página offline própria)
 
-const CACHE_NAME = 'guiazap-v1';
-const ARQUIVOS_PARA_CACHE = [
-  '/index.html',
-  '/css/style.css',
-  '/js/app.js',
-  '/config.js',
-  '/favicon-32.png',
-  '/favicon-512.png'
-];
+importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ARQUIVOS_PARA_CACHE))
-  );
-  self.skipWaiting();
+const CACHE = "pwabuilder-page";
+const offlineFallbackPage = "offline.html";
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('install', async (event) => {
   event.waitUntil(
-    caches.keys().then((nomes) =>
-      Promise.all(nomes.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
-    )
+    caches.open(CACHE)
+      .then((cache) => cache.add(offlineFallbackPage))
   );
-  self.clients.claim();
 });
+
+if (workbox.navigationPreload.isSupported()) {
+  workbox.navigationPreload.enable();
+}
 
 self.addEventListener('fetch', (event) => {
-  // Deixa passar direto tudo que for API (Supabase, IBGE, ViaCEP) — nunca cacheia dados dinâmicos
-  if (event.request.url.includes('supabase.co') || event.request.url.includes('ibge.gov.br') || event.request.url.includes('viacep.com.br')) {
-    return;
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const preloadResp = await event.preloadResponse;
+        if (preloadResp) {
+          return preloadResp;
+        }
+        const networkResp = await fetch(event.request);
+        return networkResp;
+      } catch (error) {
+        const cache = await caches.open(CACHE);
+        const cachedResp = await cache.match(offlineFallbackPage);
+        return cachedResp;
+      }
+    })());
   }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
 });
