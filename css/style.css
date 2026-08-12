@@ -282,9 +282,14 @@
 }
 .btn-foto-opcao:hover { background: var(--cinza-fundo); }
 
-@media (max-width: 380px) {
+@media (max-width: 420px) {
   .filtros { flex-direction: column; }
   .filtros select, .filtros input { width: 100%; }
+  .auth-row { flex-direction: column; }
+  .auth-row input { width: 100%; }
+  .row2 { flex-direction: column; }
+  .foto-botoes { flex-direction: column; }
+  .auth-actions { flex-wrap: wrap; }
 }
 
 .review-count { font-size: 0.72rem; color: #8a8270; }
