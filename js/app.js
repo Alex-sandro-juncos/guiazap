@@ -144,6 +144,10 @@ async function loadEntries(){
   document.getElementById('loading').style.display = 'none';
   populateEstados();
   await loadAvaliacoes();
+
+  const params = new URLSearchParams(window.location.search);
+  cadastroCompartilhadoId = params.get('p');
+
   render();
 }
 
@@ -512,6 +516,30 @@ async function cancelarAssinatura(){
   }
 }
 
+function verTodos(){
+  cadastroCompartilhadoId = null;
+  window.history.replaceState({}, '', window.location.pathname);
+  render();
+}
+
+async function compartilharCadastro(id, nome){
+  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const texto = `Confira ${nome} no GuiaZap: ${link}`;
+
+  if(navigator.share){
+    try{ await navigator.share({ title: nome, text: `Confira ${nome} no GuiaZap`, url: link }); return; } catch(e){ /* usuário cancelou, sem problema */ }
+  }
+
+  try{
+    await navigator.clipboard.writeText(link);
+    alert('Link copiado! ' + link);
+  } catch(e){
+    prompt('Copie o link abaixo:', link);
+  }
+}
+
+let cadastroCompartilhadoId = null;
+
 function abrirDenuncia(id){
   const box = document.getElementById('denuncia-box-' + id);
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -574,7 +602,9 @@ function render(){
   const bairro = document.getElementById('filter-bairro').value;
 
   const cidadeBusca = cidade.toLowerCase();
-  const filtered = entries
+  const filtered = cadastroCompartilhadoId
+    ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
+    : entries
     .filter(e => mostrandoApenasMeus ? (currentUser && e.user_id === currentUser.id) : (e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id)))
     .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query) || (e.categorias_extra || '').toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
@@ -583,9 +613,11 @@ function render(){
     .sort((a,b) => mediaDe(b.id).media - mediaDe(a.id).media);
 
   document.getElementById('count').innerHTML = loaded
-    ? (mostrandoApenasMeus
-        ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
-        : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
+    ? (cadastroCompartilhadoId
+        ? `Cadastro compartilhado <button type="button" class="link-voltar-busca" onclick="verTodos()">Ver busca completa</button>`
+        : mostrandoApenasMeus
+          ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
+          : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
     : '';
 
   if(!loaded){ list.innerHTML = ''; return; }
@@ -622,7 +654,10 @@ function render(){
           <button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>
         </div>
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
-        ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
+        <div class="card-acoes-extra">
+          <button type="button" class="link-compartilhar" onclick="compartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
+          ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
+        </div>
         <div class="denuncia-box" id="denuncia-box-${e.id}" style="display:none;">
           <select id="denuncia-motivo-${e.id}" class="review-input">
             <option value="">Selecione o motivo</option>

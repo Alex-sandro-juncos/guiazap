@@ -365,3 +365,24 @@
 }
 
 .btn-auth-outline.ativo { background: var(--verde-escuro); color: white; }
+
+.card-acoes-extra { display: flex; gap: 10px; margin-top: 4px; }
+.link-compartilhar {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.link-voltar-busca {
+  background: var(--verde-escuro);
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  margin-left: 8px;
+}
