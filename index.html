@@ -105,8 +105,12 @@
       <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
     </div>
     <div class="field">
-      <label>Link da foto (opcional)</label>
-      <input id="f-foto" placeholder="https://...">
+      <label>Foto (opcional)</label>
+      <input type="file" id="f-foto-arquivo" accept="image/*" capture="environment" onchange="enviarFoto(event)">
+      <span class="foto-msg" id="foto-msg"></span>
+      <img id="foto-preview" class="foto-preview" style="display:none;">
+      <label class="foto-ou">ou cole um link de foto já existente</label>
+      <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
     </div>
     <div class="form-actions">
       <button type="submit" class="btn-salvar">Salvar</button>

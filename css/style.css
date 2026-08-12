@@ -257,3 +257,8 @@
   cursor: pointer;
   width: 100%;
 }
+
+.foto-msg { font-size: 0.78rem; color: var(--verde-escuro); display: block; margin-top: 4px; }
+.foto-preview { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin-top: 8px; border: 2px solid var(--verde-whats); }
+
+.foto-ou { display: block; font-size: 0.75rem; color: #8a8270; margin: 8px 0 4px; text-transform: none; letter-spacing: normal; font-family: 'Segoe UI', sans-serif; }

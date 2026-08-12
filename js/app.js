@@ -145,6 +145,10 @@ function openForm(entry){
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
+  document.getElementById('foto-msg').textContent = '';
+  const preview = document.getElementById('foto-preview');
+  if(entry && entry.foto){ preview.src = entry.foto; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
   carregarContatosExtra(entry ? (entry.contatos_extra || '') : '');
   document.getElementById('add-btn').style.display = 'none';
 }
@@ -183,6 +187,37 @@ function coletarContatosExtra(){
     if(rotulo && numero) partes.push(`${rotulo}: ${numero}`);
   });
   return partes.join('\n');
+}
+
+async function enviarFoto(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('foto-msg');
+  if(!file) return;
+
+  msg.textContent = 'enviando foto...';
+  const nomeArquivo = `${currentUser.id}/${Date.now()}.jpg`;
+
+  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file, { upsert: true });
+  if(error){
+    console.error(error);
+    msg.textContent = 'erro ao enviar foto: ' + error.message;
+    return;
+  }
+
+  const { data } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
+  document.getElementById('f-foto').value = data.publicUrl;
+
+  const preview = document.getElementById('foto-preview');
+  preview.src = data.publicUrl;
+  preview.style.display = 'block';
+  msg.textContent = 'foto enviada!';
+}
+
+function onFotoLinkChange(){
+  const url = document.getElementById('f-foto').value.trim();
+  const preview = document.getElementById('foto-preview');
+  if(url){ preview.src = url; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
 }
 
 async function buscarCep(){
