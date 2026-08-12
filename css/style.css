@@ -333,7 +333,8 @@
   margin-bottom: 10px;
   cursor: pointer;
 }
-.termos-check input { margin-top: 2px; }
+.termos-check input { margin-top: 2px; flex-shrink: 0; }
+.termos-check span { line-height: 1.5; }
 .termos-check a { color: var(--verde-escuro); font-weight: 600; }
 
 .rodape-legal { text-align: center; font-size: 0.75rem; color: #8a8270; margin: 30px 0 10px; }
