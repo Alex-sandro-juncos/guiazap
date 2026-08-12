@@ -132,13 +132,6 @@ const LINK_ASSINATURA = "https://mpago.la/1Ddksty";
 
 function openForm(entry){
   if(!currentUser) return;
-  if(!entry){
-    const jaAssinou = confirm("Para cadastrar, é necessário assinar o plano de R$5/mês. Clique em OK para ir até o pagamento (você pode voltar aqui depois para preencher os dados).");
-    if(jaAssinou){
-      window.open(LINK_ASSINATURA, "_blank");
-    }
-    return;
-  }
   const form = document.getElementById('cadastro-form');
   form.classList.add('open');
   document.getElementById('form-msg').textContent = '';
@@ -183,12 +176,18 @@ async function saveEntry(e){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
     payload.user_id = currentUser.id;
+    payload.user_email = currentUser.email;
     payload.status_pagamento = 'pendente';
     ({ error } = await supabaseClient.from('profissionais').insert(payload));
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
   closeForm();
   await loadEntries();
+
+  if(!id){
+    alert("Cadastro salvo! Ele fica visível só para você até o pagamento ser confirmado. Você será levado até a página de pagamento agora.");
+    window.open(LINK_ASSINATURA, "_blank");
+  }
   return false;
 }
 
