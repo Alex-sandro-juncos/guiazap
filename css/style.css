@@ -234,3 +234,26 @@
 .btn-zap-extra { background: var(--verde-escuro); font-size: 0.75rem; padding: 8px 11px; }
 
 .cep-msg { font-size: 0.75rem; color: var(--verde-escuro); margin-top: 4px; display: block; }
+
+.contato-extra-linha { display: flex; gap: 6px; margin-bottom: 6px; }
+.contato-extra-linha input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem; }
+.ce-remover {
+  background: transparent;
+  border: 1.5px solid var(--danger, #a4402f);
+  color: var(--danger, #a4402f);
+  border-radius: 6px;
+  width: 34px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-add-contato {
+  background: transparent;
+  border: 1.5px dashed var(--verde-escuro);
+  color: var(--verde-escuro);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}

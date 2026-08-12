@@ -145,8 +145,44 @@ function openForm(entry){
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
-  document.getElementById('f-contatos-extra').value = entry ? (entry.contatos_extra || '') : '';
+  carregarContatosExtra(entry ? (entry.contatos_extra || '') : '');
   document.getElementById('add-btn').style.display = 'none';
+}
+
+function adicionarLinhaContato(rotulo, numero){
+  const container = document.getElementById('contatos-extra-list');
+  const linha = document.createElement('div');
+  linha.className = 'contato-extra-linha';
+  linha.innerHTML = `
+    <input type="text" class="ce-rotulo" placeholder="Ex: Vendas" value="${rotulo ? escapeHtml(rotulo) : ''}">
+    <input type="text" class="ce-numero" placeholder="Ex: 11912345678" value="${numero ? escapeHtml(numero) : ''}">
+    <button type="button" class="ce-remover" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(linha);
+}
+
+function limparLinhasContato(){
+  document.getElementById('contatos-extra-list').innerHTML = '';
+}
+
+function carregarContatosExtra(texto){
+  limparLinhasContato();
+  if(!texto) return;
+  texto.split('\n').map(l => l.trim()).filter(Boolean).forEach(linha => {
+    const [rotulo, numero] = linha.split(':');
+    if(rotulo && numero) adicionarLinhaContato(rotulo.trim(), numero.trim());
+  });
+}
+
+function coletarContatosExtra(){
+  const linhas = document.querySelectorAll('#contatos-extra-list .contato-extra-linha');
+  const partes = [];
+  linhas.forEach(linha => {
+    const rotulo = linha.querySelector('.ce-rotulo').value.trim();
+    const numero = linha.querySelector('.ce-numero').value.replace(/\D/g,'');
+    if(rotulo && numero) partes.push(`${rotulo}: ${numero}`);
+  });
+  return partes.join('\n');
 }
 
 async function buscarCep(){
@@ -196,7 +232,7 @@ async function saveEntry(e){
     bairro: document.getElementById('f-bairro').value.trim(),
     whatsapp: document.getElementById('f-whatsapp').value.replace(/\D/g,''),
     foto: document.getElementById('f-foto').value.trim(),
-    contatos_extra: document.getElementById('f-contatos-extra').value.trim()
+    contatos_extra: coletarContatosExtra()
   };
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
 

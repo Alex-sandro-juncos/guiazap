@@ -105,7 +105,8 @@
     </div>
     <div class="field">
       <label>Outros contatos (opcional)</label>
-      <textarea id="f-contatos-extra" rows="3" placeholder="Um por linha, no formato Rótulo: número&#10;Ex: Vendas: 11912345678&#10;Suporte: 11998765432"></textarea>
+      <div id="contatos-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
     </div>
     <div class="form-actions">
       <button type="submit" class="btn-salvar">Salvar</button>
