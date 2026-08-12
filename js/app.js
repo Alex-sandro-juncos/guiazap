@@ -42,6 +42,7 @@ function updateAuthUI(){
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
     addBtn.style.display = 'none';
+    document.getElementById('trocar-senha-box').style.display = 'none';
     closeForm();
   }
 }
@@ -87,6 +88,29 @@ async function forgotPassword(){
   const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = 'e-mail enviado! verifique sua caixa de entrada.';
+}
+
+function toggleTrocarSenha(){
+  const box = document.getElementById('trocar-senha-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('trocar-senha-msg').textContent = '';
+}
+
+async function trocarSenha(){
+  const pass1 = document.getElementById('nova-senha').value;
+  const pass2 = document.getElementById('confirmar-nova-senha').value;
+  const msg = document.getElementById('trocar-senha-msg');
+
+  if(!pass1 || pass1.length < 6){ msg.textContent = 'a senha precisa ter pelo menos 6 caracteres'; return; }
+  if(pass1 !== pass2){ msg.textContent = 'as senhas não coincidem'; return; }
+
+  msg.textContent = 'salvando...';
+  const { error } = await supabaseClient.auth.updateUser({ password: pass1 });
+  if(error){ msg.textContent = error.message; return; }
+
+  msg.textContent = 'senha alterada com sucesso!';
+  document.getElementById('nova-senha').value = '';
+  document.getElementById('confirmar-nova-senha').value = '';
 }
 
 // ---------- DADOS ----------

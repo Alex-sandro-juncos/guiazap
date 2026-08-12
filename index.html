@@ -40,7 +40,20 @@
 
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
     <span>Logado como <b id="auth-email-display"></b></span>
-    <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
+    <div>
+      <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
+      <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
+    </div>
+  </div>
+  <div id="trocar-senha-box" class="auth-box" style="display:none;">
+    <div class="auth-row">
+      <input id="nova-senha" type="password" placeholder="Nova senha">
+      <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+    </div>
+    <div class="auth-actions">
+      <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
+      <span class="auth-msg" id="trocar-senha-msg"></span>
+    </div>
   </div>
 
   <div class="busca-container">

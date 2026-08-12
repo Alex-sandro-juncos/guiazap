@@ -158,7 +158,10 @@
   justify-content: space-between;
   align-items: center;
   font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+.auth-box-logged > div { display: flex; gap: 8px; }
 .auth-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .auth-row input {
   flex: 1;
