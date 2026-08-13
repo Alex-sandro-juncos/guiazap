@@ -407,3 +407,14 @@
   text-decoration: none;
   margin: 12px 0;
 }
+
+.busca-com-icone { position: relative; flex: 1; }
+.busca-com-icone .icone-lupa {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.busca-com-icone input { padding-left: 36px !important; }
