@@ -34,12 +34,13 @@
   .admin-item .meta { font-size: 0.72rem; color: #888; }
   .admin-vazio { text-align: center; color: #888; padding: 30px; }
   .admin-acoes { display: flex; gap: 8px; margin-top: 8px; }
-  .admin-btn-suspender, .admin-btn-excluir {
+  .admin-btn-suspender, .admin-btn-excluir, .admin-btn-ativar {
     border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem;
     font-weight: 700; cursor: pointer; color: white;
   }
   .admin-btn-suspender { background: #d97706; }
   .admin-btn-excluir { background: #a4402f; }
+  .admin-btn-ativar { background: var(--verde-whats); }
 </style>
 </head>
 <body>
@@ -112,7 +113,9 @@ function mostrarAbaAdmin(aba){
 async function executarAcaoAdmin(acao, tabela, id, nome){
   const confirmText = acao === 'excluir'
     ? `Tem certeza que quer EXCLUIR "${nome}"? Isso não pode ser desfeito.`
-    : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
+    : acao === 'ativar'
+      ? `Ativar "${nome}"? O cadastro volta a aparecer na busca pública.`
+      : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
   if(!confirm(confirmText)) return;
 
   const { data: { session } } = await supabaseClientAdmin.auth.getSession();
@@ -167,11 +170,14 @@ function renderAdmin(){
       </div>`;
     }
     if(abaAtual === 'empresas'){
+      const ativo = item.status_pagamento === 'ativo';
       return `<div class="admin-item">
         <div class="tipo">${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
         <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
         <div class="admin-acoes">
-          <button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>
+          ${ativo
+            ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>`
+            : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Ativar</button>`}
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </div>`;

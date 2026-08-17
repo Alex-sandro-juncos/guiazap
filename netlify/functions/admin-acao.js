@@ -13,7 +13,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -41,8 +41,9 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 
-    // suspender = só faz sentido pra "profissionais" (produtos não têm status_pagamento próprio)
-    if (acao === 'suspender' && tabela === 'profissionais') {
+    // suspender/ativar = só faz sentido pra "profissionais" (produtos não têm status_pagamento próprio)
+    if ((acao === 'suspender' || acao === 'ativar') && tabela === 'profissionais') {
+      const novoStatus = acao === 'ativar' ? 'ativo' : 'pendente';
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
         method: 'PATCH',
         headers: {
@@ -50,9 +51,9 @@ exports.handler = async function (event) {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
         },
-        body: JSON.stringify({ status_pagamento: 'pendente' })
+        body: JSON.stringify({ status_pagamento: novoStatus })
       });
-      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao suspender' }) };
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao atualizar status' }) };
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 
