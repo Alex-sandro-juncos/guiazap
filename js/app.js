@@ -542,7 +542,7 @@ async function saveEntry(e){
 }
 
 async function cancelarAssinatura(){
-  if(!confirm('Tem certeza que deseja cancelar sua assinatura? Seu cadastro deixará de aparecer na busca até você assinar novamente.')) return;
+  if(!confirm('Tem certeza que deseja desativar este cadastro? Ele deixará de aparecer na busca pública até ser reativado.')) return;
 
   const { data: { session } } = await supabaseClient.auth.getSession();
   if(!session){ alert('Sessão expirada, faça login novamente.'); return; }
@@ -554,13 +554,13 @@ async function cancelarAssinatura(){
     });
     const data = await resp.json();
     if(!resp.ok){
-      alert('Erro ao cancelar: ' + (data.error || 'tente novamente'));
+      alert('Erro ao desativar: ' + (data.error || 'tente novamente'));
       return;
     }
-    alert('Assinatura cancelada. Seu cadastro ficou pendente até uma nova assinatura.');
+    alert('Cadastro desativado. Você pode reativar (grátis ou pago) quando quiser.');
     await loadEntries();
   } catch(e){
-    alert('Erro ao cancelar assinatura. Tente novamente.');
+    alert('Erro ao desativar cadastro. Tente novamente.');
   }
 }
 
@@ -982,7 +982,7 @@ function render(){
           ${jaAvaliou(e.id) ? '<span class="ja-avaliou">Você já avaliou</span>' : `<button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>`}
         </div>
         ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
-        ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
+        ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
         ${isOwner && !pendente && e.plano !== 'completo' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
