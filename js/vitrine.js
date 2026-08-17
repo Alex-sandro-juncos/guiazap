@@ -70,18 +70,18 @@ function textoMedida(p){
 }
 
 function renderProdutos(){
-  const query = document.getElementById('v-search').value.toLowerCase();
+  const query = normalizarTextoV(document.getElementById('v-search').value);
   const linkDireto = produtoFiltroId || empresaFiltroId;
   const filtrados = produtos
     .filter(p => !produtoFiltroId || p.id === produtoFiltroId)
     .filter(p => produtoFiltroId || !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p =>
-      p.nome.toLowerCase().includes(query) ||
-      (p.marca || '').toLowerCase().includes(query) ||
-      (p.descricao || '').toLowerCase().includes(query) ||
-      (p.codigo_barras || '').toLowerCase().includes(query) ||
-      (p.profissionais && p.profissionais.name.toLowerCase().includes(query))
+      normalizarTextoV(p.nome).includes(query) ||
+      normalizarTextoV(p.marca).includes(query) ||
+      normalizarTextoV(p.descricao).includes(query) ||
+      normalizarTextoV(p.codigo_barras).includes(query) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query))
     );
 
   document.getElementById('v-count').textContent = `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
@@ -408,6 +408,10 @@ async function salvarProduto(e){
   await loadProdutos();
   setTimeout(fecharFormProduto, 1200);
   return false;
+}
+
+function normalizarTextoV(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 function escapeHtmlV(str){

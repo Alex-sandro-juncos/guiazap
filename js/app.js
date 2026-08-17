@@ -692,14 +692,14 @@ function renderProdutosDestaque(){
   const secao = document.querySelector('.destaque-vitrine');
   if(!container || !secao) return;
 
-  const query = document.getElementById('search').value.toLowerCase();
+  const query = normalizarTexto(document.getElementById('search').value);
 
   const filtrados = produtosDestaqueTodos.filter(p =>
-    p.nome.toLowerCase().includes(query) ||
-    (p.marca || '').toLowerCase().includes(query) ||
-    (p.descricao || '').toLowerCase().includes(query) ||
-    (p.codigo_barras || '').toLowerCase().includes(query) ||
-    (p.profissionais && p.profissionais.name.toLowerCase().includes(query))
+    normalizarTexto(p.nome).includes(query) ||
+    normalizarTexto(p.marca).includes(query) ||
+    normalizarTexto(p.descricao).includes(query) ||
+    normalizarTexto(p.codigo_barras).includes(query) ||
+    (p.profissionais && normalizarTexto(p.profissionais.name).includes(query))
   );
 
   if(produtosDestaqueTodos.length === 0){
@@ -763,19 +763,19 @@ function starString(rating){
 function render(){
   renderProdutosDestaque();
   const list = document.getElementById('list');
-  const query = document.getElementById('search').value.toLowerCase();
+  const query = normalizarTexto(document.getElementById('search').value);
   const estado = document.getElementById('filter-estado').value;
   const cidade = document.getElementById('filter-cidade').value;
   const bairro = document.getElementById('filter-bairro').value;
 
-  const cidadeBusca = cidade.toLowerCase();
+  const cidadeBusca = normalizarTexto(cidade);
   const filtered = cadastroCompartilhadoId
     ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
     : entries
     .filter(e => currentUser ? e.user_id === currentUser.id : e.status_pagamento === 'ativo')
-    .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query) || (e.categorias_extra || '').toLowerCase().includes(query))
+    .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
-    .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
+    .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
     .sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
 
@@ -865,6 +865,10 @@ function render(){
       </div>
     </div>
   `; }).join('');
+}
+
+function normalizarTexto(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 function escapeHtml(str){
