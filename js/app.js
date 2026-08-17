@@ -665,7 +665,7 @@ async function loadProdutosDestaque(){
 
   const { data, error } = await supabaseClient
     .from('produtos')
-    .select('*, profissionais(name, whatsapp, status_pagamento)')
+    .select('*, profissionais(name, whatsapp, status_pagamento, user_id)')
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -675,7 +675,12 @@ async function loadProdutosDestaque(){
     return;
   }
 
-  const produtosAtivos = data.filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
+  const produtosAtivos = data
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo')
+    .filter(p => !currentUser || (p.profissionais && p.profissionais.user_id === currentUser.id));
+
+  const titulo = document.querySelector('.destaque-header h2');
+  if(titulo) titulo.textContent = currentUser ? '🛍️ Seus produtos' : '🛍️ Produtos em destaque';
 
   if(produtosAtivos.length === 0){
     document.querySelector('.destaque-vitrine').style.display = 'none';
