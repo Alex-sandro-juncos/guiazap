@@ -49,7 +49,6 @@
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
     <span>Logado como <b id="auth-email-display"></b></span>
     <div>
-      <button type="button" class="btn-auth-outline" id="meus-cadastros-btn" onclick="toggleMeusCadastros()">Meus cadastros</button>
       <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
       <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
     </div>
@@ -86,7 +85,7 @@
 
   <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
 
-  <button class="btn-cadastro" id="add-btn" onclick="openForm()">+ Cadastrar minha empresa - R$5/mês</button>
+  <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
 
   <form id="cadastro-form" onsubmit="return saveEntry(event)">
     <input type="hidden" id="edit-id">
@@ -164,7 +163,7 @@
   <div id="list"></div>
   <div class="loading" id="loading">carregando profissionais...</div>
   <div class="rodape-legal">
-    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a>
+    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a>
   </div>
 </div>
 

@@ -3,7 +3,6 @@ let entries = [];
 let loaded = false;
 let currentUser = null;
 let avaliacoesMap = {};
-let mostrandoApenasMeus = false;
 
 function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('SUA-URL') || SUPABASE_ANON_KEY.includes('SUA-CHAVE')){
@@ -39,12 +38,12 @@ function updateAuthUI(){
     loggedInBox.style.display = 'flex';
     document.getElementById('auth-email-display').textContent = currentUser.email;
     addBtn.style.display = 'block';
+    abrirCadastroSePendente();
   } else {
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
     addBtn.style.display = 'none';
     document.getElementById('trocar-senha-box').style.display = 'none';
-    mostrandoApenasMeus = false;
     closeForm();
   }
 }
@@ -98,14 +97,6 @@ async function forgotPassword(){
   msg.textContent = 'e-mail enviado! verifique sua caixa de entrada.';
 }
 
-function toggleMeusCadastros(){
-  mostrandoApenasMeus = !mostrandoApenasMeus;
-  const btn = document.getElementById('meus-cadastros-btn');
-  btn.textContent = mostrandoApenasMeus ? 'Ver todos' : 'Meus cadastros';
-  btn.classList.toggle('ativo', mostrandoApenasMeus);
-  render();
-}
-
 function toggleTrocarSenha(){
   const box = document.getElementById('trocar-senha-box');
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -148,7 +139,22 @@ async function loadEntries(){
   const params = new URLSearchParams(window.location.search);
   cadastroCompartilhadoId = params.get('p');
 
+  const planoParam = params.get('plano');
+  if(planoParam === 'basico' || planoParam === 'completo'){
+    planoEscolhido = planoParam;
+    localStorage.setItem('planoEscolhido', planoEscolhido);
+    localStorage.setItem('abrirCadastroAposLogin', '1');
+  }
+
+  abrirCadastroSePendente();
   render();
+}
+
+function abrirCadastroSePendente(){
+  if(currentUser && localStorage.getItem('abrirCadastroAposLogin') === '1'){
+    localStorage.removeItem('abrirCadastroAposLogin');
+    setTimeout(() => openForm(), 300);
+  }
 }
 
 async function loadAvaliacoes(){
@@ -293,7 +299,15 @@ function populateEstados(){
   populateBairrosFiltro();
 }
 
-const LINK_ASSINATURA = "https://mpago.la/1Ddksty";
+const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty";
+const LINK_ASSINATURA_COMPLETO = "https://mpago.la/SUBSTITUA-AQUI"; // TODO: trocar pelo link do plano de R$10 quando criar no Mercado Pago
+const LINK_ASSINATURA = LINK_ASSINATURA_BASICO; // mantém compatibilidade com o código já existente (ex: "Pagar agora" de cadastros antigos)
+
+let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
+
+function linkDoPlano(plano){
+  return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
+}
 
 function openForm(entry){
   if(!currentUser) return;
@@ -467,6 +481,7 @@ async function saveEntry(e){
   const msg = document.getElementById('form-msg');
   msg.textContent = 'salvando...';
   let error;
+  let novoCadastroId = null;
   if(id){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
@@ -486,7 +501,10 @@ async function saveEntry(e){
     payload.user_id = currentUser.id;
     payload.user_email = currentUser.email;
     payload.status_pagamento = 'pendente';
-    ({ error } = await supabaseClient.from('profissionais').insert(payload));
+    payload.plano = planoEscolhido;
+    const { data: inserido, error: errInsert } = await supabaseClient.from('profissionais').insert(payload).select('id').single();
+    error = errInsert;
+    novoCadastroId = inserido ? inserido.id : null;
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar'; return false; }
   closeForm();
@@ -494,8 +512,27 @@ async function saveEntry(e){
   populateBairrosFiltro();
 
   if(!id){
-    alert("Cadastro salvo! Ele fica visível só para você até o pagamento ser confirmado. Você será levado até a página de pagamento agora.");
-    window.location.href = LINK_ASSINATURA;
+    if(planoEscolhido === 'basico'){
+      msg.textContent = 'ativando seu cadastro gratuito...';
+      try{
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const respAtivar = await fetch('/.netlify/functions/ativar-basico', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ profissionalId: novoCadastroId })
+        });
+        if(respAtivar.ok){
+          alert("Cadastro gratuito ativado! Já está visível para todos.");
+        } else {
+          alert("Cadastro salvo, mas houve um problema na ativação automática. Fale com o suporte.");
+        }
+      } catch(e){
+        alert("Cadastro salvo, mas houve um problema na ativação automática. Fale com o suporte.");
+      }
+      await loadEntries();
+    } else {
+      alert("Cadastro salvo! Ele fica visível só para você até o pagamento ser confirmado (ou até você aplicar um cupom, se tiver um). Role para baixo para ver seu cadastro.");
+    }
   }
   return false;
 }
@@ -529,20 +566,38 @@ function verTodos(){
   render();
 }
 
-async function compartilharCadastro(id, nome){
-  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
-  const texto = `Confira ${nome} no GuiaZap: ${link}`;
-
-  if(navigator.share){
-    try{ await navigator.share({ title: nome, text: `Confira ${nome} no GuiaZap`, url: link }); return; } catch(e){ /* usuário cancelou, sem problema */ }
+function toggleMenuCompartilharCadastro(id, nome){
+  const menu = document.getElementById('menu-compartilhar-cad-' + id);
+  if(menu.style.display === 'block'){
+    menu.style.display = 'none';
+    return;
   }
 
+  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const texto = `Confira ${nome} no GuiaZap!`;
+  const linkCodificado = encodeURIComponent(link);
+  const textoCodificado = encodeURIComponent(texto);
+
+  menu.innerHTML = `
+    <a href="https://wa.me/?text=${textoCodificado}%20${linkCodificado}" target="_blank" class="opcao-rede whatsapp">WhatsApp</a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${linkCodificado}" target="_blank" class="opcao-rede facebook">Facebook</a>
+    <a href="https://twitter.com/intent/tweet?text=${textoCodificado}&url=${linkCodificado}" target="_blank" class="opcao-rede twitter">X (Twitter)</a>
+    <a href="https://t.me/share/url?url=${linkCodificado}&text=${textoCodificado}" target="_blank" class="opcao-rede telegram">Telegram</a>
+    <button type="button" class="opcao-rede copiar" onclick="copiarLinkCadastro('${id}', event)">Copiar link</button>
+  `;
+  menu.style.display = 'block';
+}
+
+async function copiarLinkCadastro(id, event){
+  event.preventDefault();
+  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
   try{
     await navigator.clipboard.writeText(link);
-    alert('Link copiado! ' + link);
+    alert('Link copiado!');
   } catch(e){
     prompt('Copie o link abaixo:', link);
   }
+  document.getElementById('menu-compartilhar-cad-' + id).style.display = 'none';
 }
 
 let cadastroCompartilhadoId = null;
@@ -570,6 +625,37 @@ async function enviarDenuncia(id){
 
   msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o GuiaZap seguro.';
   setTimeout(() => { document.getElementById('denuncia-box-' + id).style.display = 'none'; }, 2500);
+}
+
+async function aplicarCupom(profissionalId){
+  const codigo = document.getElementById('cupom-input-' + profissionalId).value.trim();
+  const msg = document.getElementById('cupom-msg-' + profissionalId);
+
+  if(!codigo){ msg.textContent = 'Digite um código de cupom.'; return; }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session){ msg.textContent = 'Sessão expirada, faça login novamente.'; return; }
+
+  msg.textContent = 'aplicando cupom...';
+  try{
+    const resp = await fetch('/.netlify/functions/resgatar-cupom', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ codigo, profissionalId })
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      msg.textContent = data.error || 'cupom inválido';
+      return;
+    }
+    msg.textContent = 'Cupom aplicado! Seu cadastro já está ativo.';
+    await loadEntries();
+  } catch(e){
+    msg.textContent = 'erro ao aplicar cupom, tente novamente';
+  }
 }
 
 function editEntry(id){
@@ -612,7 +698,7 @@ function render(){
   const filtered = cadastroCompartilhadoId
     ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
     : entries
-    .filter(e => mostrandoApenasMeus ? (currentUser && e.user_id === currentUser.id) : (e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id)))
+    .filter(e => currentUser ? e.user_id === currentUser.id : e.status_pagamento === 'ativo')
     .filter(e => e.name.toLowerCase().includes(query) || e.cat.toLowerCase().includes(query) || (e.categorias_extra || '').toLowerCase().includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || e.cidade.toLowerCase().includes(cidadeBusca))
@@ -622,7 +708,7 @@ function render(){
   document.getElementById('count').innerHTML = loaded
     ? (cadastroCompartilhadoId
         ? `Cadastro compartilhado <button type="button" class="link-voltar-busca" onclick="verTodos()">Ver busca completa</button>`
-        : mostrandoApenasMeus
+        : currentUser
           ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
           : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
     : '';
@@ -643,7 +729,12 @@ function render(){
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
       ${isOwner && pendente ? `<div class="badge-pendente">Pagamento pendente — só você vê este cadastro
-        <a href="${LINK_ASSINATURA}" class="link-pagar">Pagar agora</a>
+        <a href="${linkDoPlano(e.plano)}" class="link-pagar">Pagar agora</a>
+        <div class="cupom-row">
+          <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
+          <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
+        </div>
+        <span class="cupom-msg" id="cupom-msg-${e.id}"></span>
       </div>` : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
@@ -661,8 +752,10 @@ function render(){
           ${jaAvaliou(e.id) ? '<span class="ja-avaliou">Você já avaliou</span>' : `<button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>`}
         </div>
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
+        ${isOwner && !pendente && e.plano !== 'completo' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
         <div class="card-acoes-extra">
-          <button type="button" class="link-compartilhar" onclick="compartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
+          <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
+          <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
           ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
         </div>
         <div class="denuncia-box" id="denuncia-box-${e.id}" style="display:none;">
@@ -694,6 +787,7 @@ function render(){
           <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
           ${renderContatosExtra(e.contatos_extra)}
         </div>
+        ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
       </div>
     </div>
   `; }).join('');

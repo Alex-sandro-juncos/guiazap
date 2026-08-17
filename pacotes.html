@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pacotes — GuiaZap</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .pacotes-wrap { max-width: 480px; margin: 0 auto; padding: 20px 15px 40px; }
+  .pacotes-wrap h1 { text-align: center; font-size: 1.4rem; margin: 10px 0 4px; color: #1c1c1c; }
+  .pacotes-wrap .sub { text-align: center; color: #666; font-size: 0.88rem; margin-bottom: 22px; }
+
+  .card-pacote {
+    background: var(--cinza-card);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    border: 2px solid transparent;
+  }
+  .card-pacote.destaque { border-color: var(--verde-whats); position: relative; }
+  .selo-recomendado {
+    position: absolute;
+    top: -11px;
+    right: 16px;
+    background: var(--verde-whats);
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 50px;
+  }
+  .card-pacote h2 { font-size: 1.1rem; color: #1c1c1c; }
+  .card-pacote .preco { font-size: 1.6rem; font-weight: 800; color: var(--verde-escuro); margin: 6px 0 12px; }
+  .card-pacote .preco span { font-size: 0.85rem; font-weight: 500; color: #888; }
+  .card-pacote ul { list-style: none; margin-bottom: 16px; }
+  .card-pacote li { font-size: 0.87rem; color: #444; padding: 4px 0; padding-left: 22px; position: relative; }
+  .card-pacote li:before { content: "✓"; position: absolute; left: 0; color: var(--verde-whats); font-weight: 700; }
+  .btn-escolher {
+    display: block;
+    width: 100%;
+    text-align: center;
+    background: var(--verde-whats);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .card-pacote:not(.destaque) .btn-escolher { background: var(--verde-escuro); }
+  .voltar { display: block; text-align: center; margin-top: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Escolha seu pacote</p></header>
+<div class="pacotes-wrap">
+  <h1>Como você quer aparecer no GuiaZap?</h1>
+  <p class="sub">Escolha o pacote e depois complete seu cadastro</p>
+
+  <div class="card-pacote">
+    <h2>Pacote Contato</h2>
+    <div class="preco">Grátis</div>
+    <ul>
+      <li>Apareça na busca do GuiaZap</li>
+      <li>Contato direto por WhatsApp</li>
+      <li>Categoria, avaliações e localização</li>
+      <li>Vários contatos no mesmo cadastro</li>
+    </ul>
+    <a href="index.html?plano=basico" class="btn-escolher">Escolher este pacote</a>
+  </div>
+
+  <div class="card-pacote destaque">
+    <span class="selo-recomendado">MAIS COMPLETO</span>
+    <h2>Pacote Contato + Vitrine</h2>
+    <div class="preco">R$ 10<span>/mês</span></div>
+    <ul>
+      <li>Tudo do Pacote Contato</li>
+      <li>Anuncie seus produtos na Vitrine GuiaZap</li>
+      <li>Apareça também para quem busca por produto</li>
+      <li>Visitantes podem compartilhar seus produtos no WhatsApp e redes sociais</li>
+      <li>Mais visibilidade para o seu negócio</li>
+    </ul>
+    <a href="index.html?plano=completo" class="btn-escolher">Escolher este pacote</a>
+  </div>
+
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+</div>
+</body>
+</html>

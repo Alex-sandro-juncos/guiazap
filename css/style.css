@@ -418,3 +418,75 @@
   cursor: pointer;
 }
 .busca-com-icone input { padding-left: 36px !important; }
+
+.link-migrar {
+  display: block;
+  background: #fff3cd;
+  color: #7c4a03;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.link-ver-produtos {
+  display: block;
+  text-align: center;
+  background: var(--verde-escuro);
+  color: white;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  margin-top: 8px;
+}
+
+.menu-compartilhar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  background: #f8f8f8;
+  border-radius: 8px;
+  padding: 6px;
+}
+.opcao-rede {
+  display: block;
+  text-align: center;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  color: white;
+}
+.opcao-rede.whatsapp { background: #25D366; }
+.opcao-rede.facebook { background: #1877F2; }
+.opcao-rede.twitter { background: #000000; }
+.opcao-rede.telegram { background: #229ED9; }
+.opcao-rede.copiar { background: #666; }
+
+.cupom-row { display: flex; gap: 6px; margin-top: 8px; }
+.cupom-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+.btn-cupom {
+  background: #d97706;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cupom-msg { display: block; font-size: 0.72rem; color: #7c4a03; margin-top: 4px; }

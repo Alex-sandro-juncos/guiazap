@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuiaZap Vitrine — Produtos de empresas locais</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .vitrine-header { background: var(--verde-whats); padding: 24px 15px; text-align: center; color: white; }
+  .vitrine-header h1 { font-size: 1.8rem; font-weight: 800; }
+  .vitrine-header p { font-size: 0.88rem; opacity: 0.95; margin-top: 4px; }
+  .vitrine-busca {
+    background: var(--cinza-card);
+    padding: 14px;
+    margin: -14px 15px 0;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 2;
+  }
+  .vitrine-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
+  .vitrine-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 15px 10px; }
+  .vitrine-toolbar .count { font-size: 0.9rem; color: #444; }
+  .btn-add-produto {
+    background: var(--verde-whats);
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .grid-produtos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 0 15px 30px;
+  }
+  .card-produto {
+    background: var(--cinza-card);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    display: flex;
+    flex-direction: column;
+  }
+  .card-produto img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
+  .card-produto .info { padding: 10px; flex: 1; display: flex; flex-direction: column; }
+  .card-produto .nome { font-size: 0.88rem; font-weight: 700; color: #1c1c1c; line-height: 1.3; }
+  .card-produto .preco { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 4px; }
+  .card-produto .empresa { font-size: 0.72rem; color: #8a8270; margin-top: 4px; }
+  .card-produto .marca-produto { font-size: 0.72rem; color: var(--verde-escuro); font-weight: 600; margin-top: 2px; }
+  .card-produto .medida-produto { font-size: 0.72rem; color: #666; margin-top: 2px; }
+  .card-produto .owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  .card-produto .owner-actions .icon-btn {
+    background: none; border: none; cursor: pointer; font-size: 0.85rem;
+    padding: 2px 4px; border-radius: 4px; color: var(--verde-escuro);
+  }
+  .link-compartilhar-produto {
+    background: var(--verde-whats);
+    color: white;
+    border: none;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 7px;
+    margin-top: 6px;
+    border-radius: 8px;
+    width: 100%;
+    text-align: center;
+  }
+  .aviso-compartilhar {
+    background: #e8f4fd;
+    color: #0a4a6b;
+    font-size: 0.78rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .menu-compartilhar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    background: #f8f8f8;
+    border-radius: 8px;
+    padding: 6px;
+  }
+  .opcao-rede {
+    display: block;
+    text-align: center;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    color: white;
+  }
+  .opcao-rede.whatsapp { background: #25D366; }
+  .opcao-rede.facebook { background: #1877F2; }
+  .opcao-rede.twitter { background: #000000; }
+  .opcao-rede.telegram { background: #229ED9; }
+  .opcao-rede.copiar { background: #666; }
+  .card-produto .btn-zap-mini {
+    margin-top: 8px;
+    display: block;
+    text-align: center;
+    background: var(--verde-whats);
+    color: white;
+    padding: 7px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .vazio-vitrine { text-align: center; padding: 50px 20px; color: #8a8270; grid-column: 1 / -1; }
+
+  #produto-form {
+    display: none;
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 0 15px 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  #produto-form.open { display: block; }
+  #produto-form .field { margin-bottom: 10px; }
+  #produto-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  #produto-form input, #produto-form textarea, #produto-form select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  }
+  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="vitrine-header">
+  <h1>GuiaZap Vitrine</h1>
+  <p>Produtos de empresas da sua região, tudo num só lugar</p>
+</header>
+
+<div class="vitrine-busca">
+  <input id="v-search" placeholder="Buscar por nome, marca, descrição ou código de barras..." oninput="renderProdutos()">
+</div>
+
+<div class="vitrine-toolbar">
+  <span class="count" id="v-count"></span>
+  <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+</div>
+
+<form id="produto-form" onsubmit="return salvarProduto(event)">
+  <input type="hidden" id="p-id">
+  <input type="hidden" id="p-codigo-barras">
+  <div class="field">
+    <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
+    <select id="p-profissional" required></select>
+  </div>
+  <div class="field">
+    <label>Nome do produto</label>
+    <input id="p-nome" required placeholder="Ex: Bolo de chocolate">
+  </div>
+  <div class="aviso-compartilhar">
+    📢 Depois de cadastrado, esse produto ganha um botão "Compartilhar" — qualquer visitante pode enviar ele pra amigos e clientes no WhatsApp, Instagram e redes sociais, ajudando a divulgar seu negócio de graça!
+  </div>
+  <div class="field">
+    <button type="button" class="btn-foto-opcao" style="width:100%;" onclick="abrirScanner()">📷 Ler código de barras (preenche sozinho)</button>
+    <div id="scanner-area" style="display:none; margin-top:10px;">
+      <div id="scanner-leitor" style="width:100%;"></div>
+      <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="fecharScanner()">Cancelar leitura</button>
+    </div>
+    <span class="foto-msg" id="scanner-msg"></span>
+  </div>
+  <div class="field">
+    <label>Marca (opcional)</label>
+    <input id="p-marca" placeholder="Ex: Nestlé, marca própria...">
+  </div>
+  <div class="field">
+    <label>Descrição (opcional)</label>
+    <textarea id="p-descricao" rows="2" placeholder="Detalhes do produto"></textarea>
+  </div>
+  <div class="field">
+    <label>Marca (opcional)</label>
+    <input id="p-marca" placeholder="Ex: Nestlé, Coca-Cola, marca própria...">
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>Medido em</label>
+      <select id="p-unidade-medida">
+        <option value="unidade">Unidade</option>
+        <option value="peso">Peso (kg)</option>
+        <option value="litro">Litro</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Quantidade</label>
+      <input id="p-quantidade" type="number" min="0" step="0.01" value="1">
+    </div>
+  </div>
+  <div class="field">
+    <label>Valor (R$)</label>
+    <input id="p-preco" placeholder="Ex: 35,00 ou Sob consulta">
+  </div>
+  <div class="field">
+    <label>Foto do produto</label>
+    <div class="foto-botoes">
+      <label class="btn-foto-opcao">
+        📷 Tirar foto
+        <input type="file" accept="image/*" capture="environment" onchange="enviarFotoProduto(event)" style="display:none;">
+      </label>
+      <label class="btn-foto-opcao">
+        🖼️ Escolher da galeria
+        <input type="file" accept="image/*" onchange="enviarFotoProduto(event)" style="display:none;">
+      </label>
+    </div>
+    <span class="foto-msg" id="p-foto-msg"></span>
+    <img id="p-foto-preview" class="foto-preview" style="display:none;">
+    <label class="foto-ou">ou cole um link de foto já existente</label>
+    <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn-salvar">Salvar produto</button>
+    <button type="button" class="btn-cancelar" onclick="fecharFormProduto()">Cancelar</button>
+    <span class="review-msg" id="p-msg"></span>
+  </div>
+</form>
+
+<div class="grid-produtos" id="v-grid"></div>
+<a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
+
+<script src="config.js"></script>
+<script src="js/vitrine.js"></script>
+</body>
+</html>
