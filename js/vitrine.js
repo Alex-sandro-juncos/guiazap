@@ -50,8 +50,17 @@ async function loadProdutos(){
   produtoFiltroId = params.get('produto');
 
   if(produtoFiltroId){
-    document.querySelector('.vitrine-header h1').textContent = 'Produto compartilhado';
-    document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+    const produtoCompartilhado = produtos.find(p => p.id === produtoFiltroId);
+    if(produtoCompartilhado && produtoCompartilhado.profissionais){
+      // Mostra o produto em destaque + os outros produtos da mesma empresa
+      empresaFiltroId = produtoCompartilhado.profissionais.id;
+      const nomeEmpresa = produtoCompartilhado.profissionais.name;
+      document.querySelector('.vitrine-header h1').textContent = `Produtos de ${nomeEmpresa}`;
+      document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+    } else {
+      document.querySelector('.vitrine-header h1').textContent = 'Produto compartilhado';
+      document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+    }
   } else if(empresaFiltroId){
     const empresa = produtos.find(p => p.profissionais && p.profissionais.id === empresaFiltroId);
     const nomeEmpresa = empresa ? empresa.profissionais.name : '';
@@ -73,8 +82,7 @@ function renderProdutos(){
   const query = normalizarTextoV(document.getElementById('v-search').value);
   const linkDireto = produtoFiltroId || empresaFiltroId;
   const filtrados = produtos
-    .filter(p => !produtoFiltroId || p.id === produtoFiltroId)
-    .filter(p => produtoFiltroId || !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
+    .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p =>
       normalizarTextoV(p.nome).includes(query) ||
@@ -82,7 +90,15 @@ function renderProdutos(){
       normalizarTextoV(p.descricao).includes(query) ||
       normalizarTextoV(p.codigo_barras).includes(query) ||
       (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query))
-    );
+    )
+    .sort((a, b) => {
+      // Coloca o produto compartilhado sempre primeiro
+      if(produtoFiltroId){
+        if(a.id === produtoFiltroId) return -1;
+        if(b.id === produtoFiltroId) return 1;
+      }
+      return 0;
+    });
 
   document.getElementById('v-count').textContent = `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
 
@@ -97,8 +113,10 @@ function renderProdutos(){
 
   grid.innerHTML = filtrados.map(p => {
     const isDono = currentUserV && p.profissionais && p.profissionais.user_id === currentUserV.id;
+    const isCompartilhado = produtoFiltroId && p.id === produtoFiltroId;
     return `
-    <div class="card-produto">
+    <div class="card-produto${isCompartilhado ? ' card-produto-destaque' : ''}">
+      ${isCompartilhado ? '<div class="selo-compartilhado">⭐ Produto compartilhado</div>' : ''}
       <img src="${p.foto ? escapeHtmlV(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtmlV(p.nome)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
