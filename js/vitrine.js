@@ -105,7 +105,7 @@ function renderProdutos(){
         </div>
         ${p.marca ? `<div class="marca-produto">${escapeHtmlV(p.marca)}</div>` : ''}
         <div class="medida-produto">${textoMedida(p)}</div>
-        ${p.preco ? `<div class="preco">${escapeHtmlV(p.preco)}</div>` : ''}
+        ${p.preco ? `<div class="preco">R$ ${escapeHtmlV(p.preco)}</div>` : ''}
         <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}</div>
         ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${p.profissionais.whatsapp}" target="_blank">Chamar no WhatsApp</a>` : ''}
         <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
@@ -156,20 +156,72 @@ let scannerAtivo = null;
 
 function abrirScanner(){
   document.getElementById('scanner-area').style.display = 'block';
-  document.getElementById('scanner-msg').textContent = '';
+  document.getElementById('scanner-msg').textContent = 'Aponte a câmera para o código de barras, mantendo boa distância e luz';
 
-  scannerAtivo = new Html5Qrcode('scanner-leitor');
+  scannerAtivo = new Html5Qrcode('scanner-leitor', {
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39
+    ],
+    verbose: false
+  });
+
   scannerAtivo.start(
     { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 250, height: 120 } },
+    {
+      fps: 15,
+      qrbox: { width: 280, height: 130 },
+      aspectRatio: 1.6,
+      videoConstraints: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      }
+    },
     async (codigoLido) => {
       await fecharScanner();
       await buscarProdutoPorCodigoBarras(codigoLido);
     },
     () => {} // erro de leitura de cada frame, ignora silenciosamente
-  ).catch(err => {
+  ).then(() => {
+    ativarBotaoLanterna();
+  }).catch(err => {
     document.getElementById('scanner-msg').textContent = 'Não foi possível acessar a câmera: ' + err.message;
   });
+}
+
+function ativarBotaoLanterna(){
+  const existente = document.getElementById('btn-lanterna');
+  if(existente) existente.remove();
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-lanterna';
+  btn.className = 'btn-cancelar';
+  btn.style.marginTop = '6px';
+  btn.style.marginRight = '6px';
+  btn.textContent = '🔦 Ligar lanterna';
+  btn.onclick = toggleLanterna;
+
+  const area = document.getElementById('scanner-area');
+  area.insertBefore(btn, document.getElementById('scanner-leitor').nextSibling);
+}
+
+let lanternaLigada = false;
+async function toggleLanterna(){
+  if(!scannerAtivo) return;
+  try{
+    lanternaLigada = !lanternaLigada;
+    await scannerAtivo.applyVideoConstraints({ advanced: [{ torch: lanternaLigada }] });
+    document.getElementById('btn-lanterna').textContent = lanternaLigada ? '🔦 Desligar lanterna' : '🔦 Ligar lanterna';
+  } catch(e){
+    document.getElementById('scanner-msg').textContent = 'Este dispositivo não permite controlar a lanterna pelo navegador.';
+  }
 }
 
 async function fecharScanner(){
@@ -177,6 +229,9 @@ async function fecharScanner(){
     try{ await scannerAtivo.stop(); await scannerAtivo.clear(); } catch(e){}
     scannerAtivo = null;
   }
+  const btnLanterna = document.getElementById('btn-lanterna');
+  if(btnLanterna) btnLanterna.remove();
+  lanternaLigada = false;
   document.getElementById('scanner-area').style.display = 'none';
 }
 
