@@ -951,15 +951,14 @@ function render(){
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
       ${isOwner && pendente ? `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
-        ${e.plano === 'basico'
-          ? `<button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">Reativar gratuitamente</button>
-             <span class="cupom-msg" id="reativar-msg-${e.id}"></span>`
-          : `<a href="${linkDoPlano(e.plano)}" class="link-pagar">Pagar agora</a>
-             <div class="cupom-row">
-               <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
-               <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
-             </div>
-             <span class="cupom-msg" id="cupom-msg-${e.id}"></span>`}
+        <button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">🎁 Ativar Pacote Grátis agora</button>
+        <a href="${linkDoPlano('completo')}" class="link-pagar">💳 Pagar Pacote Completo (R$10/mês)</a>
+        <div class="cupom-row">
+          <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
+          <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
+        </div>
+        <span class="cupom-msg" id="cupom-msg-${e.id}"></span>
+        <span class="cupom-msg" id="reativar-msg-${e.id}"></span>
       </div>` : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">

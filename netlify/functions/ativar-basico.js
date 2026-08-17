@@ -1,6 +1,6 @@
-// Ativa automaticamente um cadastro do Pacote 1 (grátis) — sem precisar de
-// pagamento nem cupom. Só funciona pra cadastros que realmente escolheram
-// o plano "basico"; o Pacote 2 (pago) continua exigindo pagamento ou cupom.
+// Ativa gratuitamente um cadastro (Pacote 1) — sem precisar de pagamento nem cupom.
+// Funciona tanto pra quem está criando o cadastro pela primeira vez no plano grátis,
+// quanto pra quem cancelou o Pacote Pago e quer voltar pro grátis em vez de pagar de novo.
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
@@ -43,14 +43,15 @@ exports.handler = async function (event) {
       return { statusCode: 401, body: JSON.stringify({ error: 'sessão inválida' }) };
     }
 
-    // Confirma que o cadastro é do usuário E que o plano dele é "basico" (grátis)
+    // Confirma que o cadastro é do usuário (qualquer plano — serve tanto pra ativar
+    // o Pacote Grátis pela primeira vez, quanto pra "baixar de nível" quem cancelou o pago)
     const cadastroResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&user_id=eq.${userData.id}&plano=eq.basico&select=id,name`,
+      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&user_id=eq.${userData.id}&select=id,name`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const cadastros = await cadastroResp.json();
     if (!cadastros[0]) {
-      return { statusCode: 403, body: JSON.stringify({ error: 'cadastro não encontrado ou não é do plano grátis' }) };
+      return { statusCode: 403, body: JSON.stringify({ error: 'cadastro não encontrado' }) };
     }
 
     await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}`, {
@@ -60,7 +61,7 @@ exports.handler = async function (event) {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
       },
-      body: JSON.stringify({ status_pagamento: 'ativo' })
+      body: JSON.stringify({ status_pagamento: 'ativo', plano: 'basico' })
     });
 
     await enviarEmail(
