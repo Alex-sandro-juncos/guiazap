@@ -71,9 +71,11 @@ function textoMedida(p){
 
 function renderProdutos(){
   const query = document.getElementById('v-search').value.toLowerCase();
+  const linkDireto = produtoFiltroId || empresaFiltroId;
   const filtrados = produtos
     .filter(p => !produtoFiltroId || p.id === produtoFiltroId)
     .filter(p => produtoFiltroId || !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
+    .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p =>
       p.nome.toLowerCase().includes(query) ||
       (p.marca || '').toLowerCase().includes(query) ||
@@ -86,7 +88,10 @@ function renderProdutos(){
 
   const grid = document.getElementById('v-grid');
   if(filtrados.length === 0){
-    grid.innerHTML = '<div class="vazio-vitrine">Nenhum produto encontrado ainda.</div>';
+    const mensagem = (currentUserV && !linkDireto)
+      ? 'Você ainda não tem produtos cadastrados. Clique em "+ Anunciar produto" para começar.'
+      : 'Nenhum produto encontrado ainda.';
+    grid.innerHTML = `<div class="vazio-vitrine">${mensagem}</div>`;
     return;
   }
 
