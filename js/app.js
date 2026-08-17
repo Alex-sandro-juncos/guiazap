@@ -299,9 +299,9 @@ function populateEstados(){
   populateBairrosFiltro();
 }
 
-const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty";
-const LINK_ASSINATURA_COMPLETO = "https://mpago.la/SUBSTITUA-AQUI"; // TODO: trocar pelo link do plano de R$10 quando criar no Mercado Pago
-const LINK_ASSINATURA = LINK_ASSINATURA_BASICO; // mantém compatibilidade com o código já existente (ex: "Pagar agora" de cadastros antigos)
+const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Pacote 1 é grátis e ativa sozinho
+const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
+const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com o código já existente
 
 let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
 
