@@ -107,6 +107,17 @@ exports.handler = async function (event) {
         );
       }
 
+      if ((ativadoNovo && ativadoNovo.length > 0) || (upgradeFeito && upgradeFeito.length > 0)) {
+        await enviarEmail(
+          payerEmail,
+          'Pagamento confirmado — cadastro ativo no GuiaZap!',
+          `<p>Olá!</p>
+           <p>Seu pagamento foi confirmado e seu cadastro no GuiaZap (Pacote ${planoPago === 'completo' ? 'Completo' : 'Básico'}) já está <b>ativo</b>, aparecendo para todos na busca.</p>
+           <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra ver seu cadastro no ar.</p>
+           <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
+        );
+      }
+
       return {
         statusCode: 200,
         body: `ativados: ${JSON.stringify(ativadoNovo)} | upgrades: ${JSON.stringify(upgradeFeito)}`

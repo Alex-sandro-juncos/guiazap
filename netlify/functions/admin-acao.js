@@ -1,6 +1,21 @@
 // Executa ações de moderação (suspender ou excluir empresa/produto) — só o e-mail admin consegue.
 
 const ADMIN_EMAIL = 'contato@guiazap.shop';
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
+
+async function enviarEmail(destinatario, assunto, html){
+  if(!RESEND_API_KEY || !destinatario) return;
+  try{
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+      body: JSON.stringify({ from: EMAIL_REMETENTE, to: [destinatario], subject: assunto, html })
+    });
+  } catch(e){
+    console.error('erro ao enviar e-mail', e);
+  }
+}
 
 exports.handler = async function (event) {
   try {
@@ -54,6 +69,25 @@ exports.handler = async function (event) {
         body: JSON.stringify({ status_pagamento: novoStatus })
       });
       if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao atualizar status' }) };
+
+      if (acao === 'ativar') {
+        const cadastroResp = await fetch(
+          `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}&select=name,user_email`,
+          { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        );
+        const cadastros = await cadastroResp.json();
+        if (cadastros[0] && cadastros[0].user_email) {
+          await enviarEmail(
+            cadastros[0].user_email,
+            'Cadastro ativado — GuiaZap',
+            `<p>Olá!</p>
+             <p>Seu cadastro "<b>${cadastros[0].name}</b>" no GuiaZap está <b>ativo</b>, aparecendo para todos na busca.</p>
+             <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra conferir.</p>
+             <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
+          );
+        }
+      }
+
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 

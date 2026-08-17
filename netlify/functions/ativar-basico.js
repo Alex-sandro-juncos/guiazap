@@ -2,6 +2,22 @@
 // pagamento nem cupom. Só funciona pra cadastros que realmente escolheram
 // o plano "basico"; o Pacote 2 (pago) continua exigindo pagamento ou cupom.
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
+
+async function enviarEmail(destinatario, assunto, html){
+  if(!RESEND_API_KEY || !destinatario) return;
+  try{
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+      body: JSON.stringify({ from: EMAIL_REMETENTE, to: [destinatario], subject: assunto, html })
+    });
+  } catch(e){
+    console.error('erro ao enviar e-mail', e);
+  }
+}
+
 exports.handler = async function (event) {
   try {
     const authHeader = event.headers.authorization || event.headers.Authorization;
@@ -29,7 +45,7 @@ exports.handler = async function (event) {
 
     // Confirma que o cadastro é do usuário E que o plano dele é "basico" (grátis)
     const cadastroResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&user_id=eq.${userData.id}&plano=eq.basico&select=id`,
+      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&user_id=eq.${userData.id}&plano=eq.basico&select=id,name`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const cadastros = await cadastroResp.json();
@@ -46,6 +62,15 @@ exports.handler = async function (event) {
       },
       body: JSON.stringify({ status_pagamento: 'ativo' })
     });
+
+    await enviarEmail(
+      userData.email,
+      'Cadastro ativado — GuiaZap',
+      `<p>Olá!</p>
+       <p>Seu cadastro "<b>${cadastros[0].name}</b>" no GuiaZap (Pacote Grátis) está <b>ativo</b>, aparecendo para todos na busca.</p>
+       <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra conferir.</p>
+       <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
+    );
 
     return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
   } catch (err) {
