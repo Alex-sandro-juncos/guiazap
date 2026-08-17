@@ -659,6 +659,8 @@ async function aplicarCupom(profissionalId){
   }
 }
 
+let produtosDestaqueTodos = [];
+
 async function loadProdutosDestaque(){
   const container = document.getElementById('destaque-produtos-lista');
   if(!container) return;
@@ -667,7 +669,7 @@ async function loadProdutosDestaque(){
     .from('produtos')
     .select('*, profissionais(name, whatsapp, status_pagamento, user_id)')
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(50);
 
   if(error || !data){
     container.innerHTML = '';
@@ -675,22 +677,48 @@ async function loadProdutosDestaque(){
     return;
   }
 
-  const produtosAtivos = data
+  produtosDestaqueTodos = data
     .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo')
     .filter(p => !currentUser || (p.profissionais && p.profissionais.user_id === currentUser.id));
 
   const titulo = document.querySelector('.destaque-header h2');
   if(titulo) titulo.textContent = currentUser ? '🛍️ Seus produtos' : '🛍️ Produtos em destaque';
 
-  if(produtosAtivos.length === 0){
-    document.querySelector('.destaque-vitrine').style.display = 'none';
+  renderProdutosDestaque();
+}
+
+function renderProdutosDestaque(){
+  const container = document.getElementById('destaque-produtos-lista');
+  const secao = document.querySelector('.destaque-vitrine');
+  if(!container || !secao) return;
+
+  const query = document.getElementById('search').value.toLowerCase();
+
+  const filtrados = produtosDestaqueTodos.filter(p =>
+    p.nome.toLowerCase().includes(query) ||
+    (p.marca || '').toLowerCase().includes(query) ||
+    (p.descricao || '').toLowerCase().includes(query) ||
+    (p.codigo_barras || '').toLowerCase().includes(query) ||
+    (p.profissionais && p.profissionais.name.toLowerCase().includes(query))
+  );
+
+  if(produtosDestaqueTodos.length === 0){
+    secao.style.display = 'none';
+    return;
+  }
+  if(filtrados.length === 0){
+    secao.style.display = query ? 'block' : 'none';
+    container.innerHTML = query ? '<div class="destaque-carregando">Nenhum produto encontrado para essa busca.</div>' : '';
     return;
   }
 
-  // Embaralha um pouco e limita a 10, pra dar visibilidade variada entre empresas diferentes
-  const embaralhados = produtosAtivos.sort(() => Math.random() - 0.5).slice(0, 10);
+  secao.style.display = 'block';
 
-  container.innerHTML = embaralhados.map(p => `
+  // Sem busca ativa: embaralha e limita a 10, pra variar as empresas em destaque.
+  // Com busca ativa: mostra todos os resultados, sem embaralhar nem limitar.
+  const lista = query ? filtrados : [...filtrados].sort(() => Math.random() - 0.5).slice(0, 10);
+
+  container.innerHTML = lista.map(p => `
     <div class="destaque-card">
       <img src="${p.foto ? escapeHtml(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtml(p.nome)}">
       <div class="destaque-info">
@@ -733,6 +761,7 @@ function starString(rating){
 }
 
 function render(){
+  renderProdutosDestaque();
   const list = document.getElementById('list');
   const query = document.getElementById('search').value.toLowerCase();
   const estado = document.getElementById('filter-estado').value;
