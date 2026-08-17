@@ -180,6 +180,17 @@ async function fecharScanner(){
   document.getElementById('scanner-area').style.display = 'none';
 }
 
+function onCodigoBarrasManualChange(){
+  const valor = document.getElementById('p-codigo-barras-manual').value.trim();
+  document.getElementById('p-codigo-barras').value = valor;
+}
+
+async function buscarInfoCodigoManual(){
+  const valor = document.getElementById('p-codigo-barras-manual').value.trim();
+  if(!valor){ return; }
+  await buscarProdutoPorCodigoBarras(valor);
+}
+
 async function buscarProdutoPorCodigoBarras(codigo){
   const msg = document.getElementById('scanner-msg');
   msg.textContent = `Código lido: ${codigo}. Buscando informações...`;
@@ -218,6 +229,7 @@ function fecharFormProduto(){
   document.getElementById('produto-form').classList.remove('open');
   document.getElementById('p-id').value = '';
   document.getElementById('p-codigo-barras').value = '';
+  document.getElementById('p-codigo-barras-manual').value = '';
   document.getElementById('p-nome').value = '';
   document.getElementById('p-marca').value = '';
   document.getElementById('p-descricao').value = '';
@@ -235,6 +247,7 @@ function editarProduto(id){
   abrirFormProduto();
   document.getElementById('p-id').value = p.id;
   document.getElementById('p-codigo-barras').value = p.codigo_barras || '';
+  document.getElementById('p-codigo-barras-manual').value = p.codigo_barras || '';
   document.getElementById('p-profissional').value = p.profissional_id;
   document.getElementById('p-nome').value = p.nome;
   document.getElementById('p-marca').value = p.marca || '';
