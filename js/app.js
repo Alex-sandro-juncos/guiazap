@@ -805,7 +805,7 @@ async function loadProdutosDestaque(){
 
   const { data, error } = await supabaseClient
     .from('produtos')
-    .select('*, profissionais(name, whatsapp, status_pagamento, user_id)')
+    .select('*, profissionais(name, whatsapp, status_pagamento, plano, user_id)')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -816,7 +816,7 @@ async function loadProdutosDestaque(){
   }
 
   produtosDestaqueTodos = data
-    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo')
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && p.profissionais.plano === 'completo')
     .filter(p => !currentUser || (p.profissionais && p.profissionais.user_id === currentUser.id));
 
   const titulo = document.querySelector('.destaque-header h2');
