@@ -271,6 +271,30 @@ async function buscarProdutoPorCodigoBarras(codigo){
   msg.textContent = `Código lido: ${codigo}. Buscando informações...`;
   document.getElementById('p-codigo-barras') && (document.getElementById('p-codigo-barras').value = codigo);
 
+  // 1. Primeiro busca no NOSSO catálogo (cadastros anteriores de qualquer empresa do GuiaZap)
+  try{
+    const { data: doCatalogo } = await supabaseClientV
+      .from('produtos_catalogo_barcode')
+      .select('*')
+      .eq('codigo_barras', codigo)
+      .maybeSingle();
+
+    if(doCatalogo){
+      if(doCatalogo.nome) document.getElementById('p-nome').value = doCatalogo.nome;
+      if(doCatalogo.marca) document.getElementById('p-marca').value = doCatalogo.marca;
+      if(doCatalogo.foto){
+        document.getElementById('p-foto').value = doCatalogo.foto;
+        onFotoProdutoLinkChange();
+      }
+      if(doCatalogo.descricao) document.getElementById('p-descricao').value = doCatalogo.descricao;
+      msg.textContent = 'Produto encontrado no catálogo do GuiaZap! Confira os dados antes de salvar.';
+      return;
+    }
+  } catch(e){
+    console.error('erro ao consultar catálogo do GuiaZap', e);
+  }
+
+  // 2. Se não achou no nosso catálogo, tenta a base pública externa
   try{
     const resp = await fetch(`https://world.openfoodfacts.org/api/v0/product/${codigo}.json`);
     const data = await resp.json();
@@ -288,10 +312,26 @@ async function buscarProdutoPorCodigoBarras(codigo){
       }
       msg.textContent = 'Produto encontrado e preenchido automaticamente! Confira os dados antes de salvar.';
     } else {
-      msg.textContent = 'Código lido, mas o produto não foi encontrado na base pública. Preencha manualmente.';
+      msg.textContent = 'Código lido, mas o produto não foi encontrado em nenhuma base. Preencha manualmente — seu cadastro vai ajudar quem escanear esse código depois.';
     }
   } catch(e){
     msg.textContent = 'Código lido, mas houve erro ao buscar informações. Preencha manualmente.';
+  }
+}
+
+async function contribuirCatalogoBarcode(codigo, nome, marca, foto, descricao){
+  if(!codigo) return;
+  try{
+    await supabaseClientV.from('produtos_catalogo_barcode').upsert({
+      codigo_barras: codigo,
+      nome: nome || null,
+      marca: marca || null,
+      foto: foto || null,
+      descricao: descricao || null,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e){
+    console.error('erro ao contribuir com o catálogo', e);
   }
 }
 
@@ -403,6 +443,11 @@ async function salvarProduto(e){
     ({ error } = await supabaseClientV.from('produtos').insert(payload));
   }
   if(error){ console.error(error); msg.textContent = 'erro ao salvar produto'; return false; }
+
+  // Contribui com o catálogo colaborativo de código de barras, pra ajudar outras empresas depois
+  if(payload.codigo_barras){
+    await contribuirCatalogoBarcode(payload.codigo_barras, payload.nome, payload.marca, payload.foto, payload.descricao);
+  }
 
   msg.textContent = id ? 'produto atualizado!' : 'produto anunciado!';
   await loadProdutos();
