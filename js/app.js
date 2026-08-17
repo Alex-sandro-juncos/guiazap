@@ -135,6 +135,7 @@ async function loadEntries(){
   document.getElementById('loading').style.display = 'none';
   populateEstados();
   await loadAvaliacoes();
+  loadProdutosDestaque();
 
   const params = new URLSearchParams(window.location.search);
   cadastroCompartilhadoId = params.get('p');
@@ -656,6 +657,45 @@ async function aplicarCupom(profissionalId){
   } catch(e){
     msg.textContent = 'erro ao aplicar cupom, tente novamente';
   }
+}
+
+async function loadProdutosDestaque(){
+  const container = document.getElementById('destaque-produtos-lista');
+  if(!container) return;
+
+  const { data, error } = await supabaseClient
+    .from('produtos')
+    .select('*, profissionais(name, whatsapp, status_pagamento)')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if(error || !data){
+    container.innerHTML = '';
+    document.querySelector('.destaque-vitrine').style.display = 'none';
+    return;
+  }
+
+  const produtosAtivos = data.filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
+
+  if(produtosAtivos.length === 0){
+    document.querySelector('.destaque-vitrine').style.display = 'none';
+    return;
+  }
+
+  // Embaralha um pouco e limita a 10, pra dar visibilidade variada entre empresas diferentes
+  const embaralhados = produtosAtivos.sort(() => Math.random() - 0.5).slice(0, 10);
+
+  container.innerHTML = embaralhados.map(p => `
+    <div class="destaque-card">
+      <img src="${p.foto ? escapeHtml(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtml(p.nome)}">
+      <div class="destaque-info">
+        <div class="destaque-nome">${escapeHtml(p.nome)}</div>
+        ${p.preco ? `<div class="destaque-preco">R$ ${escapeHtml(p.preco)}</div>` : ''}
+        <div class="destaque-empresa">${p.profissionais ? escapeHtml(p.profissionais.name) : ''}</div>
+        <a href="vitrine.html?produto=${p.id}" class="destaque-btn">Ver produto</a>
+      </div>
+    </div>
+  `).join('');
 }
 
 function editEntry(id){

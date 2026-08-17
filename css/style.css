@@ -490,3 +490,45 @@
   cursor: pointer;
 }
 .cupom-msg { display: block; font-size: 0.72rem; color: #7c4a03; margin-top: 4px; }
+
+.destaque-vitrine {
+  margin: 14px 0;
+  background: linear-gradient(135deg, #128C7E, #075E54);
+  border-radius: 14px;
+  padding: 14px;
+}
+.destaque-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.destaque-header h2 { color: white; font-size: 1rem; font-weight: 800; }
+.ver-vitrine-link { color: #d4f5e3; font-size: 0.75rem; font-weight: 700; text-decoration: underline; }
+.destaque-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.destaque-carregando { color: white; font-size: 0.8rem; padding: 10px; }
+.destaque-card {
+  flex: 0 0 auto;
+  width: 130px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.destaque-card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
+.destaque-info { padding: 8px; }
+.destaque-nome { font-size: 0.78rem; font-weight: 700; color: #1c1c1c; line-height: 1.25; }
+.destaque-preco { font-size: 0.75rem; color: var(--verde-escuro); font-weight: 700; margin-top: 2px; }
+.destaque-empresa { font-size: 0.66rem; color: #8a8270; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.destaque-btn {
+  display: block;
+  text-align: center;
+  background: var(--verde-whats);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 5px;
+  border-radius: 6px;
+  margin-top: 6px;
+  text-decoration: none;
+}
