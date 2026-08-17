@@ -162,6 +162,32 @@
     text-align: center;
     padding: 3px 6px;
   }
+  .stars-produto { font-size: 0.72rem; color: var(--amarelo); margin: 4px 0; }
+  .stars-produto .num-produto { color: #444; font-weight: 600; font-size: 0.7rem; }
+  .sem-avaliacao-produto { font-size: 0.68rem; color: #8a8270; font-style: italic; }
+  .link-avaliar-produto {
+    background: none; border: none; color: var(--verde-escuro);
+    font-size: 0.68rem; font-weight: 700; text-decoration: underline;
+    cursor: pointer; padding: 0; margin-left: 6px;
+  }
+  .ja-avaliou-produto { font-size: 0.66rem; color: #8a8270; font-style: italic; margin-left: 6px; }
+  .review-box-produto {
+    background: var(--cinza-fundo);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 6px;
+  }
+  .review-box-produto .review-stars { font-size: 1.1rem; color: var(--amarelo); cursor: pointer; margin-bottom: 4px; }
+  .categoria-produto { font-size: 0.68rem; color: #888; margin-top: 1px; }
+  .vitrine-filtros { display: flex; gap: 8px; margin-top: 10px; }
+  .vitrine-filtros select {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    background: white;
+  }
 </style>
 </head>
 <body>
@@ -174,6 +200,16 @@
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
     <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
+  </div>
+  <div class="vitrine-filtros">
+    <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>
+    <select id="v-filter-preco" onchange="renderProdutos()">
+      <option value="">Qualquer preço</option>
+      <option value="0-20">Até R$ 20</option>
+      <option value="20-50">R$ 20 a R$ 50</option>
+      <option value="50-100">R$ 50 a R$ 100</option>
+      <option value="100-9999999">Acima de R$ 100</option>
+    </select>
   </div>
 </div>
 
@@ -218,8 +254,9 @@
     <textarea id="p-descricao" rows="2" placeholder="Detalhes do produto"></textarea>
   </div>
   <div class="field">
-    <label>Marca (opcional)</label>
-    <input id="p-marca" placeholder="Ex: Nestlé, Coca-Cola, marca própria...">
+    <label>Categoria (opcional)</label>
+    <input id="p-categoria" list="categorias-produto-list" placeholder="Ex: Bebidas, Alimentos, Peças...">
+    <datalist id="categorias-produto-list"></datalist>
   </div>
   <div class="row2">
     <div class="field">

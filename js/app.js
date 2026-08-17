@@ -608,6 +608,38 @@ function abrirDenuncia(id){
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
 }
 
+async function toggleDenunciasRecebidas(profissionalId){
+  const box = document.getElementById('denuncias-recebidas-' + profissionalId);
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div class="denuncia-carregando">carregando...</div>';
+
+  const { data, error } = await supabaseClient
+    .from('denuncias')
+    .select('motivo, descricao, created_at')
+    .eq('profissional_id', profissionalId)
+    .order('created_at', { ascending: false });
+
+  if(error){ box.innerHTML = '<div class="denuncia-carregando">erro ao carregar denúncias</div>'; return; }
+
+  if(!data || data.length === 0){
+    box.innerHTML = '<div class="denuncia-carregando">Nenhuma denúncia recebida. 🎉</div>';
+    return;
+  }
+
+  box.innerHTML = data.map(d => `
+    <div class="denuncia-item">
+      <div class="denuncia-motivo">${escapeHtml(d.motivo)}</div>
+      ${d.descricao ? `<div class="denuncia-descricao">${escapeHtml(d.descricao)}</div>` : ''}
+      <div class="denuncia-data">${new Date(d.created_at).toLocaleDateString('pt-BR')}</div>
+    </div>
+  `).join('');
+}
+
 async function enviarDenuncia(id){
   const motivo = document.getElementById('denuncia-motivo-' + id).value;
   const descricao = document.getElementById('denuncia-descricao-' + id).value.trim();
@@ -760,6 +792,17 @@ function starString(rating){
   return '★'.repeat(full) + '☆'.repeat(5 - full);
 }
 
+let visualizacoesContadas = new Set();
+
+function contarVisualizacao(id, isOwner){
+  if(isOwner) return; // não conta o dono vendo o próprio cadastro
+  if(visualizacoesContadas.has(id)) return; // já contou nessa sessão, não conta de novo
+  visualizacoesContadas.add(id);
+  supabaseClient.rpc('incrementar_visualizacao', { pid: id }).then(({ error }) => {
+    if(error) console.error('erro ao contar visualização', error);
+  });
+}
+
 function render(){
   renderProdutosDestaque();
   const list = document.getElementById('list');
@@ -800,6 +843,7 @@ function render(){
     const isOwner = currentUser && e.user_id === currentUser.id;
     const pendente = e.status_pagamento !== 'ativo';
     const { media, count } = mediaDe(e.id);
+    contarVisualizacao(e.id, isOwner);
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
       ${isOwner && pendente ? `<div class="badge-pendente">Pagamento pendente — só você vê este cadastro
@@ -825,7 +869,10 @@ function render(){
           ${count > 0 ? `${starString(media)} <span class="num">${media.toFixed(1)}</span> <span class="review-count">(${count} avaliação${count > 1 ? 'ões' : ''})</span>` : '<span class="sem-avaliacao">Ainda sem avaliações</span>'}
           ${jaAvaliou(e.id) ? '<span class="ja-avaliou">Você já avaliou</span>' : `<button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>`}
         </div>
+        ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Cancelar assinatura</button>` : ''}
+        ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
+        <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
         ${isOwner && !pendente && e.plano !== 'completo' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
         <div class="card-acoes-extra">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>

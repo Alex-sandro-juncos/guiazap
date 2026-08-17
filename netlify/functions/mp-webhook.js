@@ -1,9 +1,34 @@
 // Recebe os avisos (webhooks) do Mercado Pago.
 // - "payment" aprovado -> ativa o cadastro pendente correspondente, OU faz upgrade
 //   de plano se já for um cadastro ativo que pagou o valor do Pacote Completo (migração).
-// - "subscription_preapproval" com status diferente de "authorized" (cancelada, pausada) -> desativa.
+// - "payment" recusado/com problema -> avisa a empresa por e-mail.
+// - "subscription_preapproval" com status diferente de "authorized" (cancelada, pausada) ->
+//   desativa e avisa por e-mail.
 
 const VALOR_PACOTE_COMPLETO = 10; // R$10 -> se o pagamento for igual/maior que isso, considera Pacote Completo
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
+
+async function enviarEmail(destinatario, assunto, html){
+  if(!RESEND_API_KEY || !destinatario) return;
+  try{
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: EMAIL_REMETENTE,
+        to: [destinatario],
+        subject: assunto,
+        html
+      })
+    });
+  } catch(e){
+    console.error('erro ao enviar e-mail', e);
+  }
+}
 
 exports.handler = async function (event) {
   try {
@@ -34,18 +59,30 @@ exports.handler = async function (event) {
       return resp.json();
     }
 
-    // ---------- PAGAMENTO APROVADO ----------
+    // ---------- PAGAMENTO (aprovado ou recusado) ----------
     if (type === 'payment') {
       const mpResp = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
         headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
       });
       const payment = await mpResp.json();
+      const payerEmail = payment.payer && payment.payer.email;
 
       if (payment.status !== 'approved') {
-        return { statusCode: 200, body: `pagamento com status ${payment.status}, nada a fazer` };
+        // Pagamento recusado, pendente ou com problema -> avisa por e-mail (se tiver e-mail e não for a primeira tentativa de um cadastro novo, que ainda nem existe)
+        if (payerEmail && (payment.status === 'rejected' || payment.status === 'in_process')) {
+          await enviarEmail(
+            payerEmail,
+            'Problema no pagamento da sua assinatura GuiaZap',
+            `<p>Olá!</p>
+             <p>Identificamos um problema com o pagamento da sua assinatura no GuiaZap (status: <b>${payment.status}</b>).</p>
+             <p>Isso pode acontecer por cartão vencido, sem limite disponível, ou recusa do banco.</p>
+             <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a>, entre na sua conta e tente novamente pelo botão "Pagar agora" no seu cadastro.</p>
+             <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
+          );
+        }
+        return { statusCode: 200, body: `pagamento com status ${payment.status}, e-mail enviado se aplicável` };
       }
 
-      const payerEmail = payment.payer && payment.payer.email;
       if (!payerEmail) {
         return { statusCode: 200, body: 'pagamento aprovado mas sem e-mail do pagador' };
       }
@@ -76,7 +113,7 @@ exports.handler = async function (event) {
       };
     }
 
-    // ---------- ASSINATURA CANCELADA/PAUSADA -> DESATIVA ----------
+    // ---------- ASSINATURA CANCELADA/PAUSADA -> DESATIVA + AVISA ----------
     if (type === 'subscription_preapproval') {
       const mpResp = await fetch(`https://api.mercadopago.com/preapproval/${dataId}`, {
         headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
@@ -97,6 +134,16 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: `reativado(s): ${JSON.stringify(updated)}` };
       } else {
         const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.ativo`, { status_pagamento: 'pendente' });
+
+        await enviarEmail(
+          payerEmail,
+          'Sua assinatura GuiaZap foi desativada',
+          `<p>Olá!</p>
+           <p>Sua assinatura no GuiaZap foi ${status === 'cancelled' ? 'cancelada' : 'pausada'}, e por isso seu cadastro deixou de aparecer nas buscas públicas.</p>
+           <p>Se foi engano ou você quer reativar, acesse <a href="https://guiazap.shop">guiazap.shop</a>, entre na sua conta e clique em "Pagar agora" no seu cadastro.</p>
+           <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
+        );
+
         return { statusCode: 200, body: `desativado(s) por status "${status}": ${JSON.stringify(updated)}` };
       }
     }

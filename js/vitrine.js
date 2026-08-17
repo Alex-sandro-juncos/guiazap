@@ -1,5 +1,6 @@
 let supabaseClientV;
 let produtos = [];
+let avaliacoesProdutosMap = {};
 let meusCadastros = [];
 let currentUserV = null;
 
@@ -44,6 +45,8 @@ async function loadProdutos(){
   if(error){ console.error(error); return; }
 
   produtos = (data || []).filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
+  await loadAvaliacoesProdutos();
+  popularFiltrosProduto();
 
   const params = new URLSearchParams(window.location.search);
   empresaFiltroId = params.get('empresa');
@@ -71,6 +74,70 @@ async function loadProdutos(){
   renderProdutos();
 }
 
+async function loadAvaliacoesProdutos(){
+  const { data, error } = await supabaseClientV.from('avaliacoes_produtos').select('produto_id, nota');
+  if(error){ console.error(error); return; }
+
+  avaliacoesProdutosMap = {};
+  data.forEach(a => {
+    if(!avaliacoesProdutosMap[a.produto_id]) avaliacoesProdutosMap[a.produto_id] = { soma: 0, count: 0 };
+    avaliacoesProdutosMap[a.produto_id].soma += a.nota;
+    avaliacoesProdutosMap[a.produto_id].count += 1;
+  });
+}
+
+function mediaDeProduto(id){
+  const dados = avaliacoesProdutosMap[id];
+  if(!dados || dados.count === 0) return { media: 0, count: 0 };
+  return { media: dados.soma / dados.count, count: dados.count };
+}
+
+function starStringV(rating){
+  const full = Math.round(rating);
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function jaAvaliouProduto(id){
+  return localStorage.getItem('avaliado_produto_' + id) === '1';
+}
+
+function abrirAvaliacaoProduto(id){
+  const box = document.getElementById('review-produto-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+let notaSelecionadaProduto = {};
+
+function selecionarNotaProduto(id, nota){
+  notaSelecionadaProduto[id] = nota;
+  const stars = document.querySelectorAll('#review-produto-stars-' + id + ' span');
+  stars.forEach((s, i) => { s.textContent = (i < nota) ? '★' : '☆'; });
+}
+
+async function enviarAvaliacaoProduto(id){
+  const comentarioInput = document.getElementById('review-produto-comentario-' + id);
+  const msg = document.getElementById('review-produto-msg-' + id);
+
+  if(jaAvaliouProduto(id)){ msg.textContent = 'Você já avaliou este produto neste dispositivo.'; return; }
+
+  const nota = notaSelecionadaProduto[id];
+  const comentario = comentarioInput.value.trim();
+  if(!nota){ msg.textContent = 'Escolha uma nota.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientV.from('avaliacoes_produtos').insert({
+    produto_id: id, nota, comentario: comentario || null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar avaliação'; return; }
+
+  localStorage.setItem('avaliado_produto_' + id, '1');
+  comentarioInput.value = '';
+  delete notaSelecionadaProduto[id];
+  msg.textContent = 'avaliação enviada, obrigado!';
+  await loadAvaliacoesProdutos();
+  renderProdutos();
+}
+
 function textoMedida(p){
   const qtd = p.quantidade || 1;
   if(p.unidade_medida === 'peso') return `${qtd} kg`;
@@ -78,12 +145,45 @@ function textoMedida(p){
   return qtd == 1 ? '1 unidade' : `${qtd} unidades`;
 }
 
+let visualizacoesProdutoContadas = new Set();
+
+function contarVisualizacaoProduto(id, isDono){
+  if(isDono) return;
+  if(visualizacoesProdutoContadas.has(id)) return;
+  visualizacoesProdutoContadas.add(id);
+  supabaseClientV.rpc('incrementar_visualizacao_produto', { pid: id }).then(({ error }) => {
+    if(error) console.error('erro ao contar visualização de produto', error);
+  });
+}
+
+function popularFiltrosProduto(){
+  const categorias = [...new Set(produtos.map(p => p.categoria).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+  const filtroSel = document.getElementById('v-filter-categoria');
+  const prevValor = filtroSel.value;
+  filtroSel.innerHTML = '<option value="">Categoria</option>' + categorias.map(c => `<option value="${escapeHtmlV(c)}">${escapeHtmlV(c)}</option>`).join('');
+  filtroSel.value = prevValor;
+
+  const datalist = document.getElementById('categorias-produto-list');
+  if(datalist) datalist.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">`).join('');
+}
+
 function renderProdutos(){
   const query = normalizarTextoV(document.getElementById('v-search').value);
+  const categoriaFiltro = document.getElementById('v-filter-categoria').value;
+  const precoFiltro = document.getElementById('v-filter-preco').value;
   const linkDireto = produtoFiltroId || empresaFiltroId;
   const filtrados = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
+    .filter(p => {
+      if(!precoFiltro) return true;
+      const precoNumerico = parseFloat((p.preco || '').replace(/[^\d,]/g, '').replace(',', '.'));
+      if(isNaN(precoNumerico)) return false;
+      const [min, max] = precoFiltro.split('-').map(Number);
+      return precoNumerico >= min && precoNumerico <= max;
+    })
     .filter(p =>
       normalizarTextoV(p.nome).includes(query) ||
       normalizarTextoV(p.marca).includes(query) ||
@@ -113,6 +213,7 @@ function renderProdutos(){
 
   grid.innerHTML = filtrados.map(p => {
     const isDono = currentUserV && p.profissionais && p.profissionais.user_id === currentUserV.id;
+    contarVisualizacaoProduto(p.id, isDono);
     const isCompartilhado = produtoFiltroId && p.id === produtoFiltroId;
     return `
     <div class="card-produto${isCompartilhado ? ' card-produto-destaque' : ''}">
@@ -127,9 +228,27 @@ function renderProdutos(){
           </span>` : ''}
         </div>
         ${p.marca ? `<div class="marca-produto">${escapeHtmlV(p.marca)}</div>` : ''}
+        ${p.categoria ? `<div class="categoria-produto">${escapeHtmlV(p.categoria)}</div>` : ''}
+        ${isDono ? `<div class="stat-visualizacoes">👁️ ${p.visualizacoes || 0} visualizaç${(p.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
         <div class="medida-produto">${textoMedida(p)}</div>
         ${p.preco ? `<div class="preco">R$ ${escapeHtmlV(p.preco)}</div>` : ''}
         <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}</div>
+        <div class="stars-produto">
+          ${mediaDeProduto(p.id).count > 0
+            ? `${starStringV(mediaDeProduto(p.id).media)} <span class="num-produto">${mediaDeProduto(p.id).media.toFixed(1)}</span>`
+            : '<span class="sem-avaliacao-produto">Sem avaliações</span>'}
+          ${jaAvaliouProduto(p.id) ? '<span class="ja-avaliou-produto">Avaliado</span>' : `<button type="button" class="link-avaliar-produto" onclick="abrirAvaliacaoProduto('${p.id}')">Avaliar</button>`}
+        </div>
+        <div class="review-box-produto" id="review-produto-box-${p.id}" style="display:none;">
+          <div class="review-stars" id="review-produto-stars-${p.id}">
+            ${[1,2,3,4,5].map(n => `<span onclick="selecionarNotaProduto('${p.id}', ${n})">☆</span>`).join('')}
+          </div>
+          <textarea id="review-produto-comentario-${p.id}" placeholder="Comentário (opcional)" class="review-input" rows="2"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarAvaliacaoProduto('${p.id}')">Enviar</button>
+            <span class="review-msg" id="review-produto-msg-${p.id}"></span>
+          </div>
+        </div>
         ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${p.profissionais.whatsapp}" target="_blank">Chamar no WhatsApp</a>` : ''}
         <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
         <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
@@ -365,6 +484,7 @@ function fecharFormProduto(){
   document.getElementById('p-codigo-barras-manual').value = '';
   document.getElementById('p-nome').value = '';
   document.getElementById('p-marca').value = '';
+  document.getElementById('p-categoria').value = '';
   document.getElementById('p-descricao').value = '';
   document.getElementById('p-unidade-medida').value = 'unidade';
   document.getElementById('p-quantidade').value = '1';
@@ -384,6 +504,7 @@ function editarProduto(id){
   document.getElementById('p-profissional').value = p.profissional_id;
   document.getElementById('p-nome').value = p.nome;
   document.getElementById('p-marca').value = p.marca || '';
+  document.getElementById('p-categoria').value = p.categoria || '';
   document.getElementById('p-descricao').value = p.descricao || '';
   document.getElementById('p-unidade-medida').value = p.unidade_medida || 'unidade';
   document.getElementById('p-quantidade').value = p.quantidade || 1;
@@ -444,6 +565,7 @@ async function salvarProduto(e){
     nome: document.getElementById('p-nome').value.trim(),
     marca: document.getElementById('p-marca').value.trim() || null,
     descricao: document.getElementById('p-descricao').value.trim() || null,
+    categoria: document.getElementById('p-categoria').value.trim() || null,
     unidade_medida: document.getElementById('p-unidade-medida').value,
     quantidade: parseFloat(document.getElementById('p-quantidade').value) || 1,
     preco: document.getElementById('p-preco').value.trim() || null,
