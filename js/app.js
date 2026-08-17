@@ -145,6 +145,9 @@ async function loadEntries(){
     planoEscolhido = planoParam;
     localStorage.setItem('planoEscolhido', planoEscolhido);
     localStorage.setItem('abrirCadastroAposLogin', '1');
+    // Limpa o "?plano=..." da URL, senão ele fica sendo lido de novo a cada recarregamento
+    // e reabre o formulário sozinho toda vez (inclusive depois de já ter salvo).
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   abrirCadastroSePendente();
