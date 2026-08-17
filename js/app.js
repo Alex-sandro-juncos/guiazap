@@ -738,6 +738,31 @@ async function enviarDenuncia(id){
   setTimeout(() => { document.getElementById('denuncia-box-' + id).style.display = 'none'; }, 2500);
 }
 
+async function reativarGratis(profissionalId){
+  const msg = document.getElementById('reativar-msg-' + profissionalId);
+  msg.textContent = 'reativando...';
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session){ msg.textContent = 'Sessão expirada, faça login novamente.'; return; }
+
+  try{
+    const resp = await fetch('/.netlify/functions/ativar-basico', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId })
+    });
+    if(!resp.ok){
+      const data = await resp.json();
+      msg.textContent = data.error || 'erro ao reativar';
+      return;
+    }
+    msg.textContent = 'Reativado! Já está visível pra todos.';
+    await loadEntries();
+  } catch(e){
+    msg.textContent = 'erro ao reativar, tente novamente';
+  }
+}
+
 async function aplicarCupom(profissionalId){
   const codigo = document.getElementById('cupom-input-' + profissionalId).value.trim();
   const msg = document.getElementById('cupom-msg-' + profissionalId);
@@ -925,13 +950,16 @@ function render(){
     contarVisualizacao(e.id, isOwner);
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
-      ${isOwner && pendente ? `<div class="badge-pendente">Pagamento pendente — só você vê este cadastro
-        <a href="${linkDoPlano(e.plano)}" class="link-pagar">Pagar agora</a>
-        <div class="cupom-row">
-          <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
-          <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
-        </div>
-        <span class="cupom-msg" id="cupom-msg-${e.id}"></span>
+      ${isOwner && pendente ? `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
+        ${e.plano === 'basico'
+          ? `<button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">Reativar gratuitamente</button>
+             <span class="cupom-msg" id="reativar-msg-${e.id}"></span>`
+          : `<a href="${linkDoPlano(e.plano)}" class="link-pagar">Pagar agora</a>
+             <div class="cupom-row">
+               <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
+               <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
+             </div>
+             <span class="cupom-msg" id="cupom-msg-${e.id}"></span>`}
       </div>` : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
