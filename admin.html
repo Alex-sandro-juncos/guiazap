@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — GuiaZap</title>
+<meta name="robots" content="noindex, nofollow">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .admin-wrap { max-width: 600px; margin: 0 auto; padding: 20px 15px 60px; }
+  .admin-login { max-width: 360px; margin: 60px auto; text-align: center; }
+  .admin-login input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; }
+  .admin-login button {
+    width: 100%; padding: 10px; background: var(--verde-whats); color: white;
+    border: none; border-radius: 8px; font-weight: 700; cursor: pointer;
+  }
+  .admin-msg { font-size: 0.8rem; color: #a4402f; margin-top: 8px; }
+  .admin-abas { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .admin-aba-btn {
+    flex: 1; min-width: 100px; padding: 9px; border: 1.5px solid var(--verde-escuro);
+    background: transparent; color: var(--verde-escuro); border-radius: 8px;
+    font-weight: 700; font-size: 0.78rem; cursor: pointer;
+  }
+  .admin-aba-btn.ativa { background: var(--verde-escuro); color: white; }
+  .admin-item {
+    background: var(--cinza-card); border-radius: 10px; padding: 12px; margin-bottom: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  .admin-item .tipo { font-weight: 700; color: var(--verde-escuro); font-size: 0.85rem; }
+  .admin-item .tipo.reclamacao, .admin-item .tipo.den { color: #a4402f; }
+  .admin-item .mensagem { margin: 6px 0; font-size: 0.88rem; }
+  .admin-item .meta { font-size: 0.72rem; color: #888; }
+  .admin-vazio { text-align: center; color: #888; padding: 30px; }
+  .admin-acoes { display: flex; gap: 8px; margin-top: 8px; }
+  .admin-btn-suspender, .admin-btn-excluir {
+    border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem;
+    font-weight: 700; cursor: pointer; color: white;
+  }
+  .admin-btn-suspender { background: #d97706; }
+  .admin-btn-excluir { background: #a4402f; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Painel Admin</p></header>
+
+<div id="admin-login-box" class="admin-login">
+  <h2 style="margin-bottom:14px;">Entrar</h2>
+  <input id="admin-email" type="email" placeholder="Seu e-mail">
+  <input id="admin-senha" type="password" placeholder="Senha">
+  <button onclick="loginAdmin()">Entrar</button>
+  <div class="admin-msg" id="admin-login-msg"></div>
+</div>
+
+<div id="admin-conteudo" class="admin-wrap" style="display:none;">
+  <div class="admin-abas">
+    <button class="admin-aba-btn ativa" id="aba-feedback" onclick="mostrarAbaAdmin('feedback')">💬 Feedback</button>
+    <button class="admin-aba-btn" id="aba-denuncias" onclick="mostrarAbaAdmin('denuncias')">🚩 Denúncias</button>
+    <button class="admin-aba-btn" id="aba-mensagens" onclick="mostrarAbaAdmin('mensagens')">📩 Msgs empresas</button>
+    <button class="admin-aba-btn" id="aba-empresas" onclick="mostrarAbaAdmin('empresas')">🏢 Empresas</button>
+    <button class="admin-aba-btn" id="aba-produtos" onclick="mostrarAbaAdmin('produtos')">📦 Produtos</button>
+  </div>
+  <div id="admin-lista"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientAdmin = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let dadosAdmin = null;
+let abaAtual = 'feedback';
+
+async function loginAdmin(){
+  const email = document.getElementById('admin-email').value.trim();
+  const senha = document.getElementById('admin-senha').value;
+  const msg = document.getElementById('admin-login-msg');
+
+  msg.textContent = 'entrando...';
+  const { error } = await supabaseClientAdmin.auth.signInWithPassword({ email, password: senha });
+  if(error){ msg.textContent = error.message; return; }
+
+  await carregarDadosAdmin();
+}
+
+async function carregarDadosAdmin(){
+  const { data: { session } } = await supabaseClientAdmin.auth.getSession();
+  if(!session){ return; }
+
+  const resp = await fetch('/.netlify/functions/admin-dados', {
+    headers: { Authorization: `Bearer ${session.access_token}` }
+  });
+
+  if(!resp.ok){
+    document.getElementById('admin-login-msg').textContent = 'Acesso negado — esse e-mail não é administrador.';
+    return;
+  }
+
+  dadosAdmin = await resp.json();
+  document.getElementById('admin-login-box').style.display = 'none';
+  document.getElementById('admin-conteudo').style.display = 'block';
+  renderAdmin();
+}
+
+function mostrarAbaAdmin(aba){
+  abaAtual = aba;
+  ['feedback','denuncias','mensagens','empresas','produtos'].forEach(a => {
+    document.getElementById('aba-' + a).classList.toggle('ativa', aba === a);
+  });
+  renderAdmin();
+}
+
+async function executarAcaoAdmin(acao, tabela, id, nome){
+  const confirmText = acao === 'excluir'
+    ? `Tem certeza que quer EXCLUIR "${nome}"? Isso não pode ser desfeito.`
+    : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
+  if(!confirm(confirmText)) return;
+
+  const { data: { session } } = await supabaseClientAdmin.auth.getSession();
+  const resp = await fetch('/.netlify/functions/admin-acao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ acao, tabela, id })
+  });
+
+  if(!resp.ok){
+    alert('Erro ao executar ação.');
+    return;
+  }
+
+  alert(acao === 'excluir' ? 'Excluído com sucesso.' : 'Suspenso com sucesso.');
+  await carregarDadosAdmin();
+}
+
+function formatarData(iso){
+  return new Date(iso).toLocaleString('pt-BR');
+}
+
+function renderAdmin(){
+  const lista = document.getElementById('admin-lista');
+  if(!dadosAdmin){ lista.innerHTML = ''; return; }
+
+  let itens = [];
+  if(abaAtual === 'feedback') itens = dadosAdmin.feedbackSite;
+  if(abaAtual === 'denuncias') itens = [...dadosAdmin.denuncias.map(d => ({...d, origem:'Empresa'})), ...dadosAdmin.denunciasProdutos.map(d => ({...d, origem:'Produto'}))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  if(abaAtual === 'mensagens') itens = dadosAdmin.mensagensEmpresa;
+  if(abaAtual === 'empresas') itens = dadosAdmin.profissionais;
+  if(abaAtual === 'produtos') itens = dadosAdmin.produtos;
+
+  if(!itens || itens.length === 0){
+    lista.innerHTML = '<div class="admin-vazio">Nada por aqui ainda.</div>';
+    return;
+  }
+
+  lista.innerHTML = itens.map(item => {
+    if(abaAtual === 'feedback' || abaAtual === 'mensagens'){
+      return `<div class="admin-item">
+        <div class="tipo ${item.tipo === 'reclamacao' ? 'reclamacao' : ''}">${item.tipo === 'reclamacao' ? '⚠️ Reclamação' : '💡 Sugestão'}</div>
+        <div class="mensagem">${item.mensagem}</div>
+        <div class="meta">${item.remetente_email || 'anônimo'} · ${formatarData(item.created_at)}</div>
+      </div>`;
+    }
+    if(abaAtual === 'denuncias'){
+      return `<div class="admin-item">
+        <div class="tipo den">🚩 ${item.motivo} <span style="font-weight:400; color:#888;">(${item.origem})</span></div>
+        ${item.descricao ? `<div class="mensagem">${item.descricao}</div>` : ''}
+        <div class="meta">${item.denunciante_email || 'anônimo'} · ${formatarData(item.created_at)}</div>
+      </div>`;
+    }
+    if(abaAtual === 'empresas'){
+      return `<div class="admin-item">
+        <div class="tipo">${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
+        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
+        <div class="admin-acoes">
+          <button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>
+          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
+        </div>
+      </div>`;
+    }
+    if(abaAtual === 'produtos'){
+      return `<div class="admin-item">
+        <div class="tipo">${item.nome}</div>
+        <div class="meta">${item.marca || ''} ${item.categoria ? '· ' + item.categoria : ''} ${item.preco ? '· R$ ' + item.preco : ''}</div>
+        <div class="admin-acoes">
+          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'produtos', '${item.id}', '${item.nome.replace(/'/g,"\\'")}')">Excluir</button>
+        </div>
+      </div>`;
+    }
+    return '';
+  }).join('');
+}
+
+// Se já estiver logado (sessão anterior), carrega direto
+supabaseClientAdmin.auth.getSession().then(({ data: { session } }) => {
+  if(session) carregarDadosAdmin();
+});
+</script>
+</body>
+</html>

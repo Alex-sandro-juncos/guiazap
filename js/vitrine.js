@@ -1,6 +1,25 @@
 let supabaseClientV;
 let produtos = [];
 let avaliacoesProdutosMap = {};
+
+// ---------- FAVORITOS DE PRODUTO (salvos no navegador) ----------
+let favoritosProdutos = new Set(JSON.parse(localStorage.getItem('favoritos_produtos') || '[]'));
+let mostrandoSoFavoritosProdutos = false;
+
+function toggleFavoritoProduto(id, event){
+  if(event) event.stopPropagation();
+  if(favoritosProdutos.has(id)) favoritosProdutos.delete(id);
+  else favoritosProdutos.add(id);
+  localStorage.setItem('favoritos_produtos', JSON.stringify([...favoritosProdutos]));
+  renderProdutos();
+}
+
+function toggleFiltroFavoritosProdutos(){
+  mostrandoSoFavoritosProdutos = !mostrandoSoFavoritosProdutos;
+  const btn = document.getElementById('btn-favoritos-produtos');
+  if(btn) btn.classList.toggle('ativo', mostrandoSoFavoritosProdutos);
+  renderProdutos();
+}
 let meusCadastros = [];
 let currentUserV = null;
 
@@ -176,6 +195,7 @@ function renderProdutos(){
   const filtrados = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
     .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
     .filter(p => {
       if(!precoFiltro) return true;
@@ -222,6 +242,7 @@ function renderProdutos(){
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="nome">${escapeHtmlV(p.nome)}</div>
+          <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavoritoProduto('${p.id}', event)">${favoritosProdutos.has(p.id) ? '❤️' : '🤍'}</button>
           ${isDono ? `<span class="owner-actions">
             <button class="icon-btn" title="Editar" onclick="editarProduto('${p.id}')">✎</button>
             <button class="icon-btn" title="Excluir" onclick="excluirProduto('${p.id}')">✕</button>

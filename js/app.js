@@ -603,6 +603,26 @@ async function copiarLinkCadastro(id, event){
 
 let cadastroCompartilhadoId = null;
 
+// ---------- FAVORITOS (salvos no navegador, sem precisar de login) ----------
+
+let favoritosEmpresas = new Set(JSON.parse(localStorage.getItem('favoritos_empresas') || '[]'));
+let mostrandoSoFavoritos = false;
+
+function toggleFavorito(id, event){
+  if(event) event.stopPropagation();
+  if(favoritosEmpresas.has(id)) favoritosEmpresas.delete(id);
+  else favoritosEmpresas.add(id);
+  localStorage.setItem('favoritos_empresas', JSON.stringify([...favoritosEmpresas]));
+  render();
+}
+
+function toggleFiltroFavoritos(){
+  mostrandoSoFavoritos = !mostrandoSoFavoritos;
+  const btn = document.getElementById('btn-favoritos');
+  if(btn) btn.classList.toggle('ativo', mostrandoSoFavoritos);
+  render();
+}
+
 function abrirDenuncia(id){
   const box = document.getElementById('denuncia-box-' + id);
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -874,6 +894,7 @@ function render(){
     ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
     : entries
     .filter(e => currentUser ? e.user_id === currentUser.id : e.status_pagamento === 'ativo')
+    .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
     .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
@@ -916,10 +937,13 @@ function render(){
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <h3>${escapeHtml(e.name)}</h3>
-          ${isOwner ? `<span class="owner-actions">
-            <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
-            <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
-          </span>` : ''}
+          <div style="display:flex; align-items:center; gap:4px;">
+            <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
+            ${isOwner ? `<span class="owner-actions">
+              <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
+              <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
+            </span>` : ''}
+          </div>
         </div>
         <div class="categoria">${escapeHtml(e.cat)}${e.categorias_extra ? ' · ' + e.categorias_extra.split('\n').map(c=>escapeHtml(c.trim())).filter(Boolean).join(', ') : ''}</div>
         <div class="local">${escapeHtml(e.cidade)} · ${escapeHtml(e.bairro)}</div>
