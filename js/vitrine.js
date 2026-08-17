@@ -180,6 +180,21 @@ async function fecharScanner(){
   document.getElementById('scanner-area').style.display = 'none';
 }
 
+function formatarValorProduto(event){
+  const input = event.target;
+  const valorAtual = input.value;
+
+  // Se a pessoa digitou alguma letra (ex: "Sob consulta"), não mexe em nada, deixa livre
+  if(/[a-zA-Z]/.test(valorAtual)) return;
+
+  // Pega só os dígitos e formata como dinheiro (últimos 2 dígitos = centavos)
+  const somenteDigitos = valorAtual.replace(/\D/g, '');
+  if(!somenteDigitos){ input.value = ''; return; }
+
+  const numero = (parseInt(somenteDigitos, 10) / 100).toFixed(2);
+  input.value = numero.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 function onCodigoBarrasManualChange(){
   const valor = document.getElementById('p-codigo-barras-manual').value.trim();
   document.getElementById('p-codigo-barras').value = valor;

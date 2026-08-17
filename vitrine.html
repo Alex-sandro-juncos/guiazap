@@ -137,6 +137,18 @@
     width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
   }
   .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .campo-com-prefixo { position: relative; }
+  .campo-com-prefixo .prefixo-rs {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-weight: 700;
+    color: #444;
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+  .campo-com-prefixo input { padding-left: 34px !important; }
 </style>
 </head>
 <body>
@@ -212,7 +224,10 @@
   </div>
   <div class="field">
     <label>Valor (R$)</label>
-    <input id="p-preco" placeholder="Ex: 35,00 ou Sob consulta">
+    <div class="campo-com-prefixo">
+      <span class="prefixo-rs">R$</span>
+      <input id="p-preco" placeholder="0,00" inputmode="numeric" oninput="formatarValorProduto(event)">
+    </div>
   </div>
   <div class="field">
     <label>Foto do produto</label>
