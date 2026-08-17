@@ -173,7 +173,7 @@
 <div class="vitrine-busca">
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
-    <input id="v-search" placeholder="Buscar por nome, marca, descrição ou código de barras..." oninput="renderProdutos()">
+    <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
   </div>
 </div>
 
@@ -203,9 +203,9 @@
       <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="fecharScanner()">Cancelar leitura</button>
     </div>
     <span class="foto-msg" id="scanner-msg"></span>
-    <label class="foto-ou">ou digite o código de barras manualmente (se o leitor não funcionar)</label>
+    <label class="foto-ou">ou digite o código de barras / código de peça manualmente (útil quando um mecânico ou fornecedor passou só o código)</label>
     <div style="display:flex; gap:6px;">
-      <input id="p-codigo-barras-manual" placeholder="Ex: 7891000100103" oninput="onCodigoBarrasManualChange()" style="flex:1;">
+      <input id="p-codigo-barras-manual" placeholder="Ex: 7891000100103 ou código do fabricante da peça" oninput="onCodigoBarrasManualChange()" style="flex:1;">
       <button type="button" class="btn-cancelar" onclick="buscarInfoCodigoManual()">Buscar</button>
     </div>
   </div>
