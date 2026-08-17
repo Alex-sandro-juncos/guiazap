@@ -608,6 +608,64 @@ function abrirDenuncia(id){
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
 }
 
+function abrirMensagemEmpresa(id){
+  const box = document.getElementById('mensagem-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarMensagemEmpresa(id){
+  const tipo = document.getElementById('mensagem-tipo-' + id).value;
+  const mensagem = document.getElementById('mensagem-texto-' + id).value.trim();
+  const msg = document.getElementById('mensagem-msg-' + id);
+
+  if(!mensagem){ msg.textContent = 'Escreva sua mensagem.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClient.from('mensagens_empresa').insert({
+    profissional_id: id,
+    tipo,
+    mensagem,
+    remetente_email: currentUser ? currentUser.email : null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar mensagem'; return; }
+
+  msg.textContent = 'mensagem enviada!';
+  document.getElementById('mensagem-texto-' + id).value = '';
+  setTimeout(() => { document.getElementById('mensagem-box-' + id).style.display = 'none'; }, 2000);
+}
+
+async function toggleMensagensRecebidas(profissionalId){
+  const box = document.getElementById('mensagens-recebidas-' + profissionalId);
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div class="denuncia-carregando">carregando...</div>';
+
+  const { data, error } = await supabaseClient
+    .from('mensagens_empresa')
+    .select('tipo, mensagem, created_at')
+    .eq('profissional_id', profissionalId)
+    .order('created_at', { ascending: false });
+
+  if(error){ box.innerHTML = '<div class="denuncia-carregando">erro ao carregar mensagens</div>'; return; }
+
+  if(!data || data.length === 0){
+    box.innerHTML = '<div class="denuncia-carregando">Nenhuma mensagem recebida ainda.</div>';
+    return;
+  }
+
+  box.innerHTML = data.map(m => `
+    <div class="denuncia-item">
+      <div class="denuncia-motivo">${m.tipo === 'reclamacao' ? '⚠️ Reclamação' : '💡 Sugestão'}</div>
+      <div class="denuncia-descricao">${escapeHtml(m.mensagem)}</div>
+      <div class="denuncia-data">${new Date(m.created_at).toLocaleDateString('pt-BR')}</div>
+    </div>
+  `).join('');
+}
+
 async function toggleDenunciasRecebidas(profissionalId){
   const box = document.getElementById('denuncias-recebidas-' + profissionalId);
   if(box.style.display === 'block'){
@@ -878,6 +936,20 @@ function render(){
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
           ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
+          ${!isOwner ? `<button type="button" class="link-mensagem" onclick="abrirMensagemEmpresa('${e.id}')">💬 Reclamar/Sugerir pra empresa</button>` : ''}
+          ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleMensagensRecebidas('${e.id}')">💬 Ver mensagens recebidas</button>` : ''}
+        </div>
+        ${isOwner ? `<div class="mensagens-recebidas-box" id="mensagens-recebidas-${e.id}" style="display:none;"></div>` : ''}
+        <div class="mensagem-box" id="mensagem-box-${e.id}" style="display:none;">
+          <select id="mensagem-tipo-${e.id}" class="review-input">
+            <option value="reclamacao">Reclamação</option>
+            <option value="sugestao">Sugestão</option>
+          </select>
+          <textarea id="mensagem-texto-${e.id}" class="review-input" rows="3" placeholder="Escreva sua mensagem para a empresa"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarMensagemEmpresa('${e.id}')">Enviar</button>
+            <span class="review-msg" id="mensagem-msg-${e.id}"></span>
+          </div>
         </div>
         <div class="denuncia-box" id="denuncia-box-${e.id}" style="display:none;">
           <select id="denuncia-motivo-${e.id}" class="review-input">

@@ -52,13 +52,44 @@
     <span id="copiar-msg" class="copiar-msg"></span>
   </div>
 
+  <div class="contato-card">
+    <div class="rotulo" style="margin-bottom:8px;">Reclamação ou sugestão sobre o site</div>
+    <select id="feedback-tipo" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px;">
+      <option value="sugestao">Sugestão</option>
+      <option value="reclamacao">Reclamação</option>
+    </select>
+    <textarea id="feedback-mensagem" rows="4" placeholder="Conte pra gente o que achou, ou o que podemos melhorar" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px;"></textarea>
+    <button class="contato-btn copiar-solo" style="border:none; width:100%; cursor:pointer;" onclick="enviarFeedbackSite()">Enviar</button>
+    <div id="feedback-msg" style="font-size:0.8rem; margin-top:8px;"></div>
+  </div>
+
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 function copiarEmail(){
   navigator.clipboard.writeText('contato@guiazap.shop').then(() => {
     document.getElementById('copiar-msg').textContent = 'e-mail copiado!';
   });
+}
+
+const supabaseClientContato = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function enviarFeedbackSite(){
+  const tipo = document.getElementById('feedback-tipo').value;
+  const mensagem = document.getElementById('feedback-mensagem').value.trim();
+  const msg = document.getElementById('feedback-msg');
+
+  if(!mensagem){ msg.textContent = 'Escreva sua mensagem antes de enviar.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientContato.from('feedback_site').insert({ tipo, mensagem });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar, tente novamente'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'Obrigado! Sua mensagem foi enviada.';
+  msg.style.color = 'var(--verde-escuro)';
+  document.getElementById('feedback-mensagem').value = '';
 }
 </script>
 </body>

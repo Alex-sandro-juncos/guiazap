@@ -64,3 +64,62 @@ create policy "Qualquer logado pode contribuir com o catalogo" on produtos_catal
 
 create policy "Qualquer logado pode atualizar o catalogo" on produtos_catalogo_barcode
   for update using (auth.role() = 'authenticated');
+
+-- Avaliações de produtos individuais (mesma lógica das avaliações de empresa, mas por produto)
+create table avaliacoes_produtos (
+  id uuid default gen_random_uuid() primary key,
+  produto_id uuid references produtos(id) on delete cascade not null,
+  nota int not null check (nota between 1 and 5),
+  comentario text,
+  created_at timestamp default now()
+);
+
+alter table avaliacoes_produtos enable row level security;
+
+create policy "Leitura publica de avaliacoes de produtos" on avaliacoes_produtos
+  for select using (true);
+
+create policy "Qualquer um pode avaliar produto" on avaliacoes_produtos
+  for insert with check (true);
+
+-- Categoria do produto (pra filtrar na Vitrine)
+alter table produtos add column if not exists categoria text;
+
+-- Contador de visualizações de produto
+alter table produtos add column if not exists visualizacoes integer default 0;
+
+create or replace function incrementar_visualizacao_produto(pid uuid)
+returns void as $$
+begin
+  update produtos set visualizacoes = visualizacoes + 1 where id = pid;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function incrementar_visualizacao_produto(uuid) to anon, authenticated;
+
+-- Denúncias de produtos (mesma lógica das denúncias de empresa, mas por produto)
+create table denuncias_produtos (
+  id uuid default gen_random_uuid() primary key,
+  produto_id uuid references produtos(id) on delete cascade not null,
+  motivo text not null,
+  descricao text,
+  denunciante_email text,
+  status text default 'pendente',
+  created_at timestamp default now()
+);
+
+alter table denuncias_produtos enable row level security;
+
+create policy "Qualquer um pode denunciar produto" on denuncias_produtos
+  for insert with check (true);
+
+-- Só o dono do produto (via empresa) consegue ver as denúncias dele
+create policy "Dono ve as denuncias do proprio produto" on denuncias_produtos
+  for select using (
+    exists (
+      select 1 from produtos
+      join profissionais on profissionais.id = produtos.profissional_id
+      where produtos.id = produto_id
+      and profissionais.user_id = auth.uid()
+    )
+  );

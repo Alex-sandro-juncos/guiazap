@@ -564,3 +564,39 @@
 .denuncia-data { color: #999; font-size: 0.68rem; margin-top: 3px; }
 
 .stat-visualizacoes { font-size: 0.72rem; color: #666; margin-top: 4px; font-weight: 600; }
+
+.link-denunciar-produto {
+  background: none;
+  border: none;
+  color: #8a8270;
+  font-size: 0.68rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+
+.link-mensagem {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+.mensagem-box {
+  background: #e8f4fd;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.mensagens-recebidas-box {
+  background: #e8f4fd;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 6px;
+}

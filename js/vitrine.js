@@ -252,6 +252,23 @@ function renderProdutos(){
         ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${p.profissionais.whatsapp}" target="_blank">Chamar no WhatsApp</a>` : ''}
         <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
         <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
+        ${!isDono ? `<button type="button" class="link-denunciar-produto" onclick="abrirDenunciaProduto('${p.id}')">Denunciar produto</button>
+        <div class="denuncia-box" id="denuncia-produto-box-${p.id}" style="display:none;">
+          <select id="denuncia-produto-motivo-${p.id}" class="review-input">
+            <option value="">Selecione o motivo</option>
+            <option value="Produto falso ou golpe">Produto falso ou golpe</option>
+            <option value="Foto/descricao enganosa">Foto ou descrição enganosa</option>
+            <option value="Preco incorreto">Preço incorreto</option>
+            <option value="Conteudo ofensivo">Conteúdo ofensivo</option>
+            <option value="Outro">Outro</option>
+          </select>
+          <textarea id="denuncia-produto-descricao-${p.id}" class="review-input" rows="2" placeholder="Descreva o problema (opcional)"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarDenunciaProduto('${p.id}')">Enviar denúncia</button>
+            <span class="review-msg" id="denuncia-produto-msg-${p.id}"></span>
+          </div>
+        </div>` : `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasProdutoRecebidas('${p.id}')">🚩 Ver denúncias recebidas</button>
+        <div class="denuncias-recebidas-box" id="denuncias-produto-recebidas-${p.id}" style="display:none;"></div>`}
       </div>
     </div>
   `; }).join('');
@@ -470,6 +487,63 @@ async function contribuirCatalogoBarcode(codigo, nome, marca, foto, descricao){
   } catch(e){
     console.error('erro ao contribuir com o catálogo', e);
   }
+}
+
+function abrirDenunciaProduto(id){
+  const box = document.getElementById('denuncia-produto-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarDenunciaProduto(id){
+  const motivo = document.getElementById('denuncia-produto-motivo-' + id).value;
+  const descricao = document.getElementById('denuncia-produto-descricao-' + id).value.trim();
+  const msg = document.getElementById('denuncia-produto-msg-' + id);
+
+  if(!motivo){ msg.textContent = 'Selecione um motivo.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientV.from('denuncias_produtos').insert({
+    produto_id: id,
+    motivo,
+    descricao: descricao || null,
+    denunciante_email: currentUserV ? currentUserV.email : null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar denúncia'; return; }
+
+  msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o GuiaZap seguro.';
+  setTimeout(() => { document.getElementById('denuncia-produto-box-' + id).style.display = 'none'; }, 2500);
+}
+
+async function toggleDenunciasProdutoRecebidas(produtoId){
+  const box = document.getElementById('denuncias-produto-recebidas-' + produtoId);
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div class="denuncia-carregando">carregando...</div>';
+
+  const { data, error } = await supabaseClientV
+    .from('denuncias_produtos')
+    .select('motivo, descricao, created_at')
+    .eq('produto_id', produtoId)
+    .order('created_at', { ascending: false });
+
+  if(error){ box.innerHTML = '<div class="denuncia-carregando">erro ao carregar denúncias</div>'; return; }
+
+  if(!data || data.length === 0){
+    box.innerHTML = '<div class="denuncia-carregando">Nenhuma denúncia recebida. 🎉</div>';
+    return;
+  }
+
+  box.innerHTML = data.map(d => `
+    <div class="denuncia-item">
+      <div class="denuncia-motivo">${escapeHtmlV(d.motivo)}</div>
+      ${d.descricao ? `<div class="denuncia-descricao">${escapeHtmlV(d.descricao)}</div>` : ''}
+      <div class="denuncia-data">${new Date(d.created_at).toLocaleDateString('pt-BR')}</div>
+    </div>
+  `).join('');
 }
 
 function abrirFormProduto(){
