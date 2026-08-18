@@ -83,7 +83,6 @@
     align-items: flex-start;
   }
   .card-profissional > .badge-pendente { width: 100%; order: -1; }
-  .card-profissional > .avatar,
   .card-profissional > .info { flex: 1 1 auto; min-width: 0; }
   .card-profissional img.avatar {
     width: 58px; height: 58px;
