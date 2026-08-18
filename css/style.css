@@ -1,185 +1,664 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GuiaZap — Encontre profissionais e fale direto no WhatsApp</title>
-<meta name="description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp. Busque por categoria, cidade e bairro no GuiaZap.">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#25D366">
+:root {
+    --verde-whats: #25D366;
+    --verde-escuro: #128C7E;
+    --cinza-fundo: #F0F2F5;
+    --cinza-card: #FFFFFF;
+    --amarelo: #FFB020;
+    --texto-sub: #6b7280;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+  body { background: var(--cinza-fundo); padding-bottom: 40px; }
 
-<meta property="og:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
-<meta property="og:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://guiazap.shop">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-<header>
-  <div class="logo">GuiaZap</div>
-  <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
-</header>
+  header {
+    background: var(--verde-whats);
+    color: white;
+    padding: 28px 15px 22px;
+    text-align: center;
+  }
+  header .logo { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+  header p { font-size: 0.9rem; opacity: 0.95; margin-top: 4px; }
 
-<div class="wrap">
-  <div id="config-warning" class="config-warning" style="display:none;">
-    ⚠ Configuração pendente — preencha SUPABASE_URL e SUPABASE_ANON_KEY no arquivo config.js. Veja o README.md.
-  </div>
+  .wrap { max-width: 480px; margin: 0 auto; padding: 0 15px; }
 
-  <div id="auth-logged-out" class="auth-box">
-    <div class="auth-row">
-      <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
-      <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
-    </div>
-    <label class="termos-check">
-      <input type="checkbox" id="aceite-termos">
-      <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
-    </label>
-    <div class="auth-actions">
-      <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
-      <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
-      <span class="auth-msg" id="auth-msg"></span>
-    </div>
-    <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
-  </div>
+  .busca-container {
+    background: var(--cinza-card);
+    padding: 16px;
+    margin-top: 14px;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 1;
+  }
+  .busca-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .busca-container input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  .busca-container input:focus, .busca-container select:focus { outline: 2px solid var(--verde-whats); }
+  .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filtros select, .filtros input {
+    flex: 1 1 30%;
+    min-width: 90px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: white;
+  }
 
-  <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
-    <span>Logado como <b id="auth-email-display"></b></span>
-    <div>
-      <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
-      <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
-    </div>
-  </div>
-  <div id="trocar-senha-box" class="auth-box" style="display:none;">
-    <div class="auth-row">
-      <input id="nova-senha" type="password" placeholder="Nova senha">
-      <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
-    </div>
-    <div class="auth-actions">
-      <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
-      <span class="auth-msg" id="trocar-senha-msg"></span>
-    </div>
-  </div>
+  .btn-cadastro {
+    display: block;
+    width: 100%;
+    background: var(--verde-whats);
+    color: white;
+    text-align: center;
+    padding: 15px;
+    margin: 18px 0;
+    border-radius: 12px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
 
-  <div class="busca-container">
-    <div class="busca-row">
-      <div class="busca-com-icone">
-        <span class="icone-lupa" onclick="render()">🔍</span>
-        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
-      </div>
-    </div>
-    <div id="historico-busca-lista" class="historico-busca"></div>
-    <div class="field" style="margin-bottom:10px;">
-      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" onblur="buscarCepFiltro()">
-      <span class="cep-msg" id="filter-cep-msg"></span>
-    </div>
-    <div class="filtros">
-      <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" oninput="render()" onchange="onCidadeFiltroChange()">
-      <datalist id="cidades-filtro-list"></datalist>
-      <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
-    </div>
-    <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
-  </div>
+  .result-header {
+    font-size: 0.95rem;
+    color: #1c1c1c;
+    margin: 4px 0 12px;
+  }
+  .result-header b { color: var(--verde-escuro); }
 
-  <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
+  .card-profissional {
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .card-profissional > .badge-pendente { width: 100%; order: -1; }
+  .card-profissional > .info { flex: 1 1 auto; min-width: 0; }
+  .card-profissional img.avatar {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #eee;
+    flex-shrink: 0;
+  }
+  .card-profissional .info { flex: 1; min-width: 0; }
+  .card-profissional .info h3 { font-size: 1.02rem; color: #1c1c1c; }
+  .card-profissional .info .categoria { color: var(--verde-escuro); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
+  .card-profissional .info .local { color: var(--texto-sub); font-size: 0.8rem; margin-top: 2px; }
+  .stars { color: var(--amarelo); font-size: 0.85rem; margin-top: 4px; }
+  .stars .num { color: #444; font-weight: 600; margin-left: 3px; }
+  .btn-zap {
+    display: inline-block;
+    background: var(--verde-whats);
+    color: white;
+    border: none;
+    padding: 9px 12px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-top: 8px;
+    cursor: pointer;
+    text-decoration: none;
+  }
 
-  <div class="destaque-vitrine">
-    <div class="destaque-header">
-      <h2>🛍️ Produtos em destaque</h2>
-      <a href="vitrine.html" class="ver-vitrine-link">Ver vitrine completa →</a>
-    </div>
-    <div class="destaque-scroll" id="destaque-produtos-lista">
-      <div class="destaque-carregando">carregando produtos...</div>
-    </div>
-  </div>
+  .empty { text-align: center; padding: 40px 20px; color: var(--texto-sub); }
+  .loading { text-align: center; padding: 30px; color: var(--texto-sub); font-size: 0.85rem; }
 
-  <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
+  .config-warning {
+    background: #fff3cd;
+    border: 1.5px solid #d97706;
+    color: #7c4a03;
+    font-size: 0.78rem;
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin: 15px 0;
+    line-height: 1.5;
+  }
 
-  <form id="cadastro-form" onsubmit="return saveEntry(event)">
-    <input type="hidden" id="edit-id">
-    <div class="field">
-      <label>Nome</label>
-      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão">
-    </div>
-    <div class="field">
-      <label>CNPJ ou CPF</label>
-      <input id="f-documento" required placeholder="Só números">
-    </div>
-    <div class="field">
-      <label>Categoria principal</label>
-      <input id="f-cat" required placeholder="Ex: Dentista">
-    </div>
-    <div class="field">
-      <label>Outras categorias (opcional)</label>
-      <div id="categorias-extra-list"></div>
-      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
-    </div>
-    <div class="field">
-      <label>CEP</label>
-      <input id="f-cep" placeholder="Ex: 01310-100" onblur="buscarCep()">
-      <span class="cep-msg" id="cep-msg"></span>
-    </div>
-    <div class="row2">
-      <div class="field">
-        <label>Estado</label>
-        <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
-      </div>
-      <div class="field">
-        <label>Cidade</label>
-        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione">
-        <datalist id="cidades-cadastro-list"></datalist>
-      </div>
-      <div class="field">
-        <label>Bairro</label>
-        <input id="f-bairro" required placeholder="Ex: Vila Mariana">
-      </div>
-    </div>
-    <div class="field">
-      <label>WhatsApp (com DDD, só números)</label>
-      <input id="f-whatsapp" required placeholder="Ex: 11912345678">
-    </div>
-    <div class="field">
-      <label>Outros contatos (opcional)</label>
-      <div id="contatos-extra-list"></div>
-      <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
-    </div>
-    <div class="field">
-      <label>Foto (opcional)</label>
-      <div class="foto-botoes">
-        <label class="btn-foto-opcao">
-          📷 Tirar foto
-          <input type="file" accept="image/*" capture="environment" onchange="enviarFoto(event)" style="display:none;">
-        </label>
-        <label class="btn-foto-opcao">
-          🖼️ Escolher da galeria
-          <input type="file" accept="image/*" onchange="enviarFoto(event)" style="display:none;">
-        </label>
-      </div>
-      <span class="foto-msg" id="foto-msg"></span>
-      <img id="foto-preview" class="foto-preview" style="display:none;">
-      <label class="foto-ou">ou cole um link de foto já existente</label>
-      <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn-salvar">Salvar</button>
-      <button type="button" class="btn-cancelar" onclick="closeForm()">Cancelar</button>
-      <span class="form-msg" id="form-msg"></span>
-    </div>
-  </form>
+  #cadastro-form {
+    display: none;
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 18px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  #cadastro-form.open { display: block; }
+  #cadastro-form .field { margin-bottom: 10px; }
+  #cadastro-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  #cadastro-form input, #cadastro-form select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  }
+  #cadastro-form .row2 { display: flex; gap: 8px; }
+  #cadastro-form .row2 .field { flex: 1; }
+  .form-actions { display: flex; gap: 10px; margin-top: 8px; align-items: center; }
+  .btn-salvar { background: var(--verde-whats); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+  .btn-cancelar { background: transparent; color: #555; border: 1.5px solid #ccc; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .form-msg { font-size: 0.78rem; color: #a4402f; }
 
-  <div class="result-header" id="count"></div>
-  <div id="list"></div>
-  <div class="loading" id="loading">carregando profissionais...</div>
-  <div class="rodape-legal">
-    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a>
-  </div>
-</div>
+/* Autenticação */
+.auth-box, .auth-box-logged {
+  background: var(--cinza-card);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: -14px;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.auth-box-logged {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.auth-box-logged > div { display: flex; gap: 8px; }
+.auth-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.auth-row input {
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.auth-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn-auth {
+  background: var(--verde-whats);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.btn-auth-outline {
+  background: transparent;
+  color: var(--verde-escuro);
+  border: 1.5px solid var(--verde-escuro);
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.auth-msg { font-size: 0.75rem; color: #a4402f; }
 
-<script src="config.js"></script>
-<script src="js/app.js"></script>
-</body>
-</html>
+/* Ações do dono no card */
+.owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.owner-actions .icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--verde-escuro);
+}
+.owner-actions .icon-btn:hover { background: var(--cinza-fundo); }
+
+.forgot-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--verde-escuro);
+  text-decoration: underline;
+}
+
+.card-pendente { opacity: 0.85; border: 1.5px dashed #d97706; }
+.badge-pendente {
+  background: #fff3cd;
+  color: #7c4a03;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  display: inline-block;
+}
+
+.link-pagar {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--verde-escuro);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.contatos-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.btn-zap-extra { background: var(--verde-escuro); font-size: 0.75rem; padding: 8px 11px; }
+
+.cep-msg { font-size: 0.75rem; color: var(--verde-escuro); margin-top: 4px; display: block; }
+
+.contato-extra-linha { display: flex; gap: 6px; margin-bottom: 6px; }
+.contato-extra-linha input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem; }
+.ce-remover {
+  background: transparent;
+  border: 1.5px solid var(--danger, #a4402f);
+  color: var(--danger, #a4402f);
+  border-radius: 6px;
+  width: 34px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-add-contato {
+  background: transparent;
+  border: 1.5px dashed var(--verde-escuro);
+  color: var(--verde-escuro);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+.foto-msg { font-size: 0.78rem; color: var(--verde-escuro); display: block; margin-top: 4px; }
+.foto-preview { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin-top: 8px; border: 2px solid var(--verde-whats); }
+
+.foto-ou { display: block; font-size: 0.75rem; color: #8a8270; margin: 8px 0 4px; text-transform: none; letter-spacing: normal; font-family: 'Segoe UI', sans-serif; }
+
+.foto-botoes { display: flex; gap: 8px; }
+.btn-foto-opcao {
+  flex: 1;
+  text-align: center;
+  background: transparent;
+  border: 1.5px dashed var(--verde-escuro);
+  color: var(--verde-escuro);
+  padding: 10px 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-foto-opcao:hover { background: var(--cinza-fundo); }
+
+@media (max-width: 420px) {
+  .filtros { flex-direction: column; }
+  .filtros select, .filtros input { width: 100%; }
+  .auth-row { flex-direction: column; }
+  .auth-row input { width: 100%; }
+  .row2 { flex-direction: column; }
+  .foto-botoes { flex-direction: column; }
+  .auth-actions { flex-wrap: wrap; }
+}
+
+.review-count { font-size: 0.72rem; color: #8a8270; }
+.sem-avaliacao { font-size: 0.8rem; color: #8a8270; font-style: italic; }
+.link-avaliar {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0;
+}
+.review-box {
+  background: var(--cinza-fundo);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.review-stars { font-size: 1.4rem; color: var(--amarelo); cursor: pointer; margin-bottom: 6px; }
+.review-stars span { margin-right: 2px; }
+.review-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.review-actions { display: flex; align-items: center; gap: 10px; }
+.review-msg { font-size: 0.75rem; color: var(--verde-escuro); }
+
+.termos-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #555;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.termos-check input { margin-top: 2px; flex-shrink: 0; }
+.termos-check span { line-height: 1.5; }
+.termos-check a { color: var(--verde-escuro); font-weight: 600; }
+
+.rodape-legal { text-align: center; font-size: 0.75rem; color: #8a8270; margin: 30px 0 10px; }
+.rodape-legal a { color: #8a8270; margin: 0 6px; }
+
+.link-cancelar {
+  background: none;
+  border: none;
+  color: var(--danger, #a4402f);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+
+.link-denunciar {
+  background: none;
+  border: none;
+  color: #8a8270;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+.denuncia-box {
+  background: #fff3cd;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.btn-auth-outline.ativo { background: var(--verde-escuro); color: white; }
+
+.card-acoes-extra { display: flex; gap: 10px; margin-top: 4px; }
+.link-compartilhar {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.link-voltar-busca {
+  background: var(--verde-escuro);
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.ja-avaliou { font-size: 0.72rem; color: #8a8270; font-style: italic; margin-left: 6px; }
+
+.btn-baixar-app {
+  display: block;
+  text-align: center;
+  background: var(--verde-escuro);
+  color: white;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-decoration: none;
+  margin: 12px 0;
+}
+
+.busca-com-icone { position: relative; flex: 1; }
+.busca-com-icone .icone-lupa {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.busca-com-icone input { padding-left: 36px !important; }
+
+.link-migrar {
+  display: block;
+  background: #fff3cd;
+  color: #7c4a03;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.link-ver-produtos {
+  display: block;
+  text-align: center;
+  background: var(--verde-escuro);
+  color: white;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  margin-top: 8px;
+}
+
+.menu-compartilhar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  background: #f8f8f8;
+  border-radius: 8px;
+  padding: 6px;
+}
+.opcao-rede {
+  display: block;
+  text-align: center;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  color: white;
+}
+.opcao-rede.whatsapp { background: #25D366; }
+.opcao-rede.facebook { background: #1877F2; }
+.opcao-rede.twitter { background: #000000; }
+.opcao-rede.telegram { background: #229ED9; }
+.opcao-rede.copiar { background: #666; }
+
+.cupom-row { display: flex; gap: 6px; margin-top: 8px; }
+.cupom-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+.btn-cupom {
+  background: #d97706;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cupom-msg { display: block; font-size: 0.72rem; color: #7c4a03; margin-top: 4px; }
+
+.destaque-vitrine {
+  margin: 14px 0;
+  background: linear-gradient(135deg, #128C7E, #075E54);
+  border-radius: 14px;
+  padding: 14px;
+}
+.destaque-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.destaque-header h2 { color: white; font-size: 1rem; font-weight: 800; }
+.ver-vitrine-link { color: #d4f5e3; font-size: 0.75rem; font-weight: 700; text-decoration: underline; }
+.destaque-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.destaque-carregando { color: white; font-size: 0.8rem; padding: 10px; }
+.destaque-card {
+  flex: 0 0 auto;
+  width: 130px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.destaque-card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
+.destaque-info { padding: 8px; }
+.destaque-nome { font-size: 0.78rem; font-weight: 700; color: #1c1c1c; line-height: 1.25; }
+.destaque-preco { font-size: 0.75rem; color: var(--verde-escuro); font-weight: 700; margin-top: 2px; }
+.destaque-empresa { font-size: 0.66rem; color: #8a8270; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.destaque-btn {
+  display: block;
+  text-align: center;
+  background: var(--verde-whats);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 5px;
+  border-radius: 6px;
+  margin-top: 6px;
+  text-decoration: none;
+}
+
+.link-ver-denuncias {
+  background: none;
+  border: none;
+  color: #a4402f;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+.denuncias-recebidas-box {
+  background: #fdf0ee;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 6px;
+}
+.denuncia-carregando { font-size: 0.75rem; color: #888; padding: 4px; }
+.denuncia-item {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+}
+.denuncia-item:last-child { margin-bottom: 0; }
+.denuncia-motivo { font-weight: 700; color: #a4402f; }
+.denuncia-descricao { color: #555; margin-top: 3px; }
+.denuncia-data { color: #999; font-size: 0.68rem; margin-top: 3px; }
+
+.stat-visualizacoes { font-size: 0.72rem; color: #666; margin-top: 4px; font-weight: 600; }
+
+.link-denunciar-produto {
+  background: none;
+  border: none;
+  color: #8a8270;
+  font-size: 0.68rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+
+.link-mensagem {
+  background: none;
+  border: none;
+  color: var(--verde-escuro);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+}
+.mensagem-box {
+  background: #e8f4fd;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.mensagens-recebidas-box {
+  background: #e8f4fd;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 6px;
+}
+
+.icon-btn-favorito {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 2px 4px;
+}
+.btn-filtro-favoritos {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  background: transparent;
+  border: 1.5px dashed #e05d5d;
+  color: #c23a3a;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.btn-filtro-favoritos.ativo { background: #e05d5d; color: white; border-style: solid; }
+
+.aviso-espera {
+  background: #e8f4fd;
+  color: #0a4a6b;
+  font-size: 0.72rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.historico-busca {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0 4px;
+}
+.historico-label { font-size: 0.72rem; color: #888; margin-right: 2px; }
+.chip-historico {
+  background: white;
+  border: 1px solid var(--line);
+  color: var(--navy);
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.chip-historico:hover { background: var(--paper); }
+.chip-historico-limpar {
+  background: none;
+  border: none;
+  color: #a4402f;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 4px;
+}
