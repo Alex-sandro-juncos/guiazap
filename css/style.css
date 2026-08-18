@@ -662,3 +662,63 @@
   cursor: pointer;
   padding: 4px 4px;
 }
+
+/* ---------- MODO ESCURO ---------- */
+body.dark-mode {
+  --cinza-fundo: #121212;
+  --cinza-card: #1e1e1e;
+  color: #e8e8e8;
+}
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea {
+  background: #2a2a2a;
+  color: #e8e8e8;
+  border-color: #444;
+}
+body.dark-mode .card-produto .nome,
+body.dark-mode .destaque-nome,
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
+body.dark-mode .info h3,
+body.dark-mode .nome-empresa {
+  color: #f0f0f0;
+}
+body.dark-mode .categoria,
+body.dark-mode .empresa,
+body.dark-mode .local,
+body.dark-mode .destaque-empresa,
+body.dark-mode .medida-produto,
+body.dark-mode .categoria-produto {
+  color: #bbb;
+}
+body.dark-mode .vitrine-busca,
+body.dark-mode .busca-container,
+body.dark-mode #produto-form,
+body.dark-mode #cadastro-form,
+body.dark-mode .auth-box,
+body.dark-mode .auth-box-logged,
+body.dark-mode .card-pacote,
+body.dark-mode .contato-card,
+body.dark-mode .app-card {
+  background: var(--cinza-card);
+  color: #e8e8e8;
+}
+body.dark-mode .filtros select,
+body.dark-mode .vitrine-filtros select,
+body.dark-mode .destaque-scroll .destaque-card {
+  background: #2a2a2a;
+  color: #e8e8e8;
+  border-color: #444;
+}
+body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
+
+.btn-modo-escuro {
+  background: transparent;
+  border: 1.5px solid var(--line, #d8cdb6);
+  color: #555;
+  border-radius: 50px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-left: 6px;
+}
