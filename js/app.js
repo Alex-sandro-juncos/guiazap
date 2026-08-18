@@ -909,6 +909,45 @@ function contarVisualizacao(id, isOwner){
   });
 }
 
+// ---------- HISTÓRICO DE BUSCA RECENTE (salvo no navegador) ----------
+
+function salvarHistoricoBusca(){
+  const valor = document.getElementById('search').value.trim();
+  if(!valor) return;
+
+  let historico = JSON.parse(localStorage.getItem('historico_busca') || '[]');
+  historico = historico.filter(h => h.toLowerCase() !== valor.toLowerCase());
+  historico.unshift(valor);
+  historico = historico.slice(0, 5);
+  localStorage.setItem('historico_busca', JSON.stringify(historico));
+  renderHistoricoBusca();
+}
+
+function buscarDoHistorico(termo){
+  document.getElementById('search').value = termo;
+  render();
+}
+
+function limparHistoricoBusca(event){
+  event.stopPropagation();
+  localStorage.removeItem('historico_busca');
+  renderHistoricoBusca();
+}
+
+function renderHistoricoBusca(){
+  const container = document.getElementById('historico-busca-lista');
+  if(!container) return;
+
+  const historico = JSON.parse(localStorage.getItem('historico_busca') || '[]');
+  if(historico.length === 0){ container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <span class="historico-label">Buscas recentes:</span>
+    ${historico.map(h => `<button type="button" class="chip-historico" onclick="buscarDoHistorico('${h.replace(/'/g, "\\'")}')">${escapeHtml(h)}</button>`).join('')}
+    <button type="button" class="chip-historico-limpar" onclick="limparHistoricoBusca(event)">Limpar</button>
+  `;
+}
+
 function render(){
   renderProdutosDestaque();
   const list = document.getElementById('list');
@@ -962,6 +1001,7 @@ function render(){
         </div>
         <span class="cupom-msg" id="cupom-msg-${e.id}"></span>
         <span class="cupom-msg" id="reativar-msg-${e.id}"></span>
+        <div class="aviso-espera">⏳ Já pagou pelo Pacote Completo? Pode levar até 15 minutos pra ativar sozinho. Não precisa pagar de novo nem criar outro cadastro — só aguardar.</div>
       </div>` : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
@@ -1054,6 +1094,8 @@ if(initSupabase()){
   initAuth();
   loadEntries();
 }
+
+renderHistoricoBusca();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {

@@ -68,9 +68,10 @@
     <div class="busca-row">
       <div class="busca-com-icone">
         <span class="icone-lupa" onclick="render()">🔍</span>
-        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()">
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
       </div>
     </div>
+    <div id="historico-busca-lista" class="historico-busca"></div>
     <div class="field" style="margin-bottom:10px;">
       <input id="filter-cep" placeholder="Buscar por CEP (opcional)" onblur="buscarCepFiltro()">
       <span class="cep-msg" id="filter-cep-msg"></span>
