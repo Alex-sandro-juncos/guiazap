@@ -1155,6 +1155,7 @@ function render(){
           ${renderContatosExtra(e.contatos_extra)}
         </div>
         ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
+        ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
       </div>
     </div>
   `; }).join('');

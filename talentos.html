@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de Talentos — GuiaZap</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .talentos-header { background: #6b46c1; padding: 24px 15px; text-align: center; color: white; }
+  .talentos-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .talentos-header p { font-size: 0.85rem; opacity: 0.95; margin-top: 4px; }
+  .talentos-busca {
+    background: var(--cinza-card); padding: 14px; margin: -14px 15px 0; border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12); position: relative; z-index: 2;
+  }
+  .talentos-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
+  .talentos-lista { padding: 18px 15px 30px; }
+  .card-talento {
+    background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .card-talento .nome-talento { font-size: 1rem; font-weight: 700; color: #1c1c1c; }
+  .card-talento .cidade-talento { font-size: 0.78rem; color: #8a8270; margin-top: 2px; }
+  .card-talento .secao-talento { font-size: 0.85rem; color: #444; margin-top: 8px; line-height: 1.4; white-space: pre-wrap; }
+  .card-talento .secao-talento b { color: #6b46c1; }
+  .card-talento .btn-zap-mini {
+    margin-top: 10px; display: block; text-align: center; background: var(--verde-whats);
+    color: white; padding: 9px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; text-decoration: none;
+  }
+  .upsell-box { max-width: 420px; margin: 40px auto; padding: 0 20px; text-align: center; }
+  .upsell-box .card {
+    background: var(--cinza-card); border-radius: 16px; padding: 26px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+  }
+  .upsell-box h2 { color: #6b46c1; margin-bottom: 10px; }
+  .upsell-box p { color: #555; font-size: 0.9rem; margin-bottom: 16px; line-height: 1.5; }
+  .upsell-box a {
+    display: inline-block; background: #6b46c1; color: white; padding: 12px 24px;
+    border-radius: 50px; font-weight: 700; text-decoration: none; font-size: 0.9rem;
+  }
+  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="talentos-header">
+  <h1>🎯 Banco de Talentos</h1>
+  <p>Exclusivo do Pacote Completo — consulte currículos disponíveis</p>
+</header>
+
+<div id="talentos-conteudo">
+  <div style="text-align:center; padding:40px;">Carregando...</div>
+</div>
+
+<a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientTalentos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let curriculosTodos = [];
+
+function normalizarTextoTalentos(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+async function initTalentos(){
+  const { data: { session } } = await supabaseClientTalentos.auth.getSession();
+  const container = document.getElementById('talentos-conteudo');
+
+  if(!session){
+    mostrarUpsell(container, 'Você precisa estar logado com uma empresa do Pacote Completo pra acessar o Banco de Talentos.');
+    return;
+  }
+
+  const { data: perfis } = await supabaseClientTalentos
+    .from('profissionais')
+    .select('id')
+    .eq('user_id', session.user.id)
+    .eq('plano', 'completo')
+    .eq('status_pagamento', 'ativo');
+
+  if(!perfis || perfis.length === 0){
+    mostrarUpsell(container, 'O Banco de Talentos é exclusivo pra empresas do Pacote Completo. Faça upgrade pra consultar currículos disponíveis.');
+    return;
+  }
+
+  const { data, error } = await supabaseClientTalentos
+    .from('banco_curriculos')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if(error || !data){
+    container.innerHTML = '<div style="text-align:center; padding:40px;">Erro ao carregar. Tente novamente.</div>';
+    return;
+  }
+
+  curriculosTodos = data;
+  montarTelaTalentos(container);
+  renderTalentos();
+}
+
+function mostrarUpsell(container, mensagem){
+  container.innerHTML = `
+    <div class="upsell-box">
+      <div class="card">
+        <h2>Recurso exclusivo</h2>
+        <p>${mensagem}</p>
+        <a href="pacotes.html">Ver Pacote Completo</a>
+      </div>
+    </div>
+  `;
+}
+
+function montarTelaTalentos(container){
+  const cidades = [...new Set(curriculosTodos.map(c => c.cidade).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+  container.innerHTML = `
+    <div class="talentos-busca">
+      <div class="busca-com-icone">
+        <span class="icone-lupa" onclick="renderTalentos()">🔍</span>
+        <input id="t-search" placeholder="Buscar por nome, experiência, habilidade..." oninput="renderTalentos()">
+      </div>
+      <select id="t-filter-cidade" onchange="renderTalentos()" style="width:100%; margin-top:8px; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+        <option value="">Todas as cidades</option>
+        ${cidades.map(c => `<option value="${escapeHtmlTalentos(c)}">${escapeHtmlTalentos(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="talentos-lista" id="t-grid"></div>
+  `;
+}
+
+function renderTalentos(){
+  const query = normalizarTextoTalentos(document.getElementById('t-search').value);
+  const cidadeFiltro = document.getElementById('t-filter-cidade').value;
+
+  const filtrados = curriculosTodos
+    .filter(c => !cidadeFiltro || c.cidade === cidadeFiltro)
+    .filter(c =>
+      normalizarTextoTalentos(c.nome).includes(query) ||
+      normalizarTextoTalentos(c.cidade).includes(query) ||
+      normalizarTextoTalentos(c.objetivo).includes(query) ||
+      normalizarTextoTalentos(c.experiencia).includes(query) ||
+      normalizarTextoTalentos(c.formacao).includes(query) ||
+      normalizarTextoTalentos(c.habilidades).includes(query)
+    );
+
+  const grid = document.getElementById('t-grid');
+  if(filtrados.length === 0){
+    grid.innerHTML = '<div style="text-align:center; padding:30px; color:#888;">Nenhum currículo encontrado.</div>';
+    return;
+  }
+
+  grid.innerHTML = filtrados.map(c => `
+    <div class="card-talento">
+      <div class="nome-talento">${escapeHtmlTalentos(c.nome)}</div>
+      ${c.cidade ? `<div class="cidade-talento">${escapeHtmlTalentos(c.cidade)}</div>` : ''}
+      ${c.objetivo ? `<div class="secao-talento"><b>Objetivo:</b> ${escapeHtmlTalentos(c.objetivo)}</div>` : ''}
+      ${c.experiencia ? `<div class="secao-talento"><b>Experiência:</b> ${escapeHtmlTalentos(c.experiencia)}</div>` : ''}
+      ${c.formacao ? `<div class="secao-talento"><b>Formação:</b> ${escapeHtmlTalentos(c.formacao)}</div>` : ''}
+      ${c.habilidades ? `<div class="secao-talento"><b>Habilidades:</b> ${escapeHtmlTalentos(c.habilidades)}</div>` : ''}
+      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank">Chamar no WhatsApp</a>
+    </div>
+  `).join('');
+}
+
+function escapeHtmlTalentos(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+initTalentos();
+</script>
+</body>
+</html>

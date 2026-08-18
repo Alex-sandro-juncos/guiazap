@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Montar Currículo — GuiaZap</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <style>
@@ -48,6 +49,13 @@
     body { background: white; }
     #cv-preview { box-shadow: none; padding: 0; }
   }
+  .banco-talentos-box {
+    background: #ede9fe;
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 14px;
+  }
+  .banco-talentos-box p { font-size: 0.8rem; color: #4c1d95; margin-bottom: 10px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -57,7 +65,23 @@
 </header>
 
 <div class="curriculo-wrap">
-  <div class="cv-form">
+  <div id="cv-auth-box" class="cv-form" style="text-align:center;">
+    <p style="font-size:0.85rem; color:#555; margin-bottom:12px;">Crie uma conta grátis pra salvar seu currículo com segurança — só você consegue editar ou excluir depois.</p>
+    <input type="email" id="cv-auth-email" placeholder="Seu e-mail" style="margin-bottom:8px;">
+    <input type="password" id="cv-auth-senha" placeholder="Senha" style="margin-bottom:8px;">
+    <div style="display:flex; gap:8px;">
+      <button type="button" class="btn-baixar-cv" style="margin-top:0;" onclick="loginCv()">Entrar</button>
+      <button type="button" class="btn-baixar-cv" style="margin-top:0; background:#888;" onclick="criarContaCv()">Criar conta</button>
+    </div>
+    <div id="cv-auth-msg" style="font-size:0.78rem; color:#a4402f; margin-top:8px;"></div>
+  </div>
+
+  <div id="cv-logado-box" class="cv-form" style="display:none; text-align:center;">
+    <p style="font-size:0.85rem;">Logado como <b id="cv-email-logado"></b></p>
+    <button type="button" class="btn-baixar-cv" style="margin-top:8px; background:#888;" onclick="sairCv()">Sair</button>
+  </div>
+
+  <div class="cv-form" id="cv-form-principal" style="display:none;">
     <div class="field">
       <label>Foto (opcional)</label>
       <div class="foto-botoes">
@@ -110,6 +134,14 @@
     </div>
 
     <button type="button" class="btn-baixar-cv" onclick="window.print()">⬇ Baixar/Imprimir currículo (PDF)</button>
+    <button type="button" class="btn-baixar-cv" style="background:var(--verde-whats); margin-top:8px;" onclick="copiarCurriculoTexto()">📋 Copiar texto (colar no WhatsApp)</button>
+    <div id="cv-copiar-msg" style="text-align:center; font-size:0.78rem; color:var(--verde-escuro); margin-top:6px;"></div>
+
+    <div class="banco-talentos-box">
+      <p>🎯 <b>Quer que empresas te encontrem?</b> Envie seu currículo pro Banco de Talentos do GuiaZap — empresas cadastradas podem consultar diretamente, mesmo sem você precisar se candidatar a uma vaga específica.</p>
+      <button type="button" class="btn-baixar-cv" style="background:#6b46c1;" onclick="enviarParaBancoTalentos()">📤 Enviar para o Banco de Talentos</button>
+      <div id="cv-banco-msg" style="text-align:center; font-size:0.78rem; margin-top:6px;"></div>
+    </div>
   </div>
 
   <div id="cv-preview">
@@ -142,6 +174,37 @@
 </div>
 
 <script>
+async function copiarCurriculoTexto(){
+  const nome = document.getElementById('cv-input-nome').value.trim();
+  const telefone = document.getElementById('cv-input-telefone').value.trim();
+  const email = document.getElementById('cv-input-email').value.trim();
+  const cidade = document.getElementById('cv-input-cidade').value.trim();
+  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
+  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
+  const formacao = document.getElementById('cv-input-formacao').value.trim();
+  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
+
+  const msg = document.getElementById('cv-copiar-msg');
+
+  if(!nome){ msg.textContent = 'Preencha ao menos o nome antes de copiar.'; msg.style.color = '#a4402f'; return; }
+
+  let texto = `*CURRÍCULO*\n\n*${nome}*\n`;
+  const contato = [telefone, email, cidade].filter(Boolean).join(' · ');
+  if(contato) texto += `${contato}\n`;
+  if(objetivo) texto += `\n*Objetivo:*\n${objetivo}\n`;
+  if(experiencia) texto += `\n*Experiência profissional:*\n${experiencia}\n`;
+  if(formacao) texto += `\n*Formação/Escolaridade:*\n${formacao}\n`;
+  if(habilidades) texto += `\n*Habilidades e cursos:*\n${habilidades}\n`;
+
+  try{
+    await navigator.clipboard.writeText(texto);
+    msg.textContent = 'Currículo copiado! Agora é só colar na conversa do WhatsApp.';
+    msg.style.color = 'var(--verde-escuro)';
+  } catch(e){
+    prompt('Copie o texto abaixo:', texto);
+  }
+}
+
 function carregarFotoCv(event){
   const file = event.target.files[0];
   if(!file) return;
@@ -180,6 +243,142 @@ function atualizarPreviewCv(){
 }
 
 atualizarPreviewCv();
+</script>
+<script src="config.js"></script>
+<script>
+let supabaseClientCv = null;
+let currentUserCv = null;
+let meuCurriculoId = null;
+
+if(typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined'){
+  supabaseClientCv = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+async function initAuthCv(){
+  const { data: { session } } = await supabaseClientCv.auth.getSession();
+  currentUserCv = session ? session.user : null;
+  atualizarUiAuthCv();
+
+  supabaseClientCv.auth.onAuthStateChange((event, session) => {
+    currentUserCv = session ? session.user : null;
+    atualizarUiAuthCv();
+  });
+}
+
+async function atualizarUiAuthCv(){
+  const authBox = document.getElementById('cv-auth-box');
+  const logadoBox = document.getElementById('cv-logado-box');
+  const formPrincipal = document.getElementById('cv-form-principal');
+
+  if(currentUserCv){
+    authBox.style.display = 'none';
+    logadoBox.style.display = 'block';
+    formPrincipal.style.display = 'block';
+    document.getElementById('cv-email-logado').textContent = currentUserCv.email;
+    await carregarMeuCurriculo();
+  } else {
+    authBox.style.display = 'block';
+    logadoBox.style.display = 'none';
+    formPrincipal.style.display = 'block'; // continua deixando montar/imprimir sem login, só o ENVIO ao banco exige conta
+  }
+}
+
+async function criarContaCv(){
+  const email = document.getElementById('cv-auth-email').value.trim();
+  const senha = document.getElementById('cv-auth-senha').value;
+  const msg = document.getElementById('cv-auth-msg');
+  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
+
+  msg.textContent = 'criando conta...';
+  const { error } = await supabaseClientCv.auth.signUp({ email, password: senha });
+  if(error){ msg.textContent = error.message; return; }
+  msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
+  msg.style.color = 'var(--verde-escuro)';
+}
+
+async function loginCv(){
+  const email = document.getElementById('cv-auth-email').value.trim();
+  const senha = document.getElementById('cv-auth-senha').value;
+  const msg = document.getElementById('cv-auth-msg');
+  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
+
+  msg.textContent = 'entrando...';
+  const { error } = await supabaseClientCv.auth.signInWithPassword({ email, password: senha });
+  if(error){ msg.textContent = error.message; return; }
+  msg.textContent = '';
+}
+
+async function sairCv(){
+  await supabaseClientCv.auth.signOut();
+}
+
+async function carregarMeuCurriculo(){
+  const { data } = await supabaseClientCv
+    .from('banco_curriculos')
+    .select('*')
+    .eq('user_id', currentUserCv.id)
+    .maybeSingle();
+
+  if(data){
+    meuCurriculoId = data.id;
+    document.getElementById('cv-input-nome').value = data.nome || '';
+    document.getElementById('cv-input-telefone').value = data.telefone || '';
+    document.getElementById('cv-input-email').value = data.email || '';
+    document.getElementById('cv-input-cidade').value = data.cidade || '';
+    document.getElementById('cv-input-objetivo').value = data.objetivo || '';
+    document.getElementById('cv-input-experiencia').value = data.experiencia || '';
+    document.getElementById('cv-input-formacao').value = data.formacao || '';
+    document.getElementById('cv-input-habilidades').value = data.habilidades || '';
+    atualizarPreviewCv();
+
+    document.getElementById('cv-banco-msg').textContent = 'Você já tem um currículo salvo no banco. Editar os campos e enviar de novo atualiza ele.';
+    document.getElementById('cv-banco-msg').style.color = '#555';
+  } else {
+    meuCurriculoId = null;
+  }
+}
+
+async function enviarParaBancoTalentos(){
+  const msg = document.getElementById('cv-banco-msg');
+  if(!supabaseClientCv){ msg.textContent = 'Erro de configuração, tente novamente mais tarde.'; msg.style.color = '#a4402f'; return; }
+
+  if(!currentUserCv){ msg.textContent = 'Crie uma conta ou entre (ali em cima) antes de enviar pro banco de talentos.'; msg.style.color = '#a4402f'; return; }
+
+  const nome = document.getElementById('cv-input-nome').value.trim();
+  const telefone = document.getElementById('cv-input-telefone').value.trim();
+  const email = document.getElementById('cv-input-email').value.trim();
+  const cidade = document.getElementById('cv-input-cidade').value.trim();
+  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
+  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
+  const formacao = document.getElementById('cv-input-formacao').value.trim();
+  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
+
+  if(!nome || !telefone){ msg.textContent = 'Preencha ao menos nome e telefone antes de enviar.'; msg.style.color = '#a4402f'; return; }
+
+  const payload = {
+    nome, telefone, email: email || null, cidade: cidade || null,
+    objetivo: objetivo || null, experiencia: experiencia || null,
+    formacao: formacao || null, habilidades: habilidades || null,
+    user_id: currentUserCv.id
+  };
+
+  msg.textContent = 'enviando...';
+  let error;
+  if(meuCurriculoId){
+    ({ error } = await supabaseClientCv.from('banco_curriculos').update(payload).eq('id', meuCurriculoId));
+  } else {
+    const { data, error: errInsert } = await supabaseClientCv.from('banco_curriculos').insert(payload).select('id').single();
+    error = errInsert;
+    if(data) meuCurriculoId = data.id;
+  }
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar, tente novamente'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = meuCurriculoId ? 'Currículo salvo/atualizado! Empresas do Pacote Completo já podem consultar.' : 'Currículo enviado!';
+  msg.style.color = 'var(--verde-escuro)';
+}
+
+if(supabaseClientCv) initAuthCv();
 </script>
 </body>
 </html>

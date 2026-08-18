@@ -101,6 +101,17 @@
     display: flex; flex-direction: column; gap: 4px; margin-top: 6px;
     background: #f8f8f8; border-radius: 8px; padding: 6px;
   }
+  .banner-curriculo {
+    display: block;
+    text-align: center;
+    background: #ede9fe;
+    color: #6b46c1;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    text-decoration: none;
+  }
 </style>
 </head>
 <body>
@@ -114,6 +125,18 @@
     <span class="icone-lupa" onclick="renderVagas()">🔍</span>
     <input id="v-search-vaga" placeholder="Buscar por cargo, tipo, empresa..." oninput="renderVagas()">
   </div>
+  <div style="display:flex; gap:8px; margin-top:8px;">
+    <select id="v-filter-empresa-vaga" onchange="renderVagas()" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+      <option value="">Todas as empresas</option>
+    </select>
+    <select id="v-filter-tipo-vaga" onchange="renderVagas()" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+      <option value="">Todos os tipos</option>
+    </select>
+  </div>
+</div>
+
+<div style="padding: 0 15px; margin-top: 12px;">
+  <a href="curriculo.html" class="banner-curriculo">📄 Não tem currículo? Monte um grátis aqui em minutos</a>
 </div>
 
 <div class="vagas-toolbar">
@@ -163,7 +186,6 @@
 
 <div class="lista-vagas" id="v-grid-vaga"></div>
 <a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
-<a href="curriculo.html" class="voltar-guiazap" style="color:#6b46c1;">📄 Não tem currículo? Monte um grátis aqui</a>
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>

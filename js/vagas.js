@@ -47,17 +47,38 @@ async function loadVagas(){
 
   vagas = (data || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
 
+  popularFiltrosVaga();
+
   const params = new URLSearchParams(window.location.search);
   vagaFiltroId = params.get('vaga');
 
   renderVagas();
 }
 
+function popularFiltrosVaga(){
+  const empresas = [...new Set(vagas.map(v => v.profissionais ? v.profissionais.name : null).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  const tipos = [...new Set(vagas.map(v => v.tipo).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+  const selEmpresa = document.getElementById('v-filter-empresa-vaga');
+  const prevEmpresa = selEmpresa.value;
+  selEmpresa.innerHTML = '<option value="">Todas as empresas</option>' + empresas.map(e => `<option value="${escapeHtmlVagas(e)}">${escapeHtmlVagas(e)}</option>`).join('');
+  selEmpresa.value = prevEmpresa;
+
+  const selTipo = document.getElementById('v-filter-tipo-vaga');
+  const prevTipo = selTipo.value;
+  selTipo.innerHTML = '<option value="">Todos os tipos</option>' + tipos.map(t => `<option value="${escapeHtmlVagas(t)}">${escapeHtmlVagas(t)}</option>`).join('');
+  selTipo.value = prevTipo;
+}
+
 function renderVagas(){
   const query = normalizarTextoVagas(document.getElementById('v-search-vaga').value);
+  const empresaFiltro = document.getElementById('v-filter-empresa-vaga').value;
+  const tipoFiltro = document.getElementById('v-filter-tipo-vaga').value;
 
   const filtradas = vagas
     .filter(v => !vagaFiltroId || v.id === vagaFiltroId)
+    .filter(v => !empresaFiltro || (v.profissionais && v.profissionais.name === empresaFiltro))
+    .filter(v => !tipoFiltro || v.tipo === tipoFiltro)
     .filter(v =>
       normalizarTextoVagas(v.titulo).includes(query) ||
       normalizarTextoVagas(v.tipo).includes(query) ||
