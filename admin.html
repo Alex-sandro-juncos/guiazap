@@ -186,13 +186,80 @@ function formatarData(iso){
   return new Date(iso).toLocaleString('pt-BR');
 }
 
+function renderDenunciasAgrupadas(){
+  const lista = document.getElementById('admin-lista');
+  if(!dadosAdmin) { lista.innerHTML = ''; return; }
+
+  // Agrupa denúncias de empresa por profissional_id
+  const gruposEmpresa = {};
+  (dadosAdmin.denuncias || []).forEach(d => {
+    if(!gruposEmpresa[d.profissional_id]) gruposEmpresa[d.profissional_id] = [];
+    gruposEmpresa[d.profissional_id].push(d);
+  });
+
+  // Agrupa denúncias de produto por produto_id
+  const gruposProduto = {};
+  (dadosAdmin.denunciasProdutos || []).forEach(d => {
+    if(!gruposProduto[d.produto_id]) gruposProduto[d.produto_id] = [];
+    gruposProduto[d.produto_id].push(d);
+  });
+
+  const cardsEmpresa = Object.keys(gruposEmpresa).map(profissionalId => {
+    const denunciasDoAlvo = gruposEmpresa[profissionalId].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    const empresa = (dadosAdmin.profissionais || []).find(p => p.id === profissionalId);
+    const nome = empresa ? empresa.name : '(empresa não encontrada)';
+    const ativo = empresa && empresa.status_pagamento === 'ativo';
+
+    return `<div class="admin-item">
+      <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Empresa · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
+      ${denunciasDoAlvo.map(d => `
+        <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
+          <b>${d.motivo}</b>${d.descricao ? ' — ' + d.descricao : ''}
+          <div class="meta">${d.denunciante_email || 'anônimo'} · ${formatarData(d.created_at)}</div>
+        </div>
+      `).join('')}
+      ${empresa ? `<div class="admin-acoes" style="margin-top:8px;">
+        ${ativo
+          ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Suspender empresa</button>`
+          : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Reativar empresa</button>`}
+        <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Excluir empresa</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  const cardsProduto = Object.keys(gruposProduto).map(produtoId => {
+    const denunciasDoAlvo = gruposProduto[produtoId].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    const produto = (dadosAdmin.produtos || []).find(p => p.id === produtoId);
+    const nome = produto ? produto.nome : '(produto não encontrado / já excluído)';
+
+    return `<div class="admin-item">
+      <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Produto · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
+      ${denunciasDoAlvo.map(d => `
+        <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
+          <b>${d.motivo}</b>${d.descricao ? ' — ' + d.descricao : ''}
+          <div class="meta">${d.denunciante_email || 'anônimo'} · ${formatarData(d.created_at)}</div>
+        </div>
+      `).join('')}
+      ${produto ? `<div class="admin-acoes" style="margin-top:8px;">
+        <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'produtos', '${produtoId}', '${nome.replace(/'/g,"\\'")}')">Excluir produto</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  const todosOsCards = [...cardsEmpresa, ...cardsProduto];
+
+  lista.innerHTML = todosOsCards.length === 0
+    ? '<div class="admin-vazio">Nada por aqui ainda.</div>'
+    : todosOsCards.join('');
+}
+
 function renderAdmin(){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin){ lista.innerHTML = ''; return; }
 
   let itens = [];
   if(abaAtual === 'feedback') itens = dadosAdmin.feedbackSite;
-  if(abaAtual === 'denuncias') itens = [...dadosAdmin.denuncias.map(d => ({...d, origem:'Empresa'})), ...dadosAdmin.denunciasProdutos.map(d => ({...d, origem:'Produto'}))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  if(abaAtual === 'denuncias'){ renderDenunciasAgrupadas(); return; }
   if(abaAtual === 'mensagens') itens = dadosAdmin.mensagensEmpresa;
   if(abaAtual === 'empresas') itens = dadosAdmin.profissionais;
   if(abaAtual === 'produtos') itens = dadosAdmin.produtos;
@@ -208,13 +275,6 @@ function renderAdmin(){
         <div class="tipo ${item.tipo === 'reclamacao' ? 'reclamacao' : ''}">${item.tipo === 'reclamacao' ? '⚠️ Reclamação' : '💡 Sugestão'}</div>
         <div class="mensagem">${item.mensagem}</div>
         <div class="meta">${item.remetente_email || 'anônimo'} · ${formatarData(item.created_at)}</div>
-      </div>`;
-    }
-    if(abaAtual === 'denuncias'){
-      return `<div class="admin-item">
-        <div class="tipo den">🚩 ${item.motivo} <span style="font-weight:400; color:#888;">(${item.origem})</span></div>
-        ${item.descricao ? `<div class="mensagem">${item.descricao}</div>` : ''}
-        <div class="meta">${item.denunciante_email || 'anônimo'} · ${formatarData(item.created_at)}</div>
       </div>`;
     }
     if(abaAtual === 'empresas'){
