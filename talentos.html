@@ -151,17 +151,19 @@ function renderTalentos(){
     return;
   }
 
-  grid.innerHTML = filtrados.map(c => `
+  grid.innerHTML = filtrados.map(c => {
+    const localizacao = [c.bairro, c.cidade && c.estado ? `${c.cidade}/${c.estado}` : c.cidade].filter(Boolean).join(', ');
+    return `
     <div class="card-talento">
       <div class="nome-talento">${escapeHtmlTalentos(c.nome)}</div>
-      ${c.cidade ? `<div class="cidade-talento">${escapeHtmlTalentos(c.cidade)}</div>` : ''}
+      ${localizacao ? `<div class="cidade-talento">📍 ${escapeHtmlTalentos(localizacao)}</div>` : ''}
       ${c.objetivo ? `<div class="secao-talento"><b>Objetivo:</b> ${escapeHtmlTalentos(c.objetivo)}</div>` : ''}
       ${c.experiencia ? `<div class="secao-talento"><b>Experiência:</b> ${escapeHtmlTalentos(c.experiencia)}</div>` : ''}
       ${c.formacao ? `<div class="secao-talento"><b>Formação:</b> ${escapeHtmlTalentos(c.formacao)}</div>` : ''}
       ${c.habilidades ? `<div class="secao-talento"><b>Habilidades:</b> ${escapeHtmlTalentos(c.habilidades)}</div>` : ''}
-      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank">Chamar no WhatsApp</a>
+      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank">💬 Falar direto com o candidato pelo WhatsApp</a>
     </div>
-  `).join('');
+  `; }).join('');
 }
 
 function escapeHtmlTalentos(str){
