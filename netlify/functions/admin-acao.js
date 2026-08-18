@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -88,6 +88,35 @@ exports.handler = async function (event) {
         }
       }
 
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if ((acao === 'verificar' || acao === 'desverificar') && tabela === 'profissionais') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ verificado: acao === 'verificar' })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao atualizar verificação' }) };
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if ((acao === 'plano_completo' || acao === 'plano_basico') && tabela === 'profissionais') {
+      const novoPlano = acao === 'plano_completo' ? 'completo' : 'basico';
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ plano: novoPlano })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao mudar plano' }) };
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 

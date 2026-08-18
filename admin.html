@@ -34,13 +34,16 @@
   .admin-item .meta { font-size: 0.72rem; color: #888; }
   .admin-vazio { text-align: center; color: #888; padding: 30px; }
   .admin-acoes { display: flex; gap: 8px; margin-top: 8px; }
-  .admin-btn-suspender, .admin-btn-excluir, .admin-btn-ativar {
+  .admin-btn-suspender, .admin-btn-excluir, .admin-btn-ativar, .admin-btn-verificar, .admin-btn-plano {
     border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem;
     font-weight: 700; cursor: pointer; color: white;
   }
   .admin-btn-suspender { background: #d97706; }
   .admin-btn-excluir { background: #a4402f; }
   .admin-btn-ativar { background: var(--verde-whats); }
+  .admin-btn-verificar { background: #1877F2; }
+  .admin-btn-plano { background: #6b46c1; }
+  .admin-btn-link { background: #0a4a6b; }
 </style>
 </head>
 <body>
@@ -62,6 +65,7 @@
     <button class="admin-aba-btn" id="aba-empresas" onclick="mostrarAbaAdmin('empresas')">🏢 Empresas</button>
     <button class="admin-aba-btn" id="aba-produtos" onclick="mostrarAbaAdmin('produtos')">📦 Produtos</button>
   </div>
+  <button type="button" id="btn-exportar-emails" onclick="exportarEmails()" style="display:none; margin-bottom:14px; background:#0a4a6b; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">⬇ Exportar e-mails (.csv)</button>
   <div id="admin-lista"></div>
 </div>
 
@@ -107,7 +111,43 @@ function mostrarAbaAdmin(aba){
   ['feedback','denuncias','mensagens','empresas','produtos'].forEach(a => {
     document.getElementById('aba-' + a).classList.toggle('ativa', aba === a);
   });
+  document.getElementById('btn-exportar-emails').style.display = aba === 'empresas' ? 'block' : 'none';
   renderAdmin();
+}
+
+function exportarEmails(){
+  if(!dadosAdmin || !dadosAdmin.profissionais) return;
+
+  const linhas = [['Nome', 'E-mail', 'Status', 'Plano']];
+  dadosAdmin.profissionais.forEach(p => {
+    linhas.push([p.name, p.user_email || '', p.status_pagamento, p.plano]);
+  });
+
+  const csv = linhas.map(linha => linha.map(campo => `"${(campo || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `guiazap-empresas-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function enviarLinkAtivacao(profissionalId, nome){
+  if(!confirm(`Enviar e-mail com link de ativação para "${nome}"?`)) return;
+
+  const { data: { session } } = await supabaseClientAdmin.auth.getSession();
+  const resp = await fetch('/.netlify/functions/admin-enviar-link-ativacao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ profissionalId })
+  });
+
+  if(!resp.ok){
+    alert('Erro ao enviar link.');
+    return;
+  }
+  alert('Link de ativação enviado por e-mail!');
 }
 
 async function executarAcaoAdmin(acao, tabela, id, nome){
@@ -115,7 +155,15 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
     ? `Tem certeza que quer EXCLUIR "${nome}"? Isso não pode ser desfeito.`
     : acao === 'ativar'
       ? `Ativar "${nome}"? O cadastro volta a aparecer na busca pública.`
-      : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
+      : acao === 'verificar'
+        ? `Marcar "${nome}" como verificado? Isso mostra um selo de confiança pros visitantes.`
+        : acao === 'desverificar'
+          ? `Remover o selo de verificado de "${nome}"?`
+          : acao === 'plano_completo'
+            ? `Mudar "${nome}" pro Pacote Completo? Ela ganha acesso à Vitrine, sem precisar pagar.`
+            : acao === 'plano_basico'
+              ? `Mudar "${nome}" pro Pacote Básico? Ela perde o acesso à Vitrine (produtos somem da busca pública, mas continuam salvos).`
+              : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
   if(!confirm(confirmText)) return;
 
   const { data: { session } } = await supabaseClientAdmin.auth.getSession();
@@ -172,12 +220,19 @@ function renderAdmin(){
     if(abaAtual === 'empresas'){
       const ativo = item.status_pagamento === 'ativo';
       return `<div class="admin-item">
-        <div class="tipo">${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
+        <div class="tipo">${item.verificado ? '✅ ' : ''}${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
         <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
         <div class="admin-acoes">
           ${ativo
             ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>`
-            : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Ativar</button>`}
+            : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Ativar agora</button>
+               <button class="admin-btn-link" onclick="enviarLinkAtivacao('${item.id}', '${item.name.replace(/'/g,"\\'")}')">Enviar link p/ empresa ativar</button>`}
+          ${item.verificado
+            ? `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('desverificar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover selo ✅</button>`
+            : `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('verificar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Marcar como verificado</button>`}
+          ${item.plano === 'completo'
+            ? `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Básico</button>`
+            : `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Completo</button>`}
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </div>`;

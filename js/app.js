@@ -161,15 +161,21 @@ function abrirCadastroSePendente(){
   }
 }
 
+let avaliacoesDetalhadas = {};
+
 async function loadAvaliacoes(){
-  const { data, error } = await supabaseClient.from('avaliacoes').select('profissional_id, nota');
+  const { data, error } = await supabaseClient.from('avaliacoes').select('id, profissional_id, nota, comentario, resposta_empresa, created_at').order('created_at', { ascending: false });
   if(error){ console.error(error); return; }
 
   avaliacoesMap = {};
+  avaliacoesDetalhadas = {};
   data.forEach(a => {
     if(!avaliacoesMap[a.profissional_id]) avaliacoesMap[a.profissional_id] = { soma: 0, count: 0 };
     avaliacoesMap[a.profissional_id].soma += a.nota;
     avaliacoesMap[a.profissional_id].count += 1;
+
+    if(!avaliacoesDetalhadas[a.profissional_id]) avaliacoesDetalhadas[a.profissional_id] = [];
+    avaliacoesDetalhadas[a.profissional_id].push(a);
   });
 }
 
@@ -194,6 +200,60 @@ function selecionarNota(id, nota){
 
 function jaAvaliou(id){
   return localStorage.getItem('avaliado_' + id) === '1';
+}
+
+function toggleVerAvaliacoes(profissionalId){
+  const box = document.getElementById('lista-avaliacoes-' + profissionalId);
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  const isOwnerDesse = currentUser && entries.find(e => e.id === profissionalId)?.user_id === currentUser.id;
+  const lista = avaliacoesDetalhadas[profissionalId] || [];
+
+  box.innerHTML = lista.map(a => `
+    <div class="avaliacao-item">
+      <div class="avaliacao-estrelas">${starString(a.nota)}</div>
+      ${a.comentario ? `<div class="avaliacao-comentario">${escapeHtml(a.comentario)}</div>` : ''}
+      <div class="avaliacao-data">${new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
+      ${a.resposta_empresa
+        ? `<div class="resposta-empresa"><b>Resposta da empresa:</b> ${escapeHtml(a.resposta_empresa)}</div>`
+        : isOwnerDesse
+          ? `<button type="button" class="link-avaliar" onclick="abrirResponderAvaliacao('${a.id}')">Responder</button>
+             <div class="responder-box" id="responder-box-${a.id}" style="display:none;">
+               <textarea id="responder-texto-${a.id}" class="review-input" rows="2" placeholder="Escreva sua resposta pública"></textarea>
+               <div class="review-actions">
+                 <button type="button" class="btn-auth" onclick="responderAvaliacao('${a.id}', '${profissionalId}')">Enviar resposta</button>
+                 <span class="review-msg" id="responder-msg-${a.id}"></span>
+               </div>
+             </div>`
+          : ''}
+    </div>
+  `).join('') || '<div class="avaliacao-item">Nenhuma avaliação com detalhes ainda.</div>';
+
+  box.style.display = 'block';
+}
+
+function abrirResponderAvaliacao(avaliacaoId){
+  const box = document.getElementById('responder-box-' + avaliacaoId);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function responderAvaliacao(avaliacaoId, profissionalId){
+  const texto = document.getElementById('responder-texto-' + avaliacaoId).value.trim();
+  const msg = document.getElementById('responder-msg-' + avaliacaoId);
+
+  if(!texto){ msg.textContent = 'Escreva uma resposta.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClient.from('avaliacoes').update({ resposta_empresa: texto }).eq('id', avaliacaoId);
+  if(error){ console.error(error); msg.textContent = 'erro ao responder'; return; }
+
+  msg.textContent = 'resposta publicada!';
+  await loadAvaliacoes();
+  toggleVerAvaliacoes(profissionalId);
+  toggleVerAvaliacoes(profissionalId);
 }
 
 async function enviarAvaliacao(id){
@@ -739,6 +799,13 @@ async function enviarDenuncia(id){
 
   msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o GuiaZap seguro.';
   setTimeout(() => { document.getElementById('denuncia-box-' + id).style.display = 'none'; }, 2500);
+
+  // Verifica se essa empresa bateu o limite de denúncias (sem travar a tela esperando)
+  fetch('/.netlify/functions/verificar-limite-denuncias', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profissionalId: id })
+  }).catch(e => console.error('erro ao verificar limite de denúncias', e));
 }
 
 async function reativarGratis(profissionalId){
@@ -1017,7 +1084,7 @@ function render(){
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <h3>${escapeHtml(e.name)}</h3>
+          <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}</h3>
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
             ${isOwner ? `<span class="owner-actions">
@@ -1031,7 +1098,9 @@ function render(){
         <div class="stars">
           ${count > 0 ? `${starString(media)} <span class="num">${media.toFixed(1)}</span> <span class="review-count">(${count} avaliação${count > 1 ? 'ões' : ''})</span>` : '<span class="sem-avaliacao">Ainda sem avaliações</span>'}
           ${jaAvaliou(e.id) ? '<span class="ja-avaliou">Você já avaliou</span>' : `<button type="button" class="link-avaliar" onclick="abrirAvaliacao('${e.id}')">Avaliar</button>`}
+          ${count > 0 ? `<button type="button" class="link-avaliar" onclick="toggleVerAvaliacoes('${e.id}')">Ver avaliações</button>` : ''}
         </div>
+        <div class="lista-avaliacoes" id="lista-avaliacoes-${e.id}" style="display:none;"></div>
         ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
