@@ -510,6 +510,7 @@
   padding-bottom: 4px;
   scrollbar-width: thin;
 }
+.destaque-scroll + .destaque-scroll { margin-top: 10px; }
 .destaque-carregando { color: white; font-size: 0.8rem; padding: 10px; }
 .destaque-card {
   flex: 0 0 auto;

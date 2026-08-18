@@ -852,11 +852,7 @@ function renderProdutosDestaque(){
 
   secao.style.display = 'block';
 
-  // Sem busca ativa: embaralha e limita a 10, pra variar as empresas em destaque.
-  // Com busca ativa: mostra todos os resultados, sem embaralhar nem limitar.
-  const lista = query ? filtrados : [...filtrados].sort(() => Math.random() - 0.5).slice(0, 10);
-
-  container.innerHTML = lista.map(p => `
+  const cardHtml = p => `
     <div class="destaque-card">
       <img src="${p.foto ? escapeHtml(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtml(p.nome)}">
       <div class="destaque-info">
@@ -866,7 +862,22 @@ function renderProdutosDestaque(){
         <a href="vitrine.html?produto=${p.id}" class="destaque-btn">Ver produto</a>
       </div>
     </div>
-  `).join('');
+  `;
+
+  if(query){
+    // Com busca ativa: mostra todos os resultados numa fileira só, sem embaralhar
+    container.innerHTML = `<div class="destaque-scroll">${filtrados.map(cardHtml).join('')}</div>`;
+    return;
+  }
+
+  // Sem busca: embaralha e divide em até 3 fileiras (uma embaixo da outra), pra dar mais destaque à Vitrine
+  const embaralhados = [...filtrados].sort(() => Math.random() - 0.5).slice(0, 15);
+  const fileiras = [];
+  for(let i = 0; i < embaralhados.length; i += 5){
+    fileiras.push(embaralhados.slice(i, i + 5));
+  }
+
+  container.innerHTML = fileiras.map(fileira => `<div class="destaque-scroll">${fileira.map(cardHtml).join('')}</div>`).join('');
 }
 
 function editEntry(id){
