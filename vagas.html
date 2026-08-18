@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contrata-se — GuiaZap</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .vagas-header { background: #6b46c1; padding: 24px 15px; text-align: center; color: white; }
+  .vagas-header h1 { font-size: 1.8rem; font-weight: 800; }
+  .vagas-header p { font-size: 0.88rem; opacity: 0.95; margin-top: 4px; }
+  .vagas-busca {
+    background: var(--cinza-card);
+    padding: 14px;
+    margin: -14px 15px 0;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 2;
+  }
+  .vagas-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
+  .vagas-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 15px 10px; }
+  .vagas-toolbar .count { font-size: 0.9rem; color: #444; }
+  .btn-add-vaga {
+    background: #6b46c1;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .lista-vagas { padding: 0 15px 30px; }
+  .card-vaga {
+    background: var(--cinza-card);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .card-vaga .titulo-vaga { font-size: 1rem; font-weight: 700; color: #1c1c1c; }
+  .card-vaga .tipo-vaga {
+    display: inline-block;
+    background: #ede9fe;
+    color: #6b46c1;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 50px;
+    margin-top: 4px;
+  }
+  .card-vaga .empresa-vaga { font-size: 0.78rem; color: #8a8270; margin-top: 6px; }
+  .card-vaga .descricao-vaga { font-size: 0.85rem; color: #444; margin-top: 8px; line-height: 1.4; }
+  .card-vaga .requisitos-vaga { font-size: 0.8rem; color: #555; margin-top: 6px; }
+  .card-vaga .salario-vaga { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 6px; }
+  .card-vaga .btn-zap-mini {
+    margin-top: 10px;
+    display: block;
+    text-align: center;
+    background: var(--verde-whats);
+    color: white;
+    padding: 9px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .link-compartilhar-vaga {
+    background: #6b46c1;
+    color: white;
+    border: none;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 7px;
+    margin-top: 6px;
+    border-radius: 8px;
+    width: 100%;
+  }
+  .vazio-vagas { text-align: center; padding: 50px 20px; color: #8a8270; }
+
+  #vaga-form {
+    display: none;
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 0 15px 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  #vaga-form.open { display: block; }
+  #vaga-form .field { margin-bottom: 10px; }
+  #vaga-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  #vaga-form input, #vaga-form textarea, #vaga-form select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  }
+  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .menu-compartilhar-vaga {
+    display: flex; flex-direction: column; gap: 4px; margin-top: 6px;
+    background: #f8f8f8; border-radius: 8px; padding: 6px;
+  }
+</style>
+</head>
+<body>
+<header class="vagas-header">
+  <h1>Contrata-se</h1>
+  <p>Vagas de emprego das empresas da sua região</p>
+</header>
+
+<div class="vagas-busca">
+  <div class="busca-com-icone">
+    <span class="icone-lupa" onclick="renderVagas()">🔍</span>
+    <input id="v-search-vaga" placeholder="Buscar por cargo, tipo, empresa..." oninput="renderVagas()">
+  </div>
+</div>
+
+<div class="vagas-toolbar">
+  <span class="count" id="v-count-vaga"></span>
+  <button type="button" class="btn-add-vaga" id="v-add-vaga-btn" style="display:none;" onclick="abrirFormVaga()">+ Publicar vaga</button>
+</div>
+
+<form id="vaga-form" onsubmit="return salvarVaga(event)">
+  <input type="hidden" id="vg-id">
+  <div class="field">
+    <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
+    <select id="vg-profissional" required></select>
+  </div>
+  <div class="field">
+    <label>Cargo/título da vaga</label>
+    <input id="vg-titulo" required placeholder="Ex: Atendente de balcão">
+  </div>
+  <div class="field">
+    <label>Tipo</label>
+    <select id="vg-tipo">
+      <option value="CLT">CLT</option>
+      <option value="Meio período">Meio período</option>
+      <option value="Temporário">Temporário</option>
+      <option value="Freelancer">Freelancer</option>
+      <option value="Estágio">Estágio</option>
+      <option value="Diarista">Diarista</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Descrição da vaga</label>
+    <textarea id="vg-descricao" rows="3" placeholder="O que a pessoa vai fazer no dia a dia"></textarea>
+  </div>
+  <div class="field">
+    <label>O que procuramos (requisitos)</label>
+    <textarea id="vg-requisitos" rows="2" placeholder="Ex: experiência anterior, disponibilidade de horário..."></textarea>
+  </div>
+  <div class="field">
+    <label>Salário (opcional)</label>
+    <input id="vg-salario" placeholder="Ex: R$ 1.500,00 ou A combinar">
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn-salvar">Publicar vaga</button>
+    <button type="button" class="btn-cancelar" onclick="fecharFormVaga()">Cancelar</button>
+    <span class="review-msg" id="vg-msg"></span>
+  </div>
+</form>
+
+<div class="lista-vagas" id="v-grid-vaga"></div>
+<a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
+<a href="curriculo.html" class="voltar-guiazap" style="color:#6b46c1;">📄 Não tem currículo? Monte um grátis aqui</a>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script src="js/vagas.js"></script>
+</body>
+</html>

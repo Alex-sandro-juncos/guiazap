@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Montar Currículo — GuiaZap</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .curriculo-header { background: #6b46c1; padding: 24px 15px; text-align: center; color: white; }
+  .curriculo-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .curriculo-header p { font-size: 0.85rem; opacity: 0.95; margin-top: 4px; }
+  .curriculo-wrap { max-width: 600px; margin: 0 auto; padding: 18px 15px 40px; }
+
+  .cv-form { background: var(--cinza-card); border-radius: 14px; padding: 16px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+  .cv-form .field { margin-bottom: 10px; }
+  .cv-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  .cv-form input, .cv-form textarea, .cv-form select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  }
+  .cv-secao-titulo { font-size: 0.95rem; font-weight: 700; color: #6b46c1; margin: 16px 0 8px; }
+  .btn-baixar-cv {
+    width: 100%; background: #6b46c1; color: white; border: none; padding: 12px;
+    border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; margin-top: 10px;
+  }
+
+  /* Prévia do currículo */
+  #cv-preview {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    color: #1c1c1c;
+  }
+  .cv-topo { display: flex; gap: 16px; align-items: center; border-bottom: 3px solid #6b46c1; padding-bottom: 14px; margin-bottom: 14px; }
+  .cv-foto { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
+  .cv-nome { font-size: 1.3rem; font-weight: 800; color: #1c1c1c; }
+  .cv-contato-linha { font-size: 0.8rem; color: #555; margin-top: 2px; }
+  .cv-secao { margin-bottom: 14px; }
+  .cv-secao h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b46c1; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 6px; }
+  .cv-secao p, .cv-secao .item { font-size: 0.85rem; color: #333; line-height: 1.5; margin-bottom: 6px; white-space: pre-wrap; }
+  .cv-vazio-preview { text-align: center; color: #999; padding: 30px 10px; font-size: 0.85rem; }
+
+  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+
+  @media print {
+    header, .cv-form, .voltar-guiazap, .btn-baixar-cv { display: none !important; }
+    body { background: white; }
+    #cv-preview { box-shadow: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="curriculo-header">
+  <h1>📄 Montar Currículo</h1>
+  <p>Preencha seus dados e baixe seu currículo pronto, de graça</p>
+</header>
+
+<div class="curriculo-wrap">
+  <div class="cv-form">
+    <div class="field">
+      <label>Foto (opcional)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="carregarFotoCv(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="carregarFotoCv(event)" style="display:none;">
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Nome completo</label>
+      <input id="cv-input-nome" oninput="atualizarPreviewCv()" placeholder="Seu nome completo">
+    </div>
+    <div class="field">
+      <label>Telefone/WhatsApp</label>
+      <input id="cv-input-telefone" oninput="atualizarPreviewCv()" placeholder="(46) 99999-9999">
+    </div>
+    <div class="field">
+      <label>E-mail (opcional)</label>
+      <input id="cv-input-email" oninput="atualizarPreviewCv()" placeholder="seuemail@gmail.com">
+    </div>
+    <div class="field">
+      <label>Cidade</label>
+      <input id="cv-input-cidade" oninput="atualizarPreviewCv()" placeholder="Sua cidade">
+    </div>
+
+    <div class="cv-secao-titulo">Objetivo</div>
+    <div class="field">
+      <textarea id="cv-input-objetivo" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Busco oportunidade na área de vendas, com foco em atendimento ao cliente."></textarea>
+    </div>
+
+    <div class="cv-secao-titulo">Experiência profissional</div>
+    <div class="field">
+      <textarea id="cv-input-experiencia" rows="4" oninput="atualizarPreviewCv()" placeholder="Ex: Atendente de loja — Mercado São José (2022-2024)&#10;Responsável pelo caixa e atendimento ao público."></textarea>
+    </div>
+
+    <div class="cv-secao-titulo">Formação/Escolaridade</div>
+    <div class="field">
+      <textarea id="cv-input-formacao" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Ensino Médio completo — Colégio Estadual X, 2021"></textarea>
+    </div>
+
+    <div class="cv-secao-titulo">Habilidades e cursos</div>
+    <div class="field">
+      <textarea id="cv-input-habilidades" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Pacote Office, CNH categoria B, atendimento ao cliente"></textarea>
+    </div>
+
+    <button type="button" class="btn-baixar-cv" onclick="window.print()">⬇ Baixar/Imprimir currículo (PDF)</button>
+  </div>
+
+  <div id="cv-preview">
+    <div class="cv-topo">
+      <img id="cv-preview-foto" class="cv-foto" src="https://api.dicebear.com/7.x/initials/svg?seed=Você" alt="Foto">
+      <div>
+        <div class="cv-nome" id="cv-preview-nome">Seu nome aqui</div>
+        <div class="cv-contato-linha" id="cv-preview-contato">Telefone · E-mail · Cidade</div>
+      </div>
+    </div>
+    <div class="cv-secao" id="cv-secao-objetivo" style="display:none;">
+      <h3>Objetivo</h3>
+      <p id="cv-preview-objetivo"></p>
+    </div>
+    <div class="cv-secao" id="cv-secao-experiencia" style="display:none;">
+      <h3>Experiência profissional</h3>
+      <p id="cv-preview-experiencia"></p>
+    </div>
+    <div class="cv-secao" id="cv-secao-formacao" style="display:none;">
+      <h3>Formação/Escolaridade</h3>
+      <p id="cv-preview-formacao"></p>
+    </div>
+    <div class="cv-secao" id="cv-secao-habilidades" style="display:none;">
+      <h3>Habilidades e cursos</h3>
+      <p id="cv-preview-habilidades"></p>
+    </div>
+  </div>
+
+  <a href="vagas.html" class="voltar-guiazap">← Ver vagas de emprego (Contrata-se)</a>
+</div>
+
+<script>
+function carregarFotoCv(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    document.getElementById('cv-preview-foto').src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function atualizarPreviewCv(){
+  const nome = document.getElementById('cv-input-nome').value.trim();
+  const telefone = document.getElementById('cv-input-telefone').value.trim();
+  const email = document.getElementById('cv-input-email').value.trim();
+  const cidade = document.getElementById('cv-input-cidade').value.trim();
+  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
+  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
+  const formacao = document.getElementById('cv-input-formacao').value.trim();
+  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
+
+  document.getElementById('cv-preview-nome').textContent = nome || 'Seu nome aqui';
+
+  const contatoPartes = [telefone, email, cidade].filter(Boolean);
+  document.getElementById('cv-preview-contato').textContent = contatoPartes.length ? contatoPartes.join(' · ') : 'Telefone · E-mail · Cidade';
+
+  const secoes = [
+    ['objetivo', objetivo],
+    ['experiencia', experiencia],
+    ['formacao', formacao],
+    ['habilidades', habilidades]
+  ];
+  secoes.forEach(([chave, valor]) => {
+    document.getElementById('cv-secao-' + chave).style.display = valor ? 'block' : 'none';
+    document.getElementById('cv-preview-' + chave).textContent = valor;
+  });
+}
+
+atualizarPreviewCv();
+</script>
+</body>
+</html>
