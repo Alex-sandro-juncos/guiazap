@@ -40,7 +40,6 @@
   .busca-container input:focus, .busca-container select:focus { outline: 2px solid var(--verde-whats); }
   .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
   .filtros select, .filtros input {
-    flex: 1 1 30%;
     min-width: 90px;
     padding: 10px;
     border: 1px solid #ddd;
@@ -783,8 +782,8 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
   text-decoration: none;
 }
 
-.campo-com-limpar { position: relative; }
-.campo-com-limpar input, .campo-com-limpar select { padding-right: 28px !important; width: 100%; }
+.campo-com-limpar { position: relative; flex: 1 1 30%; min-width: 90px; }
+.campo-com-limpar input, .campo-com-limpar select { padding-right: 28px !important; width: 100%; min-width: 0; box-sizing: border-box; }
 .btn-limpar-campo {
   position: absolute;
   right: 6px;
