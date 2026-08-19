@@ -39,24 +39,16 @@
       </div>
     </div>
     <div id="historico-busca-lista" class="historico-busca"></div>
-    <div class="field" style="margin-bottom:10px;">
-      <div class="campo-com-limpar">
-        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="atualizarBotoesLimpar()" onblur="buscarCepFiltro()">
-        <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
-      </div>
-      <span class="cep-msg" id="filter-cep-msg"></span>
-    </div>
     <div class="filtros">
       <div class="campo-com-limpar">
         <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
         <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
       </div>
       <div class="campo-com-limpar">
-        <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
-          <option value="">Cidade</option>
-        </select>
+        <input id="gz-localidade-busca" class="campo-nao-login" list="cidades-filtro-list" placeholder="Cidade" name="filtro_cidade_local" autocomplete="address-level2" data-lpignore="true" data-1p-ignore="true" oninput="render(); atualizarBotoesLimpar();" onchange="onCidadeFiltroChange()">
         <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
       </div>
+      <datalist id="cidades-filtro-list"></datalist>
       <div class="campo-com-limpar">
         <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
         <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>

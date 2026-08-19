@@ -341,19 +341,6 @@ async function buscarCidadesIBGE(uf, datalistEl){
   }
 }
 
-async function popularSelectCidadesFiltro(uf){
-  const sel = document.getElementById('gz-localidade-busca');
-  sel.innerHTML = '<option value="">Cidade</option>';
-  if(!uf) return;
-  try{
-    const resp = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
-    const cidades = await resp.json();
-    sel.innerHTML += cidades.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('');
-  } catch(e){
-    console.error('erro ao buscar cidades do IBGE', e);
-  }
-}
-
 function onEstadoCadastroChange(){
   const uf = document.getElementById('f-estado').value;
   buscarCidadesIBGE(uf, document.getElementById('cidades-cadastro-list'));
@@ -361,7 +348,8 @@ function onEstadoCadastroChange(){
 
 function onEstadoFiltroChange(){
   const uf = document.getElementById('filter-estado').value;
-  popularSelectCidadesFiltro(uf);
+  buscarCidadesIBGE(uf, document.getElementById('cidades-filtro-list'));
+  document.getElementById('gz-localidade-busca').value = '';
   onCidadeFiltroChange();
 }
 
@@ -377,31 +365,6 @@ function populateBairrosFiltro(){
   const cidadeNorm = normalizarTexto(cidade);
   const bairros = [...new Set(entries.filter(e => (!estado || e.estado === estado) && (!cidadeNorm || normalizarTexto(e.cidade).includes(cidadeNorm))).map(e => e.bairro))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   bairroSel.innerHTML = '<option value="">Bairro</option>' + bairros.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
-}
-
-async function buscarCepFiltro(){
-  const cepInput = document.getElementById('filter-cep');
-  const msg = document.getElementById('filter-cep-msg');
-  const cep = cepInput.value.replace(/\D/g,'');
-  if(cep.length !== 8){ msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : ''; return; }
-
-  msg.textContent = 'buscando...';
-  try{
-    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    const data = await resp.json();
-    if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
-
-    document.getElementById('filter-estado').value = data.uf || '';
-    await popularSelectCidadesFiltro(data.uf);
-    document.getElementById('gz-localidade-busca').value = data.localidade || '';
-    populateBairrosFiltro();
-    document.getElementById('filter-bairro').value = data.bairro || '';
-    msg.textContent = 'filtro aplicado';
-    render();
-    atualizarBotoesLimpar();
-  } catch(e){
-    msg.textContent = 'erro ao buscar CEP';
-  }
 }
 
 function populateEstados(){
@@ -730,7 +693,7 @@ function toggleFavorito(id, event){
   render();
 }
 
-const CAMPOS_COM_LIMPAR = ['search', 'filter-cep', 'filter-estado', 'gz-localidade-busca', 'filter-bairro'];
+const CAMPOS_COM_LIMPAR = ['search', 'filter-estado', 'gz-localidade-busca', 'filter-bairro'];
 
 function atualizarBotoesLimpar(){
   CAMPOS_COM_LIMPAR.forEach(id => {
