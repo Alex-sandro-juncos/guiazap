@@ -30,7 +30,33 @@ async function initAuth(){
 
 function toggleAuthForm(){
   const box = document.getElementById('auth-form-fields');
-  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+
+  if(box.style.display === 'none'){
+    // Só cria os campos de login agora, na hora de abrir — assim eles nunca
+    // ficam "escondidos" no código da página pro navegador escanear sem querer.
+    box.innerHTML = `
+      <form autocomplete="on" onsubmit="return false;">
+        <div class="auth-row">
+          <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
+          <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+        </div>
+        <label class="termos-check">
+          <input type="checkbox" id="aceite-termos">
+          <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+        </label>
+        <div class="auth-actions">
+          <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
+          <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
+          <span class="auth-msg" id="auth-msg"></span>
+        </div>
+        <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
+      </form>
+    `;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+    box.innerHTML = ''; // remove os campos do código da página de novo
+  }
 }
 
 function updateAuthUI(){
@@ -1190,15 +1216,6 @@ if(initSupabase()){
 }
 
 renderHistoricoBusca();
-
-// Evita o Chrome/Edge sugerir e-mail no campo cidade do filtro
-const campoCidadeFiltro = document.getElementById('filter-cidade');
-if (campoCidadeFiltro) {
-  campoCidadeFiltro.addEventListener('focus', function () {
-    this.removeAttribute('readonly');
-    this.setAttribute('autocomplete', 'new-password');
-  });
-}
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
