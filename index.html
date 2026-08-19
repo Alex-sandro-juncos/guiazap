@@ -42,6 +42,13 @@
         <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
       </div>
     </div>
+    <div class="field" style="margin-bottom:10px;">
+      <div class="campo-com-limpar">
+        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="atualizarBotoesLimpar()" onblur="buscarCepFiltro()">
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
+      </div>
+      <span class="cep-msg" id="filter-cep-msg"></span>
+    </div>
     <div class="filtros">
       <div class="campo-com-limpar">
         <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>

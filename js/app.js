@@ -359,6 +359,31 @@ async function popularSelectCidadesFiltro(uf){
   }
 }
 
+async function buscarCepFiltro(){
+  const cepInput = document.getElementById('filter-cep');
+  const msg = document.getElementById('filter-cep-msg');
+  const cep = cepInput.value.replace(/\D/g,'');
+  if(cep.length !== 8){ msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : ''; return; }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
+
+    document.getElementById('filter-estado').value = data.uf || '';
+    await popularSelectCidadesFiltro(data.uf);
+    document.getElementById('gz-localidade-busca').value = data.localidade || '';
+    populateBairrosFiltro();
+    document.getElementById('filter-bairro').value = data.bairro || '';
+    msg.textContent = 'filtro aplicado';
+    render();
+    atualizarBotoesLimpar();
+  } catch(e){
+    msg.textContent = 'erro ao buscar CEP';
+  }
+}
+
 function onEstadoFiltroChange(){
   const uf = document.getElementById('filter-estado').value;
   popularSelectCidadesFiltro(uf);
@@ -705,7 +730,7 @@ function toggleFavorito(id, event){
   render();
 }
 
-const CAMPOS_COM_LIMPAR = ['search', 'filter-estado', 'gz-localidade-busca', 'filter-bairro'];
+const CAMPOS_COM_LIMPAR = ['search', 'filter-cep', 'filter-estado', 'gz-localidade-busca', 'filter-bairro'];
 
 function atualizarBotoesLimpar(){
   CAMPOS_COM_LIMPAR.forEach(id => {
