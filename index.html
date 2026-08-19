@@ -19,6 +19,10 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- Campo "isca", escondido fora da tela — tentativa de desviar a atenção do
+     Chrome, que insiste em sugerir contas Google no campo de busca real. -->
+<input type="email" name="email" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; pointer-events:none;">
+
 <header>
   <div class="logo">GuiaZap</div>
   <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
