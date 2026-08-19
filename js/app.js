@@ -341,6 +341,19 @@ async function buscarCidadesIBGE(uf, datalistEl){
   }
 }
 
+async function popularSelectCidadesFiltro(uf){
+  const sel = document.getElementById('gz-localidade-busca');
+  sel.innerHTML = '<option value="">Cidade</option>';
+  if(!uf) return;
+  try{
+    const resp = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+    const cidades = await resp.json();
+    sel.innerHTML += cidades.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('');
+  } catch(e){
+    console.error('erro ao buscar cidades do IBGE', e);
+  }
+}
+
 function onEstadoCadastroChange(){
   const uf = document.getElementById('f-estado').value;
   buscarCidadesIBGE(uf, document.getElementById('cidades-cadastro-list'));
@@ -348,8 +361,7 @@ function onEstadoCadastroChange(){
 
 function onEstadoFiltroChange(){
   const uf = document.getElementById('filter-estado').value;
-  buscarCidadesIBGE(uf, document.getElementById('cidades-filtro-list'));
-  document.getElementById('gz-localidade-busca').value = '';
+  popularSelectCidadesFiltro(uf);
   onCidadeFiltroChange();
 }
 
@@ -380,7 +392,7 @@ async function buscarCepFiltro(){
     if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
 
     document.getElementById('filter-estado').value = data.uf || '';
-    await buscarCidadesIBGE(data.uf, document.getElementById('cidades-filtro-list'));
+    await popularSelectCidadesFiltro(data.uf);
     document.getElementById('gz-localidade-busca').value = data.localidade || '';
     populateBairrosFiltro();
     document.getElementById('filter-bairro').value = data.bairro || '';
