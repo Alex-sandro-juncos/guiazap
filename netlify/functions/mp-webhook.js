@@ -5,9 +5,38 @@
 // - "subscription_preapproval" com status diferente de "authorized" (cancelada, pausada) ->
 //   desativa e avisa por e-mail.
 
+const crypto = require('crypto');
+
 const VALOR_PACOTE_COMPLETO = 10; // R$10 -> se o pagamento for igual/maior que isso, considera Pacote Completo
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
+
+// Confirma que o aviso realmente veio do Mercado Pago (evita que alguém envie
+// uma mensagem falsa repetindo um pagamento antigo de outra pessoa).
+// Documentação oficial: https://www.mercadopago.com.br/developers/pt/docs/checkout-api/webhooks/notifications#editor_5
+function assinaturaValida(headers, dataId){
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  if(!secret){
+    console.warn('MP_WEBHOOK_SECRET não configurado — pulando verificação de assinatura (configure pra maior segurança)');
+    return true; // não trava o funcionamento enquanto a chave não é configurada
+  }
+
+  const xSignature = headers['x-signature'] || headers['X-Signature'];
+  const xRequestId = headers['x-request-id'] || headers['X-Request-Id'];
+  if(!xSignature || !xRequestId) return false;
+
+  let ts, v1;
+  xSignature.split(',').forEach(parte => {
+    const [chave, valor] = parte.split('=');
+    if(chave && chave.trim() === 'ts') ts = (valor || '').trim();
+    if(chave && chave.trim() === 'v1') v1 = (valor || '').trim();
+  });
+  if(!ts || !v1) return false;
+
+  const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+  const hashCalculado = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+  return hashCalculado === v1;
+}
 
 async function enviarEmail(destinatario, assunto, html){
   if(!RESEND_API_KEY || !destinatario) return;
@@ -38,6 +67,11 @@ exports.handler = async function (event) {
 
     if (!dataId) {
       return { statusCode: 200, body: 'ignorado (sem data.id)' };
+    }
+
+    if(!assinaturaValida(event.headers, dataId)){
+      console.error('assinatura do webhook inválida — possível tentativa de falsificação');
+      return { statusCode: 401, body: 'assinatura inválida' };
     }
 
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
