@@ -109,7 +109,7 @@ function renderVagas(){
       ${v.descricao ? `<div class="descricao-vaga">${escapeHtmlVagas(v.descricao)}</div>` : ''}
       ${v.requisitos ? `<div class="requisitos-vaga"><b>Procuramos:</b> ${escapeHtmlVagas(v.requisitos)}</div>` : ''}
       ${v.salario ? `<div class="salario-vaga">${escapeHtmlVagas(v.salario)}</div>` : ''}
-      ${v.profissionais && v.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${v.profissionais.whatsapp}?text=${encodeURIComponent('Olá! Vi a vaga de ' + v.titulo + ' no GuiaZap e tenho interesse.')}" target="_blank">Candidatar-se pelo WhatsApp</a>` : ''}
+      ${v.profissionais && v.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(v.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi a vaga de ' + v.titulo + ' no GuiaZap e tenho interesse.')}" target="_blank">Candidatar-se pelo WhatsApp</a>` : ''}
       <button type="button" class="link-compartilhar-vaga" onclick="toggleMenuCompartilharVaga('${v.id}', '${escapeHtmlVagas(v.titulo).replace(/'/g, "\\'")}')">📤 Compartilhar vaga</button>
       <div class="menu-compartilhar-vaga" id="menu-compartilhar-vaga-${v.id}" style="display:none;"></div>
     </div>

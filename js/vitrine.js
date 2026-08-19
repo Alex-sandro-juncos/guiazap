@@ -270,7 +270,7 @@ function renderProdutos(){
             <span class="review-msg" id="review-produto-msg-${p.id}"></span>
           </div>
         </div>
-        ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${p.profissionais.whatsapp}" target="_blank">Chamar no WhatsApp</a>` : ''}
+        ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}" target="_blank">Chamar no WhatsApp</a>` : ''}
         <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
         <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
         ${!isDono ? `<button type="button" class="link-denunciar-produto" onclick="abrirDenunciaProduto('${p.id}')">Denunciar produto</button>
@@ -647,6 +647,10 @@ async function enviarFotoProduto(event){
 function onFotoProdutoLinkChange(){
   const url = document.getElementById('p-foto').value.trim();
   const preview = document.getElementById('p-foto-preview');
+  if(url && !/^https?:\/\//i.test(url)){
+    preview.style.display = 'none';
+    return;
+  }
   if(url){ preview.src = url; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
 }
@@ -670,6 +674,7 @@ async function salvarProduto(e){
   };
 
   if(!payload.nome || !payload.profissional_id){ msg.textContent = 'Preencha o nome do produto.'; return false; }
+  if(payload.foto && !/^https?:\/\//i.test(payload.foto)){ msg.textContent = 'O link da foto precisa começar com http:// ou https://'; return false; }
 
   msg.textContent = 'salvando...';
   let error;

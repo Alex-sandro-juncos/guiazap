@@ -539,6 +539,10 @@ async function enviarFoto(event){
 function onFotoLinkChange(){
   const url = document.getElementById('f-foto').value.trim();
   const preview = document.getElementById('foto-preview');
+  if(url && !/^https?:\/\//i.test(url)){
+    preview.style.display = 'none';
+    return;
+  }
   if(url){ preview.src = url; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
 }
@@ -593,6 +597,10 @@ async function saveEntry(e){
     categorias_extra: coletarCategoriasExtra()
   };
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
+  if(payload.foto && !/^https?:\/\//i.test(payload.foto)){
+    document.getElementById('form-msg').textContent = 'O link da foto precisa começar com http:// ou https://';
+    return false;
+  }
 
   const msg = document.getElementById('form-msg');
   msg.textContent = 'salvando...';
@@ -1186,7 +1194,7 @@ function render(){
           </div>
         </div>
         <div class="contatos-row">
-          <a class="btn-zap" href="https://wa.me/55${e.whatsapp}" target="_blank">Chamar no WhatsApp</a>
+          <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}" target="_blank">Chamar no WhatsApp</a>
           ${renderContatosExtra(e.contatos_extra)}
         </div>
         ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
