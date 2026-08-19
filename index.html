@@ -46,7 +46,7 @@
     </div>
     <div class="filtros">
       <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" autocomplete="address-level2" oninput="render()" onchange="onCidadeFiltroChange()">
+      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" autocomplete="nope" oninput="render()" onchange="onCidadeFiltroChange()">
       <datalist id="cidades-filtro-list"></datalist>
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
@@ -55,10 +55,10 @@
 
   <div id="auth-logged-out" class="auth-box-discreto">
     <button type="button" class="auth-toggle-link" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
-    <div id="auth-form-fields" style="display:none;">
+    <form id="auth-form-fields" style="display:none;" autocomplete="on" onsubmit="return false;">
       <div class="auth-row">
-        <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
-        <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
+        <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
+        <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
       </div>
       <label class="termos-check">
         <input type="checkbox" id="aceite-termos">
@@ -70,7 +70,7 @@
         <span class="auth-msg" id="auth-msg"></span>
       </div>
       <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
-    </div>
+    </form>
   </div>
 
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
