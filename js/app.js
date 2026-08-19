@@ -32,8 +32,6 @@ function toggleAuthForm(){
   const box = document.getElementById('auth-form-fields');
 
   if(box.style.display === 'none'){
-    // Só cria os campos de login agora, na hora de abrir — assim eles nunca
-    // ficam "escondidos" no código da página pro navegador escanear sem querer.
     box.innerHTML = `
       <form autocomplete="on" onsubmit="return false;">
         <div class="auth-row">
@@ -55,7 +53,7 @@ function toggleAuthForm(){
     box.style.display = 'block';
   } else {
     box.style.display = 'none';
-    box.innerHTML = ''; // remove os campos do código da página de novo
+    box.innerHTML = '';
   }
 }
 
@@ -350,7 +348,7 @@ function onEstadoCadastroChange(){
 function onEstadoFiltroChange(){
   const uf = document.getElementById('filter-estado').value;
   buscarCidadesIBGE(uf, document.getElementById('cidades-filtro-list'));
-  document.getElementById('filter-cidade').value = '';
+  document.getElementById('gz-localidade-busca').value = '';
   onCidadeFiltroChange();
 }
 
@@ -361,7 +359,7 @@ function onCidadeFiltroChange(){
 
 function populateBairrosFiltro(){
   const estado = document.getElementById('filter-estado').value;
-  const cidade = document.getElementById('filter-cidade').value;
+  const cidade = document.getElementById('gz-localidade-busca').value;
   const bairroSel = document.getElementById('filter-bairro');
   const cidadeNorm = normalizarTexto(cidade);
   const bairros = [...new Set(entries.filter(e => (!estado || e.estado === estado) && (!cidadeNorm || normalizarTexto(e.cidade).includes(cidadeNorm))).map(e => e.bairro))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
@@ -382,7 +380,7 @@ async function buscarCepFiltro(){
 
     document.getElementById('filter-estado').value = data.uf || '';
     await buscarCidadesIBGE(data.uf, document.getElementById('cidades-filtro-list'));
-    document.getElementById('filter-cidade').value = data.localidade || '';
+    document.getElementById('gz-localidade-busca').value = data.localidade || '';
     populateBairrosFiltro();
     document.getElementById('filter-bairro').value = data.bairro || '';
     msg.textContent = 'filtro aplicado';
@@ -1070,7 +1068,7 @@ function render(){
   const list = document.getElementById('list');
   const query = normalizarTexto(document.getElementById('search').value);
   const estado = document.getElementById('filter-estado').value;
-  const cidade = document.getElementById('filter-cidade').value;
+  const cidade = document.getElementById('gz-localidade-busca').value;
   const bairro = document.getElementById('filter-bairro').value;
 
   const cidadeBusca = normalizarTexto(cidade);
