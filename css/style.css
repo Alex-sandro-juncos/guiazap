@@ -718,15 +718,17 @@ body.dark-mode .destaque-scroll .destaque-card {
 body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
 
 .btn-modo-escuro {
-  background: transparent;
-  border: 1.5px solid var(--line, #d8cdb6);
-  color: #555;
+  background: rgba(255,255,255,0.25);
+  border: 1.5px solid rgba(255,255,255,0.6);
+  color: white;
   border-radius: 50px;
   padding: 6px 12px;
   font-size: 0.78rem;
   cursor: pointer;
   margin-left: 6px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
 }
+.btn-modo-escuro:hover { background: rgba(255,255,255,0.4); }
 
 .selo-verificado { font-size: 0.85rem; }
 
@@ -769,3 +771,14 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
   cursor: pointer;
 }
 #auth-form-fields { margin-top: 10px; padding: 12px; background: var(--cinza-card); border-radius: 10px; }
+
+.banner-cadastro-rapido {
+  display: block;
+  text-align: center;
+  background: linear-gradient(90deg, #128C7E, #25D366);
+  color: white;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
