@@ -1184,18 +1184,6 @@ function escapeHtml(str){
   return d.innerHTML;
 }
 
-// Truque contra o Chrome insistir em sugerir contas Google no campo de cidade:
-// deixa "somente leitura" até a pessoa clicar, só então libera pra digitar.
-(function(){
-  const campoCidade = document.getElementById('filter-cidade');
-  if(campoCidade){
-    campoCidade.setAttribute('readonly', 'readonly');
-    campoCidade.addEventListener('focus', function(){
-      this.removeAttribute('readonly');
-    });
-  }
-})();
-
 if(initSupabase()){
   initAuth();
   loadEntries();

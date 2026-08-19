@@ -46,7 +46,7 @@
     </div>
     <div class="filtros">
       <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" autocomplete="nope" oninput="render()" onchange="onCidadeFiltroChange()">
+      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" name="filtro_cidade_local" autocomplete="address-level2" data-lpignore="true" data-1p-ignore="true" oninput="render()" onchange="onCidadeFiltroChange()">
       <datalist id="cidades-filtro-list"></datalist>
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
