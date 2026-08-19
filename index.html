@@ -34,19 +34,33 @@
     <div class="busca-row">
       <div class="busca-com-icone">
         <span class="icone-lupa" onclick="render()">🔍</span>
-        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render(); atualizarBotoesLimpar();" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
+        <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
       </div>
     </div>
     <div id="historico-busca-lista" class="historico-busca"></div>
     <div class="field" style="margin-bottom:10px;">
-      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" onblur="buscarCepFiltro()">
+      <div class="campo-com-limpar">
+        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="atualizarBotoesLimpar()" onblur="buscarCepFiltro()">
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
+      </div>
       <span class="cep-msg" id="filter-cep-msg"></span>
     </div>
     <div class="filtros">
-      <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="gz-localidade-busca" class="campo-nao-login" list="cidades-filtro-list" placeholder="Cidade" name="filtro_cidade_local" autocomplete="address-level2" data-lpignore="true" data-1p-ignore="true" oninput="render()" onchange="onCidadeFiltroChange()">
-      <datalist id="cidades-filtro-list"></datalist>
-      <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
+      <div class="campo-com-limpar">
+        <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
+      </div>
+      <div class="campo-com-limpar">
+        <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
+          <option value="">Cidade</option>
+        </select>
+        <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
+      </div>
+      <div class="campo-com-limpar">
+        <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>
+      </div>
     </div>
     <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
   </div>

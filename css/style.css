@@ -782,3 +782,28 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
   font-size: 0.85rem;
   text-decoration: none;
 }
+
+.campo-com-limpar { position: relative; }
+.campo-com-limpar input, .campo-com-limpar select { padding-right: 28px !important; width: 100%; }
+.btn-limpar-campo {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #ddd;
+  color: #555;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.btn-limpar-campo:hover { background: #ccc; }
+.busca-com-icone { position: relative; }
+.btn-limpar-busca { right: 10px; }

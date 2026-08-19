@@ -335,7 +335,20 @@ async function buscarCidadesIBGE(uf, datalistEl){
   try{
     const resp = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
     const cidades = await resp.json();
-    datalistEl.innerHTML = cidades.map(c => `<option value="${escapeHtml(c.nome)}">`).join('');
+    datalistEl.innerHTML = cidades.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('');
+  } catch(e){
+    console.error('erro ao buscar cidades do IBGE', e);
+  }
+}
+
+async function popularSelectCidadesFiltro(uf){
+  const sel = document.getElementById('gz-localidade-busca');
+  sel.innerHTML = '<option value="">Cidade</option>';
+  if(!uf) return;
+  try{
+    const resp = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+    const cidades = await resp.json();
+    sel.innerHTML += cidades.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('');
   } catch(e){
     console.error('erro ao buscar cidades do IBGE', e);
   }
@@ -348,8 +361,7 @@ function onEstadoCadastroChange(){
 
 function onEstadoFiltroChange(){
   const uf = document.getElementById('filter-estado').value;
-  buscarCidadesIBGE(uf, document.getElementById('cidades-filtro-list'));
-  document.getElementById('gz-localidade-busca').value = '';
+  popularSelectCidadesFiltro(uf);
   onCidadeFiltroChange();
 }
 
@@ -380,12 +392,13 @@ async function buscarCepFiltro(){
     if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
 
     document.getElementById('filter-estado').value = data.uf || '';
-    await buscarCidadesIBGE(data.uf, document.getElementById('cidades-filtro-list'));
+    await popularSelectCidadesFiltro(data.uf);
     document.getElementById('gz-localidade-busca').value = data.localidade || '';
     populateBairrosFiltro();
     document.getElementById('filter-bairro').value = data.bairro || '';
     msg.textContent = 'filtro aplicado';
     render();
+    atualizarBotoesLimpar();
   } catch(e){
     msg.textContent = 'erro ao buscar CEP';
   }
@@ -715,6 +728,29 @@ function toggleFavorito(id, event){
   else favoritosEmpresas.add(id);
   localStorage.setItem('favoritos_empresas', JSON.stringify([...favoritosEmpresas]));
   render();
+}
+
+const CAMPOS_COM_LIMPAR = ['search', 'filter-cep', 'filter-estado', 'gz-localidade-busca', 'filter-bairro'];
+
+function atualizarBotoesLimpar(){
+  CAMPOS_COM_LIMPAR.forEach(id => {
+    const campo = document.getElementById(id);
+    const botao = document.getElementById('limpar-' + id);
+    if(!campo || !botao) return;
+    botao.style.display = campo.value ? 'block' : 'none';
+  });
+}
+
+function limparCampoFiltro(id){
+  const campo = document.getElementById(id);
+  if(!campo) return;
+  campo.value = '';
+
+  if(id === 'filter-estado'){ onEstadoFiltroChange(); }
+  else if(id === 'gz-localidade-busca'){ onCidadeFiltroChange(); }
+  else { render(); }
+
+  atualizarBotoesLimpar();
 }
 
 function toggleFiltroFavoritos(){
