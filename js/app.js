@@ -1220,6 +1220,18 @@ function escapeHtml(str){
   return d.innerHTML;
 }
 
+// Truque contra o Chrome insistir em sugerir contas Google no campo de busca:
+// deixa "somente leitura" até a pessoa clicar, só então libera pra digitar.
+(function(){
+  const campoBusca = document.getElementById('search');
+  if(campoBusca){
+    campoBusca.setAttribute('readonly', 'readonly');
+    campoBusca.addEventListener('focus', function(){
+      this.removeAttribute('readonly');
+    });
+  }
+})();
+
 if(initSupabase()){
   initAuth();
   loadEntries();
