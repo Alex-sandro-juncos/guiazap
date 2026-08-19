@@ -46,7 +46,20 @@
     </div>
     <div class="filtros">
       <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" name="filtro_cidade_local" autocomplete="address-level2" data-lpignore="true" data-1p-ignore="true" oninput="render()" onchange="onCidadeFiltroChange()">
+      <input
+        id="filter-cidade"
+        list="cidades-filtro-list"
+        placeholder="Cidade"
+        name="filtro_cidade_local"
+        autocomplete="new-password"
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-form-type="other"
+        readonly
+        onfocus="this.removeAttribute('readonly')"
+        oninput="render()"
+        onchange="onCidadeFiltroChange()"
+      >
       <datalist id="cidades-filtro-list"></datalist>
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
@@ -137,7 +150,7 @@
       </div>
       <div class="field">
         <label>Cidade</label>
-        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" autocomplete="address-level2">
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" name="cadastro_cidade_local" autocomplete="address-level2" data-lpignore="true" data-1p-ignore="true">
         <datalist id="cidades-cadastro-list"></datalist>
       </div>
       <div class="field">

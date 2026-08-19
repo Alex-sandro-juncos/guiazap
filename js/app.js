@@ -1191,6 +1191,15 @@ if(initSupabase()){
 
 renderHistoricoBusca();
 
+// Evita o Chrome/Edge sugerir e-mail no campo cidade do filtro
+const campoCidadeFiltro = document.getElementById('filter-cidade');
+if (campoCidadeFiltro) {
+  campoCidadeFiltro.addEventListener('focus', function () {
+    this.removeAttribute('readonly');
+    this.setAttribute('autocomplete', 'new-password');
+  });
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
