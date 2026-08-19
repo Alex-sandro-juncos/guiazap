@@ -420,7 +420,7 @@
   font-size: 1rem;
   cursor: pointer;
 }
-.busca-com-icone input { padding-left: 36px !important; }
+.busca-com-icone input { padding-left: 36px !important; width: 100%; box-sizing: border-box; }
 
 .link-migrar {
   display: block;
@@ -807,3 +807,4 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
 .btn-limpar-campo:hover { background: #ccc; }
 .busca-com-icone { position: relative; }
 .btn-limpar-busca { right: 10px; }
+.busca-com-icone input { padding-right: 30px; }
