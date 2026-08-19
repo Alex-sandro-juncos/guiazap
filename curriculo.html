@@ -153,6 +153,7 @@
     <div class="banco-talentos-box">
       <p>🎯 <b>Quer que empresas te encontrem?</b> Envie seu currículo pro Banco de Talentos do GuiaZap — empresas cadastradas podem consultar diretamente, mesmo sem você precisar se candidatar a uma vaga específica.</p>
       <button type="button" class="btn-baixar-cv" style="background:#6b46c1;" onclick="enviarParaBancoTalentos()">📤 Enviar para o Banco de Talentos</button>
+      <button type="button" id="cv-btn-excluir" class="btn-baixar-cv" style="background:#a4402f; display:none;" onclick="excluirMeuCurriculo()">🗑️ Excluir currículo do banco</button>
       <div id="cv-banco-msg" style="text-align:center; font-size:0.78rem; margin-top:6px;"></div>
     </div>
   </div>
@@ -393,8 +394,10 @@ async function carregarMeuCurriculo(){
 
     document.getElementById('cv-banco-msg').textContent = 'Você já tem um currículo salvo no banco. Editar os campos e enviar de novo atualiza ele.';
     document.getElementById('cv-banco-msg').style.color = '#555';
+    document.getElementById('cv-btn-excluir').style.display = 'block';
   } else {
     meuCurriculoId = null;
+    document.getElementById('cv-btn-excluir').style.display = 'none';
   }
 }
 
@@ -437,6 +440,23 @@ async function enviarParaBancoTalentos(){
   if(error){ console.error(error); msg.textContent = 'erro ao enviar, tente novamente'; msg.style.color = '#a4402f'; return; }
 
   msg.textContent = meuCurriculoId ? 'Currículo salvo/atualizado! Empresas do Pacote Completo já podem consultar.' : 'Currículo enviado!';
+  msg.style.color = 'var(--verde-escuro)';
+  document.getElementById('cv-btn-excluir').style.display = 'block';
+}
+
+async function excluirMeuCurriculo(){
+  if(!meuCurriculoId) return;
+  if(!confirm('Excluir seu currículo do Banco de Talentos? As empresas não vão mais conseguir te encontrar por lá.')) return;
+
+  const msg = document.getElementById('cv-banco-msg');
+  msg.textContent = 'excluindo...';
+
+  const { error } = await supabaseClientCv.from('banco_curriculos').delete().eq('id', meuCurriculoId);
+  if(error){ console.error(error); msg.textContent = 'erro ao excluir, tente novamente'; msg.style.color = '#a4402f'; return; }
+
+  meuCurriculoId = null;
+  document.getElementById('cv-btn-excluir').style.display = 'none';
+  msg.textContent = 'Currículo excluído do banco.';
   msg.style.color = 'var(--verde-escuro)';
 }
 
