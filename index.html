@@ -34,11 +34,10 @@
     <div class="busca-row">
       <div class="busca-com-icone">
         <span class="icone-lupa" onclick="render()">🔍</span>
-        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render(); atualizarBotoesLimpar();" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render(); atualizarBotoesLimpar();">
         <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
       </div>
     </div>
-    <div id="historico-busca-lista" class="historico-busca"></div>
     <div class="filtros">
       <div class="campo-com-limpar">
         <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>

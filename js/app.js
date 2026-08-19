@@ -1036,45 +1036,6 @@ function contarVisualizacao(id, isOwner){
   });
 }
 
-// ---------- HISTÓRICO DE BUSCA RECENTE (salvo no navegador) ----------
-
-function salvarHistoricoBusca(){
-  const valor = document.getElementById('search').value.trim();
-  if(!valor) return;
-
-  let historico = JSON.parse(localStorage.getItem('historico_busca') || '[]');
-  historico = historico.filter(h => h.toLowerCase() !== valor.toLowerCase());
-  historico.unshift(valor);
-  historico = historico.slice(0, 5);
-  localStorage.setItem('historico_busca', JSON.stringify(historico));
-  renderHistoricoBusca();
-}
-
-function buscarDoHistorico(termo){
-  document.getElementById('search').value = termo;
-  render();
-}
-
-function limparHistoricoBusca(event){
-  event.stopPropagation();
-  localStorage.removeItem('historico_busca');
-  renderHistoricoBusca();
-}
-
-function renderHistoricoBusca(){
-  const container = document.getElementById('historico-busca-lista');
-  if(!container) return;
-
-  const historico = JSON.parse(localStorage.getItem('historico_busca') || '[]');
-  if(historico.length === 0){ container.innerHTML = ''; return; }
-
-  container.innerHTML = `
-    <span class="historico-label">Buscas recentes:</span>
-    ${historico.map(h => `<button type="button" class="chip-historico" onclick="buscarDoHistorico('${h.replace(/'/g, "\\'")}')">${escapeHtml(h)}</button>`).join('')}
-    <button type="button" class="chip-historico-limpar" onclick="limparHistoricoBusca(event)">Limpar</button>
-  `;
-}
-
 function render(){
   renderProdutosDestaque();
   const list = document.getElementById('list');
@@ -1237,7 +1198,7 @@ if(initSupabase()){
   loadEntries();
 }
 
-renderHistoricoBusca();
+localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
