@@ -54,22 +54,8 @@
   </div>
 
   <div id="auth-logged-out" class="auth-box-discreto">
-    <form autocomplete="on" onsubmit="return false;">
-      <div class="auth-row">
-        <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
-        <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
-      </div>
-      <label class="termos-check">
-        <input type="checkbox" id="aceite-termos">
-        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
-      </label>
-      <div class="auth-actions">
-        <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
-        <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
-        <span class="auth-msg" id="auth-msg"></span>
-      </div>
-      <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
-    </form>
+    <button type="button" class="auth-toggle-link" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;"></div>
   </div>
 
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
