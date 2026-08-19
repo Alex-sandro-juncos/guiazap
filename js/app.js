@@ -93,6 +93,7 @@ async function signUp(){
   });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
+  localStorage.setItem('abrirCadastroAposLogin', '1');
 }
 
 async function signIn(){
