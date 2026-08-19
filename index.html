@@ -41,12 +41,12 @@
     </div>
     <div id="historico-busca-lista" class="historico-busca"></div>
     <div class="field" style="margin-bottom:10px;">
-      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" onblur="buscarCepFiltro()">
+      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" onblur="buscarCepFiltro()">
       <span class="cep-msg" id="filter-cep-msg"></span>
     </div>
     <div class="filtros">
       <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
-      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" oninput="render()" onchange="onCidadeFiltroChange()">
+      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" autocomplete="off" oninput="render()" onchange="onCidadeFiltroChange()">
       <datalist id="cidades-filtro-list"></datalist>
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
@@ -110,15 +110,15 @@
     <input type="hidden" id="edit-id">
     <div class="field">
       <label>Nome</label>
-      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão">
+      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão" autocomplete="off">
     </div>
     <div class="field">
       <label>CNPJ ou CPF</label>
-      <input id="f-documento" required placeholder="Só números">
+      <input id="f-documento" required placeholder="Só números" autocomplete="off">
     </div>
     <div class="field">
       <label>Categoria principal</label>
-      <input id="f-cat" required placeholder="Ex: Dentista">
+      <input id="f-cat" required placeholder="Ex: Dentista" autocomplete="off">
     </div>
     <div class="field">
       <label>Outras categorias (opcional)</label>
@@ -127,7 +127,7 @@
     </div>
     <div class="field">
       <label>CEP</label>
-      <input id="f-cep" placeholder="Ex: 01310-100" onblur="buscarCep()">
+      <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" onblur="buscarCep()">
       <span class="cep-msg" id="cep-msg"></span>
     </div>
     <div class="row2">
@@ -137,17 +137,17 @@
       </div>
       <div class="field">
         <label>Cidade</label>
-        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione">
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" autocomplete="off">
         <datalist id="cidades-cadastro-list"></datalist>
       </div>
       <div class="field">
         <label>Bairro</label>
-        <input id="f-bairro" required placeholder="Ex: Vila Mariana">
+        <input id="f-bairro" required placeholder="Ex: Vila Mariana" autocomplete="off">
       </div>
     </div>
     <div class="field">
       <label>WhatsApp (com DDD, só números)</label>
-      <input id="f-whatsapp" required placeholder="Ex: 11912345678">
+      <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
     </div>
     <div class="field">
       <label>Outros contatos (opcional)</label>
