@@ -761,14 +761,17 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
 .auth-box-discreto { margin: 14px 0; }
 .auth-toggle-link {
   width: 100%;
-  background: transparent;
-  border: 1px dashed var(--line, #d8cdb6);
-  color: #666;
+  background: rgba(37,211,102,0.08);
+  border: 1px solid rgba(37,211,102,0.3);
+  color: var(--verde-escuro, #128C7E);
   padding: 9px;
   border-radius: 10px;
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
+.auth-toggle-link:hover { background: rgba(37,211,102,0.14); }
 #auth-form-fields { margin-top: 10px; padding: 12px; background: var(--cinza-card); border-radius: 10px; }
 
 .banner-cadastro-rapido {
