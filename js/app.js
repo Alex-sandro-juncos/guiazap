@@ -337,7 +337,8 @@ function populateBairrosFiltro(){
   const estado = document.getElementById('filter-estado').value;
   const cidade = document.getElementById('filter-cidade').value;
   const bairroSel = document.getElementById('filter-bairro');
-  const bairros = [...new Set(entries.filter(e => (!estado || e.estado === estado) && (!cidade || e.cidade === cidade)).map(e => e.bairro))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const cidadeNorm = normalizarTexto(cidade);
+  const bairros = [...new Set(entries.filter(e => (!estado || e.estado === estado) && (!cidadeNorm || normalizarTexto(e.cidade).includes(cidadeNorm))).map(e => e.bairro))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   bairroSel.innerHTML = '<option value="">Bairro</option>' + bairros.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
 }
 
