@@ -1,4 +1,4 @@
-// Roda sozinha a cada 15 minutos (configurado no netlify.toml).
+// Roda sozinha de hora em hora (configurado no netlify.toml).
 // Verifica se algum cadastro "pendente" já tem assinatura aprovada no Mercado Pago
 // que o webhook, por algum motivo, não avisou — e ativa automaticamente.
 

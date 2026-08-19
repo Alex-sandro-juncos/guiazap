@@ -30,21 +30,45 @@
     ⚠ Configuração pendente — preencha SUPABASE_URL e SUPABASE_ANON_KEY no arquivo config.js. Veja o README.md.
   </div>
 
-  <div id="auth-logged-out" class="auth-box">
-    <div class="auth-row">
-      <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
-      <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
+  <div class="busca-container">
+    <div class="busca-row">
+      <div class="busca-com-icone">
+        <span class="icone-lupa" onclick="render()">🔍</span>
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render()" onkeydown="if(event.key==='Enter') salvarHistoricoBusca()" onblur="salvarHistoricoBusca()">
+      </div>
     </div>
-    <label class="termos-check">
-      <input type="checkbox" id="aceite-termos">
-      <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
-    </label>
-    <div class="auth-actions">
-      <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
-      <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
-      <span class="auth-msg" id="auth-msg"></span>
+    <div id="historico-busca-lista" class="historico-busca"></div>
+    <div class="field" style="margin-bottom:10px;">
+      <input id="filter-cep" placeholder="Buscar por CEP (opcional)" onblur="buscarCepFiltro()">
+      <span class="cep-msg" id="filter-cep-msg"></span>
     </div>
-    <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
+    <div class="filtros">
+      <select id="filter-estado" onchange="onEstadoFiltroChange()"><option value="">Estado</option></select>
+      <input id="filter-cidade" list="cidades-filtro-list" placeholder="Cidade" oninput="render()" onchange="onCidadeFiltroChange()">
+      <datalist id="cidades-filtro-list"></datalist>
+      <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
+    </div>
+    <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+  </div>
+
+  <div id="auth-logged-out" class="auth-box-discreto">
+    <button type="button" class="auth-toggle-link" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;">
+      <div class="auth-row">
+        <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
+        <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
+      </div>
+      <label class="termos-check">
+        <input type="checkbox" id="aceite-termos">
+        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
+        <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
+        <span class="auth-msg" id="auth-msg"></span>
+      </div>
+      <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
+    </div>
   </div>
 
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
@@ -63,6 +87,137 @@
       <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
       <span class="auth-msg" id="trocar-senha-msg"></span>
     </div>
+  </div>
+
+  <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
+  <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
+
+  <div class="destaque-vitrine">
+    <div class="destaque-header">
+      <h2>🛍️ Produtos em destaque</h2>
+      <a href="vitrine.html" class="ver-vitrine-link">Ver vitrine completa →</a>
+    </div>
+    <div class="destaque-linhas" id="destaque-produtos-lista">
+      <div class="destaque-carregando">carregando produtos...</div>
+    </div>
+  </div>
+
+  <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
+
+  <form id="cadastro-form" onsubmit="return saveEntry(event)">
+    <input type="hidden" id="edit-id">
+    <div class="field">
+      <label>Nome</label>
+      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão">
+    </div>
+    <div class="field">
+      <label>CNPJ ou CPF</label>
+      <input id="f-documento" required placeholder="Só números">
+    </div>
+    <div class="field">
+      <label>Categoria principal</label>
+      <input id="f-cat" required placeholder="Ex: Dentista">
+    </div>
+    <div class="field">
+      <label>Outras categorias (opcional)</label>
+      <div id="categorias-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
+    </div>
+    <div class="field">
+      <label>CEP</label>
+      <input id="f-cep" placeholder="Ex: 01310-100" onblur="buscarCep()">
+      <span class="cep-msg" id="cep-msg"></span>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Estado</label>
+        <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
+      </div>
+      <div class="field">
+        <label>Cidade</label>
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione">
+        <datalist id="cidades-cadastro-list"></datalist>
+      </div>
+      <div class="field">
+        <label>Bairro</label>
+        <input id="f-bairro" required placeholder="Ex: Vila Mariana">
+      </div>
+    </div>
+    <div class="field">
+      <label>WhatsApp (com DDD, só números)</label>
+      <input id="f-whatsapp" required placeholder="Ex: 11912345678">
+    </div>
+    <div class="field">
+      <label>Outros contatos (opcional)</label>
+      <div id="contatos-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
+    </div>
+    <div class="field">
+      <label>Foto (opcional)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="foto-msg"></span>
+      <img id="foto-preview" class="foto-preview" style="display:none;">
+      <label class="foto-ou">ou cole um link de foto já existente</label>
+      <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Salvar</button>
+      <button type="button" class="btn-cancelar" onclick="closeForm()">Cancelar</button>
+      <span class="form-msg" id="form-msg"></span>
+    </div>
+  </form>
+
+  <div class="result-header" id="count"></div>
+  <div id="list"></div>
+  <div class="loading" id="loading">carregando profissionais...</div>
+  <div class="rodape-legal">
+    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a>
+  </div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuiaZap — Encontre profissionais e fale direto no WhatsApp</title>
+<meta name="description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp. Busque por categoria, cidade e bairro no GuiaZap.">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#25D366">
+
+<meta property="og:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
+<meta property="og:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://guiazap.shop">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">GuiaZap</div>
+  <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
+  <button type="button" class="btn-modo-escuro" onclick="toggleModoEscuro()" id="btn-modo-escuro">🌙 Modo escuro</button>
+</header>
+
+<div class="wrap">
+  <div id="config-warning" class="config-warning" style="display:none;">
+    ⚠ Configuração pendente — preencha SUPABASE_URL e SUPABASE_ANON_KEY no arquivo config.js. Veja o README.md.
   </div>
 
   <div class="busca-container">
@@ -84,6 +239,44 @@
       <select id="filter-bairro" onchange="render()"><option value="">Bairro</option></select>
     </div>
     <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+  </div>
+
+  <div id="auth-logged-out" class="auth-box-discreto">
+    <button type="button" class="auth-toggle-link" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;">
+      <div class="auth-row">
+        <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="off">
+        <input id="auth-password" type="password" placeholder="Senha" autocomplete="off">
+      </div>
+      <label class="termos-check">
+        <input type="checkbox" id="aceite-termos">
+        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn-auth" onclick="signIn()">Entrar</button>
+        <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
+        <span class="auth-msg" id="auth-msg"></span>
+      </div>
+      <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
+    </div>
+  </div>
+
+  <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
+    <span>Logado como <b id="auth-email-display"></b></span>
+    <div>
+      <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
+      <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
+    </div>
+  </div>
+  <div id="trocar-senha-box" class="auth-box" style="display:none;">
+    <div class="auth-row">
+      <input id="nova-senha" type="password" placeholder="Nova senha">
+      <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+    </div>
+    <div class="auth-actions">
+      <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
+      <span class="auth-msg" id="trocar-senha-msg"></span>
+    </div>
   </div>
 
   <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>

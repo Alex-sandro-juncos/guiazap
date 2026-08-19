@@ -756,3 +756,16 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
   font-size: 0.75rem;
 }
 .responder-box { margin-top: 6px; }
+
+.auth-box-discreto { margin: 14px 0; }
+.auth-toggle-link {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--line, #d8cdb6);
+  color: #666;
+  padding: 9px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+#auth-form-fields { margin-top: 10px; padding: 12px; background: var(--cinza-card); border-radius: 10px; }

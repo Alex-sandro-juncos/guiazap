@@ -28,6 +28,11 @@ async function initAuth(){
   });
 }
 
+function toggleAuthForm(){
+  const box = document.getElementById('auth-form-fields');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
 function updateAuthUI(){
   const loggedOutBox = document.getElementById('auth-logged-out');
   const loggedInBox = document.getElementById('auth-logged-in');
@@ -124,7 +129,10 @@ async function trocarSenha(){
 // ---------- DADOS ----------
 
 async function loadEntries(){
-  const { data, error } = await supabaseClient.from('profissionais').select('*').order('name', { ascending: true });
+  const { data, error } = await supabaseClient
+    .from('profissionais')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id')
+    .order('name', { ascending: true });
   if(error){
     console.error(error);
     document.getElementById('loading').textContent = 'Erro ao carregar. Confira o config.js e as políticas do Supabase.';
@@ -373,14 +381,19 @@ function linkDoPlano(plano){
   return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
 }
 
-function openForm(entry){
+async function openForm(entry){
   if(!currentUser) return;
   const form = document.getElementById('cadastro-form');
   form.classList.add('open');
   document.getElementById('form-msg').textContent = '';
   document.getElementById('edit-id').value = entry ? entry.id : '';
   document.getElementById('f-name').value = entry ? entry.name : '';
-  document.getElementById('f-documento').value = entry ? (entry.documento || '') : '';
+  document.getElementById('f-documento').value = '';
+  if(entry){
+    // O documento não vem mais junto do cadastro por segurança — busca separado, só o dono consegue
+    const { data: doc } = await supabaseClient.rpc('obter_meu_documento', { pid: entry.id });
+    document.getElementById('f-documento').value = doc || '';
+  }
   document.getElementById('f-cat').value = entry ? entry.cat : '';
   document.getElementById('f-estado').value = entry ? entry.estado : '';
   if(entry && entry.estado) buscarCidadesIBGE(entry.estado, document.getElementById('cidades-cadastro-list'));
@@ -549,13 +562,12 @@ async function saveEntry(e){
   if(id){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
-    const { data: existentes } = await supabaseClient
-      .from('profissionais')
-      .select('id, name')
-      .eq('documento', payload.documento)
-      .eq('estado', payload.estado)
-      .eq('cidade', payload.cidade)
-      .eq('bairro', payload.bairro);
+    const { data: existentes } = await supabaseClient.rpc('verificar_documento_duplicado', {
+      doc: payload.documento,
+      uf: payload.estado,
+      cid: payload.cidade,
+      bai: payload.bairro
+    });
 
     if(existentes && existentes.length > 0){
       msg.textContent = 'Ja existe um cadastro com esse CNPJ/CPF neste endereco (' + existentes[0].name + '). Edite esse cadastro e adicione o contato em "Outros contatos", em vez de criar um novo.';

@@ -3,4 +3,4 @@
   publish = "."
 
 [functions."verificar-pagamentos"]
-  schedule = "*/15 * * * *"
+  schedule = "0 * * * *"

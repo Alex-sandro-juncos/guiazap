@@ -469,23 +469,24 @@ async function buscarProdutoPorCodigoBarras(codigo){
     console.error('erro ao consultar catálogo do GuiaZap', e);
   }
 
-  // 2. Se não achou no nosso catálogo, tenta a base pública externa
+  // 2. Se não achou no nosso catálogo, chama nossa função no servidor
+  // (que tenta o Bluesoft Cosmos primeiro, e cai pro Open Food Facts se não achar)
   try{
-    const resp = await fetch(`https://world.openfoodfacts.org/api/v0/product/${codigo}.json`);
+    const resp = await fetch(`/.netlify/functions/buscar-codigo-barras?codigo=${codigo}`);
     const data = await resp.json();
 
-    if(data.status === 1 && data.product){
-      const prod = data.product;
-      if(prod.product_name) document.getElementById('p-nome').value = prod.product_name;
-      if(prod.brands) document.getElementById('p-marca').value = prod.brands;
-      if(prod.image_url){
-        document.getElementById('p-foto').value = prod.image_url;
+    if(data.encontrado){
+      if(data.nome) document.getElementById('p-nome').value = data.nome;
+      if(data.marca) document.getElementById('p-marca').value = data.marca;
+      if(data.foto){
+        document.getElementById('p-foto').value = data.foto;
         onFotoProdutoLinkChange();
       }
-      if(prod.quantity){
-        document.getElementById('p-descricao').value = 'Quantidade da embalagem: ' + prod.quantity;
+      if(data.descricao){
+        document.getElementById('p-descricao').value = data.descricao;
       }
-      msg.textContent = 'Produto encontrado e preenchido automaticamente! Confira os dados antes de salvar.';
+      const nomeFonte = data.fonte === 'cosmos' ? 'base Bluesoft Cosmos' : 'base pública internacional';
+      msg.textContent = `Produto encontrado (${nomeFonte}) e preenchido automaticamente! Confira os dados antes de salvar.`;
     } else {
       msg.textContent = 'Código lido, mas o produto não foi encontrado em nenhuma base. Preencha manualmente — seu cadastro vai ajudar quem escanear esse código depois.';
     }
