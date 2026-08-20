@@ -12,11 +12,11 @@
   header {
     background: var(--verde-whats);
     color: white;
-    padding: 28px 15px 22px;
+    padding: 16px 15px 12px;
     text-align: center;
   }
-  header .logo { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
-  header p { font-size: 0.9rem; opacity: 0.95; margin-top: 4px; }
+  header .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+  header p { font-size: 0.78rem; opacity: 0.95; margin-top: 2px; }
 
   .wrap { max-width: 480px; margin: 0 auto; padding: 0 15px; }
 
@@ -830,10 +830,10 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 
 .stories-linha {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   overflow-x: auto;
-  padding: 10px 4px;
-  margin-bottom: 6px;
+  padding: 6px 4px 2px;
+  margin-top: 4px;
 }
 .story-bolinha {
   display: flex;
@@ -845,8 +845,8 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   width: 62px;
 }
 .story-bolinha img {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid;
@@ -876,28 +876,32 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 .story-viewer {
   position: fixed; inset: 0; background: rgba(0,0,0,0.92);
   z-index: 999; display: flex; align-items: center; justify-content: center;
-  padding: 10px;
+  padding: 10px; overflow-y: auto;
 }
 .story-viewer-conteudo {
-  position: relative; width: 100%; max-width: 420px;
+  position: relative; width: 100%; max-width: 420px; max-height: 92vh;
   background: #111; border-radius: 14px; overflow: hidden;
   display: flex; flex-direction: column;
 }
 .story-progresso { height: 3px; background: rgba(255,255,255,0.25); }
 .story-progresso-barra { height: 100%; background: white; transition: width 0.3s linear; }
-.story-empresa-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; }
+.story-empresa-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; position: absolute; top: 6px; left: 8px; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
 .story-fechar {
   position: absolute; top: 8px; right: 10px; z-index: 2;
   background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%;
   width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer;
 }
-.story-foto-area { position: relative; width: 100%; aspect-ratio: 9/13; background: #000; }
+.story-foto-area { position: relative; width: 100%; max-height: 62vh; aspect-ratio: 9/13; background: #000; }
 .story-foto { width: 100%; height: 100%; object-fit: contain; }
 .story-tap-esquerda, .story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
 .story-tap-esquerda { left: 0; }
 .story-tap-direita { right: 0; }
-.story-texto { color: white; font-size: 0.85rem; padding: 10px 14px; min-height: 20px; }
-.story-acoes { display: flex; gap: 8px; padding: 10px 14px 16px; flex-wrap: wrap; }
+.story-texto {
+  color: white; font-size: 0.85rem; padding: 30px 14px 12px; min-height: 20px;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+}
+.story-acoes { display: flex; gap: 8px; padding: 10px 14px 16px; flex-wrap: wrap; flex-shrink: 0; }
 .story-btn-comprar, .story-btn-produto {
   flex: 1; text-align: center; padding: 10px; border-radius: 8px;
   font-size: 0.8rem; font-weight: 700; text-decoration: none;

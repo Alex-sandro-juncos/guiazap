@@ -1070,6 +1070,26 @@ function fecharFormStory(){
   document.getElementById('story-form').style.display = 'none';
 }
 
+async function onProdutoStoryChange(){
+  const produtoId = document.getElementById('story-produto-id').value;
+  if(!produtoId) return;
+
+  const { data: produto } = await supabaseClient.from('produtos').select('nome, foto, preco').eq('id', produtoId).single();
+  if(!produto) return;
+
+  // Já usa a foto do próprio produto — não precisa tirar foto nem escolher da galeria de novo
+  if(produto.foto){
+    storyFotosSelecionadas = [produto.foto];
+    renderStoryFotosPreview();
+    document.getElementById('story-foto-msg').textContent = 'Foto do produto usada automaticamente.';
+  }
+
+  const campoTexto = document.getElementById('story-texto');
+  if(!campoTexto.value.trim()){
+    campoTexto.value = `${produto.nome}${produto.preco ? ' - R$ ' + produto.preco : ''}`;
+  }
+}
+
 async function adicionarFotoStory(event){
   const file = event.target.files[0];
   const msg = document.getElementById('story-foto-msg');
