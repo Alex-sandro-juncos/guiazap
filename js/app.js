@@ -1221,6 +1221,8 @@ async function loadStories(){
   }
 }
 
+let storiesOrdemEmpresas = [];
+
 function renderStoriesLinha(){
   const container = document.getElementById('stories-linha');
 
@@ -1230,10 +1232,19 @@ function renderStoriesLinha(){
     ? Object.entries(storiesAgrupadas).filter(([id, g]) => g.empresa.id && entries.some(e => e.id === id && e.user_id === currentUser.id))
     : Object.entries(storiesAgrupadas);
 
-  if(grupos.length === 0){ container.style.display = 'none'; return; }
+  storiesOrdemEmpresas = grupos.map(([id]) => id);
 
+  // A fileira sempre aparece agora (mesmo sem nenhuma novidade), por causa do botão "+"
   container.style.display = 'flex';
-  container.innerHTML = grupos.map(([id, grupo]) => {
+
+  const bolinhaAdicionar = `
+    <div class="story-bolinha story-bolinha-add" onclick="irParaLoginOuPostar()">
+      <div class="story-add-circulo">+</div>
+      <span>Postar</span>
+    </div>
+  `;
+
+  const bolinhasEmpresas = grupos.map(([id, grupo]) => {
     const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
     return `
       <div class="story-bolinha" onclick="abrirStoryViewer('${id}')">
@@ -1242,6 +1253,24 @@ function renderStoriesLinha(){
       </div>
     `;
   }).join('');
+
+  container.innerHTML = bolinhaAdicionar + bolinhasEmpresas;
+}
+
+function irParaLoginOuPostar(){
+  if(currentUser){
+    // Já logado: rola até o próprio card e abre o formulário de postar novidade direto
+    const meuCadastro = entries.find(e => e.user_id === currentUser.id);
+    if(meuCadastro){
+      abrirFormStory(meuCadastro.id, meuCadastro.plano);
+      return;
+    }
+  }
+
+  // Não logado ainda: abre a área de login
+  const authBox = document.getElementById('auth-form-fields');
+  if(authBox.style.display === 'none') toggleAuthForm();
+  document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function abrirStoryViewer(profissionalId){
@@ -1294,13 +1323,40 @@ function renderStorySlideAtual(){
 
 function avancarStorySlide(){
   storySlideAtual++;
-  if(storySlideAtual >= storyEmpresaAtual.slidesFlat.length){ fecharStoryViewer(); return; }
+  if(storySlideAtual >= storyEmpresaAtual.slidesFlat.length){
+    // Acabaram as fotos dessa empresa — pula pra próxima da fileira automaticamente
+    const empresaIdAtual = storyEmpresaAtual.empresa.id;
+    const indiceAtual = storiesOrdemEmpresas.indexOf(empresaIdAtual);
+    const proximoId = storiesOrdemEmpresas[indiceAtual + 1];
+
+    if(proximoId){
+      abrirStoryViewer(proximoId);
+    } else {
+      fecharStoryViewer();
+    }
+    return;
+  }
   renderStorySlideAtual();
 }
 
 function voltarStorySlide(){
   storySlideAtual--;
-  if(storySlideAtual < 0) storySlideAtual = 0;
+  if(storySlideAtual < 0){
+    // Já está no primeiro slide dessa empresa — volta pra empresa anterior da fileira
+    const empresaIdAtual = storyEmpresaAtual.empresa.id;
+    const indiceAtual = storiesOrdemEmpresas.indexOf(empresaIdAtual);
+    const anteriorId = storiesOrdemEmpresas[indiceAtual - 1];
+
+    if(anteriorId){
+      abrirStoryViewer(anteriorId);
+      storySlideAtual = storyEmpresaAtual.slidesFlat.length - 1;
+      renderStorySlideAtual();
+    } else {
+      storySlideAtual = 0;
+      renderStorySlideAtual();
+    }
+    return;
+  }
   renderStorySlideAtual();
 }
 

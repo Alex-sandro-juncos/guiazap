@@ -941,3 +941,18 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   box-shadow: 0 0 0 3px rgba(233,30,99,0.15);
 }
 .story-textarea-bonito::placeholder { color: #b0879a; }
+
+.story-add-circulo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  border: 2px dashed rgba(255,255,255,0.8);
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.story-bolinha-add:hover .story-add-circulo { background: rgba(255,255,255,0.4); }
