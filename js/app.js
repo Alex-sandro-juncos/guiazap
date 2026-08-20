@@ -213,11 +213,12 @@ function abrirStorySeVindoDoProduto(){
     return;
   }
 
+  const minhaEmpresa = entries.find(e => e.id === empresaId && e.user_id === currentUser.id);
+  if(!minhaEmpresa) return; // ainda não carregou a lista de cadastros — tenta de novo na próxima chamada
+
+  // Só apaga o "lembrete" DEPOIS de confirmar que vai conseguir abrir de verdade
   localStorage.removeItem('criarStoryProdutoId');
   localStorage.removeItem('criarStoryEmpresaId');
-
-  const minhaEmpresa = entries.find(e => e.id === empresaId && e.user_id === currentUser.id);
-  if(!minhaEmpresa) return; // segurança: só continua se realmente for dono dessa empresa
 
   abrirFormStory(minhaEmpresa.id, minhaEmpresa.plano);
   setTimeout(() => {
