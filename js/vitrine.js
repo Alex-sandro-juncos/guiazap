@@ -273,7 +273,7 @@ function renderProdutos(){
         <div class="acoes-produto-coluna">
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
-          ${isDono ? `<button type="button" class="link-compartilhar-produto" style="background:#e91e63;" onclick="colocarProdutoNoStory('${p.id}', '${p.profissional_id}')">📸 Colocar no Story</button>` : ''}
+          <button type="button" class="link-compartilhar-produto" style="background:#e91e63;" onclick="colocarProdutoNoStory('${p.id}', '${p.profissional_id}')">📸 Colocar no Story</button>
         </div>
         <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
         ${!isDono ? `<button type="button" class="link-denunciar-produto" onclick="abrirDenunciaProduto('${p.id}')">Denunciar produto</button>
@@ -299,15 +299,9 @@ function renderProdutos(){
 }
 
 function colocarProdutoNoStory(produtoId, profissionalId){
-  if(!currentUserV){
-    // Não logado (situação rara aqui, já que o botão só aparece pro dono, mas por segurança):
-    // manda pra tela inicial já preparada pra mostrar a mensagem de login
-    localStorage.setItem('criarStoryProdutoId', produtoId);
-    localStorage.setItem('criarStoryEmpresaId', profissionalId);
-    window.location.href = 'index.html';
-    return;
-  }
-
+  // Sempre manda pra tela inicial "lembrando" desse produto — lá, a função
+  // abrirStorySeVindoDoProduto() decide o que fazer: se não estiver logado,
+  // mostra a área de login com a explicação; se for o dono, abre o formulário direto.
   localStorage.setItem('criarStoryProdutoId', produtoId);
   localStorage.setItem('criarStoryEmpresaId', profissionalId);
   window.location.href = 'index.html';
