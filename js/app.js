@@ -1128,6 +1128,20 @@ async function abrirFormStory(profissionalId, plano){
       ? 'até 5 fotos — Pacote Completo'
       : '1 foto — Pacote Básico';
 
+  // Avisa sobre o limite de NOVIDADES simultâneas (não só fotos por novidade)
+  const grupoAtual = storiesAgrupadas[profissionalId];
+  const novidadesAtivas = grupoAtual ? grupoAtual.stories.length : 0;
+  const limiteNovidades = plano === 'premium' ? Infinity : (plano === 'completo' ? 3 : 1);
+  if(novidadesAtivas >= limiteNovidades){
+    const msgEl = document.getElementById('story-msg');
+    const textoAviso = plano === 'basico'
+      ? 'Seu plano permite só 1 novidade ativa por vez. Espere a atual expirar (ou exclua ela) pra publicar outra.'
+      : `Seu plano permite até ${limiteNovidades} novidades ativas ao mesmo tempo — você já atingiu esse limite.`;
+    const nomeProximoPlano = plano === 'basico' ? 'Completo ou Premium' : 'Premium';
+    msgEl.innerHTML = `${textoAviso} <a href="pacotes.html" style="color:#a4402f; font-weight:700; text-decoration:underline;">Quer publicar mais? Conheça o Pacote ${nomeProximoPlano} →</a>`;
+    msgEl.style.color = '#a4402f';
+  }
+
   const campoProduto = document.getElementById('story-produto-campo');
   if(plano === 'completo' || plano === 'premium'){
     campoProduto.style.display = 'block';
@@ -1632,7 +1646,8 @@ function render(){
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
-        ${isOwner && !pendente && e.plano !== 'completo' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
+        ${isOwner && !pendente && e.plano !== 'completo' && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
+        ${isOwner && !pendente && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_PREMIUM}" class="link-migrar" style="background:linear-gradient(90deg, #fdf6e3, #f9e9b8); border:1.5px solid #d4af37; color:#4a3800;">👑 Migrar para o Pacote Premium (R$25/mês) — seguidores, mais Stories e prioridade</a>` : ''}
         <div class="card-acoes-extra">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
