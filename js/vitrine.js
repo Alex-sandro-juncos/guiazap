@@ -628,7 +628,7 @@ async function enviarFotoProduto(event){
   msg.textContent = 'enviando foto...';
   const nomeArquivo = `produtos/${currentUserV.id}/${Date.now()}.jpg`;
 
-  const { error } = await supabaseClientV.storage.from('fotos').upload(nomeArquivo, file, { upsert: true });
+  const { error } = await supabaseClientV.storage.from('fotos').upload(nomeArquivo, file);
   if(error){
     console.error(error);
     msg.textContent = 'erro ao enviar foto: ' + error.message;

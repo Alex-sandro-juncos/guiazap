@@ -520,7 +520,7 @@ async function enviarFoto(event){
   msg.textContent = 'enviando foto...';
   const nomeArquivo = `${currentUser.id}/${Date.now()}.jpg`;
 
-  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file, { upsert: true });
+  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file);
   if(error){
     console.error(error);
     msg.textContent = 'erro ao enviar foto: ' + error.message;
@@ -1083,7 +1083,7 @@ async function adicionarFotoStory(event){
 
   msg.textContent = 'enviando foto...';
   const nomeArquivo = `stories/${currentUser.id}/${Date.now()}.jpg`;
-  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file, { upsert: true });
+  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file);
   event.target.value = '';
 
   if(error){ console.error(error); msg.textContent = 'erro ao enviar foto: ' + error.message; return; }
