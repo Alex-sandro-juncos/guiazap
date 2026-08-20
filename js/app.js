@@ -1082,6 +1082,8 @@ async function onProdutoStoryChange(){
     storyFotosSelecionadas = [produto.foto];
     renderStoryFotosPreview();
     document.getElementById('story-foto-msg').textContent = 'Foto do produto usada automaticamente.';
+  } else {
+    document.getElementById('story-foto-msg').textContent = 'Esse produto não tem foto cadastrada na Vitrine — envie uma foto manualmente abaixo.';
   }
 
   const campoTexto = document.getElementById('story-texto');
