@@ -1241,7 +1241,7 @@ function renderStorySlideAtual(){
   barra.style.width = `${((storySlideAtual + 1) / slides.length) * 100}%`;
 
   const acoes = document.getElementById('story-acoes');
-  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap e tenho interesse.`);
+  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap e tenho interesse. Foto que vi: ${slide.foto}`);
   acoes.innerHTML = `
     <a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>
     ${slide.produto_id ? `<a href="vitrine.html?produto=${slide.produto_id}" class="story-btn-produto">Ver produto na Vitrine</a>` : ''}
