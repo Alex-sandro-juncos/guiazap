@@ -1137,12 +1137,25 @@ async function salvarStory(e){
 
   if(storyFotosSelecionadas.length === 0){ msg.textContent = 'Adicione pelo menos 1 foto.'; return false; }
 
+  const produtoId = document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null;
+
   const payload = {
     profissional_id: document.getElementById('story-profissional-id').value,
     fotos: storyFotosSelecionadas,
     texto: document.getElementById('story-texto-input').value.trim() || null,
-    produto_id: document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null
+    produto_id: produtoId,
+    produto_nome: null,
+    produto_preco: null
   };
+
+  // Guarda o nome/preço do produto no momento da publicação, pra mostrar na visualização
+  if(produtoId){
+    const { data: produto } = await supabaseClient.from('produtos').select('nome, preco').eq('id', produtoId).single();
+    if(produto){
+      payload.produto_nome = produto.nome;
+      payload.produto_preco = produto.preco;
+    }
+  }
 
   msg.textContent = 'publicando...';
   const { error } = await supabaseClient.from('stories').insert(payload);
@@ -1242,7 +1255,7 @@ function abrirStoryViewer(profissionalId){
   storyEmpresaAtual.slidesFlat = [];
   grupo.stories.forEach(s => {
     s.fotos.forEach(foto => {
-      storyEmpresaAtual.slidesFlat.push({ foto, texto: s.texto, produto_id: s.produto_id, whatsapp: grupo.empresa.whatsapp, nome: grupo.empresa.name });
+      storyEmpresaAtual.slidesFlat.push({ foto, texto: s.texto, produto_id: s.produto_id, produto_nome: s.produto_nome, produto_preco: s.produto_preco, whatsapp: grupo.empresa.whatsapp, nome: grupo.empresa.name });
     });
   });
 
@@ -1257,13 +1270,19 @@ function renderStorySlideAtual(){
 
   document.getElementById('story-empresa-nome').textContent = slide.nome;
   document.getElementById('story-foto').src = slide.foto;
-  document.getElementById('story-texto').textContent = slide.texto || '';
+
+  const textoCompleto = [
+    slide.produto_nome ? `🏷️ ${slide.produto_nome}${slide.produto_preco ? ' — R$ ' + slide.produto_preco : ''}` : '',
+    slide.texto || ''
+  ].filter(Boolean).join('\n');
+  document.getElementById('story-texto').textContent = textoCompleto;
 
   const barra = document.getElementById('story-progresso-barra');
   barra.style.width = `${((storySlideAtual + 1) / slides.length) * 100}%`;
 
   const acoes = document.getElementById('story-acoes');
-  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap e tenho interesse. Foto que vi: ${slide.foto}`);
+  const infoProduto = slide.produto_nome ? ` (${slide.produto_nome}${slide.produto_preco ? ' - R$ ' + slide.produto_preco : ''})` : '';
+  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap${infoProduto} e tenho interesse. Foto que vi: ${slide.foto}`);
   acoes.innerHTML = `
     <a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>
     ${slide.produto_id ? `<a href="vitrine.html?produto=${slide.produto_id}" class="story-btn-produto">Ver produto na Vitrine</a>` : ''}
