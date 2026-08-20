@@ -1049,7 +1049,7 @@ function renderContatosExtra(texto){
     if(!numeroRaw) return '';
     const numero = numeroRaw.replace(/\D/g,'');
     if(!numero) return '';
-    return `<a class="btn-zap btn-zap-extra" href="https://wa.me/55${numero}" target="_blank">${escapeHtml(label.trim())}</a>`;
+    return `<a class="btn-zap btn-zap-extra" href="https://wa.me/55${numero}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">${escapeHtml(label.trim())}</a>`;
   }).join('');
 }
 
@@ -1194,7 +1194,7 @@ function render(){
           </div>
         </div>
         <div class="contatos-row">
-          <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}" target="_blank">Chamar no WhatsApp</a>
+          <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
           ${renderContatosExtra(e.contatos_extra)}
         </div>
         ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
