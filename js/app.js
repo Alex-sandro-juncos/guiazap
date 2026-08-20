@@ -1137,6 +1137,33 @@ let storySlideAtual = 0;
 let storyEmpresaAtual = null;
 let storyTimer = null;
 
+function renderMinhasNovidades(profissionalId){
+  const container = document.getElementById('minhas-novidades-' + profissionalId);
+  if(!container) return;
+
+  const grupo = storiesAgrupadas[profissionalId];
+  if(!grupo || grupo.stories.length === 0){ container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <div class="minhas-novidades-label">📸 Suas novidades ativas (somem em até 24h):</div>
+    <div class="minhas-novidades-lista">
+      ${grupo.stories.map(s => `
+        <div class="minha-novidade-item">
+          <img src="${s.fotos[0]}">
+          <button type="button" title="Excluir agora" onclick="excluirStory('${s.id}', '${profissionalId}')">✕</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function excluirStory(storyId, profissionalId){
+  if(!confirm('Excluir essa novidade antes do prazo de 24h?')) return;
+  const { error } = await supabaseClient.from('stories').delete().eq('id', storyId);
+  if(error){ console.error(error); alert('erro ao excluir'); return; }
+  await loadStories();
+}
+
 async function loadStories(){
   const { data, error } = await supabaseClient
     .from('stories')
@@ -1153,24 +1180,30 @@ async function loadStories(){
   });
 
   renderStoriesLinha();
+
+  if(currentUser){
+    entries.filter(e => e.user_id === currentUser.id).forEach(e => renderMinhasNovidades(e.id));
+  }
 }
 
 function renderStoriesLinha(){
   const container = document.getElementById('stories-linha');
-  const ids = Object.keys(storiesAgrupadas);
 
-  if(ids.length === 0){ container.style.display = 'none'; return; }
+  // Igual ao resto do site: logado, só vê as próprias novidades (modo gerenciar);
+  // deslogado, vê a fileira pública de todo mundo.
+  const grupos = currentUser
+    ? Object.entries(storiesAgrupadas).filter(([id, g]) => g.empresa.id && entries.some(e => e.id === id && e.user_id === currentUser.id))
+    : Object.entries(storiesAgrupadas);
+
+  if(grupos.length === 0){ container.style.display = 'none'; return; }
 
   container.style.display = 'flex';
-  container.innerHTML = ids.map(id => {
-    const grupo = storiesAgrupadas[id];
-    return `
+  container.innerHTML = grupos.map(([id, grupo]) => `
       <div class="story-bolinha" onclick="abrirStoryViewer('${id}')">
         <img src="${grupo.empresa.foto ? escapeHtml(grupo.empresa.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.empresa.name)}">
         <span>${escapeHtml(grupo.empresa.name.split(' ')[0])}</span>
       </div>
-    `;
-  }).join('');
+  `).join('');
 }
 
 function abrirStoryViewer(profissionalId){
@@ -1398,9 +1431,13 @@ function render(){
         ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
         ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
+        ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
       </div>
     </div>
   `; }).join('');
+
+  entries.filter(e => e.user_id === (currentUser && currentUser.id)).forEach(e => renderMinhasNovidades(e.id));
+  renderStoriesLinha();
 }
 
 function normalizarTexto(str){

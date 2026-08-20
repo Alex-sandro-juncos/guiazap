@@ -904,3 +904,17 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 }
 .story-btn-comprar { background: var(--verde-whats); color: white; }
 .story-btn-produto { background: #6b46c1; color: white; }
+
+.minhas-novidades { margin-top: 8px; }
+.minhas-novidades-label { font-size: 0.7rem; color: #888; margin-bottom: 4px; }
+.minhas-novidades-lista { display: flex; gap: 6px; flex-wrap: wrap; }
+.minha-novidade-item { position: relative; width: 46px; height: 46px; }
+.minha-novidade-item img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 8px;
+  border: 2px solid #e91e63;
+}
+.minha-novidade-item button {
+  position: absolute; top: -6px; right: -6px;
+  background: #a4402f; color: white; border: none; border-radius: 50%;
+  width: 16px; height: 16px; font-size: 0.6rem; cursor: pointer; padding: 0; line-height: 1;
+}
