@@ -691,10 +691,11 @@ function verTodos(){
 
 function toggleMenuCompartilharCadastro(id, nome){
   const menu = document.getElementById('menu-compartilhar-cad-' + id);
-  if(menu.style.display === 'block'){
-    menu.style.display = 'none';
-    return;
-  }
+  const jaAberto = menu.style.display === 'block';
+
+  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
+
+  if(jaAberto) return;
 
   const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
   const texto = `Confira ${nome} no GuiaZap!`;
@@ -1318,6 +1319,8 @@ function renderStorySlideAtual(){
   acoes.innerHTML = `
     <a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>
     ${slide.produto_id ? `<a href="vitrine.html?produto=${slide.produto_id}" class="story-btn-produto">Ver produto na Vitrine</a>` : ''}
+    <button type="button" class="story-btn-compartilhar" onclick="toggleMenuCompartilharStory(event)">📤 Compartilhar</button>
+    <div class="menu-compartilhar" id="menu-compartilhar-story" style="display:none;"></div>
   `;
 
   clearTimeout(storyTimer);
@@ -1361,6 +1364,44 @@ function voltarStorySlide(){
     return;
   }
   renderStorySlideAtual();
+}
+
+function toggleMenuCompartilharStory(event){
+  event.stopPropagation();
+  const menu = document.getElementById('menu-compartilhar-story');
+  const jaAberto = menu.style.display === 'block';
+
+  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
+  clearTimeout(storyTimer);
+
+  if(jaAberto) return;
+
+  const slide = storyEmpresaAtual.slidesFlat[storySlideAtual];
+  const link = slide.foto;
+  const texto = `Vi essa novidade de ${slide.nome} no GuiaZap!`;
+  const linkCodificado = encodeURIComponent(link);
+  const textoCodificado = encodeURIComponent(texto);
+
+  menu.innerHTML = `
+    <a href="https://wa.me/?text=${textoCodificado}%20${linkCodificado}" target="_blank" class="opcao-rede whatsapp">WhatsApp</a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${linkCodificado}" target="_blank" class="opcao-rede facebook">Facebook</a>
+    <a href="https://twitter.com/intent/tweet?text=${textoCodificado}&url=${linkCodificado}" target="_blank" class="opcao-rede twitter">X (Twitter)</a>
+    <a href="https://t.me/share/url?url=${linkCodificado}&text=${textoCodificado}" target="_blank" class="opcao-rede telegram">Telegram</a>
+    <button type="button" class="opcao-rede copiar" onclick="copiarLinkStory(event)">Copiar link</button>
+  `;
+  menu.style.display = 'block';
+}
+
+async function copiarLinkStory(event){
+  event.stopPropagation();
+  const slide = storyEmpresaAtual.slidesFlat[storySlideAtual];
+  try{
+    await navigator.clipboard.writeText(slide.foto);
+    alert('Link copiado!');
+  } catch(e){
+    prompt('Copie o link abaixo:', slide.foto);
+  }
+  document.getElementById('menu-compartilhar-story').style.display = 'none';
 }
 
 function fecharStoryViewer(){

@@ -449,11 +449,11 @@
 .menu-compartilhar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
   background: #f8f8f8;
   border-radius: 8px;
-  padding: 6px;
+  padding: 8px;
 }
 .opcao-rede {
   display: block;
@@ -909,6 +909,13 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 }
 .story-btn-comprar { background: var(--verde-whats); color: white; }
 .story-btn-produto { background: #6b46c1; color: white; }
+.story-btn-compartilhar {
+  flex-basis: 100%;
+  text-align: center; padding: 10px; border-radius: 8px;
+  font-size: 0.8rem; font-weight: 700; border: none; cursor: pointer;
+  background: #444; color: white;
+}
+.story-acoes .menu-compartilhar { flex-basis: 100%; }
 
 .minhas-novidades { margin-top: 8px; }
 .minhas-novidades-label { font-size: 0.7rem; color: #888; margin-bottom: 4px; }

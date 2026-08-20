@@ -300,10 +300,12 @@ function toggleMenuCompartilhar(id){
   if(!p) return;
 
   const menu = document.getElementById('menu-compartilhar-' + id);
-  if(menu.style.display === 'block'){
-    menu.style.display = 'none';
-    return;
-  }
+  const jaAberto = menu.style.display === 'block';
+
+  // Fecha qualquer outro menu de compartilhar que esteja aberto na tela
+  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
+
+  if(jaAberto) return;
 
   const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
   const texto = `Confira ${p.nome} na Vitrine GuiaZap!`;
