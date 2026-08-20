@@ -892,7 +892,7 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%;
   width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer;
 }
-.story-foto-area { position: relative; width: 100%; max-height: 62vh; aspect-ratio: 9/13; background: #000; }
+.story-foto-area { position: relative; width: 100%; max-height: 42vh; aspect-ratio: 9/13; background: #000; }
 .story-foto { width: 100%; height: 100%; object-fit: contain; }
 .story-tap-esquerda, .story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
 .story-tap-esquerda { left: 0; }
