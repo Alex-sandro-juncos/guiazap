@@ -1034,6 +1034,204 @@ function editEntry(id){
   if(en) openForm(en);
 }
 
+// ---------- NOVIDADES / STORIES (24h) ----------
+
+let storyFotosSelecionadas = [];
+let storyLimiteFotos = 1;
+
+async function abrirFormStory(profissionalId, plano){
+  document.getElementById('story-profissional-id').value = profissionalId;
+  document.getElementById('story-plano').value = plano;
+  document.getElementById('story-form').style.display = 'block';
+  document.getElementById('story-texto').value = '';
+  document.getElementById('story-msg').textContent = '';
+  storyFotosSelecionadas = [];
+  renderStoryFotosPreview();
+
+  storyLimiteFotos = plano === 'completo' ? 5 : 1;
+  document.getElementById('story-limite-texto').textContent = plano === 'completo'
+    ? 'até 5 fotos — Pacote Completo'
+    : '1 foto — Pacote Básico';
+
+  const campoProduto = document.getElementById('story-produto-campo');
+  if(plano === 'completo'){
+    campoProduto.style.display = 'block';
+    const { data: produtos } = await supabaseClient.from('produtos').select('id, nome').eq('profissional_id', profissionalId);
+    const sel = document.getElementById('story-produto-id');
+    sel.innerHTML = '<option value="">Nenhum</option>' + (produtos || []).map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join('');
+  } else {
+    campoProduto.style.display = 'none';
+  }
+
+  document.getElementById('story-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function fecharFormStory(){
+  document.getElementById('story-form').style.display = 'none';
+}
+
+async function adicionarFotoStory(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('story-foto-msg');
+  if(!file) return;
+
+  if(storyFotosSelecionadas.length >= storyLimiteFotos){
+    msg.textContent = `Seu plano permite no máximo ${storyLimiteFotos} foto${storyLimiteFotos > 1 ? 's' : ''} por novidade.`;
+    event.target.value = '';
+    return;
+  }
+
+  msg.textContent = 'enviando foto...';
+  const nomeArquivo = `stories/${currentUser.id}/${Date.now()}.jpg`;
+  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file, { upsert: true });
+  event.target.value = '';
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar foto: ' + error.message; return; }
+
+  const { data } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
+  storyFotosSelecionadas.push(data.publicUrl);
+  msg.textContent = '';
+  renderStoryFotosPreview();
+}
+
+function removerFotoStory(index){
+  storyFotosSelecionadas.splice(index, 1);
+  renderStoryFotosPreview();
+}
+
+function renderStoryFotosPreview(){
+  const container = document.getElementById('story-fotos-preview');
+  container.innerHTML = storyFotosSelecionadas.map((url, i) => `
+    <div class="story-foto-mini">
+      <img src="${url}">
+      <button type="button" onclick="removerFotoStory(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+async function salvarStory(e){
+  e.preventDefault();
+  const msg = document.getElementById('story-msg');
+
+  if(storyFotosSelecionadas.length === 0){ msg.textContent = 'Adicione pelo menos 1 foto.'; return false; }
+
+  const payload = {
+    profissional_id: document.getElementById('story-profissional-id').value,
+    fotos: storyFotosSelecionadas,
+    texto: document.getElementById('story-texto').value.trim() || null,
+    produto_id: document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null
+  };
+
+  msg.textContent = 'publicando...';
+  const { error } = await supabaseClient.from('stories').insert(payload);
+  if(error){ console.error(error); msg.textContent = 'erro ao publicar: ' + error.message; return false; }
+
+  msg.textContent = 'novidade publicada! fica no ar por 24 horas.';
+  setTimeout(fecharFormStory, 1500);
+  loadStories();
+  return false;
+}
+
+let storiesAgrupadas = {};
+let storySlideAtual = 0;
+let storyEmpresaAtual = null;
+let storyTimer = null;
+
+async function loadStories(){
+  const { data, error } = await supabaseClient
+    .from('stories')
+    .select('*, profissionais(id, name, foto, whatsapp)')
+    .order('created_at', { ascending: true });
+
+  if(error){ console.error(error); return; }
+
+  storiesAgrupadas = {};
+  (data || []).forEach(s => {
+    if(!s.profissionais) return;
+    if(!storiesAgrupadas[s.profissional_id]) storiesAgrupadas[s.profissional_id] = { empresa: s.profissionais, stories: [] };
+    storiesAgrupadas[s.profissional_id].stories.push(s);
+  });
+
+  renderStoriesLinha();
+}
+
+function renderStoriesLinha(){
+  const container = document.getElementById('stories-linha');
+  const ids = Object.keys(storiesAgrupadas);
+
+  if(ids.length === 0){ container.style.display = 'none'; return; }
+
+  container.style.display = 'flex';
+  container.innerHTML = ids.map(id => {
+    const grupo = storiesAgrupadas[id];
+    return `
+      <div class="story-bolinha" onclick="abrirStoryViewer('${id}')">
+        <img src="${grupo.empresa.foto ? escapeHtml(grupo.empresa.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.empresa.name)}">
+        <span>${escapeHtml(grupo.empresa.name.split(' ')[0])}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function abrirStoryViewer(profissionalId){
+  const grupo = storiesAgrupadas[profissionalId];
+  if(!grupo) return;
+
+  storyEmpresaAtual = grupo;
+  storySlideAtual = 0;
+
+  // Monta a lista completa de fotos (juntando todas as stories dessa empresa, em ordem)
+  storyEmpresaAtual.slidesFlat = [];
+  grupo.stories.forEach(s => {
+    s.fotos.forEach(foto => {
+      storyEmpresaAtual.slidesFlat.push({ foto, texto: s.texto, produto_id: s.produto_id, whatsapp: grupo.empresa.whatsapp, nome: grupo.empresa.name });
+    });
+  });
+
+  document.getElementById('story-viewer').style.display = 'flex';
+  renderStorySlideAtual();
+}
+
+function renderStorySlideAtual(){
+  const slides = storyEmpresaAtual.slidesFlat;
+  const slide = slides[storySlideAtual];
+  if(!slide){ fecharStoryViewer(); return; }
+
+  document.getElementById('story-empresa-nome').textContent = slide.nome;
+  document.getElementById('story-foto').src = slide.foto;
+  document.getElementById('story-texto').textContent = slide.texto || '';
+
+  const barra = document.getElementById('story-progresso-barra');
+  barra.style.width = `${((storySlideAtual + 1) / slides.length) * 100}%`;
+
+  const acoes = document.getElementById('story-acoes');
+  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap e tenho interesse.`);
+  acoes.innerHTML = `
+    <a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>
+    ${slide.produto_id ? `<a href="vitrine.html?produto=${slide.produto_id}" class="story-btn-produto">Ver produto na Vitrine</a>` : ''}
+  `;
+
+  clearTimeout(storyTimer);
+  storyTimer = setTimeout(() => avancarStorySlide(), 5000);
+}
+
+function avancarStorySlide(){
+  storySlideAtual++;
+  if(storySlideAtual >= storyEmpresaAtual.slidesFlat.length){ fecharStoryViewer(); return; }
+  renderStorySlideAtual();
+}
+
+function voltarStorySlide(){
+  storySlideAtual--;
+  if(storySlideAtual < 0) storySlideAtual = 0;
+  renderStorySlideAtual();
+}
+
+function fecharStoryViewer(){
+  clearTimeout(storyTimer);
+  document.getElementById('story-viewer').style.display = 'none';
+}
+
 async function deleteEntry(id){
   if(!confirm('Excluir este cadastro?')) return;
   const { error } = await supabaseClient.from('profissionais').delete().eq('id', id);
@@ -1199,6 +1397,7 @@ function render(){
         </div>
         ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
         ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
+        ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
       </div>
     </div>
   `; }).join('');
@@ -1229,6 +1428,7 @@ function escapeHtml(str){
 if(initSupabase()){
   initAuth();
   loadEntries();
+  loadStories();
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada

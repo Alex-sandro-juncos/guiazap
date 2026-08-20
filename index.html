@@ -34,6 +34,8 @@
     ⚠ Serviço temporariamente indisponível. Tente novamente em alguns instantes.
   </div>
 
+  <div id="stories-linha" class="stories-linha" style="display:none;"></div>
+
   <div class="busca-container">
     <div class="busca-row">
       <div class="busca-com-icone">
@@ -178,6 +180,39 @@
     </div>
   </form>
 
+  <form id="story-form" onsubmit="return salvarStory(event)" style="display:none;">
+    <input type="hidden" id="story-profissional-id">
+    <input type="hidden" id="story-plano">
+    <div class="field">
+      <label>Fotos (<span id="story-limite-texto">1 foto — Pacote Básico</span>)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="story-foto-msg"></span>
+      <div id="story-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="story-texto" rows="2" placeholder="Ex: Chegou produto novo! Vem conferir 😍" maxlength="200"></textarea>
+    </div>
+    <div class="field" id="story-produto-campo" style="display:none;">
+      <label>Vincular a um produto da Vitrine (opcional)</label>
+      <select id="story-produto-id"><option value="">Nenhum</option></select>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStory()">Cancelar</button>
+      <span class="form-msg" id="story-msg"></span>
+    </div>
+  </form>
+
   <div class="result-header" id="count"></div>
   <div id="list"></div>
   <div class="loading" id="loading">carregando profissionais...</div>
@@ -186,6 +221,21 @@
     <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a>
   </div>
 </div>
+
+  <div id="story-viewer" class="story-viewer" style="display:none;" onclick="fecharStoryViewer()">
+    <div class="story-viewer-conteudo" onclick="event.stopPropagation()">
+      <button type="button" class="story-fechar" onclick="fecharStoryViewer()">✕</button>
+      <div class="story-progresso"><div class="story-progresso-barra" id="story-progresso-barra"></div></div>
+      <div class="story-empresa-nome" id="story-empresa-nome"></div>
+      <div class="story-foto-area">
+        <div class="story-tap-esquerda" onclick="voltarStorySlide()"></div>
+        <div class="story-tap-direita" onclick="avancarStorySlide()"></div>
+        <img id="story-foto" class="story-foto">
+      </div>
+      <div class="story-texto" id="story-texto"></div>
+      <div class="story-acoes" id="story-acoes"></div>
+    </div>
+  </div>
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>
