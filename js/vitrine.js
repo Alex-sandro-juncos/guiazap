@@ -270,9 +270,11 @@ function renderProdutos(){
             <span class="review-msg" id="review-produto-msg-${p.id}"></span>
           </div>
         </div>
-        ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
-        <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
-        ${isDono ? `<button type="button" class="link-compartilhar-produto" style="background:#e91e63; margin-top:10px;" onclick="colocarProdutoNoStory('${p.id}', '${p.profissional_id}')">📸 Colocar no Story</button>` : ''}
+        <div class="acoes-produto-coluna">
+          ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
+          <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
+          ${isDono ? `<button type="button" class="link-compartilhar-produto" style="background:#e91e63;" onclick="colocarProdutoNoStory('${p.id}', '${p.profissional_id}')">📸 Colocar no Story</button>` : ''}
+        </div>
         <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
         ${!isDono ? `<button type="button" class="link-denunciar-produto" onclick="abrirDenunciaProduto('${p.id}')">Denunciar produto</button>
         <div class="denuncia-box" id="denuncia-produto-box-${p.id}" style="display:none;">

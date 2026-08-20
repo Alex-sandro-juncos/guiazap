@@ -186,6 +186,7 @@ async function loadEntries(){
   }
 
   abrirCadastroSePendente();
+  abrirStorySeVindoDoProduto();
   render();
 }
 
