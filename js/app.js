@@ -1267,9 +1267,12 @@ function irParaLoginOuPostar(){
     }
   }
 
-  // Não logado ainda: abre a área de login
+  // Não logado ainda: abre a área de login, com uma mensagem explicando o motivo
   const authBox = document.getElementById('auth-form-fields');
   if(authBox.style.display === 'none') toggleAuthForm();
+
+  const msg = document.getElementById('auth-msg');
+  if(msg) msg.textContent = '📸 Faça login (ou crie uma conta) pra poder postar uma novidade';
   document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
