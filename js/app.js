@@ -1128,20 +1128,6 @@ async function abrirFormStory(profissionalId, plano){
       ? 'até 5 fotos — Pacote Completo'
       : '1 foto — Pacote Básico';
 
-  // Avisa sobre o limite de NOVIDADES simultâneas (não só fotos por novidade)
-  const grupoAtual = storiesAgrupadas[profissionalId];
-  const novidadesAtivas = grupoAtual ? grupoAtual.stories.length : 0;
-  const limiteNovidades = plano === 'premium' ? Infinity : (plano === 'completo' ? 3 : 1);
-  if(novidadesAtivas >= limiteNovidades){
-    const msgEl = document.getElementById('story-msg');
-    const textoAviso = plano === 'basico'
-      ? 'Seu plano permite só 1 novidade ativa por vez. Espere a atual expirar (ou exclua ela) pra publicar outra.'
-      : `Seu plano permite até ${limiteNovidades} novidades ativas ao mesmo tempo — você já atingiu esse limite.`;
-    const nomeProximoPlano = plano === 'basico' ? 'Completo ou Premium' : 'Premium';
-    msgEl.innerHTML = `${textoAviso} <a href="pacotes.html" style="color:#a4402f; font-weight:700; text-decoration:underline;">Quer publicar mais? Conheça o Pacote ${nomeProximoPlano} →</a>`;
-    msgEl.style.color = '#a4402f';
-  }
-
   const campoProduto = document.getElementById('story-produto-campo');
   if(plano === 'completo' || plano === 'premium'){
     campoProduto.style.display = 'block';
@@ -1228,11 +1214,27 @@ async function salvarStory(e){
 
   const produtoId = document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null;
   const plano = document.getElementById('story-plano').value;
+  const profissionalIdAtual = document.getElementById('story-profissional-id').value;
+
+  // Checa o limite de NOVIDADES simultâneas só agora, na hora de publicar de verdade
+  const grupoAtual = storiesAgrupadas[profissionalIdAtual];
+  const novidadesAtivas = grupoAtual ? grupoAtual.stories.length : 0;
+  const limiteNovidades = plano === 'premium' ? Infinity : (plano === 'completo' ? 3 : 1);
+  if(novidadesAtivas >= limiteNovidades){
+    const textoAviso = plano === 'basico'
+      ? 'Seu plano permite só 1 novidade ativa por vez. Espere a atual expirar (ou exclua ela) pra publicar outra.'
+      : `Seu plano permite até ${limiteNovidades} novidades ativas ao mesmo tempo — você já atingiu esse limite.`;
+    const nomeProximoPlano = plano === 'basico' ? 'Completo ou Premium' : 'Premium';
+    msg.innerHTML = `${textoAviso} <a href="pacotes.html" style="color:#a4402f; font-weight:700; text-decoration:underline;">Quer publicar mais? Conheça o Pacote ${nomeProximoPlano} →</a>`;
+    msg.style.color = '#a4402f';
+    return false;
+  }
+
   const horasDuracao = plano === 'premium' ? (24 * 7) : 24;
   const expiresAt = new Date(Date.now() + horasDuracao * 60 * 60 * 1000).toISOString();
 
   const payload = {
-    profissional_id: document.getElementById('story-profissional-id').value,
+    profissional_id: profissionalIdAtual,
     fotos: storyFotosSelecionadas,
     texto: document.getElementById('story-texto-input').value.trim() || null,
     produto_id: produtoId,
