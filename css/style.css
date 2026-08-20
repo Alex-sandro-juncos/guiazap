@@ -922,3 +922,21 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   background: #a4402f; color: white; border: none; border-radius: 50%;
   width: 16px; height: 16px; font-size: 0.6rem; cursor: pointer; padding: 0; line-height: 1;
 }
+
+.story-textarea-bonito {
+  width: 100%;
+  border: 1.5px solid #e91e63;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  background: linear-gradient(180deg, #fff, #fff5f8);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.story-textarea-bonito:focus {
+  outline: none;
+  border-color: #ad1457;
+  box-shadow: 0 0 0 3px rgba(233,30,99,0.15);
+}
+.story-textarea-bonito::placeholder { color: #b0879a; }

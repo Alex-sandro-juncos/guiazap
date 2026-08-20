@@ -1043,7 +1043,7 @@ async function abrirFormStory(profissionalId, plano){
   document.getElementById('story-profissional-id').value = profissionalId;
   document.getElementById('story-plano').value = plano;
   document.getElementById('story-form').style.display = 'block';
-  document.getElementById('story-texto').value = '';
+  document.getElementById('story-texto-input').value = '';
   document.getElementById('story-msg').textContent = '';
   storyFotosSelecionadas = [];
   renderStoryFotosPreview();
@@ -1086,7 +1086,7 @@ async function onProdutoStoryChange(){
     document.getElementById('story-foto-msg').textContent = 'Esse produto não tem foto cadastrada na Vitrine — envie uma foto manualmente abaixo.';
   }
 
-  const campoTexto = document.getElementById('story-texto');
+  const campoTexto = document.getElementById('story-texto-input');
   if(!campoTexto.value.trim()){
     campoTexto.value = `${produto.nome}${produto.preco ? ' - R$ ' + produto.preco : ''}`;
   }
@@ -1140,7 +1140,7 @@ async function salvarStory(e){
   const payload = {
     profissional_id: document.getElementById('story-profissional-id').value,
     fotos: storyFotosSelecionadas,
-    texto: document.getElementById('story-texto').value.trim() || null,
+    texto: document.getElementById('story-texto-input').value.trim() || null,
     produto_id: document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null
   };
 

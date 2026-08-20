@@ -200,7 +200,7 @@
     </div>
     <div class="field">
       <label>Texto (opcional)</label>
-      <textarea id="story-texto" rows="2" placeholder="Ex: Chegou produto novo! Vem conferir 😍" maxlength="200"></textarea>
+      <textarea id="story-texto-input" rows="3" placeholder="Ex: Chegou produto novo! Vem conferir 😍" maxlength="200" class="story-textarea-bonito"></textarea>
     </div>
     <div class="field" id="story-produto-campo" style="display:none;">
       <label>Vincular a um produto da Vitrine (opcional)</label>
@@ -231,8 +231,8 @@
         <div class="story-tap-esquerda" onclick="voltarStorySlide()"></div>
         <div class="story-tap-direita" onclick="avancarStorySlide()"></div>
         <img id="story-foto" class="story-foto">
+        <div class="story-texto" id="story-texto"></div>
       </div>
-      <div class="story-texto" id="story-texto"></div>
       <div class="story-acoes" id="story-acoes"></div>
     </div>
   </div>
