@@ -498,14 +498,30 @@ async function buscarProdutoPorCodigoBarras(codigo){
 async function contribuirCatalogoBarcode(codigo, nome, marca, foto, descricao){
   if(!codigo) return;
   try{
-    await supabaseClientV.from('produtos_catalogo_barcode').upsert({
+    const payload = {
       codigo_barras: codigo,
       nome: nome || null,
       marca: marca || null,
       foto: foto || null,
       descricao: descricao || null,
       updated_at: new Date().toISOString()
-    });
+    };
+
+    // Evita usar .upsert() direto (já tivemos problema com isso hoje em outro lugar do site) —
+    // checa se já existe, e decide entre inserir ou atualizar manualmente.
+    const { data: existente } = await supabaseClientV
+      .from('produtos_catalogo_barcode')
+      .select('codigo_barras')
+      .eq('codigo_barras', codigo)
+      .maybeSingle();
+
+    if(existente){
+      const { error } = await supabaseClientV.from('produtos_catalogo_barcode').update(payload).eq('codigo_barras', codigo);
+      if(error) console.error('erro ao atualizar catálogo colaborativo', error);
+    } else {
+      const { error } = await supabaseClientV.from('produtos_catalogo_barcode').insert(payload);
+      if(error) console.error('erro ao inserir no catálogo colaborativo', error);
+    }
   } catch(e){
     console.error('erro ao contribuir com o catálogo', e);
   }
