@@ -8,6 +8,7 @@
 const crypto = require('crypto');
 
 const VALOR_PACOTE_COMPLETO = 10; // R$10 -> se o pagamento for igual/maior que isso, considera Pacote Completo
+const VALOR_PACOTE_PREMIUM = 25; // R$25 -> se o pagamento for igual/maior que isso, considera Pacote Premium
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
 
@@ -122,7 +123,7 @@ exports.handler = async function (event) {
       }
 
       const valorPago = payment.transaction_amount || 0;
-      const planoPago = valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico';
+      const planoPago = valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico');
 
       // Caso 1: existe um cadastro PENDENTE desse e-mail -> é um cadastro novo, ativa
       const emailFiltro = `user_email=eq.${encodeURIComponent(payerEmail)}`;
@@ -131,22 +132,28 @@ exports.handler = async function (event) {
         { status_pagamento: 'ativo', plano: planoPago }
       );
 
-      // Caso 2: se o valor pago foi do Pacote Completo, faz upgrade de qualquer
-      // cadastro já ATIVO desse e-mail que ainda estava no plano básico (migração)
+      // Caso 2: se o valor pago foi de um plano mais alto, faz upgrade de qualquer
+      // cadastro já ATIVO desse e-mail que ainda estava num plano mais baixo (migração)
       let upgradeFeito = [];
       if (planoPago === 'completo') {
         upgradeFeito = await atualizarSupabase(
           `${emailFiltro}&status_pagamento=eq.ativo&plano=eq.basico`,
           { plano: 'completo' }
         );
+      } else if (planoPago === 'premium') {
+        upgradeFeito = await atualizarSupabase(
+          `${emailFiltro}&status_pagamento=eq.ativo&plano=in.(basico,completo)`,
+          { plano: 'premium' }
+        );
       }
 
       if ((ativadoNovo && ativadoNovo.length > 0) || (upgradeFeito && upgradeFeito.length > 0)) {
+        const nomePlano = planoPago === 'premium' ? 'Premium' : planoPago === 'completo' ? 'Completo' : 'Básico';
         await enviarEmail(
           payerEmail,
           'Pagamento confirmado — cadastro ativo no GuiaZap!',
           `<p>Olá!</p>
-           <p>Seu pagamento foi confirmado e seu cadastro no GuiaZap (Pacote ${planoPago === 'completo' ? 'Completo' : 'Básico'}) já está <b>ativo</b>, aparecendo para todos na busca.</p>
+           <p>Seu pagamento foi confirmado e seu cadastro no GuiaZap (Pacote ${nomePlano}) já está <b>ativo</b>, aparecendo para todos na busca.</p>
            <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra ver seu cadastro no ar.</p>
            <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
         );

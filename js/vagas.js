@@ -39,13 +39,20 @@ function normalizarTextoVagas(str){
 async function loadVagas(){
   const { data, error } = await supabaseClientVagas
     .from('vagas')
-    .select('*, profissionais(name, whatsapp, status_pagamento)')
+    .select('*, profissionais(name, whatsapp, status_pagamento, plano)')
     .eq('ativa', true)
     .order('created_at', { ascending: false });
 
   if(error){ console.error(error); return; }
 
   vagas = (data || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
+
+  // Vagas de empresas Premium aparecem primeiro
+  vagas.sort((a, b) => {
+    const premiumA = a.profissionais && a.profissionais.plano === 'premium' ? 1 : 0;
+    const premiumB = b.profissionais && b.profissionais.plano === 'premium' ? 1 : 0;
+    return premiumB - premiumA;
+  });
 
   popularFiltrosVaga();
 
@@ -105,7 +112,7 @@ function renderVagas(){
         </span>` : ''}
       </div>
       <span class="tipo-vaga">${escapeHtmlVagas(v.tipo)}</span>
-      <div class="empresa-vaga">${v.profissionais ? escapeHtmlVagas(v.profissionais.name) : ''}</div>
+      <div class="empresa-vaga">${v.profissionais ? escapeHtmlVagas(v.profissionais.name) : ''}${v.profissionais && v.profissionais.plano === 'premium' ? ' <span class="selo-premium">👑</span>' : ''}</div>
       ${v.descricao ? `<div class="descricao-vaga">${escapeHtmlVagas(v.descricao)}</div>` : ''}
       ${v.requisitos ? `<div class="requisitos-vaga"><b>Procuramos:</b> ${escapeHtmlVagas(v.requisitos)}</div>` : ''}
       ${v.salario ? `<div class="salario-vaga">${escapeHtmlVagas(v.salario)}</div>` : ''}

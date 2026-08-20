@@ -745,6 +745,19 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
 body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border-color: #555; }
 
 .selo-verificado { font-size: 0.85rem; }
+.selo-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: linear-gradient(90deg, #d4af37, #f4d570, #d4af37);
+  color: #4a3800;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 50px;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgba(212,175,55,0.5);
+}
 
 .lista-avaliacoes {
   background: var(--cinza-fundo);
@@ -990,3 +1003,15 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 .acoes-empresa-coluna .btn-zap {
   margin-top: 0 !important;
 }
+
+.btn-seguir {
+  background: #6b46c1;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-seguir.seguindo { background: #e0d6f5; color: #6b46c1; }

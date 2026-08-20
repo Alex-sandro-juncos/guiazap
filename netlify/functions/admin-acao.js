@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -105,8 +105,8 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 
-    if ((acao === 'plano_completo' || acao === 'plano_basico') && tabela === 'profissionais') {
-      const novoPlano = acao === 'plano_completo' ? 'completo' : 'basico';
+    if ((acao === 'plano_completo' || acao === 'plano_basico' || acao === 'plano_premium') && tabela === 'profissionais') {
+      const novoPlano = acao === 'plano_completo' ? 'completo' : acao === 'plano_premium' ? 'premium' : 'basico';
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
         method: 'PATCH',
         headers: {

@@ -58,7 +58,7 @@ let produtoFiltroId = null;
 async function loadProdutos(){
   const { data, error } = await supabaseClientV
     .from('produtos')
-    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id)')
+    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id, plano)')
     .order('created_at', { ascending: false });
 
   if(error){ console.error(error); return; }
@@ -217,7 +217,10 @@ function renderProdutos(){
         if(a.id === produtoFiltroId) return -1;
         if(b.id === produtoFiltroId) return 1;
       }
-      return 0;
+      // Depois, produtos de empresas Premium aparecem primeiro
+      const premiumA = a.profissionais && a.profissionais.plano === 'premium' ? 1 : 0;
+      const premiumB = b.profissionais && b.profissionais.plano === 'premium' ? 1 : 0;
+      return premiumB - premiumA;
     });
 
   document.getElementById('v-count').textContent = `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
@@ -253,7 +256,7 @@ function renderProdutos(){
         ${isDono ? `<div class="stat-visualizacoes">👁️ ${p.visualizacoes || 0} visualizaç${(p.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
         <div class="medida-produto">${textoMedida(p)}</div>
         ${p.preco ? `<div class="preco">R$ ${escapeHtmlV(p.preco)}</div>` : ''}
-        <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}</div>
+        <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}${p.profissionais && p.profissionais.plano === 'premium' ? ' <span class="selo-premium">👑</span>' : ''}</div>
         <div class="stars-produto">
           ${mediaDeProduto(p.id).count > 0
             ? `${starStringV(mediaDeProduto(p.id).media)} <span class="num-produto">${mediaDeProduto(p.id).media.toFixed(1)}</span>`
@@ -723,6 +726,21 @@ async function salvarProduto(e){
   msg.textContent = id ? 'produto atualizado!' : 'produto anunciado!';
   await loadProdutos();
   setTimeout(fecharFormProduto, 1200);
+
+  // Se for produto NOVO (não edição) numa empresa Premium, avisa quem segue por e-mail
+  if(!id){
+    fetch('/.netlify/functions/notificar-seguidores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profissionalId: payload.profissional_id,
+        tipo: 'produto',
+        titulo: payload.nome,
+        foto: payload.foto
+      })
+    }).catch(e => console.error('erro ao notificar seguidores', e));
+  }
+
   return false;
 }
 

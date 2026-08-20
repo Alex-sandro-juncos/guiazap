@@ -57,10 +57,12 @@ function toggleAuthForm(){
   }
 }
 
-function updateAuthUI(){
+async function updateAuthUI(){
   const loggedOutBox = document.getElementById('auth-logged-out');
   const loggedInBox = document.getElementById('auth-logged-in');
   const addBtn = document.getElementById('add-btn');
+
+  await loadSeguindo();
 
   if(currentUser){
     loggedOutBox.style.display = 'none';
@@ -77,6 +79,7 @@ function updateAuthUI(){
     closeForm();
     abrirStorySeVindoDoProduto();
   }
+  render();
 }
 
 async function signUp(){
@@ -176,7 +179,7 @@ async function loadEntries(){
   cadastroCompartilhadoId = params.get('p');
 
   const planoParam = params.get('plano');
-  if(planoParam === 'basico' || planoParam === 'completo'){
+  if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium'){
     planoEscolhido = planoParam;
     localStorage.setItem('planoEscolhido', planoEscolhido);
     localStorage.setItem('abrirCadastroAposLogin', '1');
@@ -448,11 +451,13 @@ function populateEstados(){
 
 const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Pacote 1 é grátis e ativa sozinho
 const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
+const LINK_ASSINATURA_PREMIUM = "https://mpago.la/2JLXkQM"; // Plano Premium (R$25/mês) criado no Mercado Pago
 const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com o código já existente
 
 let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
 
 function linkDoPlano(plano){
+  if(plano === 'premium') return LINK_ASSINATURA_PREMIUM;
   return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
 }
 
@@ -765,6 +770,37 @@ let cadastroCompartilhadoId = null;
 // ---------- FAVORITOS (salvos no navegador, sem precisar de login) ----------
 
 let favoritosEmpresas = new Set(JSON.parse(localStorage.getItem('favoritos_empresas') || '[]'));
+
+let seguindoEmpresas = new Set();
+
+async function loadSeguindo(){
+  if(!currentUser){ seguindoEmpresas = new Set(); return; }
+  const { data, error } = await supabaseClient.from('seguidores').select('profissional_id').eq('user_id', currentUser.id);
+  if(error){ console.error(error); return; }
+  seguindoEmpresas = new Set((data || []).map(s => s.profissional_id));
+}
+
+async function toggleSeguir(profissionalId, event){
+  event.stopPropagation();
+
+  if(!currentUser){
+    const authBox = document.getElementById('auth-form-fields');
+    if(authBox.style.display === 'none') toggleAuthForm();
+    const msg = document.getElementById('auth-msg');
+    if(msg) msg.textContent = '👥 Faça login (ou crie uma conta) pra seguir empresas';
+    document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  if(seguindoEmpresas.has(profissionalId)){
+    const { error } = await supabaseClient.from('seguidores').delete().eq('user_id', currentUser.id).eq('profissional_id', profissionalId);
+    if(!error) seguindoEmpresas.delete(profissionalId);
+  } else {
+    const { error } = await supabaseClient.from('seguidores').insert({ user_id: currentUser.id, profissional_id: profissionalId, user_email: currentUser.email });
+    if(!error) seguindoEmpresas.add(profissionalId);
+  }
+  render();
+}
 let mostrandoSoFavoritos = false;
 
 function toggleFavorito(id, event){
@@ -1085,13 +1121,15 @@ async function abrirFormStory(profissionalId, plano){
   storyFotosSelecionadas = [];
   renderStoryFotosPreview();
 
-  storyLimiteFotos = plano === 'completo' ? 5 : 1;
-  document.getElementById('story-limite-texto').textContent = plano === 'completo'
-    ? 'até 5 fotos — Pacote Completo'
-    : '1 foto — Pacote Básico';
+  storyLimiteFotos = plano === 'premium' ? 10 : (plano === 'completo' ? 5 : 1);
+  document.getElementById('story-limite-texto').textContent = plano === 'premium'
+    ? 'até 10 fotos — Pacote Premium'
+    : plano === 'completo'
+      ? 'até 5 fotos — Pacote Completo'
+      : '1 foto — Pacote Básico';
 
   const campoProduto = document.getElementById('story-produto-campo');
-  if(plano === 'completo'){
+  if(plano === 'completo' || plano === 'premium'){
     campoProduto.style.display = 'block';
     const { data: produtos } = await supabaseClient.from('produtos').select('id, nome').eq('profissional_id', profissionalId);
     const sel = document.getElementById('story-produto-id');
@@ -1175,6 +1213,9 @@ async function salvarStory(e){
   if(storyFotosSelecionadas.length === 0){ msg.textContent = 'Adicione pelo menos 1 foto.'; return false; }
 
   const produtoId = document.getElementById('story-produto-id') ? (document.getElementById('story-produto-id').value || null) : null;
+  const plano = document.getElementById('story-plano').value;
+  const horasDuracao = plano === 'premium' ? (24 * 7) : 24;
+  const expiresAt = new Date(Date.now() + horasDuracao * 60 * 60 * 1000).toISOString();
 
   const payload = {
     profissional_id: document.getElementById('story-profissional-id').value,
@@ -1182,7 +1223,8 @@ async function salvarStory(e){
     texto: document.getElementById('story-texto-input').value.trim() || null,
     produto_id: produtoId,
     produto_nome: null,
-    produto_preco: null
+    produto_preco: null,
+    expires_at: expiresAt
   };
 
   // Guarda o nome/preço do produto no momento da publicação, pra mostrar na visualização
@@ -1198,9 +1240,22 @@ async function salvarStory(e){
   const { error } = await supabaseClient.from('stories').insert(payload);
   if(error){ console.error(error); msg.textContent = 'erro ao publicar: ' + error.message; return false; }
 
-  msg.textContent = 'novidade publicada! fica no ar por 24 horas.';
+  msg.textContent = `novidade publicada! fica no ar por ${horasDuracao} horas.`;
   setTimeout(fecharFormStory, 1500);
   loadStories();
+
+  // Se a empresa for Premium, avisa quem segue por e-mail (não trava a tela esperando)
+  fetch('/.netlify/functions/notificar-seguidores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      profissionalId: payload.profissional_id,
+      tipo: 'story',
+      titulo: payload.texto || payload.produto_nome || null,
+      foto: payload.fotos[0]
+    })
+  }).catch(e => console.error('erro ao notificar seguidores', e));
+
   return false;
 }
 
@@ -1216,8 +1271,11 @@ function renderMinhasNovidades(profissionalId){
   const grupo = storiesAgrupadas[profissionalId];
   if(!grupo || grupo.stories.length === 0){ container.innerHTML = ''; return; }
 
+  const cadastro = entries.find(e => e.id === profissionalId);
+  const textoValidade = cadastro && cadastro.plano === 'premium' ? 'somem em até 7 dias' : 'somem em até 24h';
+
   container.innerHTML = `
-    <div class="minhas-novidades-label">📸 Suas novidades ativas (somem em até 24h):</div>
+    <div class="minhas-novidades-label">📸 Suas novidades ativas (${textoValidade}):</div>
     <div class="minhas-novidades-lista">
       ${grupo.stories.map(s => `
         <div class="minha-novidade-item">
@@ -1240,7 +1298,7 @@ async function excluirStory(storyId, profissionalId){
 async function loadStories(){
   const { data, error } = await supabaseClient
     .from('stories')
-    .select('*, profissionais(id, name, foto, whatsapp)')
+    .select('*, profissionais(id, name, foto, whatsapp, plano)')
     .order('created_at', { ascending: true });
 
   if(error){ console.error(error); return; }
@@ -1266,9 +1324,16 @@ function renderStoriesLinha(){
 
   // Igual ao resto do site: logado, só vê as próprias novidades (modo gerenciar);
   // deslogado, vê a fileira pública de todo mundo.
-  const grupos = currentUser
+  let grupos = currentUser
     ? Object.entries(storiesAgrupadas).filter(([id, g]) => g.empresa.id && entries.some(e => e.id === id && e.user_id === currentUser.id))
     : Object.entries(storiesAgrupadas);
+
+  // Empresas do Pacote Premium aparecem primeiro na fileira
+  grupos = grupos.sort((a, b) => {
+    const premiumA = a[1].empresa.plano === 'premium' ? 1 : 0;
+    const premiumB = b[1].empresa.plano === 'premium' ? 1 : 0;
+    return premiumB - premiumA;
+  });
 
   storiesOrdemEmpresas = grupos.map(([id]) => id);
 
@@ -1499,7 +1564,12 @@ function render(){
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
-    .sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
+    .sort((a,b) => {
+      const premiumA = a.plano === 'premium' ? 1 : 0;
+      const premiumB = b.plano === 'premium' ? 1 : 0;
+      if(premiumA !== premiumB) return premiumB - premiumA;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
 
   document.getElementById('count').innerHTML = loaded
     ? (cadastroCompartilhadoId
@@ -1528,6 +1598,7 @@ function render(){
       ${isOwner && pendente ? `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
         <button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">🎁 Ativar Pacote Grátis agora</button>
         <a href="${linkDoPlano('completo')}" class="link-pagar">💳 Pagar Pacote Completo (R$10/mês)</a>
+        <a href="${linkDoPlano('premium')}" class="link-pagar" style="background:linear-gradient(90deg, #d4af37, #f4d570, #d4af37); color:#4a3800;">👑 Pagar Pacote Premium (R$25/mês)</a>
         <div class="cupom-row">
           <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
           <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
@@ -1539,9 +1610,10 @@ function render(){
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}</h3>
+          <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}${e.plano === 'premium' ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
+            ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? '✓ Seguindo' : '+ Seguir'}</button>` : ''}
             ${isOwner ? `<span class="owner-actions">
               <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
               <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>

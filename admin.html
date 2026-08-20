@@ -163,7 +163,9 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
             ? `Mudar "${nome}" pro Pacote Completo? Ela ganha acesso à Vitrine, sem precisar pagar.`
             : acao === 'plano_basico'
               ? `Mudar "${nome}" pro Pacote Básico? Ela perde o acesso à Vitrine (produtos somem da busca pública, mas continuam salvos).`
-              : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
+              : acao === 'plano_premium'
+                ? `Mudar "${nome}" pro Pacote Premium? Ela ganha: até 10 fotos por Story, botão de "Seguir" pros visitantes, e prioridade na fileira de novidades.`
+                : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
   if(!confirm(confirmText)) return;
 
   const { data: { session } } = await supabaseClientAdmin.auth.getSession();
@@ -293,6 +295,9 @@ function renderAdmin(){
           ${item.plano === 'completo'
             ? `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Básico</button>`
             : `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Completo</button>`}
+          ${item.plano === 'premium'
+            ? `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Premium</button>`
+            : `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Premium</button>`}
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </div>`;
