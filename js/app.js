@@ -1221,40 +1221,12 @@ function renderMinhasNovidades(profissionalId){
         <div class="minha-novidade-item">
           <img src="${s.fotos[0]}">
           <button type="button" class="minha-novidade-btn-excluir" title="Excluir agora" onclick="excluirStory('${s.id}', '${profissionalId}')">✕</button>
-          <button type="button" class="minha-novidade-btn-compartilhar" title="Compartilhar" onclick="toggleMenuCompartilharMinhaNovidade(event, '${s.id}', '${profissionalId}')">📤</button>
         </div>
       `).join('')}
     </div>
-    <div class="menu-compartilhar" id="menu-compartilhar-novidade-${profissionalId}" style="display:none;"></div>
   `;
 }
 
-function toggleMenuCompartilharMinhaNovidade(event, storyId, profissionalId){
-  event.stopPropagation();
-  const menu = document.getElementById('menu-compartilhar-novidade-' + profissionalId);
-  const jaAberto = menu.style.display === 'block';
-
-  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
-
-  if(jaAberto) return;
-
-  const grupo = storiesAgrupadas[profissionalId];
-  const story = grupo.stories.find(s => s.id === storyId);
-  if(!story) return;
-
-  const link = story.fotos[0];
-  const texto = `Vi essa novidade de ${grupo.empresa.name} no GuiaZap!`;
-  const linkCodificado = encodeURIComponent(link);
-  const textoCodificado = encodeURIComponent(texto);
-
-  menu.innerHTML = `
-    <a href="https://wa.me/?text=${textoCodificado}%20${linkCodificado}" target="_blank" class="opcao-rede whatsapp">WhatsApp</a>
-    <a href="https://www.facebook.com/sharer/sharer.php?u=${linkCodificado}" target="_blank" class="opcao-rede facebook">Facebook</a>
-    <a href="https://twitter.com/intent/tweet?text=${textoCodificado}&url=${linkCodificado}" target="_blank" class="opcao-rede twitter">X (Twitter)</a>
-    <a href="https://t.me/share/url?url=${linkCodificado}&text=${textoCodificado}" target="_blank" class="opcao-rede telegram">Telegram</a>
-  `;
-  menu.style.display = 'block';
-}
 
 async function excluirStory(storyId, profissionalId){
   if(!confirm('Excluir essa novidade antes do prazo de 24h?')) return;
@@ -1631,13 +1603,15 @@ function render(){
             <span class="review-msg" id="review-msg-${e.id}"></span>
           </div>
         </div>
-        <div class="contatos-row">
-          <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
-          ${renderContatosExtra(e.contatos_extra)}
+        <div class="acoes-empresa-coluna">
+          <div class="contatos-row">
+            <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
+            ${renderContatosExtra(e.contatos_extra)}
+          </div>
+          ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
+          ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
+          ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
         </div>
-        ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
-        ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
-        ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
       </div>
     </div>

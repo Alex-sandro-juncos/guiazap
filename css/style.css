@@ -925,10 +925,16 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   width: 100%; height: 100%; object-fit: cover; border-radius: 8px;
   border: 2px solid #e91e63;
 }
-.minha-novidade-item button {
+.minha-novidade-btn-excluir {
   position: absolute; top: -6px; right: -6px;
   background: #a4402f; color: white; border: none; border-radius: 50%;
   width: 16px; height: 16px; font-size: 0.6rem; cursor: pointer; padding: 0; line-height: 1;
+}
+.minha-novidade-btn-compartilhar {
+  position: absolute; bottom: -6px; right: -6px;
+  background: #128C7E; color: white; border: none; border-radius: 50%;
+  width: 16px; height: 16px; font-size: 0.55rem; cursor: pointer; padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
 }
 
 .story-textarea-bonito {
@@ -963,3 +969,14 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   justify-content: center;
 }
 .story-bolinha-add:hover .story-add-circulo { background: rgba(255,255,255,0.4); }
+
+.acoes-empresa-coluna {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.acoes-empresa-coluna .link-ver-produtos,
+.acoes-empresa-coluna .btn-zap {
+  margin-top: 0 !important;
+}
