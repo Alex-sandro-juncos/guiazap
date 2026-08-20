@@ -1198,12 +1198,15 @@ function renderStoriesLinha(){
   if(grupos.length === 0){ container.style.display = 'none'; return; }
 
   container.style.display = 'flex';
-  container.innerHTML = grupos.map(([id, grupo]) => `
+  container.innerHTML = grupos.map(([id, grupo]) => {
+    const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
+    return `
       <div class="story-bolinha" onclick="abrirStoryViewer('${id}')">
-        <img src="${grupo.empresa.foto ? escapeHtml(grupo.empresa.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.empresa.name)}">
+        <img src="${primeiraFoto ? escapeHtml(primeiraFoto) : (grupo.empresa.foto ? escapeHtml(grupo.empresa.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.empresa.name))}">
         <span>${escapeHtml(grupo.empresa.name.split(' ')[0])}</span>
       </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function abrirStoryViewer(profissionalId){
