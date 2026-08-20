@@ -1,316 +1,727 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GuiaZap Vitrine — Produtos de empresas locais</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<link rel="stylesheet" href="css/style.css">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<style>
-  .vitrine-header { background: var(--verde-whats); padding: 24px 15px; text-align: center; color: white; }
-  .vitrine-header h1 { font-size: 1.8rem; font-weight: 800; }
-  .vitrine-header p { font-size: 0.88rem; opacity: 0.95; margin-top: 4px; }
-  .vitrine-busca {
-    background: var(--cinza-card);
-    padding: 14px;
-    margin: -14px 15px 0;
-    border-radius: 14px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-    position: relative;
-    z-index: 2;
-  }
-  .vitrine-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
-  .vitrine-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 15px 10px; }
-  .vitrine-toolbar .count { font-size: 0.9rem; color: #444; }
-  .btn-add-produto {
-    background: var(--verde-whats);
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 50px;
-    font-weight: 700;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .grid-produtos {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-    padding: 0 15px 30px;
-  }
-  .card-produto {
-    background: var(--cinza-card);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-    display: flex;
-    flex-direction: column;
-  }
-  .card-produto img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
-  .card-produto .info { padding: 10px; flex: 1; display: flex; flex-direction: column; }
-  .card-produto .nome { font-size: 0.88rem; font-weight: 700; color: #1c1c1c; line-height: 1.3; flex: 1; min-width: 0; }
-  .card-produto .preco { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 4px; }
-  .card-produto .empresa { font-size: 0.72rem; color: #8a8270; margin-top: 4px; }
-  .card-produto .marca-produto { font-size: 0.72rem; color: var(--verde-escuro); font-weight: 600; margin-top: 2px; }
-  .card-produto .medida-produto { font-size: 0.72rem; color: #666; margin-top: 2px; }
-  .card-produto .owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
-  .icon-btn-favorito { flex-shrink: 0; background: none; border: none; cursor: pointer; font-size: 0.9rem; }
-  .card-produto .owner-actions .icon-btn {
-    background: none; border: none; cursor: pointer; font-size: 0.85rem;
-    padding: 2px 4px; border-radius: 4px; color: var(--verde-escuro);
-  }
-  .link-compartilhar-produto {
-    background: var(--verde-whats);
-    color: white;
-    border: none;
-    font-size: 0.75rem;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 7px;
-    margin-top: 6px;
-    border-radius: 8px;
-    width: 100%;
-    text-align: center;
-  }
-  .aviso-compartilhar {
-    background: #e8f4fd;
-    color: #0a4a6b;
-    font-size: 0.78rem;
-    padding: 10px 12px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    line-height: 1.4;
-  }
-  .menu-compartilhar {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
-    background: #f8f8f8;
-    border-radius: 8px;
-    padding: 6px;
-  }
-  .opcao-rede {
-    display: block;
-    text-align: center;
-    padding: 6px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-    color: white;
-  }
-  .opcao-rede.whatsapp { background: #25D366; }
-  .opcao-rede.facebook { background: #1877F2; }
-  .opcao-rede.twitter { background: #000000; }
-  .opcao-rede.telegram { background: #229ED9; }
-  .opcao-rede.copiar { background: #666; }
-  .card-produto .btn-zap-mini {
-    margin-top: 8px;
-    display: block;
-    text-align: center;
-    background: var(--verde-whats);
-    color: white;
-    padding: 7px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-decoration: none;
-  }
-  .vazio-vitrine { text-align: center; padding: 50px 20px; color: #8a8270; grid-column: 1 / -1; }
+let supabaseClientV;
+let produtos = [];
+let avaliacoesProdutosMap = {};
 
-  #produto-form {
-    display: none;
-    background: var(--cinza-card);
-    border-radius: 14px;
-    padding: 16px;
-    margin: 0 15px 18px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  }
-  #produto-form.open { display: block; }
-  #produto-form .field { margin-bottom: 10px; }
-  #produto-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
-  #produto-form input, #produto-form textarea, #produto-form select {
-    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
-  }
-  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
-  .campo-com-prefixo { position: relative; }
-  .campo-com-prefixo .prefixo-rs {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-weight: 700;
-    color: #444;
-    font-size: 0.9rem;
-    pointer-events: none;
-  }
-  .campo-com-prefixo input { padding-left: 34px !important; }
-.card-produto-destaque {
-    border: 2.5px solid var(--verde-whats);
-    position: relative;
-    box-shadow: 0 4px 14px rgba(37,211,102,0.25);
-  }
-  .selo-compartilhado {
-    background: var(--verde-whats);
-    color: white;
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-align: center;
-    padding: 3px 6px;
-  }
-  .stars-produto { font-size: 0.72rem; color: var(--amarelo); margin: 4px 0; }
-  .stars-produto .num-produto { color: #444; font-weight: 600; font-size: 0.7rem; }
-  .sem-avaliacao-produto { font-size: 0.68rem; color: #8a8270; font-style: italic; }
-  .link-avaliar-produto {
-    background: none; border: none; color: var(--verde-escuro);
-    font-size: 0.68rem; font-weight: 700; text-decoration: underline;
-    cursor: pointer; padding: 0; margin-left: 6px;
-  }
-  .ja-avaliou-produto { font-size: 0.66rem; color: #8a8270; font-style: italic; margin-left: 6px; }
-  .review-box-produto {
-    background: var(--cinza-fundo);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 6px;
-  }
-  .review-box-produto .review-stars { font-size: 1.1rem; color: var(--amarelo); cursor: pointer; margin-bottom: 4px; }
-  .categoria-produto { font-size: 0.68rem; color: #888; margin-top: 1px; }
-  .vitrine-filtros { display: flex; gap: 8px; margin-top: 10px; }
-  .vitrine-filtros select {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    background: white;
-  }
-</style>
-</head>
-<body>
-<header class="vitrine-header">
-  <h1>GuiaZap Vitrine</h1>
-  <p>Produtos de empresas da sua região, tudo num só lugar</p>
-  <button type="button" class="btn-modo-escuro" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="border-color:white; color:white; margin-top:8px;">🌙 Modo escuro</button>
-</header>
+// ---------- FAVORITOS DE PRODUTO (salvos no navegador) ----------
+let favoritosProdutos = new Set(JSON.parse(localStorage.getItem('favoritos_produtos') || '[]'));
+let mostrandoSoFavoritosProdutos = false;
 
-<div class="vitrine-busca">
-  <div class="busca-com-icone">
-    <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
-    <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
-  </div>
-  <div class="vitrine-filtros">
-    <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>
-    <select id="v-filter-preco" onchange="renderProdutos()">
-      <option value="">Qualquer preço</option>
-      <option value="0-20">Até R$ 20</option>
-      <option value="20-50">R$ 20 a R$ 50</option>
-      <option value="50-100">R$ 50 a R$ 100</option>
-      <option value="100-9999999">Acima de R$ 100</option>
-    </select>
-  </div>
-  <button type="button" id="btn-favoritos-produtos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritosProdutos()">❤️ Ver só favoritos</button>
-</div>
+function toggleFavoritoProduto(id, event){
+  if(event) event.stopPropagation();
+  if(favoritosProdutos.has(id)) favoritosProdutos.delete(id);
+  else favoritosProdutos.add(id);
+  localStorage.setItem('favoritos_produtos', JSON.stringify([...favoritosProdutos]));
+  renderProdutos();
+}
 
-<div class="vitrine-toolbar">
-  <span class="count" id="v-count"></span>
-  <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
-</div>
+function toggleFiltroFavoritosProdutos(){
+  mostrandoSoFavoritosProdutos = !mostrandoSoFavoritosProdutos;
+  const btn = document.getElementById('btn-favoritos-produtos');
+  if(btn) btn.classList.toggle('ativo', mostrandoSoFavoritosProdutos);
+  renderProdutos();
+}
+let meusCadastros = [];
+let currentUserV = null;
 
-<form id="produto-form" onsubmit="return salvarProduto(event)">
-  <input type="hidden" id="p-id">
-  <input type="hidden" id="p-codigo-barras">
-  <div class="field">
-    <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
-    <select id="p-profissional" required></select>
-  </div>
-  <div class="field">
-    <label>Nome do produto</label>
-    <input id="p-nome" required placeholder="Ex: Bolo de chocolate">
-  </div>
-  <div class="aviso-compartilhar">
-    📢 Depois de cadastrado, esse produto ganha um botão "Compartilhar" — qualquer visitante pode enviar ele pra amigos e clientes no WhatsApp, Instagram e redes sociais, ajudando a divulgar seu negócio de graça!
-  </div>
-  <div class="field">
-    <button type="button" class="btn-foto-opcao" style="width:100%;" onclick="abrirScanner()">📷 Ler código de barras (preenche sozinho)</button>
-    <div id="scanner-area" style="display:none; margin-top:10px;">
-      <div id="scanner-leitor" style="width:100%;"></div>
-      <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="fecharScanner()">Cancelar leitura</button>
-    </div>
-    <span class="foto-msg" id="scanner-msg"></span>
-    <label class="foto-ou">ou digite o código de barras / código de peça manualmente (útil quando um mecânico ou fornecedor passou só o código)</label>
-    <div style="display:flex; gap:6px;">
-      <input id="p-codigo-barras-manual" placeholder="Ex: 7891000100103 ou código do fabricante da peça" oninput="onCodigoBarrasManualChange()" style="flex:1;">
-      <button type="button" class="btn-cancelar" onclick="buscarInfoCodigoManual()">Buscar</button>
-    </div>
-  </div>
-  <div class="field">
-    <label>Marca (opcional)</label>
-    <input id="p-marca" placeholder="Ex: Nestlé, marca própria...">
-  </div>
-  <div class="field">
-    <label>Descrição (opcional)</label>
-    <textarea id="p-descricao" rows="2" placeholder="Detalhes do produto"></textarea>
-  </div>
-  <div class="field">
-    <label>Categoria (opcional)</label>
-    <input id="p-categoria" list="categorias-produto-list" placeholder="Ex: Bebidas, Alimentos, Peças...">
-    <datalist id="categorias-produto-list"></datalist>
-  </div>
-  <div class="row2">
-    <div class="field">
-      <label>Medido em</label>
-      <select id="p-unidade-medida">
-        <option value="unidade">Unidade</option>
-        <option value="peso">Peso (kg)</option>
-        <option value="litro">Litro</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Quantidade</label>
-      <input id="p-quantidade" type="number" min="0" step="0.01" value="1">
-    </div>
-  </div>
-  <div class="field">
-    <label>Valor (R$)</label>
-    <div class="campo-com-prefixo">
-      <span class="prefixo-rs">R$</span>
-      <input id="p-preco" placeholder="0,00" inputmode="numeric" oninput="formatarValorProduto(event)">
-    </div>
-  </div>
-  <div class="field">
-    <label>Foto do produto</label>
-    <div class="foto-botoes">
-      <label class="btn-foto-opcao">
-        📷 Tirar foto
-        <input type="file" accept="image/*" capture="environment" onchange="enviarFotoProduto(event)" style="display:none;">
-      </label>
-      <label class="btn-foto-opcao">
-        🖼️ Escolher da galeria
-        <input type="file" accept="image/*" onchange="enviarFotoProduto(event)" style="display:none;">
-      </label>
-    </div>
-    <span class="foto-msg" id="p-foto-msg"></span>
-    <img id="p-foto-preview" class="foto-preview" style="display:none;">
-    <label class="foto-ou">ou cole um link de foto já existente</label>
-    <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
-  </div>
-  <div class="form-actions">
-    <button type="submit" class="btn-salvar">Salvar produto</button>
-    <button type="button" class="btn-cancelar" onclick="fecharFormProduto()">Cancelar</button>
-    <span class="review-msg" id="p-msg"></span>
-  </div>
-</form>
+function initSupabaseV(){
+  if(!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  supabaseClientV = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
+}
 
-<div class="grid-produtos" id="v-grid"></div>
-<a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
+async function initAuthV(){
+  const { data: { session } } = await supabaseClientV.auth.getSession();
+  currentUserV = session ? session.user : null;
+  document.getElementById('v-add-btn').style.display = currentUserV ? 'inline-block' : 'none';
 
-<script src="js/modo-escuro.js"></script>
-<script src="config.js"></script>
-<script src="js/vitrine.js"></script>
-</body>
-</html>
+  if(currentUserV){
+    const { data } = await supabaseClientV
+      .from('profissionais')
+      .select('id, name')
+      .eq('user_id', currentUserV.id)
+      .eq('status_pagamento', 'ativo')
+      .eq('plano', 'completo');
+    meusCadastros = data || [];
+
+    const sel = document.getElementById('p-profissional');
+    sel.innerHTML = meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('');
+
+    if(meusCadastros.length === 0){
+      document.getElementById('v-add-btn').style.display = 'none';
+    }
+  }
+}
+
+let empresaFiltroId = null;
+let produtoFiltroId = null;
+
+async function loadProdutos(){
+  const { data, error } = await supabaseClientV
+    .from('produtos')
+    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id)')
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); return; }
+
+  produtos = (data || []).filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
+  await loadAvaliacoesProdutos();
+  popularFiltrosProduto();
+
+  const params = new URLSearchParams(window.location.search);
+  empresaFiltroId = params.get('empresa');
+  produtoFiltroId = params.get('produto');
+
+  if(produtoFiltroId){
+    const produtoCompartilhado = produtos.find(p => p.id === produtoFiltroId);
+    if(produtoCompartilhado && produtoCompartilhado.profissionais){
+      // Mostra o produto em destaque + os outros produtos da mesma empresa
+      empresaFiltroId = produtoCompartilhado.profissionais.id;
+      const nomeEmpresa = produtoCompartilhado.profissionais.name;
+      document.querySelector('.vitrine-header h1').textContent = `Produtos de ${nomeEmpresa}`;
+      document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+    } else {
+      document.querySelector('.vitrine-header h1').textContent = 'Produto compartilhado';
+      document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+    }
+  } else if(empresaFiltroId){
+    const empresa = produtos.find(p => p.profissionais && p.profissionais.id === empresaFiltroId);
+    const nomeEmpresa = empresa ? empresa.profissionais.name : '';
+    document.querySelector('.vitrine-header h1').textContent = nomeEmpresa ? `Produtos de ${nomeEmpresa}` : 'GuiaZap Vitrine';
+    document.querySelector('.vitrine-header p').innerHTML = `<a href="vitrine.html" style="color:white; text-decoration:underline;">← Ver vitrine completa</a>`;
+  }
+
+  renderProdutos();
+}
+
+async function loadAvaliacoesProdutos(){
+  const { data, error } = await supabaseClientV.from('avaliacoes_produtos').select('produto_id, nota');
+  if(error){ console.error(error); return; }
+
+  avaliacoesProdutosMap = {};
+  data.forEach(a => {
+    if(!avaliacoesProdutosMap[a.produto_id]) avaliacoesProdutosMap[a.produto_id] = { soma: 0, count: 0 };
+    avaliacoesProdutosMap[a.produto_id].soma += a.nota;
+    avaliacoesProdutosMap[a.produto_id].count += 1;
+  });
+}
+
+function mediaDeProduto(id){
+  const dados = avaliacoesProdutosMap[id];
+  if(!dados || dados.count === 0) return { media: 0, count: 0 };
+  return { media: dados.soma / dados.count, count: dados.count };
+}
+
+function starStringV(rating){
+  const full = Math.round(rating);
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function jaAvaliouProduto(id){
+  return localStorage.getItem('avaliado_produto_' + id) === '1';
+}
+
+function abrirAvaliacaoProduto(id){
+  const box = document.getElementById('review-produto-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+let notaSelecionadaProduto = {};
+
+function selecionarNotaProduto(id, nota){
+  notaSelecionadaProduto[id] = nota;
+  const stars = document.querySelectorAll('#review-produto-stars-' + id + ' span');
+  stars.forEach((s, i) => { s.textContent = (i < nota) ? '★' : '☆'; });
+}
+
+async function enviarAvaliacaoProduto(id){
+  const comentarioInput = document.getElementById('review-produto-comentario-' + id);
+  const msg = document.getElementById('review-produto-msg-' + id);
+
+  if(jaAvaliouProduto(id)){ msg.textContent = 'Você já avaliou este produto neste dispositivo.'; return; }
+
+  const nota = notaSelecionadaProduto[id];
+  const comentario = comentarioInput.value.trim();
+  if(!nota){ msg.textContent = 'Escolha uma nota.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientV.from('avaliacoes_produtos').insert({
+    produto_id: id, nota, comentario: comentario || null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar avaliação'; return; }
+
+  localStorage.setItem('avaliado_produto_' + id, '1');
+  comentarioInput.value = '';
+  delete notaSelecionadaProduto[id];
+  msg.textContent = 'avaliação enviada, obrigado!';
+  await loadAvaliacoesProdutos();
+  renderProdutos();
+}
+
+function textoMedida(p){
+  const qtd = p.quantidade || 1;
+  if(p.unidade_medida === 'peso') return `${qtd} kg`;
+  if(p.unidade_medida === 'litro') return `${qtd} L`;
+  return qtd == 1 ? '1 unidade' : `${qtd} unidades`;
+}
+
+let visualizacoesProdutoContadas = new Set();
+
+function contarVisualizacaoProduto(id, isDono){
+  if(isDono) return;
+  if(visualizacoesProdutoContadas.has(id)) return;
+  visualizacoesProdutoContadas.add(id);
+  supabaseClientV.rpc('incrementar_visualizacao_produto', { pid: id }).then(({ error }) => {
+    if(error) console.error('erro ao contar visualização de produto', error);
+  });
+}
+
+function popularFiltrosProduto(){
+  const categorias = [...new Set(produtos.map(p => p.categoria).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+  const filtroSel = document.getElementById('v-filter-categoria');
+  const prevValor = filtroSel.value;
+  filtroSel.innerHTML = '<option value="">Categoria</option>' + categorias.map(c => `<option value="${escapeHtmlV(c)}">${escapeHtmlV(c)}</option>`).join('');
+  filtroSel.value = prevValor;
+
+  const datalist = document.getElementById('categorias-produto-list');
+  if(datalist) datalist.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">`).join('');
+}
+
+function renderProdutos(){
+  const query = normalizarTextoV(document.getElementById('v-search').value);
+  const categoriaFiltro = document.getElementById('v-filter-categoria').value;
+  const precoFiltro = document.getElementById('v-filter-preco').value;
+  const linkDireto = produtoFiltroId || empresaFiltroId;
+  const filtrados = produtos
+    .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
+    .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
+    .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
+    .filter(p => {
+      if(!precoFiltro) return true;
+      const precoNumerico = parseFloat((p.preco || '').replace(/[^\d,]/g, '').replace(',', '.'));
+      if(isNaN(precoNumerico)) return false;
+      const [min, max] = precoFiltro.split('-').map(Number);
+      return precoNumerico >= min && precoNumerico <= max;
+    })
+    .filter(p =>
+      normalizarTextoV(p.nome).includes(query) ||
+      normalizarTextoV(p.marca).includes(query) ||
+      normalizarTextoV(p.descricao).includes(query) ||
+      normalizarTextoV(p.codigo_barras).includes(query) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query))
+    )
+    .sort((a, b) => {
+      // Coloca o produto compartilhado sempre primeiro
+      if(produtoFiltroId){
+        if(a.id === produtoFiltroId) return -1;
+        if(b.id === produtoFiltroId) return 1;
+      }
+      return 0;
+    });
+
+  document.getElementById('v-count').textContent = `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
+
+  const grid = document.getElementById('v-grid');
+  if(filtrados.length === 0){
+    const mensagem = (currentUserV && !linkDireto)
+      ? 'Você ainda não tem produtos cadastrados. Clique em "+ Anunciar produto" para começar.'
+      : 'Nenhum produto encontrado ainda.';
+    grid.innerHTML = `<div class="vazio-vitrine">${mensagem}</div>`;
+    return;
+  }
+
+  grid.innerHTML = filtrados.map(p => {
+    const isDono = currentUserV && p.profissionais && p.profissionais.user_id === currentUserV.id;
+    contarVisualizacaoProduto(p.id, isDono);
+    const isCompartilhado = produtoFiltroId && p.id === produtoFiltroId;
+    return `
+    <div class="card-produto${isCompartilhado ? ' card-produto-destaque' : ''}">
+      ${isCompartilhado ? '<div class="selo-compartilhado">⭐ Produto compartilhado</div>' : ''}
+      <img src="${p.foto ? escapeHtmlV(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtmlV(p.nome)}">
+      <div class="info">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="nome">${escapeHtmlV(p.nome)}</div>
+          <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavoritoProduto('${p.id}', event)">${favoritosProdutos.has(p.id) ? '❤️' : '🤍'}</button>
+          ${isDono ? `<span class="owner-actions">
+            <button class="icon-btn" title="Editar" onclick="editarProduto('${p.id}')">✎</button>
+            <button class="icon-btn" title="Excluir" onclick="excluirProduto('${p.id}')">✕</button>
+          </span>` : ''}
+        </div>
+        ${p.marca ? `<div class="marca-produto">${escapeHtmlV(p.marca)}</div>` : ''}
+        ${p.categoria ? `<div class="categoria-produto">${escapeHtmlV(p.categoria)}</div>` : ''}
+        ${isDono ? `<div class="stat-visualizacoes">👁️ ${p.visualizacoes || 0} visualizaç${(p.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
+        <div class="medida-produto">${textoMedida(p)}</div>
+        ${p.preco ? `<div class="preco">R$ ${escapeHtmlV(p.preco)}</div>` : ''}
+        <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}</div>
+        <div class="stars-produto">
+          ${mediaDeProduto(p.id).count > 0
+            ? `${starStringV(mediaDeProduto(p.id).media)} <span class="num-produto">${mediaDeProduto(p.id).media.toFixed(1)}</span>`
+            : '<span class="sem-avaliacao-produto">Sem avaliações</span>'}
+          ${jaAvaliouProduto(p.id) ? '<span class="ja-avaliou-produto">Avaliado</span>' : `<button type="button" class="link-avaliar-produto" onclick="abrirAvaliacaoProduto('${p.id}')">Avaliar</button>`}
+        </div>
+        <div class="review-box-produto" id="review-produto-box-${p.id}" style="display:none;">
+          <div class="review-stars" id="review-produto-stars-${p.id}">
+            ${[1,2,3,4,5].map(n => `<span onclick="selecionarNotaProduto('${p.id}', ${n})">☆</span>`).join('')}
+          </div>
+          <textarea id="review-produto-comentario-${p.id}" placeholder="Comentário (opcional)" class="review-input" rows="2"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarAvaliacaoProduto('${p.id}')">Enviar</button>
+            <span class="review-msg" id="review-produto-msg-${p.id}"></span>
+          </div>
+        </div>
+        ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
+        <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
+        <div class="menu-compartilhar" id="menu-compartilhar-${p.id}" style="display:none;"></div>
+        ${!isDono ? `<button type="button" class="link-denunciar-produto" onclick="abrirDenunciaProduto('${p.id}')">Denunciar produto</button>
+        <div class="denuncia-box" id="denuncia-produto-box-${p.id}" style="display:none;">
+          <select id="denuncia-produto-motivo-${p.id}" class="review-input">
+            <option value="">Selecione o motivo</option>
+            <option value="Produto falso ou golpe">Produto falso ou golpe</option>
+            <option value="Foto/descricao enganosa">Foto ou descrição enganosa</option>
+            <option value="Preco incorreto">Preço incorreto</option>
+            <option value="Conteudo ofensivo">Conteúdo ofensivo</option>
+            <option value="Outro">Outro</option>
+          </select>
+          <textarea id="denuncia-produto-descricao-${p.id}" class="review-input" rows="2" placeholder="Descreva o problema (opcional)"></textarea>
+          <div class="review-actions">
+            <button type="button" class="btn-auth" onclick="enviarDenunciaProduto('${p.id}')">Enviar denúncia</button>
+            <span class="review-msg" id="denuncia-produto-msg-${p.id}"></span>
+          </div>
+        </div>` : `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasProdutoRecebidas('${p.id}')">🚩 Ver denúncias recebidas</button>
+        <div class="denuncias-recebidas-box" id="denuncias-produto-recebidas-${p.id}" style="display:none;"></div>`}
+      </div>
+    </div>
+  `; }).join('');
+}
+
+function toggleMenuCompartilhar(id){
+  const p = produtos.find(x => x.id === id);
+  if(!p) return;
+
+  const menu = document.getElementById('menu-compartilhar-' + id);
+  if(menu.style.display === 'block'){
+    menu.style.display = 'none';
+    return;
+  }
+
+  const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
+  const texto = `Confira ${p.nome} na Vitrine GuiaZap!`;
+  const linkCodificado = encodeURIComponent(link);
+  const textoCodificado = encodeURIComponent(texto);
+
+  menu.innerHTML = `
+    <a href="https://wa.me/?text=${textoCodificado}%20${linkCodificado}" target="_blank" class="opcao-rede whatsapp">WhatsApp</a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${linkCodificado}" target="_blank" class="opcao-rede facebook">Facebook</a>
+    <a href="https://twitter.com/intent/tweet?text=${textoCodificado}&url=${linkCodificado}" target="_blank" class="opcao-rede twitter">X (Twitter)</a>
+    <a href="https://t.me/share/url?url=${linkCodificado}&text=${textoCodificado}" target="_blank" class="opcao-rede telegram">Telegram</a>
+    <button type="button" class="opcao-rede copiar" onclick="copiarLinkProduto('${id}', event)">Copiar link</button>
+  `;
+  menu.style.display = 'block';
+}
+
+async function copiarLinkProduto(id, event){
+  event.preventDefault();
+  const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
+  try{
+    await navigator.clipboard.writeText(link);
+    alert('Link copiado!');
+  } catch(e){
+    prompt('Copie o link abaixo:', link);
+  }
+  document.getElementById('menu-compartilhar-' + id).style.display = 'none';
+}
+
+let scannerAtivo = null;
+
+function abrirScanner(){
+  document.getElementById('scanner-area').style.display = 'block';
+  document.getElementById('scanner-msg').textContent = 'Aponte a câmera para o código de barras, mantendo boa distância e luz';
+
+  scannerAtivo = new Html5Qrcode('scanner-leitor', {
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39
+    ],
+    verbose: false
+  });
+
+  scannerAtivo.start(
+    { facingMode: 'environment' },
+    {
+      fps: 15,
+      qrbox: { width: 280, height: 130 },
+      aspectRatio: 1.6,
+      videoConstraints: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      }
+    },
+    async (codigoLido) => {
+      await fecharScanner();
+      await buscarProdutoPorCodigoBarras(codigoLido);
+    },
+    () => {} // erro de leitura de cada frame, ignora silenciosamente
+  ).then(() => {
+    ativarBotaoLanterna();
+  }).catch(err => {
+    document.getElementById('scanner-msg').textContent = 'Não foi possível acessar a câmera: ' + err.message;
+  });
+}
+
+function ativarBotaoLanterna(){
+  const existente = document.getElementById('btn-lanterna');
+  if(existente) existente.remove();
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-lanterna';
+  btn.className = 'btn-cancelar';
+  btn.style.marginTop = '6px';
+  btn.style.marginRight = '6px';
+  btn.textContent = '🔦 Ligar lanterna';
+  btn.onclick = toggleLanterna;
+
+  const area = document.getElementById('scanner-area');
+  area.insertBefore(btn, document.getElementById('scanner-leitor').nextSibling);
+}
+
+let lanternaLigada = false;
+async function toggleLanterna(){
+  if(!scannerAtivo) return;
+  try{
+    lanternaLigada = !lanternaLigada;
+    await scannerAtivo.applyVideoConstraints({ advanced: [{ torch: lanternaLigada }] });
+    document.getElementById('btn-lanterna').textContent = lanternaLigada ? '🔦 Desligar lanterna' : '🔦 Ligar lanterna';
+  } catch(e){
+    document.getElementById('scanner-msg').textContent = 'Este dispositivo não permite controlar a lanterna pelo navegador.';
+  }
+}
+
+async function fecharScanner(){
+  if(scannerAtivo){
+    try{ await scannerAtivo.stop(); await scannerAtivo.clear(); } catch(e){}
+    scannerAtivo = null;
+  }
+  const btnLanterna = document.getElementById('btn-lanterna');
+  if(btnLanterna) btnLanterna.remove();
+  lanternaLigada = false;
+  document.getElementById('scanner-area').style.display = 'none';
+}
+
+function formatarValorProduto(event){
+  const input = event.target;
+  const valorAtual = input.value;
+
+  // Se a pessoa digitou alguma letra (ex: "Sob consulta"), não mexe em nada, deixa livre
+  if(/[a-zA-Z]/.test(valorAtual)) return;
+
+  // Pega só os dígitos e formata como dinheiro (últimos 2 dígitos = centavos)
+  const somenteDigitos = valorAtual.replace(/\D/g, '');
+  if(!somenteDigitos){ input.value = ''; return; }
+
+  const numero = (parseInt(somenteDigitos, 10) / 100).toFixed(2);
+  input.value = numero.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function onCodigoBarrasManualChange(){
+  const valor = document.getElementById('p-codigo-barras-manual').value.trim();
+  document.getElementById('p-codigo-barras').value = valor;
+}
+
+async function buscarInfoCodigoManual(){
+  const valor = document.getElementById('p-codigo-barras-manual').value.trim();
+  if(!valor){ return; }
+  await buscarProdutoPorCodigoBarras(valor);
+}
+
+async function buscarProdutoPorCodigoBarras(codigo){
+  const msg = document.getElementById('scanner-msg');
+  msg.textContent = `Código lido: ${codigo}. Buscando informações...`;
+  document.getElementById('p-codigo-barras') && (document.getElementById('p-codigo-barras').value = codigo);
+
+  // 1. Primeiro busca no NOSSO catálogo (cadastros anteriores de qualquer empresa do GuiaZap)
+  try{
+    const { data: doCatalogo } = await supabaseClientV
+      .from('produtos_catalogo_barcode')
+      .select('*')
+      .eq('codigo_barras', codigo)
+      .maybeSingle();
+
+    if(doCatalogo){
+      if(doCatalogo.nome) document.getElementById('p-nome').value = doCatalogo.nome;
+      if(doCatalogo.marca) document.getElementById('p-marca').value = doCatalogo.marca;
+      if(doCatalogo.foto){
+        document.getElementById('p-foto').value = doCatalogo.foto;
+        onFotoProdutoLinkChange();
+      }
+      if(doCatalogo.descricao) document.getElementById('p-descricao').value = doCatalogo.descricao;
+      msg.textContent = 'Produto encontrado no catálogo do GuiaZap! Confira os dados antes de salvar.';
+      return;
+    }
+  } catch(e){
+    console.error('erro ao consultar catálogo do GuiaZap', e);
+  }
+
+  // 2. Se não achou no nosso catálogo, chama nossa função no servidor
+  // (que tenta o Bluesoft Cosmos primeiro, e cai pro Open Food Facts se não achar)
+  try{
+    const resp = await fetch(`/.netlify/functions/buscar-codigo-barras?codigo=${codigo}`);
+    const data = await resp.json();
+
+    if(data.encontrado){
+      if(data.nome) document.getElementById('p-nome').value = data.nome;
+      if(data.marca) document.getElementById('p-marca').value = data.marca;
+      if(data.foto){
+        document.getElementById('p-foto').value = data.foto;
+        onFotoProdutoLinkChange();
+      }
+      if(data.descricao){
+        document.getElementById('p-descricao').value = data.descricao;
+      }
+      const nomeFonte = data.fonte === 'cosmos' ? 'base Bluesoft Cosmos' : 'base pública internacional';
+      msg.textContent = `Produto encontrado (${nomeFonte}) e preenchido automaticamente! Confira os dados antes de salvar.`;
+    } else {
+      msg.textContent = 'Código lido, mas o produto não foi encontrado em nenhuma base. Preencha manualmente — seu cadastro vai ajudar quem escanear esse código depois.';
+    }
+  } catch(e){
+    msg.textContent = 'Código lido, mas houve erro ao buscar informações. Preencha manualmente.';
+  }
+}
+
+async function contribuirCatalogoBarcode(codigo, nome, marca, foto, descricao){
+  if(!codigo) return;
+  try{
+    const payload = {
+      codigo_barras: codigo,
+      nome: nome || null,
+      marca: marca || null,
+      foto: foto || null,
+      descricao: descricao || null,
+      updated_at: new Date().toISOString()
+    };
+
+    // Evita usar .upsert() direto (já tivemos problema com isso hoje em outro lugar do site) —
+    // checa se já existe, e decide entre inserir ou atualizar manualmente.
+    const { data: existente } = await supabaseClientV
+      .from('produtos_catalogo_barcode')
+      .select('codigo_barras')
+      .eq('codigo_barras', codigo)
+      .maybeSingle();
+
+    if(existente){
+      const { error } = await supabaseClientV.from('produtos_catalogo_barcode').update(payload).eq('codigo_barras', codigo);
+      if(error) console.error('erro ao atualizar catálogo colaborativo', error);
+    } else {
+      const { error } = await supabaseClientV.from('produtos_catalogo_barcode').insert(payload);
+      if(error) console.error('erro ao inserir no catálogo colaborativo', error);
+    }
+  } catch(e){
+    console.error('erro ao contribuir com o catálogo', e);
+  }
+}
+
+function abrirDenunciaProduto(id){
+  const box = document.getElementById('denuncia-produto-box-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarDenunciaProduto(id){
+  const motivo = document.getElementById('denuncia-produto-motivo-' + id).value;
+  const descricao = document.getElementById('denuncia-produto-descricao-' + id).value.trim();
+  const msg = document.getElementById('denuncia-produto-msg-' + id);
+
+  if(!motivo){ msg.textContent = 'Selecione um motivo.'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientV.from('denuncias_produtos').insert({
+    produto_id: id,
+    motivo,
+    descricao: descricao || null,
+    denunciante_email: currentUserV ? currentUserV.email : null
+  });
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar denúncia'; return; }
+
+  msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o GuiaZap seguro.';
+  setTimeout(() => { document.getElementById('denuncia-produto-box-' + id).style.display = 'none'; }, 2500);
+}
+
+async function toggleDenunciasProdutoRecebidas(produtoId){
+  const box = document.getElementById('denuncias-produto-recebidas-' + produtoId);
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div class="denuncia-carregando">carregando...</div>';
+
+  const { data, error } = await supabaseClientV
+    .from('denuncias_produtos')
+    .select('motivo, descricao, created_at')
+    .eq('produto_id', produtoId)
+    .order('created_at', { ascending: false });
+
+  if(error){ box.innerHTML = '<div class="denuncia-carregando">erro ao carregar denúncias</div>'; return; }
+
+  if(!data || data.length === 0){
+    box.innerHTML = '<div class="denuncia-carregando">Nenhuma denúncia recebida. 🎉</div>';
+    return;
+  }
+
+  box.innerHTML = data.map(d => `
+    <div class="denuncia-item">
+      <div class="denuncia-motivo">${escapeHtmlV(d.motivo)}</div>
+      ${d.descricao ? `<div class="denuncia-descricao">${escapeHtmlV(d.descricao)}</div>` : ''}
+      <div class="denuncia-data">${new Date(d.created_at).toLocaleDateString('pt-BR')}</div>
+    </div>
+  `).join('');
+}
+
+function abrirFormProduto(){
+  document.getElementById('produto-form').classList.add('open');
+  document.getElementById('p-msg').textContent = '';
+}
+
+function fecharFormProduto(){
+  document.getElementById('produto-form').classList.remove('open');
+  document.getElementById('p-id').value = '';
+  document.getElementById('p-codigo-barras').value = '';
+  document.getElementById('p-codigo-barras-manual').value = '';
+  document.getElementById('p-nome').value = '';
+  document.getElementById('p-marca').value = '';
+  document.getElementById('p-categoria').value = '';
+  document.getElementById('p-descricao').value = '';
+  document.getElementById('p-unidade-medida').value = 'unidade';
+  document.getElementById('p-quantidade').value = '1';
+  document.getElementById('p-preco').value = '';
+  document.getElementById('p-foto').value = '';
+  document.getElementById('p-foto-preview').style.display = 'none';
+  document.getElementById('p-foto-msg').textContent = '';
+}
+
+function editarProduto(id){
+  const p = produtos.find(x => x.id === id);
+  if(!p) return;
+  abrirFormProduto();
+  document.getElementById('p-id').value = p.id;
+  document.getElementById('p-codigo-barras').value = p.codigo_barras || '';
+  document.getElementById('p-codigo-barras-manual').value = p.codigo_barras || '';
+  document.getElementById('p-profissional').value = p.profissional_id;
+  document.getElementById('p-nome').value = p.nome;
+  document.getElementById('p-marca').value = p.marca || '';
+  document.getElementById('p-categoria').value = p.categoria || '';
+  document.getElementById('p-descricao').value = p.descricao || '';
+  document.getElementById('p-unidade-medida').value = p.unidade_medida || 'unidade';
+  document.getElementById('p-quantidade').value = p.quantidade || 1;
+  document.getElementById('p-preco').value = p.preco || '';
+  document.getElementById('p-foto').value = p.foto || '';
+  if(p.foto){
+    const preview = document.getElementById('p-foto-preview');
+    preview.src = p.foto;
+    preview.style.display = 'block';
+  }
+}
+
+async function excluirProduto(id){
+  if(!confirm('Excluir este produto da Vitrine?')) return;
+  const { error } = await supabaseClientV.from('produtos').delete().eq('id', id);
+  if(error){ console.error(error); alert('Erro ao excluir.'); return; }
+  await loadProdutos();
+}
+
+async function enviarFotoProduto(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('p-foto-msg');
+  if(!file || !currentUserV) return;
+
+  msg.textContent = 'enviando foto...';
+  const nomeArquivo = `produtos/${currentUserV.id}/${Date.now()}.jpg`;
+
+  const { error } = await supabaseClientV.storage.from('fotos').upload(nomeArquivo, file);
+  if(error){
+    console.error(error);
+    msg.textContent = 'erro ao enviar foto: ' + error.message;
+    return;
+  }
+
+  const { data } = supabaseClientV.storage.from('fotos').getPublicUrl(nomeArquivo);
+  document.getElementById('p-foto').value = data.publicUrl;
+
+  const preview = document.getElementById('p-foto-preview');
+  preview.src = data.publicUrl;
+  preview.style.display = 'block';
+  msg.textContent = 'foto enviada!';
+}
+
+function onFotoProdutoLinkChange(){
+  const url = document.getElementById('p-foto').value.trim();
+  const preview = document.getElementById('p-foto-preview');
+  if(url && !/^https?:\/\//i.test(url)){
+    preview.style.display = 'none';
+    return;
+  }
+  if(url){ preview.src = url; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
+}
+
+async function salvarProduto(e){
+  e.preventDefault();
+  const msg = document.getElementById('p-msg');
+  const id = document.getElementById('p-id').value;
+
+  const payload = {
+    profissional_id: document.getElementById('p-profissional').value,
+    nome: document.getElementById('p-nome').value.trim(),
+    marca: document.getElementById('p-marca').value.trim() || null,
+    descricao: document.getElementById('p-descricao').value.trim() || null,
+    categoria: document.getElementById('p-categoria').value.trim() || null,
+    unidade_medida: document.getElementById('p-unidade-medida').value,
+    quantidade: parseFloat(document.getElementById('p-quantidade').value) || 1,
+    preco: document.getElementById('p-preco').value.trim() || null,
+    foto: document.getElementById('p-foto').value.trim() || null,
+    codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null
+  };
+
+  if(!payload.nome || !payload.profissional_id){ msg.textContent = 'Preencha o nome do produto.'; return false; }
+  if(payload.foto && !/^https?:\/\//i.test(payload.foto)){ msg.textContent = 'O link da foto precisa começar com http:// ou https://'; return false; }
+
+  msg.textContent = 'salvando...';
+  let error;
+  if(id){
+    ({ error } = await supabaseClientV.from('produtos').update(payload).eq('id', id));
+  } else {
+    ({ error } = await supabaseClientV.from('produtos').insert(payload));
+  }
+  if(error){ console.error(error); msg.textContent = 'erro ao salvar produto'; return false; }
+
+  // Contribui com o catálogo colaborativo de código de barras, pra ajudar outras empresas depois
+  if(payload.codigo_barras){
+    await contribuirCatalogoBarcode(payload.codigo_barras, payload.nome, payload.marca, payload.foto, payload.descricao);
+  }
+
+  msg.textContent = id ? 'produto atualizado!' : 'produto anunciado!';
+  await loadProdutos();
+  setTimeout(fecharFormProduto, 1200);
+  return false;
+}
+
+function normalizarTextoV(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function escapeHtmlV(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+if(initSupabaseV()){
+  initAuthV().then(loadProdutos);
+}
