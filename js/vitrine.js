@@ -238,16 +238,16 @@ function renderProdutos(){
     return `
     <div class="card-produto${isCompartilhado ? ' card-produto-destaque' : ''}">
       ${isCompartilhado ? '<div class="selo-compartilhado">⭐ Produto compartilhado</div>' : ''}
-      <img src="${p.foto ? escapeHtmlV(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtmlV(p.nome)}">
+      <div class="foto-produto-area">
+        <img src="${p.foto ? escapeHtmlV(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtmlV(p.nome)}">
+        <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavoritoProduto('${p.id}', event)">${favoritosProdutos.has(p.id) ? '❤️' : '🤍'}</button>
+        ${isDono ? `<span class="owner-actions">
+          <button class="icon-btn" title="Editar" onclick="editarProduto('${p.id}')">✎</button>
+          <button class="icon-btn" title="Excluir" onclick="excluirProduto('${p.id}')">✕</button>
+        </span>` : ''}
+      </div>
       <div class="info">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div class="nome">${escapeHtmlV(p.nome)}</div>
-          <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavoritoProduto('${p.id}', event)">${favoritosProdutos.has(p.id) ? '❤️' : '🤍'}</button>
-          ${isDono ? `<span class="owner-actions">
-            <button class="icon-btn" title="Editar" onclick="editarProduto('${p.id}')">✎</button>
-            <button class="icon-btn" title="Excluir" onclick="excluirProduto('${p.id}')">✕</button>
-          </span>` : ''}
-        </div>
+        <div class="nome">${escapeHtmlV(p.nome)}</div>
         ${p.marca ? `<div class="marca-produto">${escapeHtmlV(p.marca)}</div>` : ''}
         ${p.categoria ? `<div class="categoria-produto">${escapeHtmlV(p.categoria)}</div>` : ''}
         ${isDono ? `<div class="stat-visualizacoes">👁️ ${p.visualizacoes || 0} visualizaç${(p.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}

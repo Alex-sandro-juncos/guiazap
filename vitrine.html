@@ -48,18 +48,31 @@
     display: flex;
     flex-direction: column;
   }
-  .card-produto img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
+  .foto-produto-area { position: relative; }
+  .card-produto img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; display: block; }
+  .foto-produto-area .icon-btn-favorito {
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    background: rgba(255,255,255,0.85); border-radius: 50%; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; border: none; cursor: pointer; padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .foto-produto-area .owner-actions {
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    display: flex; gap: 4px;
+  }
+  .foto-produto-area .owner-actions .icon-btn {
+    background: rgba(255,255,255,0.9); border: none; cursor: pointer; font-size: 0.85rem;
+    width: 24px; height: 24px; border-radius: 50%; color: var(--verde-escuro);
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
   .card-produto .info { padding: 10px; flex: 1; display: flex; flex-direction: column; }
   .card-produto .nome { font-size: 0.88rem; font-weight: 700; color: #1c1c1c; line-height: 1.3; }
   .card-produto .preco { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 4px; }
   .card-produto .empresa { font-size: 0.72rem; color: #8a8270; margin-top: 4px; }
   .card-produto .marca-produto { font-size: 0.72rem; color: var(--verde-escuro); font-weight: 600; margin-top: 2px; }
   .card-produto .medida-produto { font-size: 0.72rem; color: #666; margin-top: 2px; }
-  .card-produto .owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
-  .card-produto .owner-actions .icon-btn {
-    background: none; border: none; cursor: pointer; font-size: 0.85rem;
-    padding: 2px 4px; border-radius: 4px; color: var(--verde-escuro);
-  }
   .link-compartilhar-produto {
     background: var(--verde-whats);
     color: white;
