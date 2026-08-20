@@ -902,7 +902,7 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
   white-space: pre-line;
 }
-.story-acoes { display: flex; gap: 8px; padding: 10px 14px 16px; flex-wrap: wrap; flex-shrink: 0; }
+.story-acoes { display: flex; gap: 8px; padding: 10px 14px 16px; flex-wrap: wrap; flex-shrink: 0; max-height: 40vh; overflow-y: auto; }
 .story-btn-comprar, .story-btn-produto {
   flex: 1; text-align: center; padding: 10px; border-radius: 8px;
   font-size: 0.8rem; font-weight: 700; text-decoration: none;
@@ -915,7 +915,18 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   font-size: 0.8rem; font-weight: 700; border: none; cursor: pointer;
   background: #444; color: white;
 }
-.story-acoes .menu-compartilhar { flex-basis: 100%; }
+.story-acoes .menu-compartilhar {
+  flex-basis: 100%;
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  gap: 6px !important;
+}
+.story-acoes .menu-compartilhar .opcao-rede {
+  flex: 1 1 auto;
+  min-width: 60px;
+  padding: 8px 4px;
+  font-size: 0.65rem;
+}
 
 .minhas-novidades { margin-top: 8px; }
 .minhas-novidades-label { font-size: 0.7rem; color: #888; margin-bottom: 4px; }
