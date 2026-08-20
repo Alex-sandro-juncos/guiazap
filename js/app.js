@@ -68,12 +68,14 @@ function updateAuthUI(){
     document.getElementById('auth-email-display').textContent = currentUser.email;
     addBtn.style.display = 'block';
     abrirCadastroSePendente();
+    abrirStorySeVindoDoProduto();
   } else {
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
     addBtn.style.display = 'none';
     document.getElementById('trocar-senha-box').style.display = 'none';
     closeForm();
+    abrirStorySeVindoDoProduto();
   }
 }
 
@@ -192,6 +194,38 @@ function abrirCadastroSePendente(){
     localStorage.removeItem('abrirCadastroAposLogin');
     setTimeout(() => openForm(), 300);
   }
+}
+
+function abrirStorySeVindoDoProduto(){
+  const produtoId = localStorage.getItem('criarStoryProdutoId');
+  const empresaId = localStorage.getItem('criarStoryEmpresaId');
+  if(!produtoId || !empresaId) return;
+
+  if(!currentUser){
+    // Ainda não logado: mostra a área de login com uma mensagem clara, sem apagar
+    // os dados salvos — assim que a pessoa logar, a gente continua de onde parou.
+    const authBox = document.getElementById('auth-form-fields');
+    if(authBox.style.display === 'none') toggleAuthForm();
+    const msg = document.getElementById('auth-msg');
+    if(msg) msg.textContent = '📸 Faça login pra colocar esse produto no seu Story';
+    document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  localStorage.removeItem('criarStoryProdutoId');
+  localStorage.removeItem('criarStoryEmpresaId');
+
+  const minhaEmpresa = entries.find(e => e.id === empresaId && e.user_id === currentUser.id);
+  if(!minhaEmpresa) return; // segurança: só continua se realmente for dono dessa empresa
+
+  abrirFormStory(minhaEmpresa.id, minhaEmpresa.plano);
+  setTimeout(() => {
+    const selectProduto = document.getElementById('story-produto-id');
+    if(selectProduto){
+      selectProduto.value = produtoId;
+      onProdutoStoryChange();
+    }
+  }, 600);
 }
 
 let avaliacoesDetalhadas = {};
@@ -1186,11 +1220,40 @@ function renderMinhasNovidades(profissionalId){
       ${grupo.stories.map(s => `
         <div class="minha-novidade-item">
           <img src="${s.fotos[0]}">
-          <button type="button" title="Excluir agora" onclick="excluirStory('${s.id}', '${profissionalId}')">✕</button>
+          <button type="button" class="minha-novidade-btn-excluir" title="Excluir agora" onclick="excluirStory('${s.id}', '${profissionalId}')">✕</button>
+          <button type="button" class="minha-novidade-btn-compartilhar" title="Compartilhar" onclick="toggleMenuCompartilharMinhaNovidade(event, '${s.id}', '${profissionalId}')">📤</button>
         </div>
       `).join('')}
     </div>
+    <div class="menu-compartilhar" id="menu-compartilhar-novidade-${profissionalId}" style="display:none;"></div>
   `;
+}
+
+function toggleMenuCompartilharMinhaNovidade(event, storyId, profissionalId){
+  event.stopPropagation();
+  const menu = document.getElementById('menu-compartilhar-novidade-' + profissionalId);
+  const jaAberto = menu.style.display === 'block';
+
+  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
+
+  if(jaAberto) return;
+
+  const grupo = storiesAgrupadas[profissionalId];
+  const story = grupo.stories.find(s => s.id === storyId);
+  if(!story) return;
+
+  const link = story.fotos[0];
+  const texto = `Vi essa novidade de ${grupo.empresa.name} no GuiaZap!`;
+  const linkCodificado = encodeURIComponent(link);
+  const textoCodificado = encodeURIComponent(texto);
+
+  menu.innerHTML = `
+    <a href="https://wa.me/?text=${textoCodificado}%20${linkCodificado}" target="_blank" class="opcao-rede whatsapp">WhatsApp</a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${linkCodificado}" target="_blank" class="opcao-rede facebook">Facebook</a>
+    <a href="https://twitter.com/intent/tweet?text=${textoCodificado}&url=${linkCodificado}" target="_blank" class="opcao-rede twitter">X (Twitter)</a>
+    <a href="https://t.me/share/url?url=${linkCodificado}&text=${textoCodificado}" target="_blank" class="opcao-rede telegram">Telegram</a>
+  `;
+  menu.style.display = 'block';
 }
 
 async function excluirStory(storyId, profissionalId){
