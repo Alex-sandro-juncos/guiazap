@@ -64,6 +64,14 @@
     <button type="button" class="auth-toggle-link-header" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
     <div id="auth-form-fields" style="display:none;"></div>
   </div>
+
+  <div id="auth-logged-in" class="auth-box-logged-header" style="display:none;">
+    <span>Logado como <b id="auth-email-display"></b></span>
+    <div>
+      <button type="button" class="btn-auth-outline-header" onclick="toggleTrocarSenha()">Trocar senha</button>
+      <button type="button" class="btn-auth-outline-header" onclick="signOut()">Sair</button>
+    </div>
+  </div>
 </header>
 
 <div class="wrap">
@@ -110,13 +118,6 @@
   <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
   <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
 
-  <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
-    <span>Logado como <b id="auth-email-display"></b></span>
-    <div>
-      <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
-      <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
-    </div>
-  </div>
   <div id="trocar-senha-box" class="auth-box" style="display:none;">
     <div class="auth-row">
       <div class="campo-com-olho">
