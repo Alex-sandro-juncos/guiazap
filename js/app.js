@@ -28,6 +28,14 @@ async function initAuth(){
   });
 }
 
+function toggleVerSenha(inputId, botao){
+  const campo = document.getElementById(inputId);
+  if(!campo) return;
+  const escondida = campo.type === 'password';
+  campo.type = escondida ? 'text' : 'password';
+  botao.textContent = escondida ? '🙈' : '👁️';
+}
+
 function toggleAuthForm(){
   const box = document.getElementById('auth-form-fields');
 
@@ -36,7 +44,10 @@ function toggleAuthForm(){
       <form autocomplete="on" onsubmit="return false;">
         <div class="auth-row">
           <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
-          <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+          <div class="campo-com-olho">
+            <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+            <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('auth-password', this)">👁️</button>
+          </div>
         </div>
         <label class="termos-check">
           <input type="checkbox" id="aceite-termos">

@@ -35,7 +35,10 @@
     <form autocomplete="on" onsubmit="return false;">
       <div class="auth-row">
         <input id="welcome-email" type="email" placeholder="Seu e-mail" autocomplete="email">
-        <input id="welcome-password" type="password" placeholder="Senha" autocomplete="current-password">
+        <div class="campo-com-olho">
+          <input id="welcome-password" type="password" placeholder="Senha" autocomplete="current-password">
+          <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('welcome-password', this)">👁️</button>
+        </div>
       </div>
       <label class="termos-check welcome-termos">
         <input type="checkbox" id="welcome-aceite-termos">
@@ -56,6 +59,11 @@
   <div class="logo">GuiaZap</div>
   <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
   <div id="stories-linha" class="stories-linha" style="display:none;"></div>
+
+  <div id="auth-logged-out" class="auth-box-discreto-header">
+    <button type="button" class="auth-toggle-link-header" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;"></div>
+  </div>
 </header>
 
 <div class="wrap">
@@ -102,11 +110,6 @@
   <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
   <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
 
-  <div id="auth-logged-out" class="auth-box-discreto">
-    <button type="button" class="auth-toggle-link" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
-    <div id="auth-form-fields" style="display:none;"></div>
-  </div>
-
   <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
     <span>Logado como <b id="auth-email-display"></b></span>
     <div>
@@ -116,8 +119,14 @@
   </div>
   <div id="trocar-senha-box" class="auth-box" style="display:none;">
     <div class="auth-row">
-      <input id="nova-senha" type="password" placeholder="Nova senha">
-      <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+      <div class="campo-com-olho">
+        <input id="nova-senha" type="password" placeholder="Nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('nova-senha', this)">👁️</button>
+      </div>
+      <div class="campo-com-olho">
+        <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('confirmar-nova-senha', this)">👁️</button>
+      </div>
     </div>
     <div class="auth-actions">
       <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>

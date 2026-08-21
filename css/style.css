@@ -1,1063 +1,282 @@
-:root {
-    --verde-whats: #25D366;
-    --verde-escuro: #128C7E;
-    --cinza-fundo: #F0F2F5;
-    --cinza-card: #FFFFFF;
-    --amarelo: #FFB020;
-    --texto-sub: #6b7280;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-  body { background: var(--cinza-fundo); padding-bottom: 40px; }
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuiaZap — Encontre profissionais e fale direto no WhatsApp</title>
+<meta name="description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp. Busque por categoria, cidade e bairro no GuiaZap.">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#25D366">
 
-  header {
-    background: var(--verde-whats);
-    color: white;
-    padding: 16px 15px 12px;
-    text-align: center;
-  }
-  header .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
-  header p { font-size: 0.78rem; opacity: 0.95; margin-top: 2px; }
+<meta property="og:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
+<meta property="og:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://guiazap.shop">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- Campo "isca", escondido fora da tela — tentativa de desviar a atenção do
+     Chrome, que insiste em sugerir contas Google no campo de busca real. -->
+<input type="email" name="email" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; pointer-events:none;">
 
-  .wrap { max-width: 480px; margin: 0 auto; padding: 0 15px; }
+<div id="welcome-gate" class="welcome-gate" style="display:none;">
+  <div class="welcome-gate-conteudo">
+    <div class="welcome-logo">GuiaZap</div>
+    <p class="welcome-sub">Encontre profissionais locais e fale direto no WhatsApp</p>
 
-  .busca-container {
-    background: var(--cinza-card);
-    padding: 16px;
-    margin-top: 14px;
-    border-radius: 14px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-    position: relative;
-    z-index: 1;
-  }
-  .busca-row { display: flex; gap: 8px; margin-bottom: 12px; }
-  .busca-container input {
-    flex: 1;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 0.95rem;
-  }
-  .busca-container input:focus, .busca-container select:focus { outline: 2px solid var(--verde-whats); }
-  .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
-  .filtros select, .filtros input {
-    min-width: 90px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    background: white;
-  }
+    <div class="welcome-beneficios">
+      🎁 <b>Crie sua conta grátis</b> e tenha acesso a ofertas e produtos dedicados — além de receber notificações das empresas que você seguir.
+    </div>
 
-  .btn-cadastro {
-    display: block;
-    width: 100%;
-    background: var(--verde-whats);
-    color: white;
-    text-align: center;
-    padding: 15px;
-    margin: 18px 0;
-    border-radius: 12px;
-    border: none;
-    font-weight: 700;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
+    <form autocomplete="on" onsubmit="return false;">
+      <div class="auth-row">
+        <input id="welcome-email" type="email" placeholder="Seu e-mail" autocomplete="email">
+        <div class="campo-com-olho">
+          <input id="welcome-password" type="password" placeholder="Senha" autocomplete="current-password">
+          <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('welcome-password', this)">👁️</button>
+        </div>
+      </div>
+      <label class="termos-check welcome-termos">
+        <input type="checkbox" id="welcome-aceite-termos">
+        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn-auth" onclick="welcomeSignIn()">Entrar</button>
+        <button type="button" class="btn-auth-outline welcome-btn-outline" onclick="welcomeSignUp()">Criar conta</button>
+      </div>
+      <span class="auth-msg" id="welcome-msg"></span>
+    </form>
 
-  .result-header {
-    font-size: 0.95rem;
-    color: #1c1c1c;
-    margin: 4px 0 12px;
-  }
-  .result-header b { color: var(--verde-escuro); }
+    <button type="button" class="btn-pular-welcome" onclick="pularWelcomeGate()">Pular, só quero buscar um profissional →</button>
+  </div>
+</div>
 
-  .card-profissional {
-    background: var(--cinza-card);
-    border-radius: 14px;
-    padding: 14px;
-    margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-start;
-  }
-  .card-profissional > .badge-pendente { width: 100%; order: -1; }
-  .card-profissional > .info { flex: 1 1 auto; min-width: 0; }
-  .card-profissional img.avatar {
-    width: 58px; height: 58px;
-    border-radius: 50%;
-    object-fit: cover;
-    background: #eee;
-    flex-shrink: 0;
-  }
-  .card-profissional .info { flex: 1; min-width: 0; }
-  .card-profissional .info h3 { font-size: 1.02rem; color: #1c1c1c; }
-  .card-profissional .info .categoria { color: var(--verde-escuro); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
-  .card-profissional .info .local { color: var(--texto-sub); font-size: 0.8rem; margin-top: 2px; }
-  .stars { color: var(--amarelo); font-size: 0.85rem; margin-top: 4px; }
-  .stars .num { color: #444; font-weight: 600; margin-left: 3px; }
-  .btn-zap {
-    display: inline-block;
-    background: var(--verde-whats);
-    color: white;
-    border: none;
-    padding: 9px 12px;
-    border-radius: 50px;
-    font-weight: 700;
-    font-size: 0.8rem;
-    margin-top: 8px;
-    cursor: pointer;
-    text-decoration: none;
-  }
+<header>
+  <div class="logo">GuiaZap</div>
+  <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
+  <div id="stories-linha" class="stories-linha" style="display:none;"></div>
 
-  .empty { text-align: center; padding: 40px 20px; color: var(--texto-sub); }
-  .loading { text-align: center; padding: 30px; color: var(--texto-sub); font-size: 0.85rem; }
+  <div id="auth-logged-out" class="auth-box-discreto-header">
+    <button type="button" class="auth-toggle-link-header" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;"></div>
+  </div>
+</header>
 
-  .config-warning {
-    background: #fff3cd;
-    border: 1.5px solid #d97706;
-    color: #7c4a03;
-    font-size: 0.78rem;
-    padding: 12px 14px;
-    border-radius: 8px;
-    margin: 15px 0;
-    line-height: 1.5;
-  }
+<div class="wrap">
+  <div id="config-warning" class="config-warning" style="display:none;">
+    ⚠ Serviço temporariamente indisponível. Tente novamente em alguns instantes.
+  </div>
 
-  #cadastro-form {
-    display: none;
-    background: var(--cinza-card);
-    border-radius: 14px;
-    padding: 16px;
-    margin: 18px 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  }
-  #cadastro-form.open { display: block; }
-  #cadastro-form .field { margin-bottom: 10px; }
-  #cadastro-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
-  #cadastro-form input, #cadastro-form select {
-    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
-  }
-  #cadastro-form .row2 { display: flex; gap: 8px; }
-  #cadastro-form .row2 .field { flex: 1; }
-  .form-actions { display: flex; gap: 10px; margin-top: 8px; align-items: center; }
-  .btn-salvar { background: var(--verde-whats); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-  .btn-cancelar { background: transparent; color: #555; border: 1.5px solid #ccc; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-  .form-msg { font-size: 0.78rem; color: #a4402f; }
+  <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro">🌙 Modo escuro</button>
 
-/* Autenticação */
-.auth-box, .auth-box-logged {
-  background: var(--cinza-card);
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-top: -14px;
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-}
-.auth-box-logged {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.auth-box-logged > div { display: flex; gap: 8px; }
-.auth-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.auth-row input {
-  flex: 1;
-  padding: 9px 10px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 0.85rem;
-}
-.auth-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.btn-auth {
-  background: var(--verde-whats);
-  color: white;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.btn-auth-outline {
-  background: transparent;
-  color: var(--verde-escuro);
-  border: 1.5px solid var(--verde-escuro);
-  padding: 7px 13px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.auth-msg { font-size: 0.75rem; color: #a4402f; }
+  <div class="busca-container">
+    <div class="busca-row">
+      <div class="busca-com-icone">
+        <span class="icone-lupa" onclick="render()">🔍</span>
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render(); atualizarBotoesLimpar();">
+        <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:10px;">
+      <div class="campo-com-limpar">
+        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="atualizarBotoesLimpar()" onblur="buscarCepFiltro()">
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
+      </div>
+      <span class="cep-msg" id="filter-cep-msg"></span>
+    </div>
+    <div class="filtros">
+      <div class="campo-com-limpar">
+        <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
+      </div>
+      <div class="campo-com-limpar">
+        <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
+          <option value="">Cidade</option>
+        </select>
+        <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
+      </div>
+      <div class="campo-com-limpar">
+        <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
+        <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>
+      </div>
+    </div>
+    <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+  </div>
 
-/* Ações do dono no card */
-.owner-actions { display: flex; gap: 2px; flex-shrink: 0; }
-.owner-actions .icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.95rem;
-  padding: 2px 5px;
-  border-radius: 4px;
-  color: var(--verde-escuro);
-}
-.owner-actions .icon-btn:hover { background: var(--cinza-fundo); }
+  <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
+  <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
 
-.forgot-link {
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 0.78rem;
-  color: var(--verde-escuro);
-  text-decoration: underline;
-}
+  <div id="auth-logged-in" class="auth-box-logged" style="display:none;">
+    <span>Logado como <b id="auth-email-display"></b></span>
+    <div>
+      <button type="button" class="btn-auth-outline" onclick="toggleTrocarSenha()">Trocar senha</button>
+      <button type="button" class="btn-auth-outline" onclick="signOut()">Sair</button>
+    </div>
+  </div>
+  <div id="trocar-senha-box" class="auth-box" style="display:none;">
+    <div class="auth-row">
+      <div class="campo-com-olho">
+        <input id="nova-senha" type="password" placeholder="Nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('nova-senha', this)">👁️</button>
+      </div>
+      <div class="campo-com-olho">
+        <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('confirmar-nova-senha', this)">👁️</button>
+      </div>
+    </div>
+    <div class="auth-actions">
+      <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
+      <span class="auth-msg" id="trocar-senha-msg"></span>
+    </div>
+  </div>
 
-.card-pendente { opacity: 0.85; border: 1.5px dashed #d97706; }
-.badge-pendente {
-  background: #fff3cd;
-  color: #7c4a03;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  display: inline-block;
-}
+  <div class="destaque-vitrine">
+    <div class="destaque-header">
+      <h2>🛍️ Produtos em destaque</h2>
+      <a href="vitrine.html" class="ver-vitrine-link">Ver vitrine completa →</a>
+    </div>
+    <div class="destaque-linhas" id="destaque-produtos-lista">
+      <div class="destaque-carregando">carregando produtos...</div>
+    </div>
+  </div>
 
-.link-pagar {
-  display: inline-block;
-  margin-left: 8px;
-  color: var(--verde-escuro);
-  font-weight: 700;
-  text-decoration: underline;
-}
+  <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
 
-.contatos-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.btn-zap-extra { background: var(--verde-escuro); font-size: 0.75rem; padding: 8px 11px; }
+  <form id="cadastro-form" onsubmit="return saveEntry(event)">
+    <input type="hidden" id="edit-id">
+    <div class="field">
+      <label>Nome</label>
+      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>CNPJ ou CPF</label>
+      <input id="f-documento" required placeholder="Só números" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Categoria principal</label>
+      <input id="f-cat" required placeholder="Ex: Dentista" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Outras categorias (opcional)</label>
+      <div id="categorias-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
+    </div>
+    <div class="field">
+      <label>CEP</label>
+      <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" onblur="buscarCep()">
+      <span class="cep-msg" id="cep-msg"></span>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Estado</label>
+        <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
+      </div>
+      <div class="field">
+        <label>Cidade</label>
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" autocomplete="address-level2">
+        <datalist id="cidades-cadastro-list"></datalist>
+      </div>
+      <div class="field">
+        <label>Bairro</label>
+        <input id="f-bairro" required placeholder="Ex: Vila Mariana" autocomplete="off">
+      </div>
+    </div>
+    <div class="field">
+      <label>WhatsApp (com DDD, só números)</label>
+      <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Outros contatos (opcional)</label>
+      <div id="contatos-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
+    </div>
+    <div class="field">
+      <label>Foto (opcional)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="foto-msg"></span>
+      <img id="foto-preview" class="foto-preview" style="display:none;">
+      <label class="foto-ou">ou cole um link de foto já existente</label>
+      <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Salvar</button>
+      <button type="button" class="btn-cancelar" onclick="closeForm()">Cancelar</button>
+      <span class="form-msg" id="form-msg"></span>
+    </div>
+  </form>
 
-.cep-msg { font-size: 0.75rem; color: var(--verde-escuro); margin-top: 4px; display: block; }
+  <form id="story-form" onsubmit="return salvarStory(event)" style="display:none;">
+    <input type="hidden" id="story-profissional-id">
+    <input type="hidden" id="story-plano">
+    <div class="field">
+      <label>Fotos (<span id="story-limite-texto">1 foto — Pacote Básico</span>)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="story-foto-msg"></span>
+      <div id="story-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="story-texto-input" rows="3" placeholder="Ex: Chegou produto novo! Vem conferir 😍" maxlength="200" class="story-textarea-bonito"></textarea>
+    </div>
+    <div class="field" id="story-produto-campo" style="display:none;">
+      <label>Vincular a um produto da Vitrine (opcional)</label>
+      <select id="story-produto-id" onchange="onProdutoStoryChange()"><option value="">Nenhum</option></select>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStory()">Cancelar</button>
+      <span class="form-msg" id="story-msg"></span>
+    </div>
+  </form>
 
-.contato-extra-linha { display: flex; gap: 6px; margin-bottom: 6px; }
-.contato-extra-linha input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem; }
-.ce-remover {
-  background: transparent;
-  border: 1.5px solid var(--danger, #a4402f);
-  color: var(--danger, #a4402f);
-  border-radius: 6px;
-  width: 34px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.btn-add-contato {
-  background: transparent;
-  border: 1.5px dashed var(--verde-escuro);
-  color: var(--verde-escuro);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  width: 100%;
-}
+  <div class="result-header" id="count"></div>
+  <div id="list"></div>
+  <div class="loading" id="loading">carregando profissionais...</div>
 
-.foto-msg { font-size: 0.78rem; color: var(--verde-escuro); display: block; margin-top: 4px; }
-.foto-preview { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin-top: 8px; border: 2px solid var(--verde-whats); }
+  <div class="rodape-legal">
+    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a>
+  </div>
+</div>
 
-.foto-ou { display: block; font-size: 0.75rem; color: #8a8270; margin: 8px 0 4px; text-transform: none; letter-spacing: normal; font-family: 'Segoe UI', sans-serif; }
+  <div id="story-viewer" class="story-viewer" style="display:none;" onclick="fecharStoryViewer()">
+    <div class="story-viewer-conteudo" onclick="event.stopPropagation()">
+      <button type="button" class="story-fechar" onclick="fecharStoryViewer()">✕</button>
+      <div class="story-progresso"><div class="story-progresso-barra" id="story-progresso-barra"></div></div>
+      <div class="story-empresa-nome" id="story-empresa-nome"></div>
+      <div class="story-foto-area">
+        <div class="story-tap-esquerda" onclick="voltarStorySlide()"></div>
+        <div class="story-tap-direita" onclick="avancarStorySlide()"></div>
+        <img id="story-foto" class="story-foto">
+        <div class="story-texto" id="story-texto"></div>
+      </div>
+      <div class="story-acoes" id="story-acoes"></div>
+    </div>
+  </div>
 
-.foto-botoes { display: flex; gap: 8px; }
-.btn-foto-opcao {
-  flex: 1;
-  text-align: center;
-  background: transparent;
-  border: 1.5px dashed var(--verde-escuro);
-  color: var(--verde-escuro);
-  padding: 10px 8px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-foto-opcao:hover { background: var(--cinza-fundo); }
-
-@media (max-width: 420px) {
-  .filtros { flex-direction: column; }
-  .filtros select, .filtros input { width: 100%; }
-  .auth-row { flex-direction: column; }
-  .auth-row input { width: 100%; }
-  .row2 { flex-direction: column; }
-  .foto-botoes { flex-direction: column; }
-  .auth-actions { flex-wrap: wrap; }
-}
-
-.review-count { font-size: 0.72rem; color: #8a8270; }
-.sem-avaliacao { font-size: 0.8rem; color: #8a8270; font-style: italic; }
-.link-avaliar {
-  background: none;
-  border: none;
-  color: var(--verde-escuro);
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
-  margin-left: 6px;
-  padding: 0;
-}
-.review-box {
-  background: var(--cinza-fundo);
-  border-radius: 10px;
-  padding: 10px;
-  margin-top: 8px;
-}
-.review-stars { font-size: 1.4rem; color: var(--amarelo); cursor: pointer; margin-bottom: 6px; }
-.review-stars span { margin-right: 2px; }
-.review-input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  margin-bottom: 6px;
-}
-.review-actions { display: flex; align-items: center; gap: 10px; }
-.review-msg { font-size: 0.75rem; color: var(--verde-escuro); }
-
-.termos-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: #555;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-.termos-check input { margin-top: 2px; flex-shrink: 0; }
-.termos-check span { line-height: 1.5; }
-.termos-check a { color: var(--verde-escuro); font-weight: 600; }
-
-.rodape-legal { text-align: center; font-size: 0.75rem; color: #8a8270; margin: 30px 0 10px; }
-.rodape-legal a { color: #8a8270; margin: 0 6px; }
-
-.link-cancelar {
-  background: none;
-  border: none;
-  color: var(--danger, #a4402f);
-  font-size: 0.72rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  display: block;
-}
-
-.link-denunciar {
-  background: none;
-  border: none;
-  color: #8a8270;
-  font-size: 0.7rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  display: block;
-}
-.denuncia-box {
-  background: #fff3cd;
-  border-radius: 10px;
-  padding: 10px;
-  margin-top: 8px;
-}
-
-.btn-auth-outline.ativo { background: var(--verde-escuro); color: white; }
-
-.card-acoes-extra { display: flex; gap: 10px; margin-top: 4px; }
-.link-compartilhar {
-  background: none;
-  border: none;
-  color: var(--verde-escuro);
-  font-size: 0.7rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-}
-.link-voltar-busca {
-  background: var(--verde-escuro);
-  color: white;
-  border: none;
-  padding: 4px 10px;
-  border-radius: 50px;
-  font-size: 0.72rem;
-  cursor: pointer;
-  margin-left: 8px;
-}
-
-.ja-avaliou { font-size: 0.72rem; color: #8a8270; font-style: italic; margin-left: 6px; }
-
-.btn-baixar-app {
-  display: block;
-  text-align: center;
-  background: var(--verde-escuro);
-  color: white;
-  padding: 12px;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.88rem;
-  text-decoration: none;
-  margin: 12px 0;
-}
-
-.busca-com-icone { position: relative; flex: 1; }
-.busca-com-icone .icone-lupa {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1rem;
-  cursor: pointer;
-}
-.busca-com-icone input { padding-left: 36px !important; width: 100%; box-sizing: border-box; }
-
-.link-migrar {
-  display: block;
-  background: #fff3cd;
-  color: #7c4a03;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-decoration: none;
-  padding: 6px 10px;
-  border-radius: 8px;
-  margin-top: 6px;
-}
-
-.link-ver-produtos {
-  display: block;
-  text-align: center;
-  background: var(--verde-escuro);
-  color: white;
-  padding: 8px;
-  border-radius: 8px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-decoration: none;
-  margin-top: 8px;
-}
-
-.menu-compartilhar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  background: #f8f8f8;
-  border-radius: 8px;
-  padding: 8px;
-}
-.opcao-rede {
-  display: block;
-  text-align: center;
-  padding: 6px;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-decoration: none;
-  border: none;
-  cursor: pointer;
-  color: white;
-}
-.opcao-rede.whatsapp { background: #25D366; }
-.opcao-rede.facebook { background: #1877F2; }
-.opcao-rede.twitter { background: #000000; }
-.opcao-rede.telegram { background: #229ED9; }
-.opcao-rede.copiar { background: #666; }
-
-.cupom-row { display: flex; gap: 6px; margin-top: 8px; }
-.cupom-input {
-  flex: 1;
-  padding: 6px 8px;
-  border: 1px solid #d97706;
-  border-radius: 6px;
-  font-size: 0.75rem;
-}
-.btn-cupom {
-  background: #d97706;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.cupom-msg { display: block; font-size: 0.72rem; color: #7c4a03; margin-top: 4px; }
-
-.destaque-vitrine {
-  margin: 14px 0;
-  background: linear-gradient(135deg, #128C7E, #075E54);
-  border-radius: 14px;
-  padding: 14px;
-}
-.destaque-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.destaque-header h2 { color: white; font-size: 1rem; font-weight: 800; }
-.ver-vitrine-link { color: #d4f5e3; font-size: 0.75rem; font-weight: 700; text-decoration: underline; }
-.destaque-linhas {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.destaque-scroll {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
-}
-.destaque-carregando { color: white; font-size: 0.8rem; padding: 10px; }
-.destaque-card {
-  flex: 0 0 auto;
-  width: 130px;
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
-}
-.destaque-card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
-.destaque-info { padding: 8px; }
-.destaque-nome { font-size: 0.78rem; font-weight: 700; color: #1c1c1c; line-height: 1.25; }
-.destaque-preco { font-size: 0.75rem; color: var(--verde-escuro); font-weight: 700; margin-top: 2px; }
-.destaque-empresa { font-size: 0.66rem; color: #8a8270; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.destaque-btn {
-  display: block;
-  text-align: center;
-  background: var(--verde-whats);
-  color: white;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 5px;
-  border-radius: 6px;
-  margin-top: 6px;
-  text-decoration: none;
-}
-
-.link-ver-denuncias {
-  background: none;
-  border: none;
-  color: #a4402f;
-  font-size: 0.72rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  display: block;
-}
-.denuncias-recebidas-box {
-  background: #fdf0ee;
-  border-radius: 10px;
-  padding: 8px;
-  margin-top: 6px;
-}
-.denuncia-carregando { font-size: 0.75rem; color: #888; padding: 4px; }
-.denuncia-item {
-  background: white;
-  border-radius: 8px;
-  padding: 8px;
-  margin-bottom: 6px;
-  font-size: 0.78rem;
-}
-.denuncia-item:last-child { margin-bottom: 0; }
-.denuncia-motivo { font-weight: 700; color: #a4402f; }
-.denuncia-descricao { color: #555; margin-top: 3px; }
-.denuncia-data { color: #999; font-size: 0.68rem; margin-top: 3px; }
-
-.stat-visualizacoes { font-size: 0.72rem; color: #666; margin-top: 4px; font-weight: 600; }
-
-.link-denunciar-produto {
-  background: none;
-  border: none;
-  color: #8a8270;
-  font-size: 0.68rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  display: block;
-}
-
-.link-mensagem {
-  background: none;
-  border: none;
-  color: var(--verde-escuro);
-  font-size: 0.72rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  display: block;
-}
-.mensagem-box {
-  background: #e8f4fd;
-  border-radius: 10px;
-  padding: 10px;
-  margin-top: 8px;
-}
-.mensagens-recebidas-box {
-  background: #e8f4fd;
-  border-radius: 10px;
-  padding: 8px;
-  margin-top: 6px;
-}
-
-.icon-btn-favorito {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  padding: 2px 4px;
-}
-.btn-filtro-favoritos {
-  width: 100%;
-  margin-top: 10px;
-  padding: 9px;
-  background: transparent;
-  border: 1.5px dashed #e05d5d;
-  color: #c23a3a;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.btn-filtro-favoritos.ativo { background: #e05d5d; color: white; border-style: solid; }
-
-.aviso-espera {
-  background: #e8f4fd;
-  color: #0a4a6b;
-  font-size: 0.72rem;
-  padding: 8px 10px;
-  border-radius: 8px;
-  margin-top: 8px;
-  line-height: 1.4;
-}
-
-.historico-busca {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin: 8px 0 4px;
-}
-.historico-label { font-size: 0.72rem; color: #888; margin-right: 2px; }
-.chip-historico {
-  background: white;
-  border: 1px solid var(--line);
-  color: var(--navy);
-  padding: 4px 10px;
-  border-radius: 50px;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-.chip-historico:hover { background: var(--paper); }
-.chip-historico-limpar {
-  background: none;
-  border: none;
-  color: #a4402f;
-  font-size: 0.7rem;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 4px 4px;
-}
-
-/* ---------- MODO ESCURO ---------- */
-body.dark-mode {
-  --cinza-fundo: #121212;
-  --cinza-card: #1e1e1e;
-  color: #e8e8e8;
-}
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea {
-  background: #2a2a2a;
-  color: #e8e8e8;
-  border-color: #444;
-}
-body.dark-mode .card-produto .nome,
-body.dark-mode .destaque-nome,
-body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
-body.dark-mode .info h3,
-body.dark-mode .nome-empresa {
-  color: #f0f0f0;
-}
-body.dark-mode .categoria,
-body.dark-mode .empresa,
-body.dark-mode .local,
-body.dark-mode .destaque-empresa,
-body.dark-mode .medida-produto,
-body.dark-mode .categoria-produto {
-  color: #bbb;
-}
-body.dark-mode .vitrine-busca,
-body.dark-mode .busca-container,
-body.dark-mode #produto-form,
-body.dark-mode #cadastro-form,
-body.dark-mode .auth-box,
-body.dark-mode .auth-box-logged,
-body.dark-mode .card-pacote,
-body.dark-mode .contato-card,
-body.dark-mode .app-card {
-  background: var(--cinza-card);
-  color: #e8e8e8;
-}
-body.dark-mode .filtros select,
-body.dark-mode .vitrine-filtros select,
-body.dark-mode .destaque-scroll .destaque-card {
-  background: #2a2a2a;
-  color: #e8e8e8;
-  border-color: #444;
-}
-body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
-
-.btn-modo-escuro {
-  background: rgba(255,255,255,0.25);
-  border: 1.5px solid rgba(255,255,255,0.6);
-  color: white;
-  border-radius: 50px;
-  padding: 6px 12px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  margin-left: 6px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-}
-.btn-modo-escuro:hover { background: rgba(255,255,255,0.4); }
-
-.btn-modo-escuro-solto {
-  display: block;
-  margin: 10px auto 0;
-  background: white;
-  border: 1.5px solid var(--line, #d8cdb6);
-  color: #555;
-  border-radius: 50px;
-  padding: 6px 14px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-.btn-modo-escuro-solto:hover { background: #f5f5f5; }
-body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border-color: #555; }
-
-.selo-verificado { font-size: 0.85rem; }
-.selo-premium {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: linear-gradient(90deg, #d4af37, #f4d570, #d4af37);
-  color: #4a3800;
-  font-size: 0.62rem;
-  font-weight: 800;
-  padding: 2px 8px;
-  border-radius: 50px;
-  vertical-align: middle;
-  box-shadow: 0 1px 3px rgba(212,175,55,0.5);
-}
-
-.lista-avaliacoes {
-  background: var(--cinza-fundo);
-  border-radius: 10px;
-  padding: 8px;
-  margin-top: 6px;
-}
-.avaliacao-item {
-  background: white;
-  border-radius: 8px;
-  padding: 8px;
-  margin-bottom: 6px;
-  font-size: 0.8rem;
-}
-.avaliacao-item:last-child { margin-bottom: 0; }
-.avaliacao-estrelas { color: var(--amarelo); font-size: 0.85rem; }
-.avaliacao-comentario { color: #444; margin-top: 3px; }
-.avaliacao-data { color: #999; font-size: 0.68rem; margin-top: 3px; }
-.resposta-empresa {
-  background: #e8f4fd;
-  color: #0a4a6b;
-  border-radius: 6px;
-  padding: 6px 8px;
-  margin-top: 6px;
-  font-size: 0.75rem;
-}
-.responder-box { margin-top: 6px; }
-
-.auth-box-discreto { margin: 14px 0; }
-.auth-toggle-link {
-  width: 100%;
-  background: rgba(37,211,102,0.08);
-  border: 1px solid rgba(37,211,102,0.3);
-  color: var(--verde-escuro, #128C7E);
-  padding: 9px;
-  border-radius: 10px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
-.auth-toggle-link:hover { background: rgba(37,211,102,0.14); }
-#auth-form-fields { margin-top: 10px; padding: 12px; background: var(--cinza-card); border-radius: 10px; }
-
-.banner-cadastro-rapido {
-  display: block;
-  text-align: center;
-  background: linear-gradient(90deg, #128C7E, #25D366);
-  color: white;
-  padding: 10px 14px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-decoration: none;
-}
-
-.campo-com-limpar { position: relative; flex: 1 1 30%; min-width: 90px; }
-.campo-com-limpar input, .campo-com-limpar select { padding-right: 28px !important; width: 100%; min-width: 0; box-sizing: border-box; }
-.btn-limpar-campo {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #ddd;
-  color: #555;
-  border: none;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.btn-limpar-campo:hover { background: #ccc; }
-.busca-com-icone { position: relative; }
-.btn-limpar-busca { right: 10px; }
-.busca-com-icone input { padding-right: 30px; }
-
-/* ---------- STORIES / NOVIDADES 24H ---------- */
-
-.stories-linha {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 6px 4px 2px;
-  margin-top: 4px;
-}
-.story-bolinha {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-  width: 62px;
-}
-.story-bolinha img {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid;
-  border-image: linear-gradient(45deg, #e91e63, #ff9800, #ffc107) 1;
-  padding: 2px;
-}
-.story-bolinha span {
-  font-size: 0.65rem;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 62px;
-}
-
-.story-fotos-preview { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.story-foto-mini { position: relative; width: 60px; height: 60px; }
-.story-foto-mini img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
-.story-foto-mini button {
-  position: absolute; top: -6px; right: -6px;
-  background: #a4402f; color: white; border: none; border-radius: 50%;
-  width: 18px; height: 18px; font-size: 0.65rem; cursor: pointer; padding: 0;
-}
-
-.story-viewer {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.92);
-  z-index: 999; display: flex; align-items: center; justify-content: center;
-  padding: 10px; overflow-y: auto;
-}
-.story-viewer-conteudo {
-  position: relative; width: 100%; max-width: 420px; max-height: 92vh;
-  background: #111; border-radius: 14px;
-  overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column;
-}
-.story-progresso { height: 3px; background: rgba(255,255,255,0.25); }
-.story-progresso-barra { height: 100%; background: white; transition: width 0.3s linear; }
-.story-empresa-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; position: absolute; top: 6px; left: 8px; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
-.story-fechar {
-  position: absolute; top: 8px; right: 10px; z-index: 2;
-  background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%;
-  width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer;
-}
-.story-foto-area { position: relative; width: 100%; max-height: 42vh; aspect-ratio: 9/13; background: #000; }
-.story-foto { width: 100%; height: 100%; object-fit: contain; }
-.story-tap-esquerda, .story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
-.story-tap-esquerda { left: 0; }
-.story-tap-direita { right: 0; }
-.story-texto {
-  color: white; font-size: 0.85rem; padding: 30px 14px 12px; min-height: 20px;
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
-  white-space: pre-line;
-}
-.story-acoes { display: flex; gap: 8px; padding: 10px 14px 16px; flex-wrap: wrap; flex-shrink: 0; }
-.story-btn-comprar, .story-btn-produto {
-  flex: 1; text-align: center; padding: 10px; border-radius: 8px;
-  font-size: 0.8rem; font-weight: 700; text-decoration: none;
-}
-.story-btn-comprar { background: var(--verde-whats); color: white; }
-.story-btn-produto { background: #6b46c1; color: white; }
-.story-btn-compartilhar {
-  flex-basis: 100%;
-  text-align: center; padding: 10px; border-radius: 8px;
-  font-size: 0.8rem; font-weight: 700; border: none; cursor: pointer;
-  background: #444; color: white;
-}
-.story-acoes .menu-compartilhar {
-  flex-basis: 100%;
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(55px, 1fr));
-  gap: 6px !important;
-}
-.story-acoes .menu-compartilhar .opcao-rede {
-  padding: 8px 4px;
-  font-size: 0.65rem;
-}
-
-.minhas-novidades { margin-top: 8px; }
-.minhas-novidades-label { font-size: 0.7rem; color: #888; margin-bottom: 4px; }
-.minhas-novidades-lista { display: flex; gap: 6px; flex-wrap: wrap; }
-.minha-novidade-item { position: relative; width: 46px; height: 46px; }
-.minha-novidade-item img {
-  width: 100%; height: 100%; object-fit: cover; border-radius: 8px;
-  border: 2px solid #e91e63;
-}
-.minha-novidade-btn-excluir {
-  position: absolute; top: -6px; right: -6px;
-  background: #a4402f; color: white; border: none; border-radius: 50%;
-  width: 16px; height: 16px; font-size: 0.6rem; cursor: pointer; padding: 0; line-height: 1;
-}
-.minha-novidade-btn-compartilhar {
-  position: absolute; bottom: -6px; right: -6px;
-  background: #128C7E; color: white; border: none; border-radius: 50%;
-  width: 16px; height: 16px; font-size: 0.55rem; cursor: pointer; padding: 0; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.story-textarea-bonito {
-  width: 100%;
-  border: 1.5px solid #e91e63;
-  border-radius: 12px;
-  padding: 12px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  resize: vertical;
-  background: linear-gradient(180deg, #fff, #fff5f8);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.story-textarea-bonito:focus {
-  outline: none;
-  border-color: #ad1457;
-  box-shadow: 0 0 0 3px rgba(233,30,99,0.15);
-}
-.story-textarea-bonito::placeholder { color: #b0879a; }
-
-.story-add-circulo {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.25);
-  border: 2px dashed rgba(255,255,255,0.8);
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-bolinha-add:hover .story-add-circulo { background: rgba(255,255,255,0.4); }
-
-.acoes-empresa-coluna {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-.acoes-empresa-coluna .link-ver-produtos,
-.acoes-empresa-coluna .btn-zap {
-  margin-top: 0 !important;
-}
-
-.btn-seguir {
-  background: #6b46c1;
-  color: white;
-  border: none;
-  padding: 4px 10px;
-  border-radius: 50px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.btn-seguir.seguindo { background: #e0d6f5; color: #6b46c1; }
-
-/* ---------- TELA DE BOAS-VINDAS (primeira visita) ---------- */
-.welcome-gate {
-  position: fixed; inset: 0; z-index: 1000;
-  background: linear-gradient(160deg, #128C7E, #25D366);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px; overflow-y: auto;
-}
-.welcome-gate-conteudo {
-  width: 100%; max-width: 400px;
-  background: white; border-radius: 16px; padding: 28px 22px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-.welcome-logo { font-size: 2rem; font-weight: 800; color: var(--verde-escuro); text-align: center; }
-.welcome-sub { font-size: 0.85rem; color: #666; text-align: center; margin-top: 4px; margin-bottom: 18px; }
-.welcome-beneficios {
-  background: #fff3cd; color: #7c4a03; font-size: 0.82rem;
-  padding: 12px; border-radius: 10px; margin-bottom: 18px; line-height: 1.4;
-}
-.welcome-termos { font-size: 0.72rem; }
-.welcome-btn-outline { border-color: var(--verde-escuro); color: var(--verde-escuro); }
-.btn-pular-welcome {
-  display: block; width: 100%; text-align: center; margin-top: 18px;
-  background: none; border: none; color: #888; font-size: 0.82rem;
-  text-decoration: underline; cursor: pointer; padding: 8px;
-}
-
-.btn-toggle-notificar {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 9px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1.5px solid #ccc;
-  background: #f2f2f2;
-  color: #666;
-}
-.btn-toggle-notificar.ativado {
-  background: #e8f9ee;
-  border-color: var(--verde-whats);
-  color: var(--verde-escuro);
-}
-.notificar-msg { display: block; font-size: 0.7rem; margin-top: 4px; text-align: center; }
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
