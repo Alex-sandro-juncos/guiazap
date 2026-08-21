@@ -1015,3 +1015,49 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   cursor: pointer;
 }
 .btn-seguir.seguindo { background: #e0d6f5; color: #6b46c1; }
+
+/* ---------- TELA DE BOAS-VINDAS (primeira visita) ---------- */
+.welcome-gate {
+  position: fixed; inset: 0; z-index: 1000;
+  background: linear-gradient(160deg, #128C7E, #25D366);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; overflow-y: auto;
+}
+.welcome-gate-conteudo {
+  width: 100%; max-width: 400px;
+  background: white; border-radius: 16px; padding: 28px 22px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+.welcome-logo { font-size: 2rem; font-weight: 800; color: var(--verde-escuro); text-align: center; }
+.welcome-sub { font-size: 0.85rem; color: #666; text-align: center; margin-top: 4px; margin-bottom: 18px; }
+.welcome-beneficios {
+  background: #fff3cd; color: #7c4a03; font-size: 0.82rem;
+  padding: 12px; border-radius: 10px; margin-bottom: 18px; line-height: 1.4;
+}
+.welcome-termos { font-size: 0.72rem; }
+.welcome-btn-outline { border-color: var(--verde-escuro); color: var(--verde-escuro); }
+.btn-pular-welcome {
+  display: block; width: 100%; text-align: center; margin-top: 18px;
+  background: none; border: none; color: #888; font-size: 0.82rem;
+  text-decoration: underline; cursor: pointer; padding: 8px;
+}
+
+.btn-toggle-notificar {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid #ccc;
+  background: #f2f2f2;
+  color: #666;
+}
+.btn-toggle-notificar.ativado {
+  background: #e8f9ee;
+  border-color: var(--verde-whats);
+  color: var(--verde-escuro);
+}
+.notificar-msg { display: block; font-size: 0.7rem; margin-top: 4px; text-align: center; }

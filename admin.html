@@ -66,6 +66,7 @@
     <button class="admin-aba-btn" id="aba-produtos" onclick="mostrarAbaAdmin('produtos')">📦 Produtos</button>
   </div>
   <button type="button" id="btn-exportar-emails" onclick="exportarEmails()" style="display:none; margin-bottom:14px; background:#0a4a6b; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">⬇ Exportar e-mails (.csv)</button>
+  <input type="text" id="admin-busca" placeholder="🔍 Buscar..." oninput="renderAdmin()" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
   <div id="admin-lista"></div>
 </div>
 
@@ -188,13 +189,17 @@ function formatarData(iso){
   return new Date(iso).toLocaleString('pt-BR');
 }
 
-function renderDenunciasAgrupadas(){
+function renderDenunciasAgrupadas(busca){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin) { lista.innerHTML = ''; return; }
 
   // Agrupa denúncias de empresa por profissional_id
   const gruposEmpresa = {};
   (dadosAdmin.denuncias || []).forEach(d => {
+    if(busca && !normalizarTextoAdmin(d.motivo + ' ' + (d.descricao || '')).includes(busca)) {
+      const empresaCombina = (dadosAdmin.profissionais || []).some(p => p.id === d.profissional_id && normalizarTextoAdmin(p.name).includes(busca));
+      if(!empresaCombina) return;
+    }
     if(!gruposEmpresa[d.profissional_id]) gruposEmpresa[d.profissional_id] = [];
     gruposEmpresa[d.profissional_id].push(d);
   });
@@ -202,6 +207,10 @@ function renderDenunciasAgrupadas(){
   // Agrupa denúncias de produto por produto_id
   const gruposProduto = {};
   (dadosAdmin.denunciasProdutos || []).forEach(d => {
+    if(busca && !normalizarTextoAdmin(d.motivo + ' ' + (d.descricao || '')).includes(busca)) {
+      const produtoCombina = (dadosAdmin.produtos || []).some(p => p.id === d.produto_id && normalizarTextoAdmin(p.nome).includes(busca));
+      if(!produtoCombina) return;
+    }
     if(!gruposProduto[d.produto_id]) gruposProduto[d.produto_id] = [];
     gruposProduto[d.produto_id].push(d);
   });
@@ -255,16 +264,35 @@ function renderDenunciasAgrupadas(){
     : todosOsCards.join('');
 }
 
+function normalizarTextoAdmin(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function textoBuscavelDoItem(item){
+  // Junta os campos relevantes de cada tipo de item, pra buscar em todos de uma vez
+  return normalizarTextoAdmin([
+    item.name, item.nome, item.cat, item.categoria, item.marca,
+    item.cidade, item.user_email, item.remetente_email,
+    item.mensagem, item.denunciante_email
+  ].filter(Boolean).join(' '));
+}
+
 function renderAdmin(){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin){ lista.innerHTML = ''; return; }
 
+  const busca = normalizarTextoAdmin(document.getElementById('admin-busca').value);
+
   let itens = [];
   if(abaAtual === 'feedback') itens = dadosAdmin.feedbackSite;
-  if(abaAtual === 'denuncias'){ renderDenunciasAgrupadas(); return; }
+  if(abaAtual === 'denuncias'){ renderDenunciasAgrupadas(busca); return; }
   if(abaAtual === 'mensagens') itens = dadosAdmin.mensagensEmpresa;
   if(abaAtual === 'empresas') itens = dadosAdmin.profissionais;
   if(abaAtual === 'produtos') itens = dadosAdmin.produtos;
+
+  if(busca){
+    itens = (itens || []).filter(item => textoBuscavelDoItem(item).includes(busca));
+  }
 
   if(!itens || itens.length === 0){
     lista.innerHTML = '<div class="admin-vazio">Nada por aqui ainda.</div>';

@@ -161,7 +161,7 @@ async function trocarSenha(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -1304,6 +1304,30 @@ function renderMinhasNovidades(profissionalId){
 }
 
 
+async function toggleNotificarSeguidores(profissionalId){
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(!cadastro) return;
+
+  const novoValor = !(cadastro.notificar_seguidores !== false);
+  const msg = document.getElementById('notificar-msg-' + profissionalId);
+  msg.textContent = 'salvando...';
+
+  const { error } = await supabaseClient.from('profissionais').update({ notificar_seguidores: novoValor }).eq('id', profissionalId);
+  if(error){ console.error(error); msg.textContent = 'erro ao salvar, tente de novo'; msg.style.color = '#a4402f'; return; }
+
+  cadastro.notificar_seguidores = novoValor;
+
+  const btn = document.getElementById('btn-notificar-' + profissionalId);
+  btn.textContent = novoValor ? '🔔 Notificações aos seguidores: ATIVADAS' : '🔕 Notificações aos seguidores: DESATIVADAS';
+  btn.classList.toggle('ativado', novoValor);
+
+  msg.textContent = novoValor
+    ? '✓ Salvo! Seus seguidores vão receber e-mail quando você publicar.'
+    : '✓ Salvo! Seus seguidores não vão mais receber e-mail.';
+  msg.style.color = 'var(--verde-escuro)';
+  setTimeout(() => { msg.textContent = ''; }, 4000);
+}
+
 async function excluirStory(storyId, profissionalId){
   if(!confirm('Excluir essa novidade antes do prazo de 24h?')) return;
   const { error } = await supabaseClient.from('stories').delete().eq('id', storyId);
@@ -1704,6 +1728,12 @@ function render(){
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
         </div>
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
+        ${isOwner && e.plano === 'premium' ? `
+          <button type="button" class="btn-toggle-notificar${e.notificar_seguidores !== false ? ' ativado' : ''}" id="btn-notificar-${e.id}" onclick="toggleNotificarSeguidores('${e.id}')">
+            ${e.notificar_seguidores !== false ? '🔔 Notificações aos seguidores: ATIVADAS' : '🔕 Notificações aos seguidores: DESATIVADAS'}
+          </button>
+          <span class="notificar-msg" id="notificar-msg-${e.id}"></span>
+        ` : ''}
       </div>
     </div>
   `; }).join('');
@@ -1734,10 +1764,54 @@ function escapeHtml(str){
   }
 })();
 
+function mostrarWelcomeGateSeNecessario(){
+  if(localStorage.getItem('jaVisitouGuiaZap') === '1') return;
+  document.getElementById('welcome-gate').style.display = 'flex';
+}
+
+function fecharWelcomeGate(){
+  localStorage.setItem('jaVisitouGuiaZap', '1');
+  document.getElementById('welcome-gate').style.display = 'none';
+}
+
+function pularWelcomeGate(){
+  fecharWelcomeGate();
+}
+
+async function welcomeSignIn(){
+  const email = document.getElementById('welcome-email').value.trim();
+  const senha = document.getElementById('welcome-password').value;
+  const msg = document.getElementById('welcome-msg');
+  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
+
+  msg.textContent = 'entrando...';
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+  if(error){ msg.textContent = error.message; return; }
+
+  fecharWelcomeGate();
+}
+
+async function welcomeSignUp(){
+  const email = document.getElementById('welcome-email').value.trim();
+  const senha = document.getElementById('welcome-password').value;
+  const msg = document.getElementById('welcome-msg');
+  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
+  if(!document.getElementById('welcome-aceite-termos').checked){ msg.textContent = 'você precisa aceitar os Termos de Uso pra continuar'; return; }
+
+  msg.textContent = 'criando conta...';
+  const { error } = await supabaseClient.auth.signUp({ email, password: senha });
+  if(error){ msg.textContent = error.message; return; }
+
+  msg.textContent = 'conta criada! verifique seu e-mail se for solicitado.';
+  msg.style.color = 'var(--verde-escuro)';
+  setTimeout(fecharWelcomeGate, 2000);
+}
+
 if(initSupabase()){
   initAuth();
   loadEntries();
   loadStories();
+  mostrarWelcomeGateSeNecessario();
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada

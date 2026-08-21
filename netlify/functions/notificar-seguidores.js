@@ -30,7 +30,7 @@ exports.handler = async function (event) {
 
     // Confirma que a empresa é mesmo Premium (checagem no servidor, não confia só no site)
     const empresaResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=name,plano`,
+      `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=name,plano,notificar_seguidores`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const empresas = await empresaResp.json();
@@ -40,9 +40,13 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ enviados: 0, motivo: 'empresa não é Premium' }) };
     }
 
+    if (empresa.notificar_seguidores === false) {
+      return { statusCode: 200, body: JSON.stringify({ enviados: 0, motivo: 'empresa desativou o envio de notificações' }) };
+    }
+
     // Busca todo mundo que segue essa empresa
     const seguidoresResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/seguidores?profissional_id=eq.${profissionalId}&select=user_email`,
+      `${SUPABASE_URL}/rest/v1/seguidores?profissional_id=eq.${profissionalId}&select=id,user_email`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const seguidores = await seguidoresResp.json();
@@ -55,20 +59,24 @@ exports.handler = async function (event) {
       ? `${empresa.name} publicou uma novidade no GuiaZap!`
       : `${empresa.name} anunciou um produto novo no GuiaZap!`;
 
-    const html = `
-      <p>Olá!</p>
-      <p><b>${empresa.name}</b>, que você segue no GuiaZap, acabou de ${tipo === 'story' ? 'publicar uma novidade' : 'anunciar um produto novo'}${titulo ? `: <b>${titulo}</b>` : ''}.</p>
-      ${foto ? `<img src="${foto}" style="max-width:300px; border-radius:8px; margin:10px 0;">` : ''}
-      <p><a href="https://guiazap.shop">Confira no GuiaZap</a></p>
-      <p style="font-size:0.8em; color:#888;">Você recebeu esse e-mail porque segue essa empresa no GuiaZap.</p>
-    `;
-
     let enviadosCount = 0;
     for (const s of seguidores) {
-      if (s.user_email) {
-        await enviarEmail(s.user_email, assunto, html);
-        enviadosCount++;
-      }
+      if (!s.user_email) continue;
+
+      const linkCancelar = `https://guiazap.shop/.netlify/functions/cancelar-notificacao?id=${s.id}`;
+      const html = `
+        <p>Olá!</p>
+        <p><b>${empresa.name}</b>, que você segue no GuiaZap, acabou de ${tipo === 'story' ? 'publicar uma novidade' : 'anunciar um produto novo'}${titulo ? `: <b>${titulo}</b>` : ''}.</p>
+        ${foto ? `<img src="${foto}" style="max-width:300px; border-radius:8px; margin:10px 0;">` : ''}
+        <p><a href="https://guiazap.shop">Confira no GuiaZap</a></p>
+        <p style="font-size:0.8em; color:#888;">
+          Você recebeu esse e-mail porque segue ${empresa.name} no GuiaZap.<br>
+          <a href="${linkCancelar}" style="color:#888;">Não quero mais receber e-mails dessa empresa</a>
+        </p>
+      `;
+
+      await enviarEmail(s.user_email, assunto, html);
+      enviadosCount++;
     }
 
     return { statusCode: 200, body: JSON.stringify({ enviados: enviadosCount }) };

@@ -23,6 +23,35 @@
      Chrome, que insiste em sugerir contas Google no campo de busca real. -->
 <input type="email" name="email" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; pointer-events:none;">
 
+<div id="welcome-gate" class="welcome-gate" style="display:none;">
+  <div class="welcome-gate-conteudo">
+    <div class="welcome-logo">GuiaZap</div>
+    <p class="welcome-sub">Encontre profissionais locais e fale direto no WhatsApp</p>
+
+    <div class="welcome-beneficios">
+      🎁 <b>Crie sua conta grátis</b> e tenha acesso a ofertas e produtos dedicados — além de receber notificações das empresas que você seguir.
+    </div>
+
+    <form autocomplete="on" onsubmit="return false;">
+      <div class="auth-row">
+        <input id="welcome-email" type="email" placeholder="Seu e-mail" autocomplete="email">
+        <input id="welcome-password" type="password" placeholder="Senha" autocomplete="current-password">
+      </div>
+      <label class="termos-check welcome-termos">
+        <input type="checkbox" id="welcome-aceite-termos">
+        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn-auth" onclick="welcomeSignIn()">Entrar</button>
+        <button type="button" class="btn-auth-outline welcome-btn-outline" onclick="welcomeSignUp()">Criar conta</button>
+      </div>
+      <span class="auth-msg" id="welcome-msg"></span>
+    </form>
+
+    <button type="button" class="btn-pular-welcome" onclick="pularWelcomeGate()">Pular, só quero buscar um profissional →</button>
+  </div>
+</div>
+
 <header>
   <div class="logo">GuiaZap</div>
   <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
