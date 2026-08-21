@@ -1081,16 +1081,17 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 .auth-box-discreto-header { max-width: 400px; margin: 10px auto 0; }
 .auth-toggle-link-header {
   width: 100%;
-  background: rgba(255,255,255,0.2);
-  border: 1.5px dashed rgba(255,255,255,0.7);
-  color: white;
-  padding: 9px;
+  background: white;
+  border: none;
+  color: var(--verde-escuro);
+  padding: 10px;
   border-radius: 10px;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
-.auth-toggle-link-header:hover { background: rgba(255,255,255,0.3); }
+.auth-toggle-link-header:hover { background: #f0f0f0; }
 .auth-box-discreto-header #auth-form-fields {
   margin-top: 10px;
   padding: 14px;
