@@ -1609,7 +1609,13 @@ function render(){
   const filtered = cadastroCompartilhadoId
     ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
     : entries
-    .filter(e => currentUser ? e.user_id === currentUser.id : e.status_pagamento === 'ativo')
+    .filter(e => {
+      // Só entra em "modo gerenciar" (ver só os próprios) se a pessoa realmente
+      // tiver pelo menos um cadastro próprio. Quem só tem conta (seguidor, candidato,
+      // sem empresa nenhuma) continua vendo o diretório público normal.
+      const temCadastroProprio = currentUser && entries.some(en => en.user_id === currentUser.id);
+      return temCadastroProprio ? e.user_id === currentUser.id : e.status_pagamento === 'ativo';
+    })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
     .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
