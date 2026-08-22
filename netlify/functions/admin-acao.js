@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -117,6 +117,64 @@ exports.handler = async function (event) {
         body: JSON.stringify({ plano: novoPlano })
       });
       if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao mudar plano' }) };
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if (acao === 'confirmar_whatsapp_verificacao' && tabela === 'profissionais') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ verificacao_whatsapp_confirmado: true })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao confirmar whatsapp' }) };
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if (acao === 'aprovar_selo' && tabela === 'profissionais') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ verificado: true, verificacao_status: 'aprovado' })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao aprovar selo' }) };
+
+      const cadastroResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}&select=name,user_email`,
+        { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      const cadastros = await cadastroResp.json();
+      if (cadastros[0] && cadastros[0].user_email) {
+        await enviarEmail(
+          cadastros[0].user_email,
+          'Selo Verificado aprovado — GuiaZap',
+          `<p>Olá!</p>
+           <p>Seu cadastro "<b>${cadastros[0].name}</b>" agora tem o Selo Verificado ✅ no GuiaZap!</p>
+           <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra conferir.</p>`
+        );
+      }
+
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if (acao === 'rejeitar_selo' && tabela === 'profissionais') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ verificacao_status: 'rejeitado' })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao rejeitar' }) };
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 

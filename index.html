@@ -34,6 +34,9 @@
 
     <form autocomplete="on" onsubmit="return false;">
       <div class="auth-row">
+        <input id="welcome-nome" type="text" placeholder="Seu nome" autocomplete="name">
+      </div>
+      <div class="auth-row">
         <input id="welcome-email" type="email" placeholder="Seu e-mail" autocomplete="email">
         <div class="campo-com-olho">
           <input id="welcome-password" type="password" placeholder="Senha" autocomplete="current-password">
@@ -156,7 +159,8 @@
     </div>
     <div class="field">
       <label>CNPJ ou CPF</label>
-      <input id="f-documento" required placeholder="Só números" autocomplete="off" oninput="mascaraDocumento(event)">
+      <input id="f-documento" required placeholder="Só números" autocomplete="off" oninput="mascaraDocumento(event)" onblur="conferirDocumentoAoSair()">
+      <span class="cep-msg" id="f-documento-msg"></span>
     </div>
     <div class="field">
       <label>Categoria principal</label>

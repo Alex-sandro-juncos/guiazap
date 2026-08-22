@@ -43,6 +43,9 @@ function toggleAuthForm(){
     box.innerHTML = `
       <form autocomplete="on" onsubmit="return false;">
         <div class="auth-row">
+          <input id="auth-nome" type="text" placeholder="Seu nome (só pra criar conta nova)" autocomplete="name">
+        </div>
+        <div class="auth-row">
           <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
           <div class="campo-com-olho">
             <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
@@ -95,18 +98,19 @@ async function updateAuthUI(){
 }
 
 async function signUp(){
+  const nome = document.getElementById('auth-nome').value.trim();
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
   const msg = document.getElementById('auth-msg');
   const aceitou = document.getElementById('aceite-termos').checked;
 
-  if(!email || !password){ msg.textContent = 'preencha e-mail e senha'; return; }
+  if(!nome || !email || !password){ msg.textContent = 'preencha nome, e-mail e senha'; return; }
   if(!aceitou){ msg.textContent = 'você precisa aceitar os Termos de Uso e a Política de Privacidade'; return; }
 
   msg.textContent = 'criando conta...';
   const { error } = await supabaseClient.auth.signUp({
     email, password,
-    options: { data: { termos_aceitos_em: new Date().toISOString() } }
+    options: { data: { nome, termos_aceitos_em: new Date().toISOString() } }
   });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
@@ -174,7 +178,7 @@ async function trocarSenha(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -466,6 +470,8 @@ function populateEstados(){
 const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Pacote 1 é grátis e ativa sozinho
 const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
 const LINK_ASSINATURA_PREMIUM = "https://mpago.la/2JLXkQM"; // Plano Premium (R$25/mês) criado no Mercado Pago
+const LINK_SELO_VERIFICADO = "https://mpago.la/13aLx8F"; // Selo Verificado (R$15, pagamento único) criado no Mercado Pago
+const WHATSAPP_ADMIN_GUIAZAP = "5546999209402"; // número do WhatsApp do GuiaZap que recebe a confirmação
 const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com o código já existente
 
 let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
@@ -638,6 +644,27 @@ async function saveEntry(e){
   e.preventDefault();
   if(!currentUser){ alert('Você precisa entrar na sua conta para cadastrar.'); return false; }
 
+  const documentoDigitos = document.getElementById('f-documento').value.replace(/\D/g, '');
+  const msgDocumento = document.getElementById('f-documento-msg');
+
+  if(documentoDigitos.length === 11 && !validarCPF(documentoDigitos)){
+    if(msgDocumento){ msgDocumento.textContent = '⚠️ Esse CPF não é válido — corrija antes de salvar'; msgDocumento.style.color = '#a4402f'; }
+    document.getElementById('f-documento').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+
+  if(documentoDigitos.length === 14 && !validarCNPJ(documentoDigitos)){
+    if(msgDocumento){ msgDocumento.textContent = '⚠️ Esse CNPJ não é válido — corrija antes de salvar'; msgDocumento.style.color = '#a4402f'; }
+    document.getElementById('f-documento').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+
+  if(documentoDigitos.length !== 11 && documentoDigitos.length !== 14){
+    if(msgDocumento){ msgDocumento.textContent = '⚠️ Digite um CPF (11 números) ou CNPJ (14 números) válido'; msgDocumento.style.color = '#a4402f'; }
+    document.getElementById('f-documento').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+
   const id = document.getElementById('edit-id').value;
   const payload = {
     name: document.getElementById('f-name').value.trim(),
@@ -795,21 +822,33 @@ async function loadSeguindo(){
 }
 
 let contagemSeguidoresPorEmpresa = {};
+let listaSeguidoresPorEmpresa = {};
 
 async function loadContagemSeguidores(){
   contagemSeguidoresPorEmpresa = {};
+  listaSeguidoresPorEmpresa = {};
   if(!currentUser) return;
 
   const minhasEmpresasPremium = entries.filter(e => e.user_id === currentUser.id && e.plano === 'premium');
   if(minhasEmpresasPremium.length === 0) return;
 
   for(const empresa of minhasEmpresasPremium){
-    const { count, error } = await supabaseClient
+    const { data, error } = await supabaseClient
       .from('seguidores')
-      .select('id', { count: 'exact', head: true })
-      .eq('profissional_id', empresa.id);
-    if(!error) contagemSeguidoresPorEmpresa[empresa.id] = count || 0;
+      .select('user_email, user_nome, created_at')
+      .eq('profissional_id', empresa.id)
+      .order('created_at', { ascending: false });
+    if(!error){
+      listaSeguidoresPorEmpresa[empresa.id] = data || [];
+      contagemSeguidoresPorEmpresa[empresa.id] = (data || []).length;
+    }
   }
+}
+
+function toggleListaSeguidores(profissionalId){
+  const box = document.getElementById('lista-seguidores-' + profissionalId);
+  if(!box) return;
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
 }
 
 async function toggleSeguir(profissionalId, event){
@@ -828,7 +867,7 @@ async function toggleSeguir(profissionalId, event){
     const { error } = await supabaseClient.from('seguidores').delete().eq('user_id', currentUser.id).eq('profissional_id', profissionalId);
     if(!error) seguindoEmpresas.delete(profissionalId);
   } else {
-    const { error } = await supabaseClient.from('seguidores').insert({ user_id: currentUser.id, profissional_id: profissionalId, user_email: currentUser.email });
+    const { error } = await supabaseClient.from('seguidores').insert({ user_id: currentUser.id, profissional_id: profissionalId, user_email: currentUser.email, user_nome: currentUser.user_metadata?.nome || null });
     if(!error) seguindoEmpresas.add(profissionalId);
   }
   render();
@@ -1068,7 +1107,7 @@ async function loadProdutosDestaque(){
 
   const { data, error } = await supabaseClient
     .from('produtos')
-    .select('*, profissionais(name, whatsapp, status_pagamento, plano, user_id)')
+    .select('*, profissionais(id, name, whatsapp, status_pagamento, plano, user_id)')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -1094,13 +1133,15 @@ function renderProdutosDestaque(){
 
   const query = normalizarTexto(document.getElementById('search').value);
 
-  const filtrados = produtosDestaqueTodos.filter(p =>
-    normalizarTexto(p.nome).includes(query) ||
-    normalizarTexto(p.marca).includes(query) ||
-    normalizarTexto(p.descricao).includes(query) ||
-    normalizarTexto(p.codigo_barras).includes(query) ||
-    (p.profissionais && normalizarTexto(p.profissionais.name).includes(query))
-  );
+  const filtrados = produtosDestaqueTodos
+    .filter(p => !mostrandoSoSeguindo || (p.profissionais && seguindoEmpresas.has(p.profissionais.id)))
+    .filter(p =>
+      normalizarTexto(p.nome).includes(query) ||
+      normalizarTexto(p.marca).includes(query) ||
+      normalizarTexto(p.descricao).includes(query) ||
+      normalizarTexto(p.codigo_barras).includes(query) ||
+      (p.profissionais && normalizarTexto(p.profissionais.name).includes(query))
+    );
 
   if(produtosDestaqueTodos.length === 0){
     secao.style.display = 'none';
@@ -1319,6 +1360,124 @@ let storiesAgrupadas = {};
 let storySlideAtual = 0;
 let storyEmpresaAtual = null;
 let storyTimer = null;
+
+async function renderPainelVerificacao(profissionalId){
+  const container = document.getElementById('painel-verificacao-' + profissionalId);
+  if(!container) return;
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(!cadastro) return;
+
+  if(!cadastro.verificacao_pago){
+    container.innerHTML = `<a href="${LINK_SELO_VERIFICADO}" class="link-migrar" style="background:#e3f2fd; border:1.5px solid #1565c0; color:#0d47a1;">🔵 Solicitar Selo Verificado (R$15)</a>`;
+    return;
+  }
+
+  // Confere o CPF/CNPJ automaticamente (usa a mesma consulta segura que já existe)
+  const { data: documento } = await supabaseClient.rpc('obter_meu_documento', { pid: profissionalId });
+  const digitos = (documento || '').replace(/\D/g, '');
+  let statusDocumento = '⚠️ Não foi possível conferir';
+  if(digitos.length === 11) statusDocumento = validarCPF(digitos) ? '✓ CPF válido' : '⚠️ CPF inválido';
+  if(digitos.length === 14) statusDocumento = validarCNPJ(digitos) ? '✓ CNPJ válido' : '⚠️ CNPJ inválido';
+
+  container.innerHTML = `
+    <div class="painel-verificacao">
+      <div class="painel-verificacao-titulo">🔵 Verificação em andamento</div>
+      <div class="verificacao-item">📋 Documento (CPF/CNPJ): ${statusDocumento}</div>
+      <div class="verificacao-item">
+        📄 Foto do documento:
+        ${cadastro.verificacao_documento_url
+          ? '✓ Enviada'
+          : `<label class="btn-verificacao-mini">Enviar foto<input type="file" accept="image/*" style="display:none;" onchange="enviarDocumentoVerificacao(event, '${profissionalId}')"></label>`}
+      </div>
+      <div class="verificacao-item">
+        📧 E-mail confirmado:
+        ${cadastro.verificacao_email_confirmado
+          ? '✓ Confirmado'
+          : `<button type="button" class="btn-verificacao-mini" onclick="enviarCodigoEmailVerificacao('${profissionalId}')">Enviar código por e-mail</button>`}
+      </div>
+      <div id="verificacao-email-confirmar-${profissionalId}"></div>
+      <div class="verificacao-item">
+        💬 WhatsApp confirmado:
+        ${cadastro.verificacao_whatsapp_confirmado
+          ? '✓ Confirmado'
+          : `<button type="button" class="btn-verificacao-mini" onclick="confirmarWhatsappVerificacao('${profissionalId}')">Confirmar via WhatsApp</button>`}
+      </div>
+      <p class="verificacao-rodape">Depois das 4 etapas, o GuiaZap confere tudo e libera o selo — pode levar até 2 dias úteis.</p>
+    </div>
+  `;
+}
+
+async function enviarDocumentoVerificacao(event, profissionalId){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const nomeArquivo = `verificacao/${currentUser.id}/${Date.now()}.jpg`;
+  const { error: erroUpload } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file);
+  if(erroUpload){ alert('Erro ao enviar o documento. Tente de novo.'); console.error(erroUpload); return; }
+
+  const { data: urlData } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
+  const { error } = await supabaseClient.from('profissionais').update({ verificacao_documento_url: urlData.publicUrl }).eq('id', profissionalId);
+  if(error){ alert('Erro ao salvar. Tente de novo.'); console.error(error); return; }
+
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(cadastro) cadastro.verificacao_documento_url = urlData.publicUrl;
+  renderPainelVerificacao(profissionalId);
+}
+
+async function enviarCodigoEmailVerificacao(profissionalId){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const resp = await fetch('/.netlify/functions/enviar-codigo-verificacao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profissionalId, userToken: session.access_token })
+  });
+  const data = await resp.json();
+
+  const box = document.getElementById('verificacao-email-confirmar-' + profissionalId);
+  if(!data.enviado){ box.innerHTML = '<span style="color:#a4402f; font-size:0.75rem;">Erro ao enviar o código, tente de novo.</span>'; return; }
+
+  box.innerHTML = `
+    <div class="auth-row" style="margin-top:6px;">
+      <input type="text" id="codigo-email-${profissionalId}" placeholder="Cole o código de 6 dígitos" maxlength="6">
+      <button type="button" class="btn-verificacao-mini" onclick="confirmarCodigoEmailVerificacao('${profissionalId}')">Confirmar</button>
+    </div>
+    <span id="codigo-email-msg-${profissionalId}" style="font-size:0.72rem;"></span>
+  `;
+}
+
+async function confirmarCodigoEmailVerificacao(profissionalId){
+  const codigoDigitado = document.getElementById('codigo-email-' + profissionalId).value.trim();
+  const msg = document.getElementById('codigo-email-msg-' + profissionalId);
+
+  const { data, error } = await supabaseClient.from('profissionais').select('verificacao_codigo_email').eq('id', profissionalId).single();
+  if(error || !data){ msg.textContent = 'erro ao conferir o código'; return; }
+
+  if(data.verificacao_codigo_email !== codigoDigitado){
+    msg.textContent = '❌ Código incorreto, confira e tente de novo.';
+    msg.style.color = '#a4402f';
+    return;
+  }
+
+  const { error: erroUpdate } = await supabaseClient.from('profissionais').update({ verificacao_email_confirmado: true }).eq('id', profissionalId);
+  if(erroUpdate){ msg.textContent = 'erro ao salvar'; return; }
+
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(cadastro) cadastro.verificacao_email_confirmado = true;
+  renderPainelVerificacao(profissionalId);
+}
+
+async function confirmarWhatsappVerificacao(profissionalId){
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(!cadastro) return;
+
+  const codigo = String(Math.floor(100000 + Math.random() * 900000));
+  await supabaseClient.from('profissionais').update({ verificacao_codigo_whatsapp: codigo }).eq('id', profissionalId);
+
+  const mensagem = encodeURIComponent(`Meu código de verificação GuiaZap é: ${codigo} (empresa: ${cadastro.name})`);
+  window.open(`https://wa.me/${WHATSAPP_ADMIN_GUIAZAP}?text=${mensagem}`, '_blank');
+
+  alert('Depois de enviar a mensagem no WhatsApp, aguarde a confirmação — o GuiaZap aprova manualmente em até 2 dias úteis.');
+}
 
 function renderMinhasNovidades(profissionalId){
   const container = document.getElementById('minhas-novidades-' + profissionalId);
@@ -1655,7 +1814,7 @@ function render(){
   if(btnVerMinhaEmpresa) btnVerMinhaEmpresa.style.display = usuarioTemCadastroProprio() ? 'inline-block' : 'none';
 
   const btnSeguindoFiltro = document.getElementById('btn-seguindo-filtro');
-  if(btnSeguindoFiltro) btnSeguindoFiltro.style.display = seguindoEmpresas.size > 0 ? 'block' : 'none';
+  if(btnSeguindoFiltro) btnSeguindoFiltro.style.display = currentUser ? 'block' : 'none';
 
   renderProdutosDestaque();
   const list = document.getElementById('list');
@@ -1727,7 +1886,22 @@ function render(){
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}${e.plano === 'premium' ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
-          ${isOwner && e.plano === 'premium' ? `<div class="contagem-seguidores">👥 ${contagemSeguidoresPorEmpresa[e.id] ?? '...'} seguidor${contagemSeguidoresPorEmpresa[e.id] === 1 ? '' : 'es'}</div>` : ''}
+          ${isOwner && e.plano === 'premium' ? `
+            <div class="contagem-seguidores" onclick="toggleListaSeguidores('${e.id}')">
+              👥 ${contagemSeguidoresPorEmpresa[e.id] ?? '...'} seguidor${contagemSeguidoresPorEmpresa[e.id] === 1 ? '' : 'es'}
+              <span class="link-ver-lista">(ver lista)</span>
+            </div>
+            <div class="lista-seguidores" id="lista-seguidores-${e.id}" style="display:none;">
+              ${(listaSeguidoresPorEmpresa[e.id] || []).length === 0
+                ? '<div class="lista-seguidores-vazio">Nenhum seguidor ainda.</div>'
+                : (listaSeguidoresPorEmpresa[e.id] || []).map(s => `
+                    <div class="lista-seguidores-item">
+                      ${escapeHtml(s.user_nome || s.user_email)}
+                      <span class="lista-seguidores-data">desde ${new Date(s.created_at).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  `).join('')}
+            </div>
+          ` : ''}
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
             ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? 'Deixar de seguir' : '+ Seguir'}</button>` : ''}
@@ -1811,12 +1985,124 @@ function render(){
           </button>
           <span class="notificar-msg" id="notificar-msg-${e.id}"></span>
         ` : ''}
+        ${isOwner && !e.verificado ? `<div id="painel-verificacao-${e.id}"></div>` : ''}
       </div>
     </div>
   `; }).join('');
 
   entries.filter(e => e.user_id === (currentUser && currentUser.id)).forEach(e => renderMinhasNovidades(e.id));
+  entries.filter(e => e.user_id === (currentUser && currentUser.id) && !e.verificado).forEach(e => renderPainelVerificacao(e.id));
   renderStoriesLinha();
+}
+
+function validarCPF(cpf){
+  cpf = (cpf || '').replace(/\D/g, '');
+  if(cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  let soma = 0;
+  for(let i = 0; i < 9; i++) soma += parseInt(cpf[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if(resto === 10 || resto === 11) resto = 0;
+  if(resto !== parseInt(cpf[9])) return false;
+
+  soma = 0;
+  for(let i = 0; i < 10; i++) soma += parseInt(cpf[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if(resto === 10 || resto === 11) resto = 0;
+  if(resto !== parseInt(cpf[10])) return false;
+
+  return true;
+}
+
+function validarCNPJ(cnpj){
+  cnpj = (cnpj || '').replace(/\D/g, '');
+  if(cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+
+  let tamanho = cnpj.length - 2;
+  let numeros = cnpj.substring(0, tamanho);
+  const digitos = cnpj.substring(tamanho);
+  let soma = 0;
+  let pos = tamanho - 7;
+  for(let i = tamanho; i >= 1; i--){
+    soma += numeros.charAt(tamanho - i) * pos--;
+    if(pos < 2) pos = 9;
+  }
+  let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if(resultado !== parseInt(digitos.charAt(0))) return false;
+
+  tamanho = tamanho + 1;
+  numeros = cnpj.substring(0, tamanho);
+  soma = 0;
+  pos = tamanho - 7;
+  for(let i = tamanho; i >= 1; i--){
+    soma += numeros.charAt(tamanho - i) * pos--;
+    if(pos < 2) pos = 9;
+  }
+  resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if(resultado !== parseInt(digitos.charAt(1))) return false;
+
+  return true;
+}
+
+async function conferirDocumentoAoSair(){
+  const campo = document.getElementById('f-documento');
+  const msg = document.getElementById('f-documento-msg');
+  const digitos = campo.value.replace(/\D/g, '');
+  if(!msg || !digitos) return;
+
+  if(digitos.length === 11){
+    msg.textContent = validarCPF(digitos) ? '✓ CPF válido' : '⚠️ Esse CPF não é válido — confira os números';
+    msg.style.color = validarCPF(digitos) ? 'var(--verde-escuro)' : '#a4402f';
+    return;
+  }
+
+  if(digitos.length === 14){
+    if(!validarCNPJ(digitos)){
+      msg.textContent = '⚠️ Esse CNPJ não é válido — confira os números';
+      msg.style.color = '#a4402f';
+      return;
+    }
+
+    msg.textContent = 'Consultando na Receita Federal...';
+    msg.style.color = '#888';
+    try{
+      const resp = await fetch(`/.netlify/functions/consultar-cnpj?cnpj=${digitos}`);
+      const data = await resp.json();
+
+      if(!data.encontrado){
+        msg.textContent = '⚠️ Não encontramos esse CNPJ na Receita Federal — confira os números';
+        msg.style.color = '#a4402f';
+        return;
+      }
+
+      const nomeDigitado = normalizarTexto(document.getElementById('f-name').value.trim());
+      const razaoSocial = normalizarTexto(data.razao_social || '');
+      const nomeFantasia = normalizarTexto(data.nome_fantasia || '');
+      const bateComAlgum = nomeDigitado && (razaoSocial.includes(nomeDigitado) || nomeDigitado.includes(razaoSocial) || (nomeFantasia && (nomeFantasia.includes(nomeDigitado) || nomeDigitado.includes(nomeFantasia))));
+
+      if(data.situacao && data.situacao.toUpperCase() !== 'ATIVA'){
+        msg.textContent = `⚠️ CNPJ válido, mas a situação na Receita é "${data.situacao}" (não ativa)`;
+        msg.style.color = '#a4402f';
+      } else if(!nomeDigitado){
+        msg.textContent = `✓ CNPJ válido — Razão Social: ${data.razao_social}`;
+        msg.style.color = 'var(--verde-escuro)';
+      } else if(bateComAlgum){
+        msg.textContent = `✓ CNPJ válido e o nome bate com a Receita Federal (${data.razao_social})`;
+        msg.style.color = 'var(--verde-escuro)';
+      } else {
+        msg.textContent = `⚠️ CNPJ válido, mas o nome digitado não parece bater com a Receita Federal (lá consta: "${data.razao_social}")`;
+        msg.style.color = '#a4402f';
+      }
+    } catch(e){
+      console.error(e);
+      msg.textContent = '⚠️ Não conseguimos consultar a Receita Federal agora — confira os números manualmente';
+      msg.style.color = '#a4402f';
+    }
+    return;
+  }
+
+  msg.textContent = digitos.length > 0 ? '⚠️ CPF tem 11 números, CNPJ tem 14 — confira a quantidade' : '';
+  msg.style.color = '#a4402f';
 }
 
 function mascaraCep(event){
@@ -1892,14 +2178,15 @@ async function welcomeSignIn(){
 }
 
 async function welcomeSignUp(){
+  const nome = document.getElementById('welcome-nome').value.trim();
   const email = document.getElementById('welcome-email').value.trim();
   const senha = document.getElementById('welcome-password').value;
   const msg = document.getElementById('welcome-msg');
-  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
+  if(!nome || !email || !senha){ msg.textContent = 'preencha nome, e-mail e senha'; return; }
   if(!document.getElementById('welcome-aceite-termos').checked){ msg.textContent = 'você precisa aceitar os Termos de Uso pra continuar'; return; }
 
   msg.textContent = 'criando conta...';
-  const { error } = await supabaseClient.auth.signUp({ email, password: senha });
+  const { error } = await supabaseClient.auth.signUp({ email, password: senha, options: { data: { nome } } });
   if(error){ msg.textContent = error.message; return; }
 
   msg.textContent = 'conta criada! verifique seu e-mail se for solicitado.';

@@ -123,6 +123,26 @@ exports.handler = async function (event) {
       }
 
       const valorPago = payment.transaction_amount || 0;
+
+      // Pagamento do Selo Verificado (R$15, valor exato — não é assinatura de plano)
+      const VALOR_SELO_VERIFICADO = 15;
+      if (valorPago >= VALOR_SELO_VERIFICADO && valorPago < VALOR_PACOTE_COMPLETO) {
+        const marcados = await atualizarSupabase(
+          `user_email=eq.${encodeURIComponent(payerEmail)}&status_pagamento=eq.ativo`,
+          { verificacao_pago: true, verificacao_status: 'pendente' }
+        );
+        if (marcados && marcados.length > 0) {
+          await enviarEmail(
+            payerEmail,
+            'Pagamento do Selo Verificado confirmado!',
+            `<p>Olá!</p>
+             <p>Recebemos seu pagamento do Selo Verificado no GuiaZap.</p>
+             <p>Agora é só completar as etapas de verificação no seu cadastro (documento, e-mail e WhatsApp) — acesse <a href="https://guiazap.shop">guiazap.shop</a> pra continuar.</p>`
+          );
+        }
+        return { statusCode: 200, body: `pagamento do selo verificado processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
+      }
+
       const planoPago = valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico');
 
       // Caso 1: existe um cadastro PENDENTE desse e-mail -> é um cadastro novo, ativa
