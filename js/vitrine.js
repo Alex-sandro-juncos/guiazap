@@ -35,15 +35,12 @@ async function initAuthV(){
   document.getElementById('v-add-btn').style.display = currentUserV ? 'inline-block' : 'none';
 
   if(currentUserV){
-    // CORRIGIDO: antes só buscava plano === 'completo', deixando de fora quem é
-    // 'premium' — isso fazia donos Premium perderem o botão de anunciar produto
-    // e caírem incorretamente no modo "vitrine pública" em vez do "meus produtos".
     const { data } = await supabaseClientV
       .from('profissionais')
       .select('id, name')
       .eq('user_id', currentUserV.id)
       .eq('status_pagamento', 'ativo')
-      .in('plano', ['completo', 'premium']);
+      .eq('plano', 'completo');
     meusCadastros = data || [];
 
     const sel = document.getElementById('p-profissional');
@@ -52,8 +49,6 @@ async function initAuthV(){
     if(meusCadastros.length === 0){
       document.getElementById('v-add-btn').style.display = 'none';
     }
-  } else {
-    meusCadastros = [];
   }
 }
 
@@ -192,27 +187,14 @@ function popularFiltrosProduto(){
   if(datalist) datalist.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">`).join('');
 }
 
-// ---------- Descobre se o usuário logado tem empresa própria (Completo/Premium) ----------
-// CORRIGIDO: antes o código usava só "currentUserV" (se está logado) pra decidir
-// entre mostrar a vitrine pública ou só os produtos do usuário. Isso fazia qualquer
-// pessoa logada SEM empresa cadastrada (ex: só criou uma conta, ou é seguidor de
-// alguma loja) ver "0 produtos", já que nenhum produto pertence a ela.
-// Agora a checagem usa meusCadastros (lista de empresas Completo/Premium do usuário),
-// igual já era feito corretamente no script da página inicial (usuarioTemCadastroProprio).
-function usuarioTemEmpresaPropria(){
-  return meusCadastros.length > 0;
-}
-
 function renderProdutos(){
   const query = normalizarTextoV(document.getElementById('v-search').value);
   const categoriaFiltro = document.getElementById('v-filter-categoria').value;
   const precoFiltro = document.getElementById('v-filter-preco').value;
   const linkDireto = produtoFiltroId || empresaFiltroId;
-  const temEmpresaPropria = usuarioTemEmpresaPropria();
-
   const filtrados = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
-    .filter(p => linkDireto || !temEmpresaPropria || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
     .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
     .filter(p => {
@@ -245,7 +227,7 @@ function renderProdutos(){
 
   const grid = document.getElementById('v-grid');
   if(filtrados.length === 0){
-    const mensagem = (temEmpresaPropria && !linkDireto)
+    const mensagem = (currentUserV && !linkDireto)
       ? 'Você ainda não tem produtos cadastrados. Clique em "+ Anunciar produto" para começar.'
       : 'Nenhum produto encontrado ainda.';
     grid.innerHTML = `<div class="vazio-vitrine">${mensagem}</div>`;
@@ -292,6 +274,7 @@ function renderProdutos(){
           </div>
         </div>
         <div class="acoes-produto-coluna">
+          ${p.link_externo ? `<a class="btn-comprar-externo" href="${escapeHtmlV(p.link_externo)}" target="_blank" rel="nofollow noopener">🛒 Comprar</a>` : ''}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#e91e63;" onclick="colocarProdutoNoStory('${p.id}', '${p.profissional_id}')">📸 Colocar no Story</button>
@@ -470,6 +453,58 @@ function onCodigoBarrasManualChange(){
   document.getElementById('p-codigo-barras').value = valor;
 }
 
+async function buscarInfoLinkExterno(){
+  const url = document.getElementById('p-link-externo').value.trim();
+  const msg = document.getElementById('p-link-externo-msg');
+  if(!url){ msg.textContent = ''; return; }
+
+  if(!/^https?:\/\//i.test(url)){
+    msg.textContent = 'O link precisa começar com http:// ou https://';
+    return;
+  }
+
+  msg.textContent = 'Tentando preencher automaticamente...';
+
+  try{
+    const resp = await fetch(`/.netlify/functions/buscar-info-link-externo?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+
+    if(!data.encontrado){
+      msg.textContent = 'Não conseguimos ler essa página automaticamente — preencha os campos manualmente.';
+      return;
+    }
+
+    let preenchidos = [];
+
+    if(data.nome && !document.getElementById('p-nome').value.trim()){
+      document.getElementById('p-nome').value = data.nome;
+      preenchidos.push('nome');
+    }
+    if(data.descricao && !document.getElementById('p-descricao').value.trim()){
+      document.getElementById('p-descricao').value = data.descricao;
+      preenchidos.push('descrição');
+    }
+    if(data.preco && !document.getElementById('p-preco').value.trim()){
+      document.getElementById('p-preco').value = data.preco;
+      preenchidos.push('preço');
+    }
+    if(data.foto && !document.getElementById('p-foto').value.trim()){
+      document.getElementById('p-foto').value = data.foto;
+      const preview = document.getElementById('p-foto-preview');
+      preview.src = data.foto;
+      preview.style.display = 'block';
+      preenchidos.push('foto');
+    }
+
+    msg.textContent = preenchidos.length > 0
+      ? `✓ Preenchemos automaticamente: ${preenchidos.join(', ')}. Confira se está certo!`
+      : 'Achamos a página, mas os campos já estavam preenchidos — nada foi sobrescrito.';
+  } catch(e){
+    console.error(e);
+    msg.textContent = 'Erro ao tentar ler essa página — preencha os campos manualmente.';
+  }
+}
+
 async function buscarInfoCodigoManual(){
   const valor = document.getElementById('p-codigo-barras-manual').value.trim();
   if(!valor){ return; }
@@ -637,6 +672,7 @@ function fecharFormProduto(){
   document.getElementById('p-quantidade').value = '1';
   document.getElementById('p-preco').value = '';
   document.getElementById('p-foto').value = '';
+  document.getElementById('p-link-externo').value = '';
   document.getElementById('p-foto-preview').style.display = 'none';
   document.getElementById('p-foto-msg').textContent = '';
 }
@@ -657,6 +693,7 @@ function editarProduto(id){
   document.getElementById('p-quantidade').value = p.quantidade || 1;
   document.getElementById('p-preco').value = p.preco || '';
   document.getElementById('p-foto').value = p.foto || '';
+  document.getElementById('p-link-externo').value = p.link_externo || '';
   if(p.foto){
     const preview = document.getElementById('p-foto-preview');
     preview.src = p.foto;
@@ -721,11 +758,13 @@ async function salvarProduto(e){
     quantidade: parseFloat(document.getElementById('p-quantidade').value) || 1,
     preco: document.getElementById('p-preco').value.trim() || null,
     foto: document.getElementById('p-foto').value.trim() || null,
-    codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null
+    codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,
+    link_externo: document.getElementById('p-link-externo').value.trim() || null
   };
 
   if(!payload.nome || !payload.profissional_id){ msg.textContent = 'Preencha o nome do produto.'; return false; }
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){ msg.textContent = 'O link da foto precisa começar com http:// ou https://'; return false; }
+  if(payload.link_externo && !/^https?:\/\//i.test(payload.link_externo)){ msg.textContent = 'O link externo de compra precisa começar com http:// ou https://'; return false; }
 
   msg.textContent = 'salvando...';
   let error;

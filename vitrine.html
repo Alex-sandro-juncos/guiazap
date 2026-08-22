@@ -133,6 +133,17 @@
     font-weight: 700;
     text-decoration: none;
   }
+  .btn-comprar-externo {
+    display: block;
+    text-align: center;
+    background: #e67e22;
+    color: white;
+    padding: 7px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
   .vazio-vitrine { text-align: center; padding: 50px 20px; color: #8a8270; grid-column: 1 / -1; }
 
   #produto-form {
@@ -208,7 +219,8 @@
     margin-top: 8px;
   }
   .acoes-produto-coluna .btn-zap-mini,
-  .acoes-produto-coluna .link-compartilhar-produto {
+  .acoes-produto-coluna .link-compartilhar-produto,
+  .acoes-produto-coluna .btn-comprar-externo {
     margin-top: 0 !important;
   }
 </style>
@@ -320,6 +332,12 @@
     <img id="p-foto-preview" class="foto-preview" style="display:none;">
     <label class="foto-ou">ou cole um link de foto já existente</label>
     <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
+  </div>
+  <div class="field">
+    <label>Link externo de compra (opcional)</label>
+    <input id="p-link-externo" placeholder="https://... (Amazon, Shopee, Mercado Livre, seu link de afiliado, etc)" onblur="buscarInfoLinkExterno()">
+    <span class="foto-msg" id="p-link-externo-msg"></span>
+    <label class="foto-ou">Se preenchido, aparece um botão extra "Comprar" que leva direto pra esse link — útil pra representantes de marca que precisam garantir sua comissão.</label>
   </div>
   <div class="form-actions">
     <button type="submit" class="btn-salvar">Salvar produto</button>
