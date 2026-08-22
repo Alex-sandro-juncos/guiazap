@@ -68,6 +68,7 @@
   <div id="auth-logged-in" class="auth-box-logged-header" style="display:none;">
     <span>Logado como <b id="auth-email-display"></b></span>
     <div>
+      <button type="button" class="btn-auth-outline-header" id="btn-ver-minha-empresa" style="display:none;" onclick="verMinhaEmpresa()">🏢 Ver minha empresa</button>
       <button type="button" class="btn-auth-outline-header" onclick="toggleTrocarSenha()">Trocar senha</button>
       <button type="button" class="btn-auth-outline-header" onclick="signOut()">Sair</button>
     </div>
@@ -91,7 +92,7 @@
     </div>
     <div class="field" style="margin-bottom:10px;">
       <div class="campo-com-limpar">
-        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="atualizarBotoesLimpar()" onblur="buscarCepFiltro()">
+        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="mascaraCep(event); atualizarBotoesLimpar();" onblur="buscarCepFiltro()">
         <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
       </div>
       <span class="cep-msg" id="filter-cep-msg"></span>
@@ -113,6 +114,7 @@
       </div>
     </div>
     <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+    <button type="button" id="btn-seguindo-filtro" class="btn-filtro-favoritos" style="display:none;" onclick="toggleFiltroSeguindo()">👥 Ver só quem eu sigo</button>
   </div>
 
   <div id="trocar-senha-box" class="auth-box" style="display:none;">
@@ -154,7 +156,7 @@
     </div>
     <div class="field">
       <label>CNPJ ou CPF</label>
-      <input id="f-documento" required placeholder="Só números" autocomplete="off">
+      <input id="f-documento" required placeholder="Só números" autocomplete="off" oninput="mascaraDocumento(event)">
     </div>
     <div class="field">
       <label>Categoria principal</label>
@@ -167,7 +169,7 @@
     </div>
     <div class="field">
       <label>CEP</label>
-      <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" onblur="buscarCep()">
+      <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" oninput="mascaraCep(event)" onblur="buscarCep()">
       <span class="cep-msg" id="cep-msg"></span>
     </div>
     <div class="row2">

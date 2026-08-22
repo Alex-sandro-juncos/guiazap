@@ -175,7 +175,10 @@
   </div>
   <div class="field">
     <label>Salário (opcional)</label>
-    <input id="vg-salario" placeholder="Ex: R$ 1.500,00 ou A combinar">
+    <div class="campo-com-prefixo">
+      <span class="prefixo-rs">R$</span>
+      <input id="vg-salario" placeholder="1.500,00 (ou 'A combinar')" oninput="formatarValorVaga(event)">
+    </div>
   </div>
   <div class="form-actions">
     <button type="submit" class="btn-salvar">Publicar vaga</button>

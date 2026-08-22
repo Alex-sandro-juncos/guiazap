@@ -110,7 +110,7 @@
     </div>
     <div class="field">
       <label>CEP</label>
-      <input id="cv-input-cep" placeholder="00000-000" onblur="buscarCepCv()">
+      <input id="cv-input-cep" placeholder="00000-000" oninput="mascaraCep(event)" onblur="buscarCepCv()">
       <span id="cv-cep-msg" style="font-size:0.72rem; color:#888;"></span>
     </div>
     <div class="field">
@@ -308,6 +308,12 @@ atualizarPreviewCv();
 let supabaseClientCv = null;
 let currentUserCv = null;
 let meuCurriculoId = null;
+
+function mascaraCep(event){
+  let v = event.target.value.replace(/\D/g, '').slice(0, 8);
+  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  event.target.value = v;
+}
 
 if(typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined'){
   supabaseClientCv = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

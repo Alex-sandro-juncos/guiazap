@@ -157,6 +157,20 @@ async function copiarLinkVaga(id, event){
   document.getElementById('menu-compartilhar-vaga-' + id).style.display = 'none';
 }
 
+function formatarValorVaga(event){
+  const input = event.target;
+  const valorAtual = input.value;
+
+  // Se a pessoa digitou alguma letra (ex: "A combinar"), não mexe em nada, deixa livre
+  if(/[a-zA-Z]/.test(valorAtual)) return;
+
+  const somenteDigitos = valorAtual.replace(/\D/g, '');
+  if(!somenteDigitos){ input.value = ''; return; }
+
+  const numero = (parseInt(somenteDigitos, 10) / 100).toFixed(2);
+  input.value = numero.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 function abrirFormVaga(){
   document.getElementById('vaga-form').classList.add('open');
   document.getElementById('vg-msg').textContent = '';

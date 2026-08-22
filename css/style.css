@@ -1124,3 +1124,18 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   font-weight: 700;
   cursor: pointer;
 }
+
+.contagem-seguidores { font-size: 0.75rem; color: #6b46c1; font-weight: 700; margin-top: 2px; }
+
+.campo-com-prefixo { position: relative; }
+.campo-com-prefixo .prefixo-rs {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 700;
+  color: #444;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.campo-com-prefixo input { padding-left: 34px !important; }

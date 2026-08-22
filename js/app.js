@@ -74,6 +74,7 @@ async function updateAuthUI(){
   const addBtn = document.getElementById('add-btn');
 
   await loadSeguindo();
+  await loadContagemSeguidores();
 
   if(currentUser){
     loggedOutBox.style.display = 'none';
@@ -125,6 +126,7 @@ async function signIn(){
 }
 
 async function signOut(){
+  modoGerenciarAtivo = false;
   await supabaseClient.auth.signOut();
   document.getElementById('auth-email').value = '';
   document.getElementById('auth-password').value = '';
@@ -201,6 +203,7 @@ async function loadEntries(){
 
   abrirCadastroSePendente();
   abrirStorySeVindoDoProduto();
+  loadContagemSeguidores().then(render);
   render();
 }
 
@@ -791,6 +794,24 @@ async function loadSeguindo(){
   seguindoEmpresas = new Set((data || []).map(s => s.profissional_id));
 }
 
+let contagemSeguidoresPorEmpresa = {};
+
+async function loadContagemSeguidores(){
+  contagemSeguidoresPorEmpresa = {};
+  if(!currentUser) return;
+
+  const minhasEmpresasPremium = entries.filter(e => e.user_id === currentUser.id && e.plano === 'premium');
+  if(minhasEmpresasPremium.length === 0) return;
+
+  for(const empresa of minhasEmpresasPremium){
+    const { count, error } = await supabaseClient
+      .from('seguidores')
+      .select('id', { count: 'exact', head: true })
+      .eq('profissional_id', empresa.id);
+    if(!error) contagemSeguidoresPorEmpresa[empresa.id] = count || 0;
+  }
+}
+
 async function toggleSeguir(profissionalId, event){
   event.stopPropagation();
 
@@ -849,6 +870,15 @@ function toggleFiltroFavoritos(){
   mostrandoSoFavoritos = !mostrandoSoFavoritos;
   const btn = document.getElementById('btn-favoritos');
   if(btn) btn.classList.toggle('ativo', mostrandoSoFavoritos);
+  render();
+}
+
+let mostrandoSoSeguindo = false;
+
+function toggleFiltroSeguindo(){
+  mostrandoSoSeguindo = !mostrandoSoSeguindo;
+  const btn = document.getElementById('btn-seguindo-filtro');
+  if(btn) btn.classList.toggle('ativo', mostrandoSoSeguindo);
   render();
 }
 
@@ -1048,14 +1078,11 @@ async function loadProdutosDestaque(){
     return;
   }
 
-  const temCadastroProprio = usuarioTemCadastroProprio();
-
   produtosDestaqueTodos = data
-    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && (p.profissionais.plano === 'completo' || p.profissionais.plano === 'premium'))
-    .filter(p => !temCadastroProprio || (p.profissionais && p.profissionais.user_id === currentUser.id));
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && (p.profissionais.plano === 'completo' || p.profissionais.plano === 'premium'));
 
   const titulo = document.querySelector('.destaque-header h2');
-  if(titulo) titulo.textContent = currentUser ? '🛍️ Seus produtos' : '🛍️ Produtos em destaque';
+  if(titulo) titulo.textContent = '🛍️ Produtos em destaque';
 
   renderProdutosDestaque();
 }
@@ -1603,7 +1630,33 @@ function usuarioTemCadastroProprio(){
   return !!(currentUser && entries.some(en => en.user_id === currentUser.id));
 }
 
+let modoGerenciarAtivo = false;
+
+function verMinhaEmpresa(){
+  if(!currentUser){
+    const authBox = document.getElementById('auth-form-fields');
+    if(authBox.style.display === 'none') toggleAuthForm();
+    const msg = document.getElementById('auth-msg');
+    if(msg) msg.textContent = '🔑 Faça login pra ver sua empresa';
+    return;
+  }
+  modoGerenciarAtivo = true;
+  render();
+  document.getElementById('list').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function verBuscaCompleta(){
+  modoGerenciarAtivo = false;
+  render();
+}
+
 function render(){
+  const btnVerMinhaEmpresa = document.getElementById('btn-ver-minha-empresa');
+  if(btnVerMinhaEmpresa) btnVerMinhaEmpresa.style.display = usuarioTemCadastroProprio() ? 'inline-block' : 'none';
+
+  const btnSeguindoFiltro = document.getElementById('btn-seguindo-filtro');
+  if(btnSeguindoFiltro) btnSeguindoFiltro.style.display = seguindoEmpresas.size > 0 ? 'block' : 'none';
+
   renderProdutosDestaque();
   const list = document.getElementById('list');
   const query = normalizarTexto(document.getElementById('search').value);
@@ -1616,13 +1669,13 @@ function render(){
     ? entries.filter(e => e.id === cadastroCompartilhadoId && e.status_pagamento === 'ativo')
     : entries
     .filter(e => {
-      // Só entra em "modo gerenciar" (ver só os próprios) se a pessoa realmente
-      // tiver pelo menos um cadastro próprio. Quem só tem conta (seguidor, candidato,
-      // sem empresa nenhuma) continua vendo o diretório público normal.
-      const temCadastroProprio = usuarioTemCadastroProprio();
-      return temCadastroProprio ? e.user_id === currentUser.id : e.status_pagamento === 'ativo';
+      // "Modo gerenciar" (ver só o próprio cadastro) só liga quando a pessoa
+      // clica no botão "Ver minha empresa" — nunca troca sozinho ao logar,
+      // pra ela continuar podendo buscar outras empresas/produtos à vontade.
+      return modoGerenciarAtivo ? e.user_id === currentUser.id : e.status_pagamento === 'ativo';
     })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
+    .filter(e => !mostrandoSoSeguindo || seguindoEmpresas.has(e.id))
     .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
@@ -1634,13 +1687,11 @@ function render(){
       return a.name.localeCompare(b.name, 'pt-BR');
     });
 
-  const temCadastroProprioContagem = usuarioTemCadastroProprio();
-
   document.getElementById('count').innerHTML = loaded
     ? (cadastroCompartilhadoId
         ? `Cadastro compartilhado <button type="button" class="link-voltar-busca" onclick="verTodos()">Ver busca completa</button>`
-        : temCadastroProprioContagem
-          ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
+        : modoGerenciarAtivo
+          ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b> <button type="button" class="link-voltar-busca" onclick="verBuscaCompleta()">← Ver busca completa</button>`
           : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
     : '';
 
@@ -1676,6 +1727,7 @@ function render(){
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}${e.plano === 'premium' ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
+          ${isOwner && e.plano === 'premium' ? `<div class="contagem-seguidores">👥 ${contagemSeguidoresPorEmpresa[e.id] ?? '...'} seguidor${contagemSeguidoresPorEmpresa[e.id] === 1 ? '' : 'es'}</div>` : ''}
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
             ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? 'Deixar de seguir' : '+ Seguir'}</button>` : ''}
@@ -1748,8 +1800,8 @@ function render(){
             <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
             ${renderContatosExtra(e.contatos_extra)}
           </div>
-          ${e.plano === 'completo' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
-          ${isOwner && e.plano === 'completo' ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
+          ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
+          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
         </div>
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
@@ -1765,6 +1817,29 @@ function render(){
 
   entries.filter(e => e.user_id === (currentUser && currentUser.id)).forEach(e => renderMinhasNovidades(e.id));
   renderStoriesLinha();
+}
+
+function mascaraCep(event){
+  let v = event.target.value.replace(/\D/g, '').slice(0, 8);
+  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  event.target.value = v;
+}
+
+function mascaraDocumento(event){
+  let v = event.target.value.replace(/\D/g, '').slice(0, 14);
+  if(v.length <= 11){
+    // CPF: 000.000.000-00
+    v = v.replace(/(\d{3})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  } else {
+    // CNPJ: 00.000.000/0000-00
+    v = v.replace(/(\d{2})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d)/, '$1/$2')
+         .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+  event.target.value = v;
 }
 
 function normalizarTexto(str){
