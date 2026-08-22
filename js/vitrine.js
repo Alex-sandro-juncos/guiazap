@@ -35,12 +35,15 @@ async function initAuthV(){
   document.getElementById('v-add-btn').style.display = currentUserV ? 'inline-block' : 'none';
 
   if(currentUserV){
+    // CORRIGIDO: antes só buscava plano === 'completo', deixando de fora quem é
+    // 'premium' — isso fazia donos Premium perderem o botão de anunciar produto
+    // e caírem incorretamente no modo "vitrine pública" em vez do "meus produtos".
     const { data } = await supabaseClientV
       .from('profissionais')
       .select('id, name')
       .eq('user_id', currentUserV.id)
       .eq('status_pagamento', 'ativo')
-      .eq('plano', 'completo');
+      .in('plano', ['completo', 'premium']);
     meusCadastros = data || [];
 
     const sel = document.getElementById('p-profissional');
@@ -49,6 +52,8 @@ async function initAuthV(){
     if(meusCadastros.length === 0){
       document.getElementById('v-add-btn').style.display = 'none';
     }
+  } else {
+    meusCadastros = [];
   }
 }
 
@@ -187,14 +192,27 @@ function popularFiltrosProduto(){
   if(datalist) datalist.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">`).join('');
 }
 
+// ---------- Descobre se o usuário logado tem empresa própria (Completo/Premium) ----------
+// CORRIGIDO: antes o código usava só "currentUserV" (se está logado) pra decidir
+// entre mostrar a vitrine pública ou só os produtos do usuário. Isso fazia qualquer
+// pessoa logada SEM empresa cadastrada (ex: só criou uma conta, ou é seguidor de
+// alguma loja) ver "0 produtos", já que nenhum produto pertence a ela.
+// Agora a checagem usa meusCadastros (lista de empresas Completo/Premium do usuário),
+// igual já era feito corretamente no script da página inicial (usuarioTemCadastroProprio).
+function usuarioTemEmpresaPropria(){
+  return meusCadastros.length > 0;
+}
+
 function renderProdutos(){
   const query = normalizarTextoV(document.getElementById('v-search').value);
   const categoriaFiltro = document.getElementById('v-filter-categoria').value;
   const precoFiltro = document.getElementById('v-filter-preco').value;
   const linkDireto = produtoFiltroId || empresaFiltroId;
+  const temEmpresaPropria = usuarioTemEmpresaPropria();
+
   const filtrados = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
-    .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => linkDireto || !temEmpresaPropria || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
     .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
     .filter(p => {
@@ -227,7 +245,7 @@ function renderProdutos(){
 
   const grid = document.getElementById('v-grid');
   if(filtrados.length === 0){
-    const mensagem = (currentUserV && !linkDireto)
+    const mensagem = (temEmpresaPropria && !linkDireto)
       ? 'Você ainda não tem produtos cadastrados. Clique em "+ Anunciar produto" para começar.'
       : 'Nenhum produto encontrado ainda.';
     grid.innerHTML = `<div class="vazio-vitrine">${mensagem}</div>`;
