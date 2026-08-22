@@ -1048,9 +1048,11 @@ async function loadProdutosDestaque(){
     return;
   }
 
+  const temCadastroProprio = usuarioTemCadastroProprio();
+
   produtosDestaqueTodos = data
-    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && p.profissionais.plano === 'completo')
-    .filter(p => !currentUser || (p.profissionais && p.profissionais.user_id === currentUser.id));
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && (p.profissionais.plano === 'completo' || p.profissionais.plano === 'premium'))
+    .filter(p => !temCadastroProprio || (p.profissionais && p.profissionais.user_id === currentUser.id));
 
   const titulo = document.querySelector('.destaque-header h2');
   if(titulo) titulo.textContent = currentUser ? '🛍️ Seus produtos' : '🛍️ Produtos em destaque';
@@ -1597,6 +1599,10 @@ function contarVisualizacao(id, isOwner){
   });
 }
 
+function usuarioTemCadastroProprio(){
+  return !!(currentUser && entries.some(en => en.user_id === currentUser.id));
+}
+
 function render(){
   renderProdutosDestaque();
   const list = document.getElementById('list');
@@ -1613,7 +1619,7 @@ function render(){
       // Só entra em "modo gerenciar" (ver só os próprios) se a pessoa realmente
       // tiver pelo menos um cadastro próprio. Quem só tem conta (seguidor, candidato,
       // sem empresa nenhuma) continua vendo o diretório público normal.
-      const temCadastroProprio = currentUser && entries.some(en => en.user_id === currentUser.id);
+      const temCadastroProprio = usuarioTemCadastroProprio();
       return temCadastroProprio ? e.user_id === currentUser.id : e.status_pagamento === 'ativo';
     })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
@@ -1628,10 +1634,12 @@ function render(){
       return a.name.localeCompare(b.name, 'pt-BR');
     });
 
+  const temCadastroProprioContagem = usuarioTemCadastroProprio();
+
   document.getElementById('count').innerHTML = loaded
     ? (cadastroCompartilhadoId
         ? `Cadastro compartilhado <button type="button" class="link-voltar-busca" onclick="verTodos()">Ver busca completa</button>`
-        : currentUser
+        : temCadastroProprioContagem
           ? `Seus cadastros · <b>${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}</b>`
           : `Profissionais próximos a você · <b>${filtered.length} resultados</b>`)
     : '';
@@ -1670,7 +1678,7 @@ function render(){
           <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}${e.plano === 'premium' ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
-            ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? '✓ Seguindo' : '+ Seguir'}</button>` : ''}
+            ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? 'Deixar de seguir' : '+ Seguir'}</button>` : ''}
             ${isOwner ? `<span class="owner-actions">
               <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
               <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
