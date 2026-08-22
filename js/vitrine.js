@@ -33,6 +33,7 @@ async function initAuthV(){
   const { data: { session } } = await supabaseClientV.auth.getSession();
   currentUserV = session ? session.user : null;
   document.getElementById('v-add-btn').style.display = currentUserV ? 'inline-block' : 'none';
+  document.getElementById('v-ver-meus-btn').style.display = 'none';
 
   if(currentUserV){
     const { data } = await supabaseClientV
@@ -40,7 +41,7 @@ async function initAuthV(){
       .select('id, name')
       .eq('user_id', currentUserV.id)
       .eq('status_pagamento', 'ativo')
-      .eq('plano', 'completo');
+      .in('plano', ['completo', 'premium']);
     meusCadastros = data || [];
 
     const sel = document.getElementById('p-profissional');
@@ -48,6 +49,8 @@ async function initAuthV(){
 
     if(meusCadastros.length === 0){
       document.getElementById('v-add-btn').style.display = 'none';
+    } else {
+      document.getElementById('v-ver-meus-btn').style.display = 'inline-block';
     }
   }
 }
@@ -187,6 +190,23 @@ function popularFiltrosProduto(){
   if(datalist) datalist.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">`).join('');
 }
 
+let modoGerenciarVitrineAtivo = false;
+
+function verMeusProdutos(){
+  if(!currentUserV){
+    alert('Faça login na página inicial primeiro pra ver seus produtos.');
+    return;
+  }
+  modoGerenciarVitrineAtivo = true;
+  renderProdutos();
+  document.getElementById('v-grid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function verVitrineCompleta(){
+  modoGerenciarVitrineAtivo = false;
+  renderProdutos();
+}
+
 function renderProdutos(){
   const query = normalizarTextoV(document.getElementById('v-search').value);
   const categoriaFiltro = document.getElementById('v-filter-categoria').value;
@@ -194,7 +214,7 @@ function renderProdutos(){
   const linkDireto = produtoFiltroId || empresaFiltroId;
   const filtrados = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
-    .filter(p => linkDireto || !currentUserV || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    .filter(p => !modoGerenciarVitrineAtivo || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
     .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
     .filter(p => {
@@ -223,7 +243,9 @@ function renderProdutos(){
       return premiumB - premiumA;
     });
 
-  document.getElementById('v-count').textContent = `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
+  document.getElementById('v-count').innerHTML = modoGerenciarVitrineAtivo
+    ? `Seus produtos · <b>${filtrados.length}</b> <button type="button" class="link-voltar-busca" onclick="verVitrineCompleta()">← Ver vitrine completa</button>`
+    : `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`;
 
   const grid = document.getElementById('v-grid');
   if(filtrados.length === 0){

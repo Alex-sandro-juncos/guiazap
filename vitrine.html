@@ -252,7 +252,10 @@
 
 <div class="vitrine-toolbar">
   <span class="count" id="v-count"></span>
-  <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+  <div>
+    <button type="button" class="btn-add-produto" id="v-ver-meus-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="verMeusProdutos()">🏢 Ver meus produtos</button>
+    <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+  </div>
 </div>
 
 <form id="produto-form" onsubmit="return salvarProduto(event)">
