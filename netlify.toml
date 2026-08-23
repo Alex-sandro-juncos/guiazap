@@ -1,0 +1,33 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[functions."verificar-pagamentos"]
+  schedule = "0 * * * *"
+
+[functions."relatorio-semanal"]
+  schedule = "0 9 * * 1"
+
+# Gera o sitemap.xml na hora (com todas as combinações de categoria+cidade
+# reais do banco), em vez de usar um arquivo fixo desatualizado
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap-dinamico"
+  status = 200
+
+# Mostra um artigo específico do blog (ex: /blog/como-escolher-eletricista)
+[[redirects]]
+  from = "/blog/*"
+  to = "/blog-post.html"
+  status = 200
+
+# Redireciona URLs bonitas de categoria (ex: /eletricistas-mangueirinha) pra
+# página que interpreta o endereço e mostra os resultados certos. Como o
+# Netlify sempre prioriza arquivos reais (index.html, vitrine.html, etc) antes
+# de aplicar redirecionamentos, isso só entra em ação pra endereços que não
+# batem com nenhuma página existente do site. Fica por último, pra não
+# atropelar os redirecionamentos mais específicos de cima.
+[[redirects]]
+  from = "/*"
+  to = "/categoria.html"
+  status = 200
