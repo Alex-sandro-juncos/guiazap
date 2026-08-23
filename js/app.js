@@ -83,6 +83,54 @@ async function toggleStatusDisponibilidade(profissionalId){
   render();
 }
 
+function gerarCodigoGuiaZapAleatorio(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem letras/números fáceis de confundir (0, O, I, 1)
+  let codigo = '';
+  for(let i = 0; i < 6; i++){ codigo += chars[Math.floor(Math.random() * chars.length)]; }
+  return 'GZ-' + codigo;
+}
+
+async function mostrarMeuCodigoGuiaZap(){
+  if(!currentUser) return;
+  const box = document.getElementById('codigo-guiazap-box');
+  const jaAberto = box.style.display === 'block';
+  box.style.display = jaAberto ? 'none' : 'block';
+  if(jaAberto) return;
+
+  const input = document.getElementById('codigo-guiazap-input');
+  input.value = 'carregando...';
+
+  const { data: perfilExistente } = await supabaseClient.from('perfis_usuario').select('codigo_guiazap').eq('user_id', currentUser.id).maybeSingle();
+
+  if(perfilExistente){
+    input.value = perfilExistente.codigo_guiazap;
+    return;
+  }
+
+  // Primeira vez — gera um código novo e tenta salvar (tenta de novo se, por
+  // pouquíssima chance, o código sortido já existir em outra pessoa)
+  let codigoNovo = gerarCodigoGuiaZapAleatorio();
+  let tentativas = 0;
+  let salvo = false;
+
+  while(!salvo && tentativas < 5){
+    const { error } = await supabaseClient.from('perfis_usuario').insert({ user_id: currentUser.id, codigo_guiazap: codigoNovo });
+    if(!error){ salvo = true; } else { codigoNovo = gerarCodigoGuiaZapAleatorio(); tentativas++; }
+  }
+
+  input.value = salvo ? codigoNovo : 'erro ao gerar, tente de novo';
+}
+
+function copiarCodigoGuiaZap(){
+  const input = document.getElementById('codigo-guiazap-input');
+  navigator.clipboard.writeText(input.value).then(() => {
+    alert('Código copiado! Compartilhe com quem você quer que te encontre no chat.');
+  }).catch(() => {
+    input.select();
+    alert('Selecione e copie manualmente (Ctrl+C).');
+  });
+}
+
 function mostrarLinkIndicacao(){
   if(!currentUser) return;
   const box = document.getElementById('indicacao-box');
@@ -892,6 +940,13 @@ function verTodos(){
   render();
 }
 
+// Função reutilizável — leva pro chat com o conteúdo pronto pra escolher pra
+// quem enviar. Funciona em qualquer página que incluir esse arquivo (app.js).
+function compartilharNoChat(url, titulo){
+  const conteudo = { url, titulo };
+  window.location.href = `chat.html?compartilhar=${encodeURIComponent(JSON.stringify(conteudo))}`;
+}
+
 function mostrarQrCode(id){
   const box = document.getElementById('qrcode-box-' + id);
   if(!box) return;
@@ -1417,6 +1472,106 @@ function editEntry(id){
 
 let storyFotosSelecionadas = [];
 let storyLimiteFotos = 1;
+
+let arquivoVideoSelecionado = null;
+
+async function abrirFormVideo(profissionalId, plano){
+  document.getElementById('video-profissional-id').value = profissionalId;
+  document.getElementById('video-plano').value = plano;
+  document.getElementById('video-titulo-input').value = '';
+  document.getElementById('video-arquivo-msg').textContent = '';
+  arquivoVideoSelecionado = null;
+
+  const limiteTexto = plano === 'premium'
+    ? 'Seu plano permite vídeos de até 60 segundos e 100MB, sem limite de quantidade'
+    : 'Seu plano permite vídeos de até 30 segundos e 50MB, até 3 vídeos ativos';
+  document.getElementById('video-limite-texto').textContent = limiteTexto;
+
+  document.getElementById('video-form').style.display = 'block';
+  document.getElementById('video-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function fecharFormVideo(){
+  document.getElementById('video-form').style.display = 'none';
+  arquivoVideoSelecionado = null;
+}
+
+function selecionarArquivoVideo(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('video-arquivo-msg');
+  if(!file) return;
+
+  const plano = document.getElementById('video-plano').value;
+  const limiteDuracao = plano === 'premium' ? 60 : 30;
+  const limiteTamanho = plano === 'premium' ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
+
+  if(file.size > limiteTamanho){
+    msg.textContent = `Esse arquivo é grande demais (máximo ${plano === 'premium' ? '100MB' : '50MB'} no seu plano).`;
+    msg.style.color = '#a4402f';
+    event.target.value = '';
+    arquivoVideoSelecionado = null;
+    return;
+  }
+
+  const videoTeste = document.createElement('video');
+  videoTeste.preload = 'metadata';
+  videoTeste.onloadedmetadata = () => {
+    URL.revokeObjectURL(videoTeste.src);
+    const duracao = Math.round(videoTeste.duration);
+
+    if(duracao > limiteDuracao){
+      msg.textContent = `Esse vídeo tem ${duracao}s — o máximo no seu plano é ${limiteDuracao}s.`;
+      msg.style.color = '#a4402f';
+      event.target.value = '';
+      arquivoVideoSelecionado = null;
+      return;
+    }
+
+    arquivoVideoSelecionado = { file, duracao, tamanho: file.size };
+    msg.textContent = `✓ Vídeo de ${duracao}s pronto pra enviar.`;
+    msg.style.color = 'var(--verde-escuro)';
+  };
+  videoTeste.src = URL.createObjectURL(file);
+}
+
+async function salvarVideoEmpresa(e){
+  e.preventDefault();
+  const msg = document.getElementById('video-msg');
+  const titulo = document.getElementById('video-titulo-input').value.trim();
+  const profissionalId = document.getElementById('video-profissional-id').value;
+
+  if(!titulo){ msg.textContent = 'Escreve um título pro vídeo.'; msg.style.color = '#a4402f'; return false; }
+  if(!arquivoVideoSelecionado){ msg.textContent = 'Escolhe um vídeo primeiro.'; msg.style.color = '#a4402f'; return false; }
+
+  msg.textContent = 'enviando vídeo, isso pode demorar um pouco...';
+  msg.style.color = '#555';
+
+  const nomeArquivo = `videos/${currentUser.id}/${Date.now()}-${arquivoVideoSelecionado.file.name}`;
+  const { error: erroUpload } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, arquivoVideoSelecionado.file);
+  if(erroUpload){ console.error(erroUpload); msg.textContent = 'erro ao enviar o vídeo'; msg.style.color = '#a4402f'; return false; }
+
+  const { data: urlData } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
+
+  const { error: erroInsert } = await supabaseClient.from('videos_empresa').insert({
+    profissional_id: profissionalId,
+    titulo,
+    video_url: urlData.publicUrl,
+    duracao_segundos: arquivoVideoSelecionado.duracao,
+    tamanho_bytes: arquivoVideoSelecionado.tamanho
+  });
+
+  if(erroInsert){
+    console.error(erroInsert);
+    msg.textContent = erroInsert.message.includes('row-level security') ? 'Você atingiu o limite de vídeos do seu plano.' : 'erro ao publicar vídeo';
+    msg.style.color = '#a4402f';
+    return false;
+  }
+
+  msg.textContent = '✓ Vídeo publicado! Confira na Seção de Vídeos.';
+  msg.style.color = 'var(--verde-escuro)';
+  setTimeout(fecharFormVideo, 1500);
+  return false;
+}
 
 async function abrirFormStory(profissionalId, plano){
   document.getElementById('story-profissional-id').value = profissionalId;
@@ -2195,6 +2350,7 @@ function render(){
         ${isOwner && !pendente && !(e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date()) ? `<a href="${LINK_IMPULSIONAR}" class="link-migrar" style="background:#1c1c1c; color:white; border:none;">🚀 Impulsionar por 24h no topo (R$5,00)</a>` : ''}
         <div class="card-acoes-extra">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
+          <button type="button" class="link-compartilhar" onclick="compartilharNoChat('${window.location.origin}${window.location.pathname}?p=${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
           ${isOwner ? `<button type="button" class="link-compartilhar" onclick="mostrarQrCode('${e.id}')">📱 QR Code pra imprimir</button>` : ''}
           <div class="qrcode-box" id="qrcode-box-${e.id}" style="display:none;"></div>
@@ -2250,6 +2406,8 @@ function render(){
           ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
+          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<button type="button" class="link-ver-produtos" style="background:#6b46c1; border:none; cursor:pointer;" onclick="abrirFormVideo('${e.id}', '${e.plano}')">🎥 Postar vídeo</button>` : ''}
+          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
           ${isOwner && e.plano === 'premium' ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}

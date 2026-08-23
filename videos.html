@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vídeos das Empresas — GuiaZap</title>
+<meta name="description" content="Veja vídeos de empresas e profissionais locais no GuiaZap.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .videos-wrap { max-width: 500px; margin: 0 auto; padding: 15px 15px 50px; }
+  .voltar { display: inline-block; margin-bottom: 12px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .filtros-video { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card-video { background: white; border-radius: 14px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  .card-video video { width: 100%; max-height: 500px; background: #000; display: block; }
+  .card-video .info-video { padding: 12px; }
+  .card-video .empresa-video { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 700; color: var(--verde-escuro); }
+  .selo-video-oficial { font-size: 0.62rem; background: #e8f5e9; color: #1a7a3c; padding: 1px 7px; border-radius: 50px; font-weight: 700; }
+  .titulo-video { font-size: 0.9rem; color: #333; margin-top: 4px; }
+  .meta-video { font-size: 0.72rem; color: #999; margin-top: 6px; }
+  .acoes-video { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .btn-voto { border: 1.5px solid #ddd; background: white; border-radius: 50px; padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+  .btn-voto.aprovado.ativo { background: #e8f5e9; border-color: #1a7a3c; color: #1a7a3c; }
+  .btn-voto.nao-gostei.ativo { background: #fdeaea; border-color: #a4402f; color: #a4402f; }
+  .btn-acao-video { background: none; border: none; font-size: 1.1rem; cursor: pointer; margin-left: auto; }
+  .vazio-videos { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Vídeos das Empresas</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="videos-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="filtros-video">
+    <button type="button" class="chip-filtro-rapido ativo" id="filtro-recentes" onclick="mudarOrdemVideos('recentes')">Mais recentes</button>
+    <button type="button" class="chip-filtro-rapido" id="filtro-vistos" onclick="mudarOrdemVideos('vistos')">Mais vistos</button>
+    <button type="button" class="chip-filtro-rapido" id="filtro-premium" onclick="mudarOrdemVideos('premium')">Premium primeiro</button>
+  </div>
+  <select id="filtro-categoria-video" onchange="renderVideos()" style="width:100%; margin-bottom:16px; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+    <option value="">Todas as categorias</option>
+  </select>
+
+  <div id="videos-lista">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientVideos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let todosVideos = [];
+let ordemAtualVideos = 'recentes';
+let usuarioAtualVideos = null;
+let meusVotosVideos = {};
+let jaContabilizouView = new Set();
+
+function escapeHtmlVideos(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function tempoRelativoVideo(dataStr){
+  const diff = Date.now() - new Date(dataStr).getTime();
+  const horas = Math.floor(diff / (1000 * 60 * 60));
+  if(horas < 1) return 'agora há pouco';
+  if(horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `há ${dias} dia${dias > 1 ? 's' : ''}`;
+}
+
+async function initVideos(){
+  const { data: { session } } = await supabaseClientVideos.auth.getSession();
+  usuarioAtualVideos = session ? session.user : null;
+
+  const { data, error } = await supabaseClientVideos
+    .from('videos_empresa')
+    .select('*, profissionais(name, cat, plano, verificado, status_pagamento)')
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); document.getElementById('videos-lista').innerHTML = '<div class="vazio-videos">Erro ao carregar vídeos.</div>'; return; }
+
+  todosVideos = (data || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
+
+  if(usuarioAtualVideos){
+    const { data: votos } = await supabaseClientVideos.from('videos_votos').select('video_id, tipo').eq('user_id', usuarioAtualVideos.id);
+    (votos || []).forEach(v => { meusVotosVideos[v.video_id] = v.tipo; });
+  }
+
+  const categorias = [...new Set(todosVideos.map(v => v.profissionais.cat).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  document.getElementById('filtro-categoria-video').innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(c => `<option value="${escapeHtmlVideos(c)}">${escapeHtmlVideos(c)}</option>`).join('');
+
+  renderVideos();
+}
+
+function mudarOrdemVideos(ordem){
+  ordemAtualVideos = ordem;
+  document.querySelectorAll('.filtros-video .chip-filtro-rapido').forEach(b => b.classList.remove('ativo'));
+  document.getElementById('filtro-' + (ordem === 'recentes' ? 'recentes' : ordem === 'vistos' ? 'vistos' : 'premium')).classList.add('ativo');
+  renderVideos();
+}
+
+async function renderVideos(){
+  const categoriaFiltro = document.getElementById('filtro-categoria-video').value;
+  let lista = todosVideos.filter(v => !categoriaFiltro || v.profissionais.cat === categoriaFiltro);
+
+  if(ordemAtualVideos === 'vistos'){
+    lista = [...lista].sort((a,b) => b.visualizacoes - a.visualizacoes);
+  } else if(ordemAtualVideos === 'premium'){
+    lista = [...lista].sort((a,b) => {
+      const premA = a.profissionais.plano === 'premium' ? 1 : 0;
+      const premB = b.profissionais.plano === 'premium' ? 1 : 0;
+      if(premA !== premB) return premB - premA;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+  } else {
+    lista = [...lista].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  const container = document.getElementById('videos-lista');
+  if(lista.length === 0){
+    container.innerHTML = '<div class="vazio-videos">Nenhum vídeo por aqui ainda.</div>';
+    return;
+  }
+
+  const contagens = await Promise.all(lista.map(v => contarVotos(v.id)));
+
+  container.innerHTML = lista.map((v, i) => {
+    const votoMeu = meusVotosVideos[v.id];
+    const { aprovados, naoGostei } = contagens[i];
+    return `
+    <div class="card-video">
+      <video src="${escapeHtmlVideos(v.video_url)}" controls playsinline onplay="registrarViewVideo('${v.id}')"></video>
+      <div class="info-video">
+        <div class="empresa-video">${escapeHtmlVideos(v.profissionais.name)} <span class="selo-video-oficial">✅ Vídeo oficial</span></div>
+        <div class="titulo-video">${escapeHtmlVideos(v.titulo)}</div>
+        <div class="meta-video">${v.profissionais.cat} · 👁️ ${v.visualizacoes} visualizações · ${tempoRelativoVideo(v.created_at)}</div>
+        <div class="acoes-video">
+          <button type="button" class="btn-voto aprovado${votoMeu === 'aprovado' ? ' ativo' : ''}" onclick="votarVideo('${v.id}', 'aprovado')">+ Aprovado (${aprovados})</button>
+          <button type="button" class="btn-voto nao-gostei${votoMeu === 'nao_gostei' ? ' ativo' : ''}" onclick="votarVideo('${v.id}', 'nao_gostei')">– Não gostei (${naoGostei})</button>
+          <button type="button" class="btn-acao-video" onclick="compartilharVideoWhatsapp('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Compartilhar no WhatsApp">📤</button>
+          <button type="button" class="btn-acao-video" onclick="compartilharVideoNoChat('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Enviar no chat do GuiaZap">💬</button>
+          <button type="button" class="btn-acao-video" onclick="denunciarVideo('${v.id}')" title="Denunciar">🚩</button>
+        </div>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+async function contarVotos(videoId){
+  const { data } = await supabaseClientVideos.from('videos_votos').select('tipo').eq('video_id', videoId);
+  const aprovados = (data || []).filter(v => v.tipo === 'aprovado').length;
+  const naoGostei = (data || []).filter(v => v.tipo === 'nao_gostei').length;
+  return { aprovados, naoGostei };
+}
+
+function registrarViewVideo(videoId){
+  if(jaContabilizouView.has(videoId)) return;
+  jaContabilizouView.add(videoId);
+  supabaseClientVideos.rpc('incrementar_visualizacao_video', { vid: videoId }).catch(e => console.error(e));
+}
+
+async function votarVideo(videoId, tipo){
+  if(!usuarioAtualVideos){
+    alert('Faça login na página inicial pra poder avaliar vídeos.');
+    return;
+  }
+
+  const votoAtual = meusVotosVideos[videoId];
+
+  if(votoAtual === tipo){
+    // Clicou de novo no mesmo — remove o voto
+    await supabaseClientVideos.from('videos_votos').delete().eq('video_id', videoId).eq('user_id', usuarioAtualVideos.id);
+    delete meusVotosVideos[videoId];
+  } else if(votoAtual){
+    // Já tinha votado o oposto — troca
+    await supabaseClientVideos.from('videos_votos').update({ tipo }).eq('video_id', videoId).eq('user_id', usuarioAtualVideos.id);
+    meusVotosVideos[videoId] = tipo;
+  } else {
+    // Não tinha votado ainda
+    await supabaseClientVideos.from('videos_votos').insert({ video_id: videoId, user_id: usuarioAtualVideos.id, tipo });
+    meusVotosVideos[videoId] = tipo;
+  }
+
+  renderVideos();
+}
+
+function compartilharVideoWhatsapp(videoId, titulo){
+  const link = `${window.location.origin}/videos.html?v=${videoId}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(`Olha esse vídeo no GuiaZap: ${titulo} — ${link}`)}`, '_blank');
+}
+
+function compartilharVideoNoChat(videoId, titulo){
+  const link = `${window.location.origin}/videos.html?v=${videoId}`;
+  const conteudo = { url: link, titulo: `🎥 ${titulo}` };
+  window.location.href = `chat.html?compartilhar=${encodeURIComponent(JSON.stringify(conteudo))}`;
+}
+
+async function denunciarVideo(videoId){
+  const motivo = prompt('Por que você está denunciando esse vídeo? (opcional)');
+  const { error } = await supabaseClientVideos.from('denuncias_videos').insert({ video_id: videoId, motivo: motivo || null });
+  if(error){ console.error(error); alert('Erro ao denunciar.'); return; }
+  alert('Denúncia enviada. Nossa equipe vai analisar.');
+}
+
+initVideos();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

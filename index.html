@@ -81,6 +81,7 @@
     <div>
       <button type="button" class="btn-auth-outline-header" id="btn-ver-minha-empresa" style="display:none;" onclick="verMinhaEmpresa()">🏢 Ver minha empresa</button>
       <button type="button" class="btn-auth-outline-header" onclick="mostrarLinkIndicacao()">🎁 Indique e ganhe</button>
+      <button type="button" class="btn-auth-outline-header" onclick="mostrarMeuCodigoGuiaZap()">🔑 Meu código GuiaZap</button>
       <button type="button" class="btn-auth-outline-header" onclick="toggleTrocarSenha()">Trocar senha</button>
       <button type="button" class="btn-auth-outline-header" onclick="signOut()">Sair</button>
     </div>
@@ -88,6 +89,11 @@
       <p style="font-size:0.78rem; color:#444; margin-bottom:6px;">🎁 Indique o GuiaZap: quando uma empresa se cadastra pelo seu link e vira pagante, você ganha <b>1 mês grátis</b> automaticamente!</p>
       <input type="text" id="indicacao-link-input" readonly style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.78rem; margin-bottom:6px;">
       <button type="button" class="btn-auth-outline-header" onclick="copiarLinkIndicacao()" style="width:100%;">📋 Copiar link</button>
+    </div>
+    <div id="codigo-guiazap-box" style="display:none; width:100%; margin-top:10px; background:#e8f5e9; border-radius:8px; padding:10px;">
+      <p style="font-size:0.78rem; color:#444; margin-bottom:6px;">🔑 Compartilhe esse código pra outras pessoas te adicionarem no chat, sem ver seu e-mail ou telefone de verdade.</p>
+      <input type="text" id="codigo-guiazap-input" readonly style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem; margin-bottom:6px; text-align:center; font-weight:800; letter-spacing:2px;">
+      <button type="button" class="btn-auth-outline-header" onclick="copiarCodigoGuiaZap()" style="width:100%;">📋 Copiar código</button>
     </div>
   </div>
 </header>
@@ -311,12 +317,34 @@
     </div>
   </form>
 
+  <form id="video-form" onsubmit="return salvarVideoEmpresa(event)" style="display:none;">
+    <input type="hidden" id="video-profissional-id">
+    <input type="hidden" id="video-plano">
+    <div class="field">
+      <label id="video-limite-texto">Limite do seu plano</label>
+      <label class="btn-foto-opcao" style="display:block; text-align:center;">
+        📹 Escolher vídeo (formato MP4)
+        <input type="file" accept="video/mp4" onchange="selecionarArquivoVideo(event)" style="display:none;">
+      </label>
+      <span class="foto-msg" id="video-arquivo-msg"></span>
+    </div>
+    <div class="field">
+      <label>Título do vídeo (obrigatório)</label>
+      <input type="text" id="video-titulo-input" placeholder="Ex: Como faço a instalação" maxlength="80">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar vídeo</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormVideo()">Cancelar</button>
+      <span class="form-msg" id="video-msg"></span>
+    </div>
+  </form>
+
   <div class="result-header" id="count"></div>
   <div id="list"></div>
   <div class="loading" id="loading">carregando profissionais...</div>
 
   <div class="rodape-legal">
-    <a href="sobre.html">Sobre / Como funciona</a> · <a href="blog.html">Blog</a> · <a href="mapa.html">Mapa</a> · <a href="chat.html">Chat</a> · <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a> · <a href="depoimentos.html">Depoimentos</a> · <a href="feed.html">Novidades que sigo</a>
+    <a href="sobre.html">Sobre / Como funciona</a> · <a href="blog.html">Blog</a> · <a href="mapa.html">Mapa</a> · <a href="chat.html">Chat</a> · <a href="videos.html">Vídeos</a> · <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a> · <a href="depoimentos.html">Depoimentos</a> · <a href="feed.html">Novidades que sigo</a>
   </div>
 </div>
 

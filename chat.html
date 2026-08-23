@@ -107,6 +107,8 @@
 <div class="chat-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
+  <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:10px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
+
   <div id="chat-lista-box" class="chat-lista-conversas">
     <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
   </div>
@@ -155,6 +157,18 @@
       <button type="button" class="btn-ferramenta-chat" id="btn-microfone" onclick="alternarGravacaoAudio()" title="Gravar áudio">🎤</button>
       <button type="button" onclick="enviarMensagemChat()">➤</button>
     </div>
+  </div>
+</div>
+
+<div id="overlay-compartilhar" class="overlay-chamada">
+  <div class="chamada-recebida-caixa" style="max-width:400px; width:90%; max-height:70vh; overflow-y:auto; text-align:left;">
+    <div style="text-align:center; margin-bottom:10px;">
+      <div style="font-weight:700; font-size:1rem;">Enviar pra quem?</div>
+      <div id="compartilhar-preview" style="font-size:0.8rem; color:#666; margin-top:4px;"></div>
+    </div>
+    <div id="compartilhar-lista-conversas"></div>
+    <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-top:10px;" onclick="compartilharComNovoContato()">+ Adicionar novo contato por código</button>
+    <button type="button" class="btn-cancelar" style="width:100%; margin-top:8px;" onclick="fecharOverlayCompartilhar()">Cancelar</button>
   </div>
 </div>
 
@@ -218,8 +232,136 @@ async function initChat(){
   const empresaId = params.get('empresa');
   if(empresaId) await abrirOuCriarConversa(empresaId);
 
+  const compartilharParam = params.get('compartilhar');
+  if(compartilharParam) await abrirTelaCompartilhar(compartilharParam);
+
   carregarListaConversas();
   ligarCanalDeChamadas();
+}
+
+let conteudoParaCompartilhar = null;
+
+async function abrirTelaCompartilhar(paramCodificado){
+  try{
+    conteudoParaCompartilhar = JSON.parse(decodeURIComponent(paramCodificado));
+  } catch(e){ console.error(e); return; }
+
+  document.getElementById('compartilhar-preview').textContent = conteudoParaCompartilhar.titulo || 'Conteúdo do GuiaZap';
+  document.getElementById('overlay-compartilhar').classList.add('aberto');
+
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  let filtroOr = `visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`;
+  if(meusIdsEmpresa.length > 0) filtroOr += `,profissional_id.in.(${meusIdsEmpresa.join(',')})`;
+
+  const { data } = await supabaseClientChat.from('conversas').select('id, profissional_id, visitante_user_id, usuario2_id, profissionais(name)').or(filtroOr).order('ultima_mensagem_em', { ascending: false });
+
+  const lista = document.getElementById('compartilhar-lista-conversas');
+  if(!data || data.length === 0){
+    lista.innerHTML = '<p style="text-align:center; color:#999; font-size:0.8rem; padding:10px 0;">Você ainda não tem conversas. Adicione um contato abaixo.</p>';
+    return;
+  }
+
+  const comNomes = await Promise.all(data.map(async (c) => {
+    let nome;
+    if(c.usuario2_id){
+      const outroId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
+      const { data: perfil } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroId).maybeSingle();
+      nome = (perfil && perfil.nome_exibicao) || 'Contato do GuiaZap';
+    } else {
+      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
+      nome = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+    }
+    return { ...c, nome };
+  }));
+
+  lista.innerHTML = comNomes.map(c => `
+    <div class="item-conversa" onclick="enviarConteudoCompartilhado('${c.id}')">
+      <div class="nome-conversa">${escapeHtmlChat(c.nome)}</div>
+    </div>
+  `).join('');
+}
+
+async function enviarConteudoCompartilhado(conversaId){
+  if(!conteudoParaCompartilhar) return;
+  conversaAtual = conversaId;
+  await enviarQualquerMensagem({
+    tipo: 'link',
+    arquivo_url: conteudoParaCompartilhar.url,
+    arquivo_nome: conteudoParaCompartilhar.titulo
+  });
+  conversaAtual = null;
+  fecharOverlayCompartilhar();
+  window.history.replaceState({}, '', window.location.pathname);
+  alert('Enviado!');
+  carregarListaConversas();
+}
+
+async function compartilharComNovoContato(){
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  if(!codigo) return;
+
+  const codigoLimpo = codigo.trim().toUpperCase();
+  const { data: perfilAlvo } = await supabaseClientChat.from('perfis_usuario').select('user_id').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+  if(!perfilAlvo){ alert('Código não encontrado.'); return; }
+
+  const { data: existente } = await supabaseClientChat.from('conversas').select('id').is('profissional_id', null)
+    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+  if(!conversaId){
+    const { data: nova } = await supabaseClientChat.from('conversas').insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id }).select('id').single();
+    conversaId = nova.id;
+  }
+
+  enviarConteudoCompartilhado(conversaId);
+}
+
+function fecharOverlayCompartilhar(){
+  document.getElementById('overlay-compartilhar').classList.remove('aberto');
+  conteudoParaCompartilhar = null;
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
+async function adicionarContatoPorCodigo(){
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  if(!codigo) return;
+
+  const codigoLimpo = codigo.trim().toUpperCase();
+  const { data: perfilAlvo, error } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+
+  if(error || !perfilAlvo){
+    alert('Código não encontrado. Confira se digitou certinho.');
+    return;
+  }
+
+  if(perfilAlvo.user_id === currentUserChat.id){
+    alert('Esse é o seu próprio código!');
+    return;
+  }
+
+  // Confere se já existe uma conversa com essa pessoa (em qualquer ordem)
+  const { data: existente } = await supabaseClientChat
+    .from('conversas')
+    .select('id')
+    .is('profissional_id', null)
+    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+
+  if(!conversaId){
+    const { data: nova, error: erroNova } = await supabaseClientChat
+      .from('conversas')
+      .insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id })
+      .select('id')
+      .single();
+    if(erroNova){ console.error(erroNova); alert('Erro ao adicionar contato.'); return; }
+    conversaId = nova.id;
+  }
+
+  carregarListaConversas();
+  abrirConversa(conversaId);
 }
 
 async function abrirOuCriarConversa(profissionalId){
@@ -249,24 +391,33 @@ async function carregarListaConversas(){
   const box = document.getElementById('chat-lista-box');
 
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const filtroOr = meusIdsEmpresa.length > 0
-    ? `visitante_user_id.eq.${currentUserChat.id},profissional_id.in.(${meusIdsEmpresa.join(',')})`
-    : `visitante_user_id.eq.${currentUserChat.id}`;
+  let filtroOr = `visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`;
+  if(meusIdsEmpresa.length > 0){
+    filtroOr += `,profissional_id.in.(${meusIdsEmpresa.join(',')})`;
+  }
 
   const { data, error } = await supabaseClientChat
     .from('conversas')
-    .select('id, profissional_id, visitante_user_id, ultima_mensagem_em, profissionais(name)')
+    .select('id, profissional_id, visitante_user_id, usuario2_id, ultima_mensagem_em, profissionais(name)')
     .or(filtroOr)
     .order('ultima_mensagem_em', { ascending: false });
 
   if(error || !data || data.length === 0){
-    box.innerHTML = '<div class="vazio-chat">Nenhuma conversa ainda. Vá até o perfil de uma empresa e clique em "💬 Chat pelo site" pra começar.</div>';
+    box.innerHTML = '<div class="vazio-chat">Nenhuma conversa ainda. Vá até o perfil de uma empresa e clique em "💬 Chat pelo site", ou adicione uma pessoa pelo código GuiaZap dela, pra começar.</div>';
     return;
   }
 
   const listaComInfo = await Promise.all(data.map(async (c) => {
-    const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
-    const nomeExibido = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+    let nomeExibido;
+    if(c.usuario2_id){
+      // Conversa entre pessoas — busca o nome de exibição do OUTRO participante
+      const outroUserId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
+      const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroUserId).maybeSingle();
+      nomeExibido = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+    } else {
+      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
+      nomeExibido = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+    }
 
     const { data: ultimaMsg } = await supabaseClientChat.from('mensagens_chat').select('texto, tipo, arquivo_nome').eq('conversa_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
     const { count: naoLidas } = await supabaseClientChat.from('mensagens_chat').select('id', { count: 'exact', head: true }).eq('conversa_id', c.id).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
@@ -280,6 +431,7 @@ async function carregarListaConversas(){
       else if(ultimaMsg.tipo === 'sticker') resumoUltimaMsg = '🏷️ Figurinha';
       else if(ultimaMsg.tipo === 'chamada_perdida') resumoUltimaMsg = '📞 Chamada perdida';
       else if(ultimaMsg.tipo === 'chamada_atendida') resumoUltimaMsg = '📞 Chamada realizada';
+      else if(ultimaMsg.tipo === 'link') resumoUltimaMsg = '🔗 ' + (ultimaMsg.arquivo_nome || 'Link compartilhado');
       else resumoUltimaMsg = ultimaMsg.texto || '';
     }
 
@@ -304,10 +456,17 @@ async function abrirConversa(conversaId){
   const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name)').eq('id', conversaId).single();
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
-  document.getElementById('chat-nome-topo').textContent = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
 
-  souEuAEmpresaNaConversaAtual = souEuAEmpresa;
-  const jaSilenciada = souEuAEmpresa ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
+  if(conversa.usuario2_id){
+    const outroUserId = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
+    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroUserId).maybeSingle();
+    document.getElementById('chat-nome-topo').textContent = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+  } else {
+    document.getElementById('chat-nome-topo').textContent = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+  }
+
+  souEuAEmpresaNaConversaAtual = souEuAEmpresa || (conversa.usuario2_id && conversa.usuario2_id === currentUserChat.id);
+  const jaSilenciada = souEuAEmpresaNaConversaAtual ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
   atualizarBotaoSilenciar(jaSilenciada);
   document.getElementById('volume-chat').value = localStorage.getItem('volume_chat') || '50';
 
@@ -410,6 +569,9 @@ function conteudoDaMensagem(m){
   }
   if(m.tipo === 'chamada_atendida'){
     return `📞 <i>Chamada realizada</i>`;
+  }
+  if(m.tipo === 'link'){
+    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">🔗</span> ${escapeHtmlChat(m.arquivo_nome || 'Ver no GuiaZap')}</a>`;
   }
   return escapeHtmlChat(m.texto);
 }
@@ -757,8 +919,16 @@ async function iniciarChamada(comVideo){
   const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name, user_id)').eq('id', conversaAtual).single();
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
-  const destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (conversa.profissionais ? conversa.profissionais.user_id : null);
-  const nomeDestinatario = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+
+  let destinatarioId, nomeDestinatario;
+  if(conversa.usuario2_id){
+    destinatarioId = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
+    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', destinatarioId).maybeSingle();
+    nomeDestinatario = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+  } else {
+    destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (conversa.profissionais ? conversa.profissionais.user_id : null);
+    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+  }
 
   if(!destinatarioId){ alert('Não foi possível identificar quem receberá a chamada.'); return; }
 

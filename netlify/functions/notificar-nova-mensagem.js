@@ -19,7 +19,7 @@ exports.handler = async function (event) {
 
     // Descobre quem são os dois participantes dessa conversa
     const conversaResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/conversas?id=eq.${conversaId}&select=visitante_user_id,profissional_id,silenciada_por_visitante,silenciada_por_empresa,profissionais(name,user_id)`,
+      `${SUPABASE_URL}/rest/v1/conversas?id=eq.${conversaId}&select=visitante_user_id,profissional_id,usuario2_id,silenciada_por_visitante,silenciada_por_empresa,profissionais(name,user_id)`,
       { headers }
     );
     const conversas = await conversaResp.json();
@@ -28,21 +28,36 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ enviado: false, motivo: 'conversa não encontrada' }) };
     }
 
-    const donoEmpresaUserId = conversa.profissionais ? conversa.profissionais.user_id : null;
-    const nomeEmpresa = conversa.profissionais ? conversa.profissionais.name : 'Empresa';
-
-    // O destinatário é o participante que NÃO mandou a mensagem
     let destinatarioUserId;
     let nomeRemetente;
     let destinatarioSilenciou;
-    if (remetenteUserId === conversa.visitante_user_id) {
-      destinatarioUserId = donoEmpresaUserId;
-      nomeRemetente = 'Um visitante';
-      destinatarioSilenciou = conversa.silenciada_por_empresa;
+
+    if (conversa.usuario2_id) {
+      // Conversa entre duas pessoas (não é com empresa)
+      if (remetenteUserId === conversa.visitante_user_id) {
+        destinatarioUserId = conversa.usuario2_id;
+        destinatarioSilenciou = conversa.silenciada_por_empresa; // reaproveita essa coluna pro "segundo" participante
+      } else {
+        destinatarioUserId = conversa.visitante_user_id;
+        destinatarioSilenciou = conversa.silenciada_por_visitante;
+      }
+
+      const remetenteResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${remetenteUserId}&select=nome_exibicao`, { headers });
+      const remetentePerfil = await remetenteResp.json();
+      nomeRemetente = (remetentePerfil[0] && remetentePerfil[0].nome_exibicao) || 'Um contato do GuiaZap';
     } else {
-      destinatarioUserId = conversa.visitante_user_id;
-      nomeRemetente = nomeEmpresa;
-      destinatarioSilenciou = conversa.silenciada_por_visitante;
+      const donoEmpresaUserId = conversa.profissionais ? conversa.profissionais.user_id : null;
+      const nomeEmpresa = conversa.profissionais ? conversa.profissionais.name : 'Empresa';
+
+      if (remetenteUserId === conversa.visitante_user_id) {
+        destinatarioUserId = donoEmpresaUserId;
+        nomeRemetente = 'Um visitante';
+        destinatarioSilenciou = conversa.silenciada_por_empresa;
+      } else {
+        destinatarioUserId = conversa.visitante_user_id;
+        nomeRemetente = nomeEmpresa;
+        destinatarioSilenciou = conversa.silenciada_por_visitante;
+      }
     }
 
     if (!destinatarioUserId) {
