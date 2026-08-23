@@ -2201,6 +2201,7 @@ function render(){
           ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
           ${!isOwner ? `<button type="button" class="link-mensagem" onclick="abrirMensagemEmpresa('${e.id}')">💬 Reclamar/Sugerir pra empresa</button>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleMensagensRecebidas('${e.id}')">💬 Ver mensagens recebidas</button>` : ''}
+          ${isOwner ? `<a href="chat.html" class="link-ver-denuncias" style="text-decoration:none;">💬 Ver conversas do chat</a>` : ''}
         </div>
         ${isOwner ? `<div class="mensagens-recebidas-box" id="mensagens-recebidas-${e.id}" style="display:none;"></div>` : ''}
         <div class="mensagem-box" id="mensagem-box-${e.id}" style="display:none;">
@@ -2243,6 +2244,7 @@ function render(){
           <div class="contatos-row">
             <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>
             <a class="btn-zap btn-orcamento" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank">💰 Pedir orçamento</a>
+            ${!isOwner ? `<a href="chat.html?empresa=${e.id}" class="btn-zap" style="background:#6b46c1;">💬 Chat pelo site</a>` : ''}
             ${renderContatosExtra(e.contatos_extra)}
           </div>
           ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}

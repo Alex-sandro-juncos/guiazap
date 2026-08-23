@@ -15,7 +15,7 @@ exports.handler = async function (event) {
     webpush.setVapidDetails('mailto:contato@guiazap.shop', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
     const body = JSON.parse(event.body || '{}');
-    const { titulo, mensagem, url, userIds, profissionalId } = body; // userIds: lista de IDs, "todos", ou use profissionalId pra notificar só quem segue essa empresa
+    const { titulo, mensagem, url, userIds, profissionalId, tipo } = body; // userIds: lista de IDs, "todos", ou use profissionalId pra notificar só quem segue essa empresa
     if (!titulo || !mensagem) {
       return { statusCode: 400, body: JSON.stringify({ error: 'título e mensagem são obrigatórios' }) };
     }
@@ -55,7 +55,7 @@ exports.handler = async function (event) {
         endpoint: inscricao.endpoint,
         keys: { p256dh: inscricao.p256dh, auth: inscricao.auth }
       };
-      const payload = JSON.stringify({ title: titulo, body: mensagem, url: url || '/' });
+      const payload = JSON.stringify({ title: titulo, body: mensagem, url: url || '/', tipo: tipo || null });
 
       try {
         await webpush.sendNotification(pushSubscription, payload);

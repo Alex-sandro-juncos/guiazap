@@ -48,11 +48,17 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch(e) { data = {}; }
 
   const title = data.title || 'GuiaZap';
+  const ehChamada = data.tipo === 'chamada';
+
   const options = {
     body: data.body || '',
     icon: 'favicon-192.png',
     badge: 'favicon-192.png',
-    data: { url: data.url || '/' }
+    data: { url: data.url || '/' },
+    // Padrão de vibração mais forte e repetido pra chamada (chama mais
+    // atenção), padrão simples pra notificações comuns
+    vibrate: ehChamada ? [400, 200, 400, 200, 400, 200, 400] : [200, 100, 200],
+    requireInteraction: ehChamada // chamada fica na tela até a pessoa interagir, não some sozinha
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
