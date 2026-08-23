@@ -137,7 +137,7 @@ function mostrarLinkIndicacao(){
   const jaAberto = box.style.display === 'block';
   box.style.display = jaAberto ? 'none' : 'block';
   if(!jaAberto){
-    const link = `${window.location.origin}${window.location.pathname}?ref=${currentUser.id}`;
+    const link = `${window.location.origin}/index.html?ref=${currentUser.id}`;
     document.getElementById('indicacao-link-input').value = link;
   }
 }
@@ -955,7 +955,7 @@ function mostrarQrCode(id){
   document.querySelectorAll('.qrcode-box').forEach(b => { b.style.display = 'none'; });
   if(jaAberto) return;
 
-  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const link = `${window.location.origin}/index.html?p=${id}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(link)}`;
 
   box.innerHTML = `
@@ -974,7 +974,7 @@ function toggleMenuCompartilharCadastro(id, nome){
 
   if(jaAberto) return;
 
-  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const link = `${window.location.origin}/index.html?p=${id}`;
   const texto = `Confira ${nome} no GuiaZap!`;
   const linkCodificado = encodeURIComponent(link);
   const textoCodificado = encodeURIComponent(texto);
@@ -991,7 +991,7 @@ function toggleMenuCompartilharCadastro(id, nome){
 
 async function copiarLinkCadastro(id, event){
   event.preventDefault();
-  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const link = `${window.location.origin}/index.html?p=${id}`;
   try{
     await navigator.clipboard.writeText(link);
     alert('Link copiado!');
@@ -2350,7 +2350,7 @@ function render(){
         ${isOwner && !pendente && !(e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date()) ? `<a href="${LINK_IMPULSIONAR}" class="link-migrar" style="background:#1c1c1c; color:white; border:none;">🚀 Impulsionar por 24h no topo (R$5,00)</a>` : ''}
         <div class="card-acoes-extra">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
-          <button type="button" class="link-compartilhar" onclick="compartilharNoChat('${window.location.origin}${window.location.pathname}?p=${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
+          <button type="button" class="link-compartilhar" onclick="compartilharNoChat('${window.location.origin}/index.html?p=${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
           ${isOwner ? `<button type="button" class="link-compartilhar" onclick="mostrarQrCode('${e.id}')">📱 QR Code pra imprimir</button>` : ''}
           <div class="qrcode-box" id="qrcode-box-${e.id}" style="display:none;"></div>

@@ -148,7 +148,7 @@ function toggleMenuCompartilharVaga(id, titulo){
     return;
   }
 
-  const link = `${window.location.origin}${window.location.pathname}?vaga=${id}`;
+  const link = `${window.location.origin}/vagas.html?vaga=${id}`;
   const texto = `Vaga de ${titulo} — confira no GuiaZap!`;
   const linkCodificado = encodeURIComponent(link);
   const textoCodificado = encodeURIComponent(texto);
@@ -165,7 +165,7 @@ function toggleMenuCompartilharVaga(id, titulo){
 
 async function copiarLinkVaga(id, event){
   event.preventDefault();
-  const link = `${window.location.origin}${window.location.pathname}?vaga=${id}`;
+  const link = `${window.location.origin}/vagas.html?vaga=${id}`;
   try{
     await navigator.clipboard.writeText(link);
     alert('Link copiado!');

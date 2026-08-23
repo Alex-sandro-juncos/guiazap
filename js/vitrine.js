@@ -381,7 +381,7 @@ function colocarProdutoNoStory(produtoId, profissionalId){
 }
 
 function compartilharProdutoNoChat(id, nome){
-  const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
+  const link = `${window.location.origin}/vitrine.html?produto=${id}`;
   const conteudo = { url: link, titulo: nome };
   window.location.href = `chat.html?compartilhar=${encodeURIComponent(JSON.stringify(conteudo))}`;
 }
@@ -398,7 +398,7 @@ function toggleMenuCompartilhar(id){
 
   if(jaAberto) return;
 
-  const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
+  const link = `${window.location.origin}/vitrine.html?produto=${id}`;
   const texto = `Confira ${p.nome} na Vitrine GuiaZap!`;
   const linkCodificado = encodeURIComponent(link);
   const textoCodificado = encodeURIComponent(texto);
@@ -415,7 +415,7 @@ function toggleMenuCompartilhar(id){
 
 async function copiarLinkProduto(id, event){
   event.preventDefault();
-  const link = `${window.location.origin}${window.location.pathname}?produto=${id}`;
+  const link = `${window.location.origin}/vitrine.html?produto=${id}`;
   try{
     await navigator.clipboard.writeText(link);
     alert('Link copiado!');
