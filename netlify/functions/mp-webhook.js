@@ -124,9 +124,40 @@ exports.handler = async function (event) {
 
       const valorPago = payment.transaction_amount || 0;
 
-      // Pagamento do Selo Verificado (R$15, valor exato — não é assinatura de plano)
+      // Compara valores com uma pequena margem de tolerância (evita problema
+      // de arredondamento de centavos)
+      function proximoDe(valor, alvo, tolerancia){
+        return Math.abs(valor - (alvo || 0)) <= (tolerancia || 1);
+      }
+
+      // Impulsionamento avulso (R$5,00 por 24h no topo — qualquer plano pode comprar)
+      const VALOR_IMPULSIONAR = 5;
+      if (proximoDe(valorPago, VALOR_IMPULSIONAR)) {
+        const impulsionadoAte = new Date();
+        impulsionadoAte.setHours(impulsionadoAte.getHours() + 24);
+
+        const marcados = await atualizarSupabase(
+          `user_email=eq.${encodeURIComponent(payerEmail)}&status_pagamento=eq.ativo`,
+          { impulsionado_ate: impulsionadoAte.toISOString() }
+        );
+        if (marcados && marcados.length > 0) {
+          await enviarEmail(
+            payerEmail,
+            'Impulsionamento ativado — GuiaZap',
+            `<p>Olá!</p>
+             <p>Seu cadastro está impulsionado no topo da busca por 24 horas!</p>
+             <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra conferir.</p>`
+          );
+        }
+        return { statusCode: 200, body: `impulsionamento processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
+      }
+
+      // Pagamento do Selo Verificado (R$15, valor fixo — não é assinatura de plano)
+      // CORRIGIDO: a checagem anterior (>= 15 && < 10) era matematicamente
+      // impossível e nunca disparava — pagamentos do Selo caíam por engano na
+      // lógica de planos, tratando R$15 como se fosse upgrade pro Completo.
       const VALOR_SELO_VERIFICADO = 15;
-      if (valorPago >= VALOR_SELO_VERIFICADO && valorPago < VALOR_PACOTE_COMPLETO) {
+      if (proximoDe(valorPago, VALOR_SELO_VERIFICADO)) {
         const marcados = await atualizarSupabase(
           `user_email=eq.${encodeURIComponent(payerEmail)}&status_pagamento=eq.ativo`,
           { verificacao_pago: true, verificacao_status: 'pendente' }
@@ -177,6 +208,55 @@ exports.handler = async function (event) {
            <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> pra ver seu cadastro no ar.</p>
            <p>Qualquer dúvida, fale com a gente: contato@guiazap.shop</p>`
         );
+
+        // Se esse cadastro veio de um link de indicação, e é a PRIMEIRA vez que
+        // vira pagante (plano diferente de básico), gera automaticamente um
+        // cupom de 1 mês grátis pra quem indicou.
+        const cadastroNovo = ativadoNovo && ativadoNovo[0];
+        if (cadastroNovo && cadastroNovo.indicado_por && planoPago !== 'basico') {
+          try {
+            const jaTemIndicacao = await fetch(
+              `${SUPABASE_URL}/rest/v1/indicacoes?indicado_profissional_id=eq.${cadastroNovo.id}&select=id`,
+              { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+            );
+            const indicacoesExistentes = await jaTemIndicacao.json();
+
+            if (!indicacoesExistentes || indicacoesExistentes.length === 0) {
+              const codigoCupom = `INDICOU${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+              await fetch(`${SUPABASE_URL}/rest/v1/cupons`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+                body: JSON.stringify({ codigo: codigoCupom, descricao: 'Recompensa por indicação — 1 mês grátis', usos_maximos: 1 })
+              });
+
+              await fetch(`${SUPABASE_URL}/rest/v1/indicacoes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+                body: JSON.stringify({ indicador_user_id: cadastroNovo.indicado_por, indicado_profissional_id: cadastroNovo.id, cupom_gerado: codigoCupom })
+              });
+
+              // Busca o e-mail de quem indicou, pra avisar
+              const indicadorResp = await fetch(
+                `${SUPABASE_URL}/auth/v1/admin/users/${cadastroNovo.indicado_por}`,
+                { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+              );
+              const indicadorData = await indicadorResp.json();
+              if (indicadorData && indicadorData.email) {
+                await enviarEmail(
+                  indicadorData.email,
+                  '🎁 Você ganhou 1 mês grátis no GuiaZap!',
+                  `<p>Olá!</p>
+                   <p>Uma empresa se cadastrou pelo seu link de indicação e virou pagante — você ganhou um cupom de <b>1 mês grátis</b>!</p>
+                   <p>Seu código: <b style="font-size:1.2em; letter-spacing:2px;">${codigoCupom}</b></p>
+                   <p>Use esse código no seu próximo cadastro ou renovação, no campo de cupom.</p>`
+                );
+              }
+            }
+          } catch (erroIndicacao) {
+            console.error('erro ao processar indicação', erroIndicacao);
+          }
+        }
       }
 
       return {
@@ -201,8 +281,33 @@ exports.handler = async function (event) {
 
       const emailFiltro = `user_email=eq.${encodeURIComponent(payerEmail)}`;
 
+      // Confere se essa assinatura é da campanha "primeiros 100 grátis" —
+      // compara o ID do plano de assinatura com a variável de ambiente
+      const idPlanoCampanha100 = process.env.MP_PLANO_ID_CAMPANHA100;
+      const ehCampanha100 = idPlanoCampanha100 && subscription.preapproval_plan_id === idPlanoCampanha100;
+
       if (status === 'authorized') {
-        const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.pendente`, { status_pagamento: 'ativo' });
+        const camposAtivar = ehCampanha100 ? { status_pagamento: 'ativo', plano: 'premium' } : { status_pagamento: 'ativo' };
+        const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.pendente`, camposAtivar);
+
+        // Se for a campanha, registra o resgate (só se ainda não passou de 100)
+        if (ehCampanha100 && updated && updated.length > 0) {
+          const contagemResp = await fetch(`${SUPABASE_URL}/rest/v1/campanha_100_gratis?select=id`, {
+            headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, Prefer: 'count=exact' }
+          });
+          const jaResgatados = (await contagemResp.json()).length;
+
+          if (jaResgatados < 100) {
+            const dataFimTrial = new Date();
+            dataFimTrial.setDate(dataFimTrial.getDate() + 30);
+            await fetch(`${SUPABASE_URL}/rest/v1/campanha_100_gratis`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ profissional_id: updated[0].id, data_fim_trial: dataFimTrial.toISOString() })
+            });
+          }
+        }
+
         return { statusCode: 200, body: `reativado(s): ${JSON.stringify(updated)}` };
       } else {
         const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.ativo`, { status_pagamento: 'pendente' });

@@ -15,6 +15,11 @@
 <meta property="og:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://guiazap.shop">
+<meta property="og:image" content="https://guiazap.shop/favicon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
+<meta name="twitter:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
+<meta name="twitter:image" content="https://guiazap.shop/favicon-512.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,6 +32,10 @@
   <div class="welcome-gate-conteudo">
     <div class="welcome-logo">GuiaZap</div>
     <p class="welcome-sub">Encontre profissionais locais e fale direto no WhatsApp</p>
+
+    <button type="button" class="btn-pular-welcome-grande" onclick="pularWelcomeGate()">🔍 Continuar sem cadastro</button>
+
+    <div class="welcome-divisor"><span>ou crie uma conta</span></div>
 
     <div class="welcome-beneficios">
       🎁 <b>Crie sua conta grátis</b> e tenha acesso a ofertas e produtos dedicados — além de receber notificações das empresas que você seguir.
@@ -53,8 +62,6 @@
       </div>
       <span class="auth-msg" id="welcome-msg"></span>
     </form>
-
-    <button type="button" class="btn-pular-welcome" onclick="pularWelcomeGate()">Pular, só quero buscar um profissional →</button>
   </div>
 </div>
 
@@ -62,6 +69,7 @@
   <div class="logo">GuiaZap</div>
   <p>Encontre qualquer profissional e fale direto no WhatsApp</p>
   <div id="stories-linha" class="stories-linha" style="display:none;"></div>
+  <a href="feed.html" class="link-ver-feed">📰 Ver feed completo de novidades →</a>
 
   <div id="auth-logged-out" class="auth-box-discreto-header">
     <button type="button" class="auth-toggle-link-header" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
@@ -72,8 +80,14 @@
     <span>Logado como <b id="auth-email-display"></b></span>
     <div>
       <button type="button" class="btn-auth-outline-header" id="btn-ver-minha-empresa" style="display:none;" onclick="verMinhaEmpresa()">🏢 Ver minha empresa</button>
+      <button type="button" class="btn-auth-outline-header" onclick="mostrarLinkIndicacao()">🎁 Indique e ganhe</button>
       <button type="button" class="btn-auth-outline-header" onclick="toggleTrocarSenha()">Trocar senha</button>
       <button type="button" class="btn-auth-outline-header" onclick="signOut()">Sair</button>
+    </div>
+    <div id="indicacao-box" style="display:none; width:100%; margin-top:10px; background:#f8f6fc; border-radius:8px; padding:10px;">
+      <p style="font-size:0.78rem; color:#444; margin-bottom:6px;">🎁 Indique o GuiaZap: quando uma empresa se cadastra pelo seu link e vira pagante, você ganha <b>1 mês grátis</b> automaticamente!</p>
+      <input type="text" id="indicacao-link-input" readonly style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.78rem; margin-bottom:6px;">
+      <button type="button" class="btn-auth-outline-header" onclick="copiarLinkIndicacao()" style="width:100%;">📋 Copiar link</button>
     </div>
   </div>
 </header>
@@ -84,6 +98,8 @@
   </div>
 
   <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro">🌙 Modo escuro</button>
+
+  <div class="contador-plataforma" id="contador-plataforma"></div>
 
   <div class="busca-container">
     <div class="busca-row">
@@ -118,6 +134,13 @@
     </div>
     <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
     <button type="button" id="btn-seguindo-filtro" class="btn-filtro-favoritos" style="display:none;" onclick="toggleFiltroSeguindo()">👥 Ver só quem eu sigo</button>
+
+    <div class="filtros-rapidos">
+      <button type="button" class="chip-filtro-rapido" id="chip-proximos" onclick="toggleFiltroMaisProximos()">📍 Mais próximos</button>
+      <button type="button" class="chip-filtro-rapido" id="chip-avaliados" onclick="toggleFiltroMelhorAvaliados()">⭐ Melhor avaliados</button>
+      <button type="button" class="chip-filtro-rapido" id="chip-premium-rapido" onclick="toggleFiltroPremiumRapido()">👑 Premium</button>
+      <button type="button" class="chip-filtro-rapido" id="chip-aberto-agora" onclick="toggleFiltroAbertoAgora()">🕐 Aberto agora</button>
+    </div>
   </div>
 
   <div id="trocar-senha-box" class="auth-box" style="display:none;">
@@ -149,6 +172,8 @@
 
   <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
   <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
+  <button type="button" id="btn-instalar-pwa" class="btn-baixar-app" style="display:none; background:#0a4a6b; border:none; cursor:pointer; width:100%;" onclick="instalarPWA()">📲 Instalar o GuiaZap no seu celular</button>
+  <button type="button" id="btn-ativar-push" class="btn-baixar-app" style="display:none; background:#7c3aed; border:none; cursor:pointer; width:100%;" onclick="ativarNotificacoesPush()">🔔 Ativar notificações (vagas novas, produtos de quem você segue)</button>
   <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
 
   <form id="cadastro-form" onsubmit="return saveEntry(event)">
@@ -194,6 +219,29 @@
     <div class="field">
       <label>WhatsApp (com DDD, só números)</label>
       <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Horário de funcionamento (opcional)</label>
+      <div class="horario-dias-check">
+        <label><input type="checkbox" class="f-horario-dia" value="seg"> Seg</label>
+        <label><input type="checkbox" class="f-horario-dia" value="ter"> Ter</label>
+        <label><input type="checkbox" class="f-horario-dia" value="qua"> Qua</label>
+        <label><input type="checkbox" class="f-horario-dia" value="qui"> Qui</label>
+        <label><input type="checkbox" class="f-horario-dia" value="sex"> Sex</label>
+        <label><input type="checkbox" class="f-horario-dia" value="sab"> Sáb</label>
+        <label><input type="checkbox" class="f-horario-dia" value="dom"> Dom</label>
+      </div>
+      <div class="row2" style="margin-top:8px;">
+        <div class="field">
+          <label class="foto-ou">Abre às</label>
+          <input id="f-horario-abre" type="time">
+        </div>
+        <div class="field">
+          <label class="foto-ou">Fecha às</label>
+          <input id="f-horario-fecha" type="time">
+        </div>
+      </div>
+      <label class="foto-ou">Preenchendo isso, seu cadastro aparece no filtro "Aberto agora" nos horários certos.</label>
     </div>
     <div class="field">
       <label>Outros contatos (opcional)</label>
@@ -250,6 +298,12 @@
       <label>Vincular a um produto da Vitrine (opcional)</label>
       <select id="story-produto-id" onchange="onProdutoStoryChange()"><option value="">Nenhum</option></select>
     </div>
+    <div class="field" id="story-notificar-campo" style="display:none;">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-notificar-seguidores" checked>
+        <span>📢 Notificar meus seguidores por e-mail sobre essa novidade</span>
+      </label>
+    </div>
     <div class="form-actions">
       <button type="submit" class="btn-salvar">Publicar novidade</button>
       <button type="button" class="btn-cancelar" onclick="fecharFormStory()">Cancelar</button>
@@ -262,7 +316,7 @@
   <div class="loading" id="loading">carregando profissionais...</div>
 
   <div class="rodape-legal">
-    <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a>
+    <a href="sobre.html">Sobre / Como funciona</a> · <a href="blog.html">Blog</a> · <a href="mapa.html">Mapa</a> · <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a> · <a href="depoimentos.html">Depoimentos</a> · <a href="feed.html">Novidades que sigo</a>
   </div>
 </div>
 

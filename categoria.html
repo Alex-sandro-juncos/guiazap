@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="pagina-titulo">GuiaZap — Profissionais na sua região</title>
+<meta id="pagina-descricao" name="description" content="Encontre profissionais e fale direto no WhatsApp.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .cat-wrap { max-width: 700px; margin: 0 auto; padding: 20px 15px 50px; }
+  .cat-header { text-align: center; margin-bottom: 20px; }
+  .cat-header h1 { font-size: 1.4rem; color: var(--verde-escuro); }
+  .cat-header p { font-size: 0.85rem; color: #666; margin-top: 4px; }
+  .voltar { display: inline-block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p id="header-sub">Profissionais na sua região</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="cat-wrap">
+  <a href="index.html" class="voltar">← Ver busca completa</a>
+  <div class="cat-header">
+    <h1 id="cat-titulo-h1">Carregando...</h1>
+    <p id="cat-subtitulo"></p>
+  </div>
+  <div id="cat-lista"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientCat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function normalizarTextoCat(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+function escapeHtmlCat(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+// Lê o endereço da página (ex: /eletricistas-mangueirinha) e separa em
+// categoria + cidade — tenta achar o "corte" certo comparando com cidades reais
+async function interpretarSlug(){
+  const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+  const partes = slug.split('-');
+  return partes;
+}
+
+async function initCategoria(){
+  const partesSlug = await interpretarSlug();
+  if(partesSlug.length === 0 || !partesSlug[0]){
+    document.getElementById('cat-titulo-h1').textContent = 'Página não encontrada';
+    document.getElementById('cat-lista').innerHTML = '<p style="text-align:center; color:#999;">Volta pra <a href="index.html">busca completa</a>.</p>';
+    return;
+  }
+
+  // Tenta separar "categoria" de "cidade" testando cada possível ponto de corte
+  // (ex: "eletricistas-mangueirinha" -> categoria="eletricistas", cidade="mangueirinha")
+  const { data: todasEmpresas } = await supabaseClientCat
+    .from('profissionais')
+    .select('id, name, cat, categorias_extra, cidade, estado, bairro, whatsapp, foto, status_pagamento, plano, verificado')
+    .eq('status_pagamento', 'ativo');
+
+  if(!todasEmpresas){
+    document.getElementById('cat-titulo-h1').textContent = 'Erro ao carregar';
+    return;
+  }
+
+  let categoriaEncontrada = '';
+  let cidadeEncontrada = '';
+  let resultados = [];
+
+  for(let corte = 1; corte < partesSlug.length; corte++){
+    const categoriaTeste = partesSlug.slice(0, corte).join(' ');
+    const cidadeTeste = partesSlug.slice(corte).join(' ');
+    const catNorm = normalizarTextoCat(categoriaTeste);
+    const cidNorm = normalizarTextoCat(cidadeTeste);
+
+    const match = todasEmpresas.filter(e =>
+      (normalizarTextoCat(e.cat).includes(catNorm) || normalizarTextoCat(e.categorias_extra || '').includes(catNorm)) &&
+      normalizarTextoCat(e.cidade).includes(cidNorm)
+    );
+
+    if(match.length > 0){
+      categoriaEncontrada = categoriaTeste;
+      cidadeEncontrada = cidadeTeste;
+      resultados = match;
+      break;
+    }
+  }
+
+  // Se não achou combinando categoria+cidade, tenta só como categoria (sem cidade)
+  if(resultados.length === 0){
+    const catNorm = normalizarTextoCat(partesSlug.join(' '));
+    resultados = todasEmpresas.filter(e =>
+      normalizarTextoCat(e.cat).includes(catNorm) || normalizarTextoCat(e.categorias_extra || '').includes(catNorm)
+    );
+    categoriaEncontrada = partesSlug.join(' ');
+  }
+
+  const tituloFormatado = categoriaEncontrada.charAt(0).toUpperCase() + categoriaEncontrada.slice(1) + (cidadeEncontrada ? ` em ${cidadeEncontrada.charAt(0).toUpperCase() + cidadeEncontrada.slice(1)}` : '');
+
+  document.title = `${tituloFormatado} — GuiaZap`;
+  document.getElementById('pagina-titulo').textContent = `${tituloFormatado} — GuiaZap`;
+  document.getElementById('pagina-descricao').setAttribute('content', `Encontre ${tituloFormatado.toLowerCase()} e fale direto no WhatsApp pelo GuiaZap.`);
+  document.getElementById('cat-titulo-h1').textContent = tituloFormatado;
+  document.getElementById('cat-subtitulo').textContent = `${resultados.length} resultado${resultados.length !== 1 ? 's' : ''} encontrado${resultados.length !== 1 ? 's' : ''}`;
+
+  const lista = document.getElementById('cat-lista');
+  if(resultados.length === 0){
+    lista.innerHTML = `<p style="text-align:center; color:#999; padding:30px 0;">Nenhum resultado por aqui ainda. <a href="pacotes.html">Seja o primeiro a se cadastrar!</a></p>`;
+    return;
+  }
+
+  lista.innerHTML = resultados.map(e => `
+    <div class="card-profissional">
+      <img src="${e.foto ? escapeHtmlCat(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtmlCat(e.name)}" loading="lazy">
+      <div class="info">
+        <h3>${escapeHtmlCat(e.name)}${e.verificado ? ' ✅' : ''}${e.plano === 'premium' ? ' 👑' : ''}</h3>
+        <div class="categoria-produto">${escapeHtmlCat(e.cat)}</div>
+        <div class="categoria-produto">${escapeHtmlCat([e.bairro, e.cidade].filter(Boolean).join(' · '))}</div>
+        <a class="btn-zap" href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+initCategoria();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Montar Currículo — GuiaZap</title>
+<meta name="description" content="Monte seu currículo grátis e envie pro Banco de Talentos do GuiaZap — empresas da sua região podem te encontrar.">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -45,7 +46,7 @@
   .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
 
   @media print {
-    header, .cv-form, .voltar-guiazap, .btn-baixar-cv { display: none !important; }
+    header, .cv-form, .voltar-guiazap, .btn-baixar-cv, .btn-modo-escuro-solto { display: none !important; }
     body { background: white; }
     #cv-preview { box-shadow: none; padding: 0; }
   }
@@ -56,6 +57,10 @@
     margin-top: 14px;
   }
   .banco-talentos-box p { font-size: 0.8rem; color: #4c1d95; margin-bottom: 10px; line-height: 1.4; }
+.cv-progresso-box { margin-bottom: 16px; }
+.cv-progresso-texto { font-size: 0.85rem; color: #444; margin-bottom: 6px; }
+.cv-progresso-barra-fundo { background: #eee; border-radius: 50px; height: 10px; overflow: hidden; }
+.cv-progresso-barra { height: 100%; background: linear-gradient(90deg, #25D366, #128C7E); transition: width 0.3s ease; }
 </style>
 </head>
 <body>
@@ -63,6 +68,7 @@
   <h1>📄 Montar Currículo</h1>
   <p>Preencha seus dados e baixe seu currículo pronto, de graça</p>
 </header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 
 <div class="curriculo-wrap">
   <div id="cv-auth-box" class="cv-form" style="text-align:center;">
@@ -82,6 +88,10 @@
   </div>
 
   <div class="cv-form" id="cv-form-principal" style="display:none;">
+    <div class="cv-progresso-box">
+      <div class="cv-progresso-texto">Seu currículo está <b id="cv-progresso-porcentagem">0%</b> completo</div>
+      <div class="cv-progresso-barra-fundo"><div class="cv-progresso-barra" id="cv-progresso-barra" style="width:0%;"></div></div>
+    </div>
     <div class="field">
       <label>Foto (opcional)</label>
       <div class="foto-botoes">
@@ -155,6 +165,11 @@
       <button type="button" class="btn-baixar-cv" style="background:#6b46c1;" onclick="enviarParaBancoTalentos()">📤 Enviar para o Banco de Talentos</button>
       <button type="button" id="cv-btn-excluir" class="btn-baixar-cv" style="background:#a4402f; display:none;" onclick="excluirMeuCurriculo()">🗑️ Excluir currículo do banco</button>
       <div id="cv-banco-msg" style="text-align:center; font-size:0.78rem; margin-top:6px;"></div>
+    </div>
+
+    <div id="cv-vagas-compativeis-box" style="display:none; margin-top:16px;">
+      <h3 style="font-size:0.95rem; color:var(--verde-escuro); margin-bottom:8px;">🎯 Vagas que combinam com seu perfil</h3>
+      <div id="cv-vagas-compativeis-lista"></div>
     </div>
   </div>
 
@@ -243,6 +258,15 @@ function atualizarPreviewCv(){
 
   document.getElementById('cv-preview-nome').textContent = nome || 'Seu nome aqui';
 
+  // Calcula e mostra a barra de progresso do currículo
+  const fotoCarregada = !document.getElementById('cv-preview-foto').src.includes('dicebear.com');
+  const camposParaContar = [nome, telefone, email, cidade, objetivo, experiencia, formacao, habilidades];
+  const preenchidos = camposParaContar.filter(Boolean).length + (fotoCarregada ? 1 : 0);
+  const totalCampos = camposParaContar.length + 1;
+  const porcentagem = Math.round((preenchidos / totalCampos) * 100);
+  document.getElementById('cv-progresso-porcentagem').textContent = `${porcentagem}%`;
+  document.getElementById('cv-progresso-barra').style.width = `${porcentagem}%`;
+
   const localizacao = [bairro, cidade && estado ? `${cidade}/${estado}` : cidade].filter(Boolean).join(', ');
   const contatoPartes = [telefone, email, localizacao].filter(Boolean);
   document.getElementById('cv-preview-contato').textContent = contatoPartes.length ? contatoPartes.join(' · ') : 'Telefone · E-mail · Cidade';
@@ -299,6 +323,47 @@ async function buscarCepCv(){
   } catch(e){
     msg.textContent = 'erro ao buscar CEP, preencha manualmente';
   }
+}
+
+async function carregarVagasCompativeis(curriculo){
+  const box = document.getElementById('cv-vagas-compativeis-box');
+  const lista = document.getElementById('cv-vagas-compativeis-lista');
+
+  const { data: vagas } = await supabaseClientCv.from('vagas').select('*, profissionais(name, whatsapp, status_pagamento)');
+  const vagasAtivas = (vagas || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
+
+  if(vagasAtivas.length === 0){ box.style.display = 'none'; return; }
+
+  // Junta todo o texto do currículo numa "sacola de palavras", pra comparar com cada vaga
+  const textoCompletoCv = normalizarTextoCv([
+    curriculo.objetivo, curriculo.experiencia, curriculo.formacao, curriculo.habilidades, curriculo.cidade
+  ].filter(Boolean).join(' '));
+  const palavrasCv = new Set(textoCompletoCv.split(/\s+/).filter(p => p.length > 3));
+
+  const vagasComPontuacao = vagasAtivas.map(v => {
+    const textoVaga = normalizarTextoCv([v.titulo, v.descricao, v.requisitos].filter(Boolean).join(' '));
+    const palavrasVaga = textoVaga.split(/\s+/).filter(p => p.length > 3);
+    const pontuacao = palavrasVaga.filter(p => palavrasCv.has(p)).length;
+    return { vaga: v, pontuacao };
+  }).filter(item => item.pontuacao > 0)
+    .sort((a, b) => b.pontuacao - a.pontuacao)
+    .slice(0, 5);
+
+  if(vagasComPontuacao.length === 0){ box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  lista.innerHTML = vagasComPontuacao.map(item => `
+    <div class="card-vaga" style="margin-bottom:10px;">
+      <div class="titulo-vaga">${item.vaga.titulo}</div>
+      <span class="tipo-vaga">${item.vaga.tipo}</span>
+      <div class="empresa-vaga">${item.vaga.profissionais ? item.vaga.profissionais.name : ''}</div>
+      <a href="vagas.html?vaga=${item.vaga.id}" class="btn-baixar-cv" style="display:block; text-align:center; margin-top:8px; text-decoration:none;">Ver vaga completa</a>
+    </div>
+  `).join('');
+}
+
+function normalizarTextoCv(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 atualizarPreviewCv();
@@ -401,6 +466,8 @@ async function carregarMeuCurriculo(){
     document.getElementById('cv-banco-msg').textContent = 'Você já tem um currículo salvo no banco. Editar os campos e enviar de novo atualiza ele.';
     document.getElementById('cv-banco-msg').style.color = '#555';
     document.getElementById('cv-btn-excluir').style.display = 'block';
+
+    carregarVagasCompativeis(data);
   } else {
     meuCurriculoId = null;
     document.getElementById('cv-btn-excluir').style.display = 'none';
@@ -468,5 +535,6 @@ async function excluirMeuCurriculo(){
 
 if(supabaseClientCv) initAuthCv();
 </script>
+<script src="js/modo-escuro.js"></script>
 </body>
 </html>

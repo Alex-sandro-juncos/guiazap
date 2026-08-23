@@ -48,6 +48,7 @@
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Painel Admin</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 
 <div id="admin-login-box" class="admin-login">
   <h2 style="margin-bottom:14px;">Entrar</h2>
@@ -65,6 +66,8 @@
     <button class="admin-aba-btn" id="aba-empresas" onclick="mostrarAbaAdmin('empresas')">🏢 Empresas</button>
     <button class="admin-aba-btn" id="aba-produtos" onclick="mostrarAbaAdmin('produtos')">📦 Produtos</button>
     <button class="admin-aba-btn" id="aba-verificacao" onclick="mostrarAbaAdmin('verificacao')">🔵 Selo Verificado</button>
+    <button class="admin-aba-btn" id="aba-depoimentos" onclick="mostrarAbaAdmin('depoimentos')">💬 Depoimentos</button>
+    <button class="admin-aba-btn" id="aba-blog" onclick="mostrarAbaAdmin('blog')">📝 Blog</button>
   </div>
   <button type="button" id="btn-exportar-emails" onclick="exportarEmails()" style="display:none; margin-bottom:14px; background:#0a4a6b; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">⬇ Exportar e-mails (.csv)</button>
   <input type="text" id="admin-busca" placeholder="🔍 Buscar..." oninput="renderAdmin()" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
@@ -110,7 +113,7 @@ async function carregarDadosAdmin(){
 
 function mostrarAbaAdmin(aba){
   abaAtual = aba;
-  ['feedback','denuncias','mensagens','empresas','produtos','verificacao'].forEach(a => {
+  ['feedback','denuncias','mensagens','empresas','produtos','verificacao','depoimentos','blog'].forEach(a => {
     document.getElementById('aba-' + a).classList.toggle('ativa', aba === a);
   });
   document.getElementById('btn-exportar-emails').style.display = aba === 'empresas' ? 'block' : 'none';
@@ -173,7 +176,9 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
                     ? `Aprovar o Selo Verificado de "${nome}"? Isso adiciona o ✅ no cadastro dela.`
                     : acao === 'rejeitar_selo'
                       ? `Rejeitar o pedido de Selo Verificado de "${nome}"? Ela vai precisar refazer o processo.`
-                      : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
+                      : acao === 'aprovar_depoimento'
+                        ? `Aprovar o depoimento de "${nome}"? Ele passa a aparecer publicamente na página de depoimentos.`
+                        : `Suspender "${nome}"? O cadastro deixa de aparecer na busca pública até ser reativado.`;
   if(!confirm(confirmText)) return;
 
   const { data: { session } } = await supabaseClientAdmin.auth.getSession();
@@ -194,6 +199,55 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
 
 function formatarData(iso){
   return new Date(iso).toLocaleString('pt-BR');
+}
+
+function renderBlogAdmin(busca){
+  const lista = document.getElementById('admin-lista');
+  if(!dadosAdmin){ lista.innerHTML = ''; return; }
+
+  let pendentes = (dadosAdmin.blogPosts || []).filter(p => !p.aprovado);
+  if(busca) pendentes = pendentes.filter(p => normalizarTextoAdmin(p.titulo + ' ' + p.autor_nome).includes(busca));
+
+  if(pendentes.length === 0){
+    lista.innerHTML = '<div class="admin-vazio">Nenhum artigo pendente no momento.</div>';
+    return;
+  }
+
+  lista.innerHTML = pendentes.map(p => `
+    <div class="admin-item">
+      <div class="tipo">📝 ${p.titulo}</div>
+      <div class="meta">Por ${p.autor_nome}${p.autor_email ? ' (' + p.autor_email + ')' : ''}</div>
+      <div class="meta" style="max-height:120px; overflow-y:auto; margin-top:6px;">${p.conteudo}</div>
+      <div class="admin-acoes" style="margin-top:8px;">
+        <button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_post', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">✅ Aprovar</button>
+        <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">Excluir</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDepoimentosAdmin(busca){
+  const lista = document.getElementById('admin-lista');
+  if(!dadosAdmin){ lista.innerHTML = ''; return; }
+
+  let pendentes = (dadosAdmin.depoimentos || []).filter(d => !d.aprovado);
+  if(busca) pendentes = pendentes.filter(d => normalizarTextoAdmin(d.nome + ' ' + d.mensagem).includes(busca));
+
+  if(pendentes.length === 0){
+    lista.innerHTML = '<div class="admin-vazio">Nenhum depoimento pendente no momento.</div>';
+    return;
+  }
+
+  lista.innerHTML = pendentes.map(d => `
+    <div class="admin-item">
+      <div class="tipo">${d.tipo === 'empresa' ? '🏢' : '🔍'} ${d.nome}</div>
+      <div class="meta">"${d.mensagem}"</div>
+      <div class="admin-acoes" style="margin-top:8px;">
+        <button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_depoimento', 'depoimentos', '${d.id}', '${d.nome.replace(/'/g,"\\'")}')">✅ Aprovar</button>
+        <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'depoimentos', '${d.id}', '${d.nome.replace(/'/g,"\\'")}')">Excluir</button>
+      </div>
+    </div>
+  `).join('');
 }
 
 function renderVerificacoesAdmin(busca){
@@ -331,6 +385,8 @@ function renderAdmin(){
   if(abaAtual === 'empresas') itens = dadosAdmin.profissionais;
   if(abaAtual === 'produtos') itens = dadosAdmin.produtos;
   if(abaAtual === 'verificacao'){ renderVerificacoesAdmin(busca); return; }
+  if(abaAtual === 'depoimentos'){ renderDepoimentosAdmin(busca); return; }
+  if(abaAtual === 'blog'){ renderBlogAdmin(busca); return; }
 
   if(busca){
     itens = (itens || []).filter(item => textoBuscavelDoItem(item).includes(busca));
@@ -390,5 +446,6 @@ supabaseClientAdmin.auth.getSession().then(({ data: { session } }) => {
   if(session) carregarDadosAdmin();
 });
 </script>
+<script src="js/modo-escuro.js"></script>
 </body>
 </html>

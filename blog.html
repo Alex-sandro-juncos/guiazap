@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — Dicas locais | GuiaZap</title>
+<meta name="description" content="Dicas, guias e novidades sobre serviços e comércio local, escritos pela comunidade do GuiaZap.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .blog-wrap { max-width: 700px; margin: 0 auto; padding: 20px 15px 50px; }
+  .voltar { display: inline-block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .card-post { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); text-decoration: none; display: block; color: inherit; }
+  .card-post .titulo-post { font-size: 1.05rem; font-weight: 700; color: var(--verde-escuro); }
+  .card-post .autor-post { font-size: 0.75rem; color: #999; margin-top: 4px; }
+  .card-post .resumo-post { font-size: 0.85rem; color: #555; margin-top: 8px; }
+  .enviar-form { background: var(--cinza-card); border-radius: 14px; padding: 18px; margin-bottom: 24px; }
+  .enviar-form h2 { font-size: 1.1rem; margin-bottom: 10px; color: var(--verde-escuro); }
+  .enviar-form .field { margin-bottom: 10px; }
+  .enviar-form label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+  .enviar-form input, .enviar-form textarea { width: 100%; padding: 9px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Blog — Dicas locais</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="blog-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="enviar-form">
+    <h2>✍️ Escreva um artigo</h2>
+    <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Tem uma dica boa sobre um serviço, um bairro ou um assunto local? Envie seu artigo — ele passa por uma revisão antes de ser publicado.</p>
+    <div class="field">
+      <label>Seu nome</label>
+      <input id="blog-autor" placeholder="Como quer aparecer">
+    </div>
+    <div class="field">
+      <label>Seu e-mail (não aparece publicado)</label>
+      <input id="blog-email" type="email" placeholder="seuemail@gmail.com">
+    </div>
+    <div class="field">
+      <label>Título do artigo</label>
+      <input id="blog-titulo" placeholder="Ex: Como escolher um eletricista de confiança">
+    </div>
+    <div class="field">
+      <label>Conteúdo</label>
+      <textarea id="blog-conteudo" rows="8" placeholder="Escreva seu artigo aqui..."></textarea>
+    </div>
+    <button type="button" class="btn-salvar" onclick="enviarArtigo()">Enviar pra revisão</button>
+    <span id="blog-msg" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+  </div>
+
+  <h2 style="font-size:1.1rem; color:var(--verde-escuro); margin-bottom:12px;">Artigos publicados</h2>
+  <div id="blog-lista">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientBlog = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtmlBlog(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function gerarSlug(titulo){
+  return titulo
+    .toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 60);
+}
+
+async function enviarArtigo(){
+  const autor = document.getElementById('blog-autor').value.trim();
+  const email = document.getElementById('blog-email').value.trim();
+  const titulo = document.getElementById('blog-titulo').value.trim();
+  const conteudo = document.getElementById('blog-conteudo').value.trim();
+  const msg = document.getElementById('blog-msg');
+
+  if(!autor || !titulo || !conteudo){ msg.textContent = 'Preencha nome, título e conteúdo.'; msg.style.color = '#a4402f'; return; }
+  if(conteudo.length < 200){ msg.textContent = 'O artigo precisa ter pelo menos 200 caracteres.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'enviando...';
+  const slugBase = gerarSlug(titulo);
+  const slugFinal = `${slugBase}-${Date.now().toString().slice(-5)}`;
+
+  const { error } = await supabaseClientBlog.from('blog_posts').insert({
+    titulo, conteudo, autor_nome: autor, autor_email: email || null, slug: slugFinal
+  });
+
+  if(error){ console.error(error); msg.textContent = 'Erro ao enviar. Tente de novo.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = '✓ Enviado! Seu artigo aparece aqui assim que for aprovado.';
+  msg.style.color = 'var(--verde-escuro)';
+  document.getElementById('blog-autor').value = '';
+  document.getElementById('blog-email').value = '';
+  document.getElementById('blog-titulo').value = '';
+  document.getElementById('blog-conteudo').value = '';
+}
+
+async function loadArtigos(){
+  const container = document.getElementById('blog-lista');
+  const { data, error } = await supabaseClientBlog.from('blog_posts').select('titulo, slug, autor_nome, conteudo, created_at').eq('aprovado', true).order('created_at', { ascending: false });
+
+  if(error || !data || data.length === 0){
+    container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Ainda não temos artigos publicados. Seja o primeiro a escrever!</p>';
+    return;
+  }
+
+  container.innerHTML = data.map(p => `
+    <a href="/blog/${p.slug}" class="card-post">
+      <div class="titulo-post">${escapeHtmlBlog(p.titulo)}</div>
+      <div class="autor-post">Por ${escapeHtmlBlog(p.autor_nome)} · ${new Date(p.created_at).toLocaleDateString('pt-BR')}</div>
+      <div class="resumo-post">${escapeHtmlBlog(p.conteudo.slice(0, 140))}...</div>
+    </a>
+  `).join('');
+}
+
+loadArtigos();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de profissionais — GuiaZap</title>
+<meta name="description" content="Veja no mapa os profissionais e empresas cadastrados perto de você no GuiaZap.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  #mapa-area { width: 100%; height: calc(100vh - 140px); min-height: 400px; }
+  .voltar-mapa { display: block; text-align: center; padding: 8px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .popup-mapa { font-size: 0.85rem; }
+  .popup-mapa .nome-popup { font-weight: 700; color: var(--verde-escuro); margin-bottom: 4px; }
+  .popup-mapa a { display: block; margin-top: 6px; background: var(--verde-whats); color: white; text-align: center; padding: 6px; border-radius: 6px; text-decoration: none; font-size: 0.78rem; font-weight: 700; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Mapa de profissionais</p></header>
+<div id="mapa-area"></div>
+<a href="index.html" class="voltar-mapa">← Voltar ao GuiaZap</a>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientMapa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtmlMapa(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initMapa(){
+  const { data, error } = await supabaseClientMapa
+    .from('profissionais')
+    .select('id, name, cat, bairro, cidade, whatsapp, latitude, longitude, plano')
+    .eq('status_pagamento', 'ativo');
+
+  const comCoordenadas = (data || []).filter(e => e.latitude != null && e.longitude != null);
+
+  // Centraliza no meio de todos os pins, ou no Brasil todo se não tiver nenhum
+  const centroLat = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.latitude, 0) / comCoordenadas.length : -15.78;
+  const centroLng = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.longitude, 0) / comCoordenadas.length : -47.93;
+
+  const mapa = L.map('mapa-area').setView([centroLat, centroLng], comCoordenadas.length > 0 ? 12 : 4);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(mapa);
+
+  comCoordenadas.forEach(e => {
+    const icone = e.plano === 'premium' ? '👑' : '📍';
+    const marker = L.marker([e.latitude, e.longitude]).addTo(mapa);
+    marker.bindPopup(`
+      <div class="popup-mapa">
+        <div class="nome-popup">${icone} ${escapeHtmlMapa(e.name)}</div>
+        <div>${escapeHtmlMapa(e.cat)}</div>
+        <div style="color:#888;">${escapeHtmlMapa([e.bairro, e.cidade].filter(Boolean).join(', '))}</div>
+        <a href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no mapa do GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
+      </div>
+    `);
+  });
+
+  if(comCoordenadas.length === 0){
+    document.getElementById('mapa-area').insertAdjacentHTML('afterbegin', '<p style="text-align:center; padding:20px; position:absolute; z-index:1000; background:white; left:50%; transform:translateX(-50%); top:20px; border-radius:8px;">Ainda não temos localização suficiente cadastrada pra mostrar no mapa.</p>');
+  }
+}
+
+initMapa();
+</script>
+</body>
+</html>

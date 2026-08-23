@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depoimentos — GuiaZap</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .depo-wrap { max-width: 600px; margin: 0 auto; padding: 20px 15px 50px; }
+  .depo-form { background: var(--cinza-card); border-radius: 14px; padding: 18px; margin-bottom: 24px; }
+  .depo-form h2 { font-size: 1.1rem; margin-bottom: 10px; color: var(--verde-escuro); }
+  .depo-form .field { margin-bottom: 10px; }
+  .depo-form label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+  .depo-form input, .depo-form select, .depo-form textarea { width: 100%; padding: 9px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+  .card-depoimento { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+  .card-depoimento .depo-nome { font-weight: 700; font-size: 0.9rem; }
+  .card-depoimento .depo-tipo { font-size: 0.7rem; color: #888; }
+  .card-depoimento .depo-msg { font-size: 0.88rem; color: #333; margin-top: 8px; line-height: 1.4; }
+  .voltar { display: inline-block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Depoimentos</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="depo-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="depo-form">
+    <h2>Deixe seu depoimento</h2>
+    <div class="field">
+      <label>Seu nome</label>
+      <input id="depo-nome" placeholder="Como quer aparecer">
+    </div>
+    <div class="field">
+      <label>Você é...</label>
+      <select id="depo-tipo">
+        <option value="usuario">Usuário (buscou um profissional)</option>
+        <option value="empresa">Empresa/profissional cadastrado</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Seu depoimento</label>
+      <textarea id="depo-mensagem" rows="4" placeholder="Conte sua experiência com o GuiaZap"></textarea>
+    </div>
+    <button type="button" class="btn-salvar" onclick="enviarDepoimento()">Enviar</button>
+    <span id="depo-msg" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+  </div>
+
+  <h2 style="font-size:1.1rem; color:var(--verde-escuro); margin-bottom:12px;">O que estão dizendo</h2>
+  <div id="depoimentos-lista">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+let supabaseClientDepo = null;
+if(typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined'){
+  supabaseClientDepo = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+function escapeHtmlDepo(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function enviarDepoimento(){
+  const nome = document.getElementById('depo-nome').value.trim();
+  const tipo = document.getElementById('depo-tipo').value;
+  const mensagem = document.getElementById('depo-mensagem').value.trim();
+  const msg = document.getElementById('depo-msg');
+
+  if(!nome || !mensagem){ msg.textContent = 'Preencha seu nome e o depoimento.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientDepo.from('depoimentos').insert({ nome, tipo, mensagem });
+  if(error){ console.error(error); msg.textContent = 'Erro ao enviar. Tente de novo.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = '✓ Enviado! Seu depoimento aparece aqui assim que for aprovado.';
+  msg.style.color = 'var(--verde-escuro)';
+  document.getElementById('depo-nome').value = '';
+  document.getElementById('depo-mensagem').value = '';
+}
+
+async function loadDepoimentos(){
+  const container = document.getElementById('depoimentos-lista');
+  const { data, error } = await supabaseClientDepo.from('depoimentos').select('*').eq('aprovado', true).order('created_at', { ascending: false });
+
+  if(error || !data || data.length === 0){
+    container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Ainda não temos depoimentos publicados. Seja o primeiro!</p>';
+    return;
+  }
+
+  container.innerHTML = data.map(d => `
+    <div class="card-depoimento">
+      <div class="depo-nome">${escapeHtmlDepo(d.nome)}</div>
+      <div class="depo-tipo">${d.tipo === 'empresa' ? '🏢 Empresa cadastrada' : '🔍 Usuário do GuiaZap'}</div>
+      <div class="depo-msg">"${escapeHtmlDepo(d.mensagem)}"</div>
+    </div>
+  `).join('');
+}
+
+if(supabaseClientDepo) loadDepoimentos();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

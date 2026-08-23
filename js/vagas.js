@@ -1,5 +1,19 @@
 let supabaseClientVagas;
 let vagas = [];
+let filtroHomeOfficeAtivo = false;
+let filtroSemExperienciaAtivo = false;
+
+function toggleFiltroHomeOffice(){
+  filtroHomeOfficeAtivo = !filtroHomeOfficeAtivo;
+  document.getElementById('chip-home-office-vaga').classList.toggle('ativo', filtroHomeOfficeAtivo);
+  renderVagas();
+}
+
+function toggleFiltroSemExperiencia(){
+  filtroSemExperienciaAtivo = !filtroSemExperienciaAtivo;
+  document.getElementById('chip-sem-experiencia-vaga').classList.toggle('ativo', filtroSemExperienciaAtivo);
+  renderVagas();
+}
 let meusCadastrosVagas = [];
 let currentUserVagas = null;
 let vagaFiltroId = null;
@@ -86,6 +100,8 @@ function renderVagas(){
     .filter(v => !vagaFiltroId || v.id === vagaFiltroId)
     .filter(v => !empresaFiltro || (v.profissionais && v.profissionais.name === empresaFiltro))
     .filter(v => !tipoFiltro || v.tipo === tipoFiltro)
+    .filter(v => !filtroHomeOfficeAtivo || v.home_office)
+    .filter(v => !filtroSemExperienciaAtivo || v.sem_experiencia)
     .filter(v =>
       normalizarTextoVagas(v.titulo).includes(query) ||
       normalizarTextoVagas(v.tipo).includes(query) ||
@@ -112,6 +128,8 @@ function renderVagas(){
         </span>` : ''}
       </div>
       <span class="tipo-vaga">${escapeHtmlVagas(v.tipo)}</span>
+      ${v.home_office ? '<span class="tipo-vaga" style="background:#e8f5e9; color:#1a7a3c;">🏠 Home office</span>' : ''}
+      ${v.sem_experiencia ? '<span class="tipo-vaga" style="background:#fff3cd; color:#7c4a03;">🔰 Sem experiência</span>' : ''}
       <div class="empresa-vaga">${v.profissionais ? escapeHtmlVagas(v.profissionais.name) : ''}${v.profissionais && v.profissionais.plano === 'premium' ? ' <span class="selo-premium">👑</span>' : ''}</div>
       ${v.descricao ? `<div class="descricao-vaga">${escapeHtmlVagas(v.descricao)}</div>` : ''}
       ${v.requisitos ? `<div class="requisitos-vaga"><b>Procuramos:</b> ${escapeHtmlVagas(v.requisitos)}</div>` : ''}
@@ -195,7 +213,9 @@ async function salvarVaga(e){
     tipo: document.getElementById('vg-tipo').value,
     descricao: document.getElementById('vg-descricao').value.trim() || null,
     requisitos: document.getElementById('vg-requisitos').value.trim() || null,
-    salario: document.getElementById('vg-salario').value.trim() || null
+    salario: document.getElementById('vg-salario').value.trim() || null,
+    home_office: document.getElementById('vg-home-office').checked,
+    sem_experiencia: document.getElementById('vg-sem-experiencia').checked
   };
 
   if(!payload.titulo || !payload.profissional_id){ msg.textContent = 'Preencha o cargo da vaga.'; return false; }
@@ -207,6 +227,19 @@ async function salvarVaga(e){
   msg.textContent = 'vaga publicada!';
   await loadVagas();
   setTimeout(fecharFormVaga, 1200);
+
+  // Avisa quem ativou notificações push sobre a vaga nova
+  fetch('/.netlify/functions/enviar-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      titulo: '💼 Nova vaga no GuiaZap!',
+      mensagem: payload.titulo,
+      url: '/vagas.html',
+      userIds: 'todos'
+    })
+  }).catch(e => console.error('erro ao enviar push', e));
+
   return false;
 }
 

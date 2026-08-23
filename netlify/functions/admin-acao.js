@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo'].includes(acao) || !['profissionais', 'produtos'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -53,6 +53,34 @@ exports.handler = async function (event) {
         }
       });
       if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao excluir' }) };
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if (acao === 'aprovar_depoimento' && tabela === 'depoimentos') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/depoimentos?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ aprovado: true })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao aprovar' }) };
+      return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
+    }
+
+    if (acao === 'aprovar_post' && tabela === 'blog_posts') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/blog_posts?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ aprovado: true })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao aprovar' }) };
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 

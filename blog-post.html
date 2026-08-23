@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="post-titulo-tag">Artigo — Blog GuiaZap</title>
+<meta id="post-descricao-tag" name="description" content="Dicas e novidades locais no blog do GuiaZap.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .post-wrap { max-width: 700px; margin: 0 auto; padding: 20px 15px 50px; }
+  .voltar { display: inline-block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .post-titulo { font-size: 1.4rem; color: var(--verde-escuro); margin-bottom: 6px; }
+  .post-meta { font-size: 0.78rem; color: #999; margin-bottom: 20px; }
+  .post-conteudo { font-size: 0.95rem; line-height: 1.7; color: #333; white-space: pre-wrap; }
+  .post-cta { background: var(--cinza-card); border-radius: 12px; padding: 18px; margin-top: 30px; text-align: center; }
+  .post-cta a { display: inline-block; margin-top: 8px; background: var(--verde-whats); color: white; padding: 9px 18px; border-radius: 50px; font-weight: 700; text-decoration: none; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Blog</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="post-wrap">
+  <a href="/blog.html" class="voltar">← Voltar ao Blog</a>
+  <div id="post-conteudo-area">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientPost = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtmlPost(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initPost(){
+  const area = document.getElementById('post-conteudo-area');
+  const slug = window.location.pathname.replace('/blog/', '').replace(/\/$/, '');
+
+  if(!slug){
+    area.innerHTML = '<p>Artigo não encontrado. <a href="/blog.html">Voltar ao blog</a>.</p>';
+    return;
+  }
+
+  const { data, error } = await supabaseClientPost.from('blog_posts').select('*').eq('slug', slug).eq('aprovado', true).maybeSingle();
+
+  if(error || !data){
+    area.innerHTML = '<p>Esse artigo não existe ou ainda não foi aprovado. <a href="/blog.html">Voltar ao blog</a>.</p>';
+    return;
+  }
+
+  document.title = `${data.titulo} — Blog GuiaZap`;
+  document.getElementById('post-titulo-tag').textContent = `${data.titulo} — Blog GuiaZap`;
+  document.getElementById('post-descricao-tag').setAttribute('content', data.conteudo.slice(0, 155));
+
+  area.innerHTML = `
+    <h1 class="post-titulo">${escapeHtmlPost(data.titulo)}</h1>
+    <div class="post-meta">Por ${escapeHtmlPost(data.autor_nome)} · ${new Date(data.created_at).toLocaleDateString('pt-BR')}</div>
+    <div class="post-conteudo">${escapeHtmlPost(data.conteudo)}</div>
+    <div class="post-cta">
+      <p><b>Precisa de um profissional na sua região?</b></p>
+      <a href="/index.html">Buscar no GuiaZap</a>
+    </div>
+  `;
+}
+
+initPost();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sobre o GuiaZap — Como Funciona</title>
+<meta name="description" content="O GuiaZap conecta você a profissionais e empresas da sua região. Busque, veja avaliações e fale direto no WhatsApp — de graça.">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .sobre-wrap { max-width: 700px; margin: 0 auto; padding: 30px 20px 60px; line-height: 1.6; color: #333; }
+  .sobre-wrap h1 { font-size: 1.6rem; margin-bottom: 6px; color: var(--verde-escuro); }
+  .sobre-wrap h2 { font-size: 1.15rem; margin: 28px 0 10px; color: var(--verde-escuro); }
+  .sobre-wrap p { font-size: 0.92rem; margin-bottom: 10px; }
+  .voltar { display: inline-block; margin-bottom: 20px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .passo-numerado {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+  .passo-numerado .numero {
+    background: var(--verde-whats);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+  }
+  .passo-numerado .texto { font-size: 0.9rem; padding-top: 3px; }
+  .recursos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .recurso-card { background: var(--cinza-card); border-radius: 12px; padding: 14px; text-align: center; }
+  .recurso-card .emoji { font-size: 1.6rem; }
+  .recurso-card .titulo { font-size: 0.82rem; font-weight: 700; margin-top: 4px; color: var(--verde-escuro); }
+  .cta-box { background: var(--cinza-card); border-radius: 14px; padding: 20px; text-align: center; margin-top: 24px; }
+  .cta-box a { display: inline-block; margin-top: 10px; background: var(--verde-whats); color: white; padding: 10px 22px; border-radius: 50px; font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Sobre e Como Funciona</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="sobre-wrap">
+<a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+<h1>O que é o GuiaZap?</h1>
+<p>O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários.</p>
+
+<h2>🔍 Como funciona pra quem busca um profissional</h2>
+<div class="passo-numerado">
+  <div class="numero">1</div>
+  <div class="texto">Digite o que você precisa (ex: "eletricista", "manicure") ou navegue pela lista</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">2</div>
+  <div class="texto">Filtre por cidade, bairro ou distância, e veja as avaliações de quem já contratou</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">3</div>
+  <div class="texto">Clique em "Chamar no WhatsApp" e fale direto com o profissional — sem cadastro, sem taxa</div>
+</div>
+
+<h2>🏢 Como funciona pra quem tem uma empresa</h2>
+<div class="passo-numerado">
+  <div class="numero">1</div>
+  <div class="texto">Crie sua conta grátis e cadastre sua empresa ou serviço</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">2</div>
+  <div class="texto">Escolha um pacote: o básico é <b>100% grátis</b>, sempre</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">3</div>
+  <div class="texto">Receba contatos diretos no seu WhatsApp — sem comissão sobre suas vendas</div>
+</div>
+
+<h2>✨ O que você encontra no GuiaZap</h2>
+<div class="recursos-grid">
+  <div class="recurso-card"><div class="emoji">🛍️</div><div class="titulo">Vitrine de produtos</div></div>
+  <div class="recurso-card"><div class="emoji">📸</div><div class="titulo">Novidades (Stories)</div></div>
+  <div class="recurso-card"><div class="emoji">💼</div><div class="titulo">Vagas de emprego</div></div>
+  <div class="recurso-card"><div class="emoji">📄</div><div class="titulo">Montador de currículo</div></div>
+  <div class="recurso-card"><div class="emoji">✅</div><div class="titulo">Selo Verificado</div></div>
+  <div class="recurso-card"><div class="emoji">👑</div><div class="titulo">Pacote Premium</div></div>
+</div>
+
+<h2>❓ Perguntas frequentes</h2>
+<p><b>O GuiaZap cobra alguma coisa dos visitantes?</b><br>Não, buscar e entrar em contato é 100% grátis, sempre.</p>
+<p><b>O GuiaZap participa da negociação ou cobra comissão?</b><br>Não. O GuiaZap é só um diretório — a conversa e o negócio acontecem direto entre você e a empresa, pelo WhatsApp.</p>
+<p><b>Preciso pagar pra cadastrar minha empresa?</b><br>Não necessariamente — o Pacote Contato é grátis pra sempre. Pacotes pagos existem pra quem quer recursos extras, como Vitrine de produtos e mais visibilidade.</p>
+
+<div class="cta-box">
+  <p><b>Tem uma empresa ou presta serviços?</b></p>
+  <p style="font-size:0.85rem; color:#666;">Cadastre-se gratuitamente e comece a receber contatos ainda hoje.</p>
+  <a href="pacotes.html">Cadastrar minha empresa</a>
+</div>
+
+</div>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

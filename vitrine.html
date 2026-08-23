@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GuiaZap Vitrine — Produtos de empresas locais</title>
+<title>Contrata-se — GuiaZap</title>
+<meta name="description" content="Encontre vagas de emprego perto de você e se candidate direto pelo WhatsApp, no GuiaZap.">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <style>
-  .vitrine-header { background: var(--verde-whats); padding: 24px 15px; text-align: center; color: white; }
-  .vitrine-header h1 { font-size: 1.8rem; font-weight: 800; }
-  .vitrine-header p { font-size: 0.88rem; opacity: 0.95; margin-top: 4px; }
-  .vitrine-busca {
+  .vagas-header { background: #6b46c1; padding: 24px 15px; text-align: center; color: white; }
+  .vagas-header h1 { font-size: 1.8rem; font-weight: 800; }
+  .vagas-header p { font-size: 0.88rem; opacity: 0.95; margin-top: 4px; }
+  .vagas-busca {
     background: var(--cinza-card);
     padding: 14px;
     margin: -14px 15px 0;
@@ -21,11 +21,11 @@
     position: relative;
     z-index: 2;
   }
-  .vitrine-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
-  .vitrine-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 15px 10px; }
-  .vitrine-toolbar .count { font-size: 0.9rem; color: #444; }
-  .btn-add-produto {
-    background: var(--verde-whats);
+  .vagas-busca input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
+  .vagas-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 15px 10px; }
+  .vagas-toolbar .count { font-size: 0.9rem; color: #444; }
+  .btn-add-vaga {
+    background: #6b46c1;
     color: white;
     border: none;
     padding: 8px 14px;
@@ -34,119 +34,56 @@
     font-size: 0.8rem;
     cursor: pointer;
   }
-  .grid-produtos {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-    padding: 0 15px 30px;
-  }
-  .card-produto {
+  .lista-vagas { padding: 0 15px 30px; }
+  .card-vaga {
     background: var(--cinza-card);
     border-radius: 12px;
-    overflow: hidden;
+    padding: 14px;
+    margin-bottom: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-    display: flex;
-    flex-direction: column;
   }
-  .foto-produto-area { position: relative; }
-  .card-produto img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; display: block; }
-  .foto-produto-area .icon-btn-favorito {
-    position: absolute; top: 6px; right: 6px; z-index: 2;
-    background: rgba(255,255,255,0.85); border-radius: 50%; width: 26px; height: 26px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.9rem; border: none; cursor: pointer; padding: 0;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  .card-vaga .titulo-vaga { font-size: 1rem; font-weight: 700; color: #1c1c1c; }
+  .card-vaga .tipo-vaga {
+    display: inline-block;
+    background: #ede9fe;
+    color: #6b46c1;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 50px;
+    margin-top: 4px;
   }
-  .foto-produto-area .owner-actions {
-    position: absolute; top: 6px; left: 6px; z-index: 2;
-    display: flex; gap: 4px;
-  }
-  .foto-produto-area .owner-actions .icon-btn {
-    background: rgba(255,255,255,0.9); border: none; cursor: pointer; font-size: 0.85rem;
-    width: 24px; height: 24px; border-radius: 50%; color: var(--verde-escuro);
-    display: flex; align-items: center; justify-content: center; padding: 0;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-  }
-  .card-produto .info { padding: 10px; flex: 1; display: flex; flex-direction: column; }
-  .card-produto .nome { font-size: 0.88rem; font-weight: 700; color: #1c1c1c; line-height: 1.3; }
-  .card-produto .preco { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 4px; }
-  .card-produto .empresa { font-size: 0.72rem; color: #8a8270; margin-top: 4px; }
-  .card-produto .marca-produto { font-size: 0.72rem; color: var(--verde-escuro); font-weight: 600; margin-top: 2px; }
-  .card-produto .medida-produto { font-size: 0.72rem; color: #666; margin-top: 2px; }
-  .link-compartilhar-produto {
+  .card-vaga .empresa-vaga { font-size: 0.78rem; color: #8a8270; margin-top: 6px; }
+  .card-vaga .descricao-vaga { font-size: 0.85rem; color: #444; margin-top: 8px; line-height: 1.4; }
+  .card-vaga .requisitos-vaga { font-size: 0.8rem; color: #555; margin-top: 6px; }
+  .card-vaga .salario-vaga { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 700; margin-top: 6px; }
+  .card-vaga .btn-zap-mini {
+    margin-top: 10px;
+    display: block;
+    text-align: center;
     background: var(--verde-whats);
+    color: white;
+    padding: 9px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .link-compartilhar-vaga {
+    background: #6b46c1;
     color: white;
     border: none;
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
     padding: 7px;
-    margin-top: 10px;
+    margin-top: 6px;
     border-radius: 8px;
     width: 100%;
-    text-align: center;
   }
-  .aviso-compartilhar {
-    background: #e8f4fd;
-    color: #0a4a6b;
-    font-size: 0.78rem;
-    padding: 10px 12px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    line-height: 1.4;
-  }
-  .menu-compartilhar {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 10px;
-    background: #f8f8f8;
-    border-radius: 8px;
-    padding: 10px;
-  }
-  .opcao-rede {
-    display: block;
-    text-align: center;
-    padding: 6px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-    color: white;
-  }
-  .opcao-rede.whatsapp { background: #25D366; }
-  .opcao-rede.facebook { background: #1877F2; }
-  .opcao-rede.twitter { background: #000000; }
-  .opcao-rede.telegram { background: #229ED9; }
-  .opcao-rede.copiar { background: #666; }
-  .card-produto .btn-zap-mini {
-    margin-top: 8px;
-    display: block;
-    text-align: center;
-    background: var(--verde-whats);
-    color: white;
-    padding: 7px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-decoration: none;
-  }
-  .btn-comprar-externo {
-    display: block;
-    text-align: center;
-    background: #e67e22;
-    color: white;
-    padding: 7px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-decoration: none;
-  }
-  .vazio-vitrine { text-align: center; padding: 50px 20px; color: #8a8270; grid-column: 1 / -1; }
+  .vazio-vagas { text-align: center; padding: 50px 20px; color: #8a8270; }
 
-  #produto-form {
+  #vaga-form {
     display: none;
     background: var(--cinza-card);
     border-radius: 14px;
@@ -154,206 +91,123 @@
     margin: 0 15px 18px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   }
-  #produto-form.open { display: block; }
-  #produto-form .field { margin-bottom: 10px; }
-  #produto-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
-  #produto-form input, #produto-form textarea, #produto-form select {
+  #vaga-form.open { display: block; }
+  #vaga-form .field { margin-bottom: 10px; }
+  #vaga-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  #vaga-form input, #vaga-form textarea, #vaga-form select {
     width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
   }
   .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
-  .campo-com-prefixo { position: relative; }
-  .campo-com-prefixo .prefixo-rs {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-weight: 700;
-    color: #444;
-    font-size: 0.9rem;
-    pointer-events: none;
+  .menu-compartilhar-vaga {
+    display: flex; flex-direction: column; gap: 4px; margin-top: 6px;
+    background: #f8f8f8; border-radius: 8px; padding: 6px;
   }
-  .campo-com-prefixo input { padding-left: 34px !important; }
-.card-produto-destaque {
-    border: 2.5px solid var(--verde-whats);
-    position: relative;
-    box-shadow: 0 4px 14px rgba(37,211,102,0.25);
-  }
-  .selo-compartilhado {
-    background: var(--verde-whats);
-    color: white;
-    font-size: 0.65rem;
-    font-weight: 700;
+  .banner-curriculo {
+    display: block;
     text-align: center;
-    padding: 3px 6px;
-  }
-  .stars-produto { font-size: 0.72rem; color: var(--amarelo); margin: 4px 0; }
-  .stars-produto .num-produto { color: #444; font-weight: 600; font-size: 0.7rem; }
-  .sem-avaliacao-produto { font-size: 0.68rem; color: #8a8270; font-style: italic; }
-  .link-avaliar-produto {
-    background: none; border: none; color: var(--verde-escuro);
-    font-size: 0.68rem; font-weight: 700; text-decoration: underline;
-    cursor: pointer; padding: 0; margin-left: 6px;
-  }
-  .ja-avaliou-produto { font-size: 0.66rem; color: #8a8270; font-style: italic; margin-left: 6px; }
-  .review-box-produto {
-    background: var(--cinza-fundo);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 6px;
-  }
-  .review-box-produto .review-stars { font-size: 1.1rem; color: var(--amarelo); cursor: pointer; margin-bottom: 4px; }
-  .categoria-produto { font-size: 0.68rem; color: #888; margin-top: 1px; }
-  .vitrine-filtros { display: flex; gap: 8px; margin-top: 10px; }
-  .vitrine-filtros select {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    background: white;
-  }
-  .acoes-produto-coluna {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 8px;
-  }
-  .acoes-produto-coluna .btn-zap-mini,
-  .acoes-produto-coluna .link-compartilhar-produto,
-  .acoes-produto-coluna .btn-comprar-externo {
-    margin-top: 0 !important;
+    background: #ede9fe;
+    color: #6b46c1;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    text-decoration: none;
   }
 </style>
 </head>
 <body>
-<header class="vitrine-header">
-  <h1>GuiaZap Vitrine</h1>
-  <p>Produtos de empresas da sua região, tudo num só lugar</p>
-  <button type="button" class="btn-modo-escuro" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="border-color:white; color:white; margin-top:8px;">🌙 Modo escuro</button>
+<header class="vagas-header">
+  <h1>Contrata-se</h1>
+  <p>Vagas de emprego das empresas da sua região</p>
 </header>
 
-<div class="vitrine-busca">
+<div class="vagas-busca">
   <div class="busca-com-icone">
-    <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
-    <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
+    <span class="icone-lupa" onclick="renderVagas()">🔍</span>
+    <input id="v-search-vaga" placeholder="Buscar por cargo, tipo, empresa..." oninput="renderVagas()">
   </div>
-  <div class="vitrine-filtros">
-    <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>
-    <select id="v-filter-preco" onchange="renderProdutos()">
-      <option value="">Qualquer preço</option>
-      <option value="0-20">Até R$ 20</option>
-      <option value="20-50">R$ 20 a R$ 50</option>
-      <option value="50-100">R$ 50 a R$ 100</option>
-      <option value="100-9999999">Acima de R$ 100</option>
+  <div style="display:flex; gap:8px; margin-top:8px;">
+    <select id="v-filter-empresa-vaga" onchange="renderVagas()" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+      <option value="">Todas as empresas</option>
+    </select>
+    <select id="v-filter-tipo-vaga" onchange="renderVagas()" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+      <option value="">Todos os tipos</option>
     </select>
   </div>
-  <button type="button" id="btn-favoritos-produtos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritosProdutos()">❤️ Ver só favoritos</button>
-</div>
-
-<div class="vitrine-toolbar">
-  <span class="count" id="v-count"></span>
-  <div>
-    <button type="button" class="btn-add-produto" id="v-ver-meus-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="verMeusProdutos()">🏢 Ver meus produtos</button>
-    <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+  <div class="filtros-rapidos" style="margin-top:8px;">
+    <button type="button" class="chip-filtro-rapido" id="chip-home-office-vaga" onclick="toggleFiltroHomeOffice()">🏠 Home office</button>
+    <button type="button" class="chip-filtro-rapido" id="chip-sem-experiencia-vaga" onclick="toggleFiltroSemExperiencia()">🔰 Sem experiência</button>
   </div>
 </div>
 
-<form id="produto-form" onsubmit="return salvarProduto(event)">
-  <input type="hidden" id="p-id">
-  <input type="hidden" id="p-codigo-barras">
+<div style="padding: 0 15px; margin-top: 12px;">
+  <a href="curriculo.html" class="banner-curriculo">📄 Não tem currículo? Monte um grátis aqui em minutos</a>
+</div>
+
+<div class="vagas-toolbar">
+  <span class="count" id="v-count-vaga"></span>
+  <button type="button" class="btn-add-vaga" id="v-add-vaga-btn" style="display:none;" onclick="abrirFormVaga()">+ Publicar vaga</button>
+</div>
+
+<form id="vaga-form" onsubmit="return salvarVaga(event)">
+  <input type="hidden" id="vg-id">
   <div class="field">
     <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
-    <select id="p-profissional" required></select>
+    <select id="vg-profissional" required></select>
   </div>
   <div class="field">
-    <label>Nome do produto</label>
-    <input id="p-nome" required placeholder="Ex: Bolo de chocolate">
-  </div>
-  <div class="aviso-compartilhar">
-    📢 Depois de cadastrado, esse produto ganha um botão "Compartilhar" — qualquer visitante pode enviar ele pra amigos e clientes no WhatsApp, Instagram e redes sociais, ajudando a divulgar seu negócio de graça!
+    <label>Cargo/título da vaga</label>
+    <input id="vg-titulo" required placeholder="Ex: Atendente de balcão">
   </div>
   <div class="field">
-    <button type="button" class="btn-foto-opcao" style="width:100%;" onclick="abrirScanner()">📷 Ler código de barras (preenche sozinho)</button>
-    <div id="scanner-area" style="display:none; margin-top:10px;">
-      <div id="scanner-leitor" style="width:100%;"></div>
-      <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="fecharScanner()">Cancelar leitura</button>
-    </div>
-    <span class="foto-msg" id="scanner-msg"></span>
-    <label class="foto-ou">ou digite o código de barras / código de peça manualmente (útil quando um mecânico ou fornecedor passou só o código)</label>
-    <div style="display:flex; gap:6px;">
-      <input id="p-codigo-barras-manual" placeholder="Ex: 7891000100103 ou código do fabricante da peça" oninput="onCodigoBarrasManualChange()" style="flex:1;">
-      <button type="button" class="btn-cancelar" onclick="buscarInfoCodigoManual()">Buscar</button>
-    </div>
+    <label>Tipo</label>
+    <select id="vg-tipo">
+      <option value="CLT">CLT</option>
+      <option value="PJ">PJ</option>
+      <option value="Meio período">Meio período</option>
+      <option value="Temporário">Temporário</option>
+      <option value="Freelancer">Freelancer</option>
+      <option value="Estágio">Estágio</option>
+      <option value="Diarista">Diarista</option>
+    </select>
   </div>
   <div class="field">
-    <label>Marca (opcional)</label>
-    <input id="p-marca" placeholder="Ex: Nestlé, marca própria...">
+    <label class="checkbox-18mais">
+      <input type="checkbox" id="vg-home-office">
+      <span>🏠 Home office</span>
+    </label>
+    <label class="checkbox-18mais">
+      <input type="checkbox" id="vg-sem-experiencia">
+      <span>🔰 Não exige experiência anterior</span>
+    </label>
   </div>
   <div class="field">
-    <label>Descrição (opcional)</label>
-    <textarea id="p-descricao" rows="2" placeholder="Detalhes do produto"></textarea>
+    <label>Descrição da vaga</label>
+    <textarea id="vg-descricao" rows="3" placeholder="O que a pessoa vai fazer no dia a dia"></textarea>
   </div>
   <div class="field">
-    <label>Categoria (opcional)</label>
-    <input id="p-categoria" list="categorias-produto-list" placeholder="Ex: Bebidas, Alimentos, Peças...">
-    <datalist id="categorias-produto-list"></datalist>
-  </div>
-  <div class="row2">
-    <div class="field">
-      <label>Medido em</label>
-      <select id="p-unidade-medida">
-        <option value="unidade">Unidade</option>
-        <option value="peso">Peso (kg)</option>
-        <option value="litro">Litro</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Quantidade</label>
-      <input id="p-quantidade" type="number" min="0" step="0.01" value="1">
-    </div>
+    <label>O que procuramos (requisitos)</label>
+    <textarea id="vg-requisitos" rows="2" placeholder="Ex: experiência anterior, disponibilidade de horário..."></textarea>
   </div>
   <div class="field">
-    <label>Valor (R$)</label>
+    <label>Salário (opcional)</label>
     <div class="campo-com-prefixo">
       <span class="prefixo-rs">R$</span>
-      <input id="p-preco" placeholder="0,00" inputmode="numeric" oninput="formatarValorProduto(event)">
+      <input id="vg-salario" placeholder="1.500,00 (ou 'A combinar')" oninput="formatarValorVaga(event)">
     </div>
-  </div>
-  <div class="field">
-    <label>Foto do produto</label>
-    <div class="foto-botoes">
-      <label class="btn-foto-opcao">
-        📷 Tirar foto
-        <input type="file" accept="image/*" capture="environment" onchange="enviarFotoProduto(event)" style="display:none;">
-      </label>
-      <label class="btn-foto-opcao">
-        🖼️ Escolher da galeria
-        <input type="file" accept="image/*" onchange="enviarFotoProduto(event)" style="display:none;">
-      </label>
-    </div>
-    <span class="foto-msg" id="p-foto-msg"></span>
-    <img id="p-foto-preview" class="foto-preview" style="display:none;">
-    <label class="foto-ou">ou cole um link de foto já existente</label>
-    <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
-  </div>
-  <div class="field">
-    <label>Link externo de compra (opcional)</label>
-    <input id="p-link-externo" placeholder="https://... (Amazon, Shopee, Mercado Livre, seu link de afiliado, etc)" onblur="buscarInfoLinkExterno()">
-    <span class="foto-msg" id="p-link-externo-msg"></span>
-    <label class="foto-ou">Se preenchido, aparece um botão extra "Comprar" que leva direto pra esse link — útil pra representantes de marca que precisam garantir sua comissão.</label>
   </div>
   <div class="form-actions">
-    <button type="submit" class="btn-salvar">Salvar produto</button>
-    <button type="button" class="btn-cancelar" onclick="fecharFormProduto()">Cancelar</button>
-    <span class="review-msg" id="p-msg"></span>
+    <button type="submit" class="btn-salvar">Publicar vaga</button>
+    <button type="button" class="btn-cancelar" onclick="fecharFormVaga()">Cancelar</button>
+    <span class="review-msg" id="vg-msg"></span>
   </div>
 </form>
 
-<div class="grid-produtos" id="v-grid"></div>
+<div class="lista-vagas" id="v-grid-vaga"></div>
 <a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>
-<script src="js/vitrine.js"></script>
+<script src="js/vagas.js"></script>
 </body>
 </html>

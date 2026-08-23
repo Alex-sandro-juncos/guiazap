@@ -53,13 +53,32 @@
   }
   .card-pacote:not(.destaque) .btn-escolher { background: var(--verde-escuro); }
   .voltar { display: block; text-align: center; margin-top: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .banner-campanha {
+    background: linear-gradient(135deg, #1c1c1c, #333);
+    color: white;
+    border-radius: 14px;
+    padding: 18px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .banner-campanha-titulo { font-size: 1rem; font-weight: 800; color: #ffd700; }
+  .banner-campanha-contador { font-size: 0.85rem; margin-top: 6px; }
+  .banner-campanha-obs { font-size: 0.7rem; color: #ccc; margin-top: 8px; }
 </style>
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Escolha seu pacote</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 <div class="pacotes-wrap">
   <h1>Como você quer aparecer no GuiaZap?</h1>
   <p class="sub">Escolha o pacote e depois complete seu cadastro</p>
+
+  <div id="banner-campanha-100" class="banner-campanha" style="display:none;">
+    <div class="banner-campanha-titulo">🎉 Primeiros 100 cadastros ganham Premium GRÁTIS por 30 dias!</div>
+    <div class="banner-campanha-contador" id="contador-campanha-100">Carregando...</div>
+    <a href="https://mpago.la/1nzwJm2" class="btn-escolher" style="background:#d4af37; display:block; margin-top:10px;">Quero aproveitar essa oferta</a>
+    <p class="banner-campanha-obs">Precisa cadastrar cartão — depois dos 30 dias grátis, passa a cobrar R$25/mês normalmente. Cancele quando quiser.</p>
+  </div>
 
   <div class="card-pacote">
     <h2>Pacote Contato</h2>
@@ -69,7 +88,7 @@
       <li>Contato direto por WhatsApp</li>
       <li>Categoria, avaliações e localização</li>
       <li>Vários contatos no mesmo cadastro</li>
-      <li>Publique 1 novidade (Story) por vez, ficando 24h no ar</li>
+      <li>Publique <b>1 novidade (Story)</b> por vez, ficando <b>24h</b> no ar</li>
     </ul>
     <a href="index.html?plano=basico" class="btn-escolher">Escolher este pacote</a>
   </div>
@@ -83,8 +102,9 @@
       <li>Anuncie seus produtos na Vitrine GuiaZap</li>
       <li>Apareça também para quem busca por produto</li>
       <li>Visitantes podem compartilhar seus produtos no WhatsApp e redes sociais</li>
+      <li>🛒 Link externo de compra em cada produto (útil pra afiliados/representantes de marca)</li>
       <li>🎯 Acesso ao Banco de Talentos — consulte currículos sem precisar publicar vaga</li>
-      <li>Até 3 novidades (Stories) ativas ao mesmo tempo, com até 5 fotos cada</li>
+      <li>Até <b>3 novidades (Stories)</b> ativas ao mesmo tempo, com até <b>5 fotos</b> cada, <b>24h</b> no ar</li>
       <li>Mais visibilidade para o seu negócio</li>
     </ul>
     <a href="index.html?plano=completo" class="btn-escolher">Escolher este pacote</a>
@@ -99,8 +119,7 @@
       <li>Tudo do Pacote Contato + Vitrine</li>
       <li>Selo dourado exclusivo "👑 Premium"</li>
       <li>Visitantes podem <b>seguir</b> sua empresa (sempre em contato)</li>
-      <li>Novidades (Stories) <b>sem limite de quantidade</b>, com até <b>10 fotos</b> cada</li>
-      <li>Stories ficam no ar por <b>7 dias</b>, em vez de 24h</li>
+      <li><b>Novidades (Stories) ilimitadas</b>, com até <b>10 fotos</b> cada, ficando <b>7 dias</b> no ar (em vez de 24h)</li>
       <li>Prioridade — sua empresa aparece <b>primeiro</b> na busca, na Vitrine e nas vagas</li>
       <li>Seguidores recebem <b>e-mail automático</b> quando você publica novidade ou produto</li>
       <li>Relatório semanal por e-mail com visualizações, seguidores e mais</li>
@@ -109,7 +128,44 @@
     <p style="font-size:0.72rem; color:#888; margin-top:8px; text-align:center;">⏳ Após pagar, pode levar até 15 minutos pra ativar automaticamente.</p>
   </div>
 
+  <div class="card-pacote" style="border-color:#1565c0; margin-top:8px; position:relative;">
+    <span class="selo-recomendado" style="background:#e3f2fd; color:#0d47a1;">EXTRA — QUALQUER PACOTE</span>
+    <h2>🔵 Selo Verificado</h2>
+    <div class="preco">R$ 15<span> pagamento único</span></div>
+    <ul>
+      <li>Disponível pra qualquer pacote (Contato, Completo ou Premium)</li>
+      <li>Confirmação real de CPF/CNPJ direto na Receita Federal</li>
+      <li>Envio de documento pra análise</li>
+      <li>Confirmação por e-mail e por WhatsApp</li>
+      <li>Selo ✅ azul no seu cadastro, transmitindo mais confiança pros clientes</li>
+    </ul>
+    <p style="font-size:0.78rem; color:#555; text-align:center;">O botão pra solicitar aparece direto no seu cadastro, depois de fazer login.</p>
+  </div>
+
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+async function carregarContadorCampanha(){
+  try{
+    const supabaseClientPac = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { count } = await supabaseClientPac.from('campanha_100_gratis').select('id', { count: 'exact', head: true });
+    const restantes = 100 - (count || 0);
+
+    if(restantes <= 0){
+      document.getElementById('banner-campanha-100').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('contador-campanha-100').textContent = `Restam ${restantes} de 100 vagas`;
+    document.getElementById('banner-campanha-100').style.display = 'block';
+  } catch(e){
+    console.error('erro ao carregar contador da campanha', e);
+  }
+}
+carregarContadorCampanha();
+</script>
+<script src="js/modo-escuro.js"></script>
 </body>
 </html>

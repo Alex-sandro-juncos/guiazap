@@ -133,6 +133,10 @@
       <option value="">Todos os tipos</option>
     </select>
   </div>
+  <div class="filtros-rapidos" style="margin-top:8px;">
+    <button type="button" class="chip-filtro-rapido" id="chip-home-office-vaga" onclick="toggleFiltroHomeOffice()">🏠 Home office</button>
+    <button type="button" class="chip-filtro-rapido" id="chip-sem-experiencia-vaga" onclick="toggleFiltroSemExperiencia()">🔰 Sem experiência</button>
+  </div>
 </div>
 
 <div style="padding: 0 15px; margin-top: 12px;">
@@ -158,12 +162,23 @@
     <label>Tipo</label>
     <select id="vg-tipo">
       <option value="CLT">CLT</option>
+      <option value="PJ">PJ</option>
       <option value="Meio período">Meio período</option>
       <option value="Temporário">Temporário</option>
       <option value="Freelancer">Freelancer</option>
       <option value="Estágio">Estágio</option>
       <option value="Diarista">Diarista</option>
     </select>
+  </div>
+  <div class="field">
+    <label class="checkbox-18mais">
+      <input type="checkbox" id="vg-home-office">
+      <span>🏠 Home office</span>
+    </label>
+    <label class="checkbox-18mais">
+      <input type="checkbox" id="vg-sem-experiencia">
+      <span>🔰 Não exige experiência anterior</span>
+    </label>
   </div>
   <div class="field">
     <label>Descrição da vaga</label>

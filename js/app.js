@@ -71,6 +71,48 @@ function toggleAuthForm(){
   }
 }
 
+async function toggleStatusDisponibilidade(profissionalId){
+  const cadastro = entries.find(e => e.id === profissionalId);
+  if(!cadastro) return;
+
+  const novoStatus = cadastro.status_disponibilidade === 'atendimento' ? 'disponivel' : 'atendimento';
+  const { error } = await supabaseClient.from('profissionais').update({ status_disponibilidade: novoStatus }).eq('id', profissionalId);
+  if(error){ console.error(error); alert('Erro ao trocar o status. Tente de novo.'); return; }
+
+  cadastro.status_disponibilidade = novoStatus;
+  render();
+}
+
+function mostrarLinkIndicacao(){
+  if(!currentUser) return;
+  const box = document.getElementById('indicacao-box');
+  const jaAberto = box.style.display === 'block';
+  box.style.display = jaAberto ? 'none' : 'block';
+  if(!jaAberto){
+    const link = `${window.location.origin}${window.location.pathname}?ref=${currentUser.id}`;
+    document.getElementById('indicacao-link-input').value = link;
+  }
+}
+
+async function copiarLinkIndicacao(){
+  const input = document.getElementById('indicacao-link-input');
+  try{
+    await navigator.clipboard.writeText(input.value);
+    alert('Link copiado! Compartilhe com outras empresas.');
+  } catch(e){
+    input.select();
+    alert('Selecione e copie manualmente (Ctrl+C).');
+  }
+}
+
+async function atualizarUltimoLogin(){
+  if(!currentUser) return;
+  const { error } = await supabaseClient.from('profissionais').update({ ultimo_login: new Date().toISOString() }).eq('user_id', currentUser.id);
+  if(error){ console.error(error); return; }
+
+  entries.forEach(e => { if(e.user_id === currentUser.id) e.ultimo_login = new Date().toISOString(); });
+}
+
 async function updateAuthUI(){
   const loggedOutBox = document.getElementById('auth-logged-out');
   const loggedInBox = document.getElementById('auth-logged-in');
@@ -86,6 +128,8 @@ async function updateAuthUI(){
     addBtn.style.display = 'block';
     abrirCadastroSePendente();
     abrirStorySeVindoDoProduto();
+    atualizarUltimoLogin();
+    atualizarVisibilidadeBotaoPush();
   } else {
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
@@ -93,6 +137,8 @@ async function updateAuthUI(){
     document.getElementById('trocar-senha-box').style.display = 'none';
     closeForm();
     abrirStorySeVindoDoProduto();
+    const btnPush = document.getElementById('btn-ativar-push');
+    if(btnPush) btnPush.style.display = 'none';
   }
   render();
 }
@@ -175,10 +221,34 @@ async function trocarSenha(){
 
 // ---------- DADOS ----------
 
+let denunciasPorEmpresa = {};
+
+async function loadDenunciasPorEmpresa(){
+  const { data, error } = await supabaseClient.rpc('empresas_com_denuncia');
+  if(error){ console.error(error); return; }
+  denunciasPorEmpresa = {};
+  (data || []).forEach(d => { denunciasPorEmpresa[d.profissional_id] = true; });
+  render();
+}
+
+async function loadContadorPlataforma(){
+  const container = document.getElementById('contador-plataforma');
+  if(!container) return;
+
+  const [{ count: totalCadastros }, { count: totalProdutos }] = await Promise.all([
+    supabaseClient.from('profissionais').select('id', { count: 'exact', head: true }).eq('status_pagamento', 'ativo'),
+    supabaseClient.from('produtos').select('id', { count: 'exact', head: true })
+  ]);
+
+  if(totalCadastros === null && totalProdutos === null) return;
+
+  container.textContent = `${totalCadastros ?? 0} profissionais e empresas cadastradas 🤝 ${totalProdutos ?? 0} produtos na Vitrine`;
+}
+
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -189,11 +259,23 @@ async function loadEntries(){
   loaded = true;
   document.getElementById('loading').style.display = 'none';
   populateEstados();
-  await loadAvaliacoes();
+
+  // As avaliações (estrelinhas) e produtos em destaque são só um "acabamento"
+  // visual — não precisam travar a lista principal aparecendo. Rodam em
+  // paralelo, e a tela atualiza sozinha assim que cada uma terminar.
+  loadAvaliacoes().then(render);
   loadProdutosDestaque();
 
   const params = new URLSearchParams(window.location.search);
   cadastroCompartilhadoId = params.get('p');
+
+  // Salva quem indicou (se veio de um link de indicação), pra usar quando a
+  // pessoa cadastrar uma empresa nova. Nunca sobrescreve um "ref" já salvo
+  // antes, senão o último link clicado sempre "roubaria" a indicação.
+  const refParam = params.get('ref');
+  if(refParam && !localStorage.getItem('indicado_por')){
+    localStorage.setItem('indicado_por', refParam);
+  }
 
   const planoParam = params.get('plano');
   if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium'){
@@ -471,6 +553,7 @@ const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Paco
 const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
 const LINK_ASSINATURA_PREMIUM = "https://mpago.la/2JLXkQM"; // Plano Premium (R$25/mês) criado no Mercado Pago
 const LINK_SELO_VERIFICADO = "https://mpago.la/13aLx8F"; // Selo Verificado (R$15, pagamento único) criado no Mercado Pago
+const LINK_IMPULSIONAR = "https://mpago.la/2rGLFyJ"; // Impulsionamento avulso (R$5, pagamento único) criado no Mercado Pago
 const WHATSAPP_ADMIN_GUIAZAP = "5546999209402"; // número do WhatsApp do GuiaZap que recebe a confirmação
 const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com o código já existente
 
@@ -507,6 +590,12 @@ async function openForm(entry){
   else { preview.style.display = 'none'; }
   carregarContatosExtra(entry ? (entry.contatos_extra || '') : '');
   carregarCategoriasExtra(entry ? (entry.categorias_extra || '') : '');
+
+  const diasSalvos = entry && entry.horario_dias ? entry.horario_dias.split(',') : [];
+  document.querySelectorAll('.f-horario-dia').forEach(el => { el.checked = diasSalvos.includes(el.value); });
+  document.getElementById('f-horario-abre').value = entry ? (entry.horario_abre || '') : '';
+  document.getElementById('f-horario-fecha').value = entry ? (entry.horario_fecha || '') : '';
+
   document.getElementById('add-btn').style.display = 'none';
 }
 
@@ -640,6 +729,21 @@ function closeForm(){
   if(currentUser) document.getElementById('add-btn').style.display = 'block';
 }
 
+async function geocodificarCadastro(profissionalId, cidade, bairro, estado){
+  try{
+    const resp = await fetch(`/.netlify/functions/geocodificar-endereco?cidade=${encodeURIComponent(cidade)}&bairro=${encodeURIComponent(bairro)}&estado=${encodeURIComponent(estado)}`);
+    const data = await resp.json();
+    if(!data.encontrado) return;
+
+    await supabaseClient.from('profissionais').update({ latitude: data.latitude, longitude: data.longitude }).eq('id', profissionalId);
+
+    const cadastro = entries.find(e => e.id === profissionalId);
+    if(cadastro){ cadastro.latitude = data.latitude; cadastro.longitude = data.longitude; }
+  } catch(e){
+    console.error('erro ao estimar localização', e);
+  }
+}
+
 async function saveEntry(e){
   e.preventDefault();
   if(!currentUser){ alert('Você precisa entrar na sua conta para cadastrar.'); return false; }
@@ -676,7 +780,10 @@ async function saveEntry(e){
     whatsapp: document.getElementById('f-whatsapp').value.replace(/\D/g,''),
     foto: document.getElementById('f-foto').value.trim(),
     contatos_extra: coletarContatosExtra(),
-    categorias_extra: coletarCategoriasExtra()
+    categorias_extra: coletarCategoriasExtra(),
+    horario_dias: Array.from(document.querySelectorAll('.f-horario-dia:checked')).map(el => el.value).join(',') || null,
+    horario_abre: document.getElementById('f-horario-abre').value || null,
+    horario_fecha: document.getElementById('f-horario-fecha').value || null
   };
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){
@@ -707,6 +814,13 @@ async function saveEntry(e){
     payload.user_email = currentUser.email;
     payload.status_pagamento = 'pendente';
     payload.plano = planoEscolhido;
+
+    // Se a pessoa veio de um link de indicação (e não está se auto-indicando), guarda quem indicou
+    const indicadoPor = localStorage.getItem('indicado_por');
+    if(indicadoPor && indicadoPor !== currentUser.id){
+      payload.indicado_por = indicadoPor;
+    }
+
     const { data: inserido, error: errInsert } = await supabaseClient.from('profissionais').insert(payload).select('id').single();
     error = errInsert;
     novoCadastroId = inserido ? inserido.id : null;
@@ -715,6 +829,13 @@ async function saveEntry(e){
   closeForm();
   await loadEntries();
   populateBairrosFiltro();
+
+  // Estima a localização (latitude/longitude) a partir da cidade/bairro, em segundo
+  // plano — não trava a tela esperando isso, já que não é essencial pro cadastro salvar
+  const idParaGeocodificar = id || novoCadastroId;
+  if(idParaGeocodificar){
+    geocodificarCadastro(idParaGeocodificar, payload.cidade, payload.bairro, payload.estado);
+  }
 
   if(!id){
     if(planoEscolhido === 'basico'){
@@ -769,6 +890,25 @@ function verTodos(){
   cadastroCompartilhadoId = null;
   window.history.replaceState({}, '', window.location.pathname);
   render();
+}
+
+function mostrarQrCode(id){
+  const box = document.getElementById('qrcode-box-' + id);
+  if(!box) return;
+
+  const jaAberto = box.style.display === 'block';
+  document.querySelectorAll('.qrcode-box').forEach(b => { b.style.display = 'none'; });
+  if(jaAberto) return;
+
+  const link = `${window.location.origin}${window.location.pathname}?p=${id}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(link)}`;
+
+  box.innerHTML = `
+    <img src="${qrUrl}" alt="QR Code do seu perfil" style="width:100%; max-width:220px; display:block; margin:8px auto;">
+    <p style="text-align:center; font-size:0.75rem; color:#666;">Imprime e cola na sua loja — quem escanear vai direto pro seu perfil no GuiaZap</p>
+    <a href="${qrUrl}" download="qrcode-guiazap.png" class="link-compartilhar" style="display:block; text-align:center; text-decoration:none;">⬇ Baixar imagem</a>
+  `;
+  box.style.display = 'block';
 }
 
 function toggleMenuCompartilharCadastro(id, nome){
@@ -918,6 +1058,91 @@ function toggleFiltroSeguindo(){
   mostrandoSoSeguindo = !mostrandoSoSeguindo;
   const btn = document.getElementById('btn-seguindo-filtro');
   if(btn) btn.classList.toggle('ativo', mostrandoSoSeguindo);
+  render();
+}
+
+// ---------- FILTROS RÁPIDOS ----------
+
+function estaAbertoAgora(entry){
+  if(!entry.horario_dias || !entry.horario_abre || !entry.horario_fecha) return false;
+
+  const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+  const agora = new Date();
+  const diaAtual = diasSemana[agora.getDay()];
+  const dias = entry.horario_dias.split(',');
+  if(!dias.includes(diaAtual)) return false;
+
+  const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+  const [horaAbre, minAbre] = entry.horario_abre.split(':').map(Number);
+  const [horaFecha, minFecha] = entry.horario_fecha.split(':').map(Number);
+  const minutosAbre = horaAbre * 60 + minAbre;
+  const minutosFecha = horaFecha * 60 + minFecha;
+
+  return horaAtual >= minutosAbre && horaAtual <= minutosFecha;
+}
+
+function calcularDistanciaKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+let filtroMaisProximosAtivo = false;
+let filtroMelhorAvaliadosAtivo = false;
+let filtroPremiumRapidoAtivo = false;
+let filtroAbertoAgoraAtivo = false;
+let minhaLatitude = null;
+let minhaLongitude = null;
+
+function toggleFiltroMaisProximos(){
+  if(!filtroMaisProximosAtivo && !minhaLatitude){
+    if(!navigator.geolocation){
+      alert('Seu navegador não suporta localização. Tente por outro filtro.');
+      return;
+    }
+    document.getElementById('chip-proximos').textContent = '📍 Buscando sua localização...';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        minhaLatitude = pos.coords.latitude;
+        minhaLongitude = pos.coords.longitude;
+        filtroMaisProximosAtivo = true;
+        document.getElementById('chip-proximos').textContent = '📍 Mais próximos';
+        document.getElementById('chip-proximos').classList.add('ativo');
+        render();
+      },
+      () => {
+        document.getElementById('chip-proximos').textContent = '📍 Mais próximos';
+        alert('Não conseguimos acessar sua localização. Verifique as permissões do navegador.');
+      }
+    );
+    return;
+  }
+
+  filtroMaisProximosAtivo = !filtroMaisProximosAtivo;
+  document.getElementById('chip-proximos').classList.toggle('ativo', filtroMaisProximosAtivo);
+  render();
+}
+
+function toggleFiltroMelhorAvaliados(){
+  filtroMelhorAvaliadosAtivo = !filtroMelhorAvaliadosAtivo;
+  document.getElementById('chip-avaliados').classList.toggle('ativo', filtroMelhorAvaliadosAtivo);
+  render();
+}
+
+function toggleFiltroPremiumRapido(){
+  filtroPremiumRapidoAtivo = !filtroPremiumRapidoAtivo;
+  document.getElementById('chip-premium-rapido').classList.toggle('ativo', filtroPremiumRapidoAtivo);
+  render();
+}
+
+function toggleFiltroAbertoAgora(){
+  filtroAbertoAgoraAtivo = !filtroAbertoAgoraAtivo;
+  document.getElementById('chip-aberto-agora').classList.toggle('ativo', filtroAbertoAgoraAtivo);
   render();
 }
 
@@ -1157,7 +1382,7 @@ function renderProdutosDestaque(){
 
   const cardHtml = p => `
     <div class="destaque-card">
-      <img src="${p.foto ? escapeHtml(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtml(p.nome)}">
+      <img src="${p.foto ? escapeHtml(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtml(p.nome)}" loading="lazy">
       <div class="destaque-info">
         <div class="destaque-nome">${escapeHtml(p.nome)}</div>
         ${p.preco ? `<div class="destaque-preco">R$ ${escapeHtml(p.preco)}</div>` : ''}
@@ -1218,6 +1443,10 @@ async function abrirFormStory(profissionalId, plano){
   } else {
     campoProduto.style.display = 'none';
   }
+
+  const campoNotificar = document.getElementById('story-notificar-campo');
+  campoNotificar.style.display = plano === 'premium' ? 'block' : 'none';
+  document.getElementById('story-notificar-seguidores').checked = true;
 
   document.getElementById('story-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -1341,17 +1570,32 @@ async function salvarStory(e){
   setTimeout(fecharFormStory, 1500);
   loadStories();
 
-  // Se a empresa for Premium, avisa quem segue por e-mail (não trava a tela esperando)
-  fetch('/.netlify/functions/notificar-seguidores', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      profissionalId: payload.profissional_id,
-      tipo: 'story',
-      titulo: payload.texto || payload.produto_nome || null,
-      foto: payload.fotos[0]
-    })
-  }).catch(e => console.error('erro ao notificar seguidores', e));
+  // Se a empresa for Premium, e a pessoa deixou marcado, avisa quem segue por
+  // e-mail e por notificação push (não trava a tela esperando)
+  const quiseNotificar = document.getElementById('story-notificar-seguidores').checked;
+  if(quiseNotificar){
+    fetch('/.netlify/functions/notificar-seguidores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profissionalId: payload.profissional_id,
+        tipo: 'story',
+        titulo: payload.texto || payload.produto_nome || null,
+        foto: payload.fotos[0]
+      })
+    }).catch(e => console.error('erro ao notificar seguidores', e));
+
+    fetch('/.netlify/functions/enviar-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titulo: '📸 Novidade de quem você segue!',
+        mensagem: payload.texto || payload.produto_nome || 'Confira a novidade nova',
+        url: '/index.html',
+        profissionalId: payload.profissional_id
+      })
+    }).catch(e => console.error('erro ao enviar push', e));
+  }
 
   return false;
 }
@@ -1502,30 +1746,6 @@ function renderMinhasNovidades(profissionalId){
   `;
 }
 
-
-async function toggleNotificarSeguidores(profissionalId){
-  const cadastro = entries.find(e => e.id === profissionalId);
-  if(!cadastro) return;
-
-  const novoValor = !(cadastro.notificar_seguidores !== false);
-  const msg = document.getElementById('notificar-msg-' + profissionalId);
-  msg.textContent = 'salvando...';
-
-  const { error } = await supabaseClient.from('profissionais').update({ notificar_seguidores: novoValor }).eq('id', profissionalId);
-  if(error){ console.error(error); msg.textContent = 'erro ao salvar, tente de novo'; msg.style.color = '#a4402f'; return; }
-
-  cadastro.notificar_seguidores = novoValor;
-
-  const btn = document.getElementById('btn-notificar-' + profissionalId);
-  btn.textContent = novoValor ? '🔔 Notificações aos seguidores: ATIVADAS' : '🔕 Notificações aos seguidores: DESATIVADAS';
-  btn.classList.toggle('ativado', novoValor);
-
-  msg.textContent = novoValor
-    ? '✓ Salvo! Seus seguidores vão receber e-mail quando você publicar.'
-    : '✓ Salvo! Seus seguidores não vão mais receber e-mail.';
-  msg.style.color = 'var(--verde-escuro)';
-  setTimeout(() => { msg.textContent = ''; }, 4000);
-}
 
 async function excluirStory(storyId, profissionalId){
   if(!confirm('Excluir essa novidade antes do prazo de 24h?')) return;
@@ -1783,6 +2003,13 @@ function contarVisualizacao(id, isOwner){
   supabaseClient.rpc('incrementar_visualizacao', { pid: id }).then(({ error }) => {
     if(error) console.error('erro ao contar visualização', error);
   });
+  supabaseClient.from('eventos_analytics').insert({ profissional_id: id, tipo: 'visualizacao' }).then(({ error }) => {
+    if(error) console.error('erro ao registrar evento de visualização', error);
+  });
+}
+
+function registrarCliqueWhatsapp(id){
+  supabaseClient.from('eventos_analytics').insert({ profissional_id: id, tipo: 'whatsapp_click' }).catch(e => console.error('erro ao registrar clique whatsapp', e));
 }
 
 function usuarioTemCadastroProprio(){
@@ -1835,11 +2062,34 @@ function render(){
     })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
     .filter(e => !mostrandoSoSeguindo || seguindoEmpresas.has(e.id))
+    .filter(e => !filtroPremiumRapidoAtivo || e.plano === 'premium')
+    .filter(e => !filtroAbertoAgoraAtivo || estaAbertoAgora(e))
     .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
     .sort((a,b) => {
+      // Impulsionamento avulso tem prioridade máxima — acima até do Premium
+      const impulsionadoA = a.impulsionado_ate && new Date(a.impulsionado_ate) > new Date() ? 1 : 0;
+      const impulsionadoB = b.impulsionado_ate && new Date(b.impulsionado_ate) > new Date() ? 1 : 0;
+      if(impulsionadoA !== impulsionadoB) return impulsionadoB - impulsionadoA;
+
+      if(filtroMaisProximosAtivo && minhaLatitude){
+        const temDistA = a.latitude != null && a.longitude != null;
+        const temDistB = b.latitude != null && b.longitude != null;
+        if(temDistA && !temDistB) return -1;
+        if(!temDistA && temDistB) return 1;
+        if(temDistA && temDistB){
+          const distA = calcularDistanciaKm(minhaLatitude, minhaLongitude, a.latitude, a.longitude);
+          const distB = calcularDistanciaKm(minhaLatitude, minhaLongitude, b.latitude, b.longitude);
+          if(distA !== distB) return distA - distB;
+        }
+      }
+      if(filtroMelhorAvaliadosAtivo){
+        const mediaA = mediaDe(a.id).media;
+        const mediaB = mediaDe(b.id).media;
+        if(mediaA !== mediaB) return mediaB - mediaA;
+      }
       const premiumA = a.plano === 'premium' ? 1 : 0;
       const premiumB = b.plano === 'premium' ? 1 : 0;
       if(premiumA !== premiumB) return premiumB - premiumA;
@@ -1857,9 +2107,17 @@ function render(){
   if(!loaded){ list.innerHTML = ''; return; }
 
   if(filtered.length === 0){
+    const buscaAtual = document.getElementById('search').value.trim();
     list.innerHTML = entries.length === 0
       ? '<div class="empty">Ainda não há profissionais cadastrados.<br>Seja o primeiro a cadastrar!</div>'
-      : '<div class="empty">Nenhum resultado encontrado.<br>Tente outro termo ou filtro.</div>';
+      : `
+        <div class="empty empty-com-cta">
+          <div class="empty-icone">🔍</div>
+          <p>Nenhum resultado ${buscaAtual ? `pra "<b>${escapeHtml(buscaAtual)}</b>"` : 'com esses filtros'} por aqui ainda.</p>
+          <p class="empty-sugestao">Tenta ampliar a busca, trocar o filtro de cidade, ou:</p>
+          <a href="pacotes.html" class="btn-cadastro-empty">+ Seja o primeiro a se cadastrar nessa categoria</a>
+        </div>
+      `;
     return;
   }
 
@@ -1885,7 +2143,16 @@ function render(){
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <h3>${escapeHtml(e.name)}${e.verificado ? ' <span title="Verificado pelo GuiaZap" class="selo-verificado">✅</span>' : ''}${e.plano === 'premium' ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
+          <h3>${escapeHtml(e.name)}${e.verificado && e.plano === 'premium' ? ' <span title="Empresa Verificada e Premium" class="selo-verificado-premium">✅👑 Verificada Premium</span>' : e.verificado ? ' <span title="Empresa verificada pelo GuiaZap" class="selo-verificado">✅ Empresa verificada</span>' : ''}${e.plano === 'premium' && !e.verificado ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
+          ${e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date() ? '<div class="selo-impulsionado">🚀 Impulsionado — no topo agora</div>' : ''}
+          <div class="selo-disponibilidade ${e.status_disponibilidade === 'atendimento' ? 'atendimento' : 'disponivel'}" ${isOwner ? `onclick="toggleStatusDisponibilidade('${e.id}')" style="cursor:pointer;"` : ''}>
+            ${e.status_disponibilidade === 'atendimento' ? '🟡 Em atendimento' : '🟢 Disponível agora'}
+            ${isOwner ? ' <span class="link-trocar-status">(trocar)</span>' : ''}
+          </div>
+          ${e.ultimo_login && (Date.now() - new Date(e.ultimo_login).getTime()) < (30 * 24 * 60 * 60 * 1000) ? '<div class="selo-ativo">🟢 Profissional ativo</div>' : ''}
+          ${!denunciasPorEmpresa[e.id] ? '<div class="selo-sem-denuncia">✓ Sem denúncias pendentes</div>' : ''}
+          ${filtroMaisProximosAtivo && minhaLatitude && e.latitude != null && e.longitude != null ? `<div class="distancia-km">📍 ${calcularDistanciaKm(minhaLatitude, minhaLongitude, e.latitude, e.longitude).toFixed(1)} km de você</div>` : ''}
+          ${e.horario_dias && e.horario_abre && e.horario_fecha ? `<div class="selo-horario ${estaAbertoAgora(e) ? 'aberto' : 'fechado'}">${estaAbertoAgora(e) ? '🟢 Aberto agora' : '🔴 Fechado agora'}</div>` : ''}
           ${isOwner && e.plano === 'premium' ? `
             <div class="contagem-seguidores" onclick="toggleListaSeguidores('${e.id}')">
               👥 ${contagemSeguidoresPorEmpresa[e.id] ?? '...'} seguidor${contagemSeguidoresPorEmpresa[e.id] === 1 ? '' : 'es'}
@@ -1925,9 +2192,12 @@ function render(){
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
         ${isOwner && !pendente && e.plano !== 'completo' && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
         ${isOwner && !pendente && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_PREMIUM}" class="link-migrar" style="background:linear-gradient(90deg, #fdf6e3, #f9e9b8); border:1.5px solid #d4af37; color:#4a3800;">👑 Migrar para o Pacote Premium (R$25/mês) — seguidores, mais Stories e prioridade</a>` : ''}
+        ${isOwner && !pendente && !(e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date()) ? `<a href="${LINK_IMPULSIONAR}" class="link-migrar" style="background:#1c1c1c; color:white; border:none;">🚀 Impulsionar por 24h no topo (R$5,00)</a>` : ''}
         <div class="card-acoes-extra">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
+          ${isOwner ? `<button type="button" class="link-compartilhar" onclick="mostrarQrCode('${e.id}')">📱 QR Code pra imprimir</button>` : ''}
+          <div class="qrcode-box" id="qrcode-box-${e.id}" style="display:none;"></div>
           ${!isOwner ? `<button type="button" class="link-denunciar" onclick="abrirDenuncia('${e.id}')">Denunciar</button>` : ''}
           ${!isOwner ? `<button type="button" class="link-mensagem" onclick="abrirMensagemEmpresa('${e.id}')">💬 Reclamar/Sugerir pra empresa</button>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleMensagensRecebidas('${e.id}')">💬 Ver mensagens recebidas</button>` : ''}
@@ -1971,20 +2241,16 @@ function render(){
         </div>
         <div class="acoes-empresa-coluna">
           <div class="contatos-row">
-            <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
+            <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>
+            <a class="btn-zap btn-orcamento" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank">💰 Pedir orçamento</a>
             ${renderContatosExtra(e.contatos_extra)}
           </div>
           ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
+          ${isOwner && e.plano === 'premium' ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
-        ${isOwner && e.plano === 'premium' ? `
-          <button type="button" class="btn-toggle-notificar${e.notificar_seguidores !== false ? ' ativado' : ''}" id="btn-notificar-${e.id}" onclick="toggleNotificarSeguidores('${e.id}')">
-            ${e.notificar_seguidores !== false ? '🔔 Notificações aos seguidores: ATIVADAS' : '🔕 Notificações aos seguidores: DESATIVADAS'}
-          </button>
-          <span class="notificar-msg" id="notificar-msg-${e.id}"></span>
-        ` : ''}
         ${isOwner && !e.verificado ? `<div id="painel-verificacao-${e.id}"></div>` : ''}
       </div>
     </div>
@@ -2198,6 +2464,8 @@ if(initSupabase()){
   initAuth();
   loadEntries();
   loadStories();
+  loadContadorPlataforma();
+  loadDenunciasPorEmpresa();
   mostrarWelcomeGateSeNecessario();
 }
 
@@ -2207,4 +2475,95 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
   });
+}
+
+// ---------- INSTALAÇÃO DO APP (PWA) ----------
+
+let promptInstalacaoPWA = null;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  promptInstalacaoPWA = event;
+  const btn = document.getElementById('btn-instalar-pwa');
+  if(btn) btn.style.display = 'block';
+});
+
+async function instalarPWA(){
+  if(!promptInstalacaoPWA) return;
+  promptInstalacaoPWA.prompt();
+  const { outcome } = await promptInstalacaoPWA.userChoice;
+  if(outcome === 'accepted'){
+    document.getElementById('btn-instalar-pwa').style.display = 'none';
+  }
+  promptInstalacaoPWA = null;
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btn-instalar-pwa');
+  if(btn) btn.style.display = 'none';
+});
+
+// ---------- NOTIFICAÇÕES PUSH ----------
+
+const VAPID_PUBLIC_KEY = 'BGuNuGRR8zQZL0ZUeJo4y-zeiGItjWzLelApvMPh-F5Sj2wkcmZWcjHKF3RO6fkLCrh1Pmt0HIu4oPzFLz_41fg';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; ++i){
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function atualizarVisibilidadeBotaoPush(){
+  const btn = document.getElementById('btn-ativar-push');
+  if(!btn) return;
+  const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  btn.style.display = (suportado && currentUser && Notification.permission !== 'granted') ? 'block' : 'none';
+}
+
+async function ativarNotificacoesPush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    alert('Seu navegador não suporta notificações push.');
+    return;
+  }
+  if(!currentUser){
+    alert('Faça login pra ativar notificações.');
+    return;
+  }
+
+  const permissao = await Notification.requestPermission();
+  if(permissao !== 'granted'){
+    alert('Você precisa permitir notificações pra ativar esse recurso.');
+    return;
+  }
+
+  try{
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if(!subscription){
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    const subJson = subscription.toJSON();
+
+    const { data: existente } = await supabaseClient.from('push_subscriptions').select('id').eq('endpoint', subJson.endpoint).maybeSingle();
+    if(existente){
+      await supabaseClient.from('push_subscriptions').update({ user_id: currentUser.id, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }).eq('endpoint', subJson.endpoint);
+    } else {
+      await supabaseClient.from('push_subscriptions').insert({ user_id: currentUser.id, endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth });
+    }
+
+    alert('🔔 Notificações ativadas! Você vai receber avisos de vagas novas e novidades de quem você segue.');
+    atualizarVisibilidadeBotaoPush();
+  } catch(e){
+    console.error(e);
+    alert('Erro ao ativar notificações. Tente de novo.');
+  }
 }

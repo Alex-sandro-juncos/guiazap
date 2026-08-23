@@ -1,9 +1,0 @@
-[build]
-  functions = "netlify/functions"
-  publish = "."
-
-[functions."verificar-pagamentos"]
-  schedule = "0 * * * *"
-
-[functions."relatorio-semanal"]
-  schedule = "0 9 * * 1"

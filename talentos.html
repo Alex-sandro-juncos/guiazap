@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Banco de Talentos — GuiaZap</title>
+<meta name="description" content="Empresas do GuiaZap consultam currículos de candidatos disponíveis na região.">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -59,6 +60,7 @@
 <script>
 const supabaseClientTalentos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let curriculosTodos = [];
+let meuProfissionalIdTalentos = null;
 
 function normalizarTextoTalentos(str){
   return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -77,13 +79,15 @@ async function initTalentos(){
     .from('profissionais')
     .select('id')
     .eq('user_id', session.user.id)
-    .eq('plano', 'completo')
+    .in('plano', ['completo', 'premium'])
     .eq('status_pagamento', 'ativo');
 
   if(!perfis || perfis.length === 0){
-    mostrarUpsell(container, 'O Banco de Talentos é exclusivo pra empresas do Pacote Completo. Faça upgrade pra consultar currículos disponíveis.');
+    mostrarUpsell(container, 'O Banco de Talentos é exclusivo pra empresas do Pacote Completo ou Premium. Faça upgrade pra consultar currículos disponíveis.');
     return;
   }
+
+  meuProfissionalIdTalentos = perfis[0].id;
 
   const { data, error } = await supabaseClientTalentos
     .from('banco_curriculos')
@@ -161,9 +165,18 @@ function renderTalentos(){
       ${c.experiencia ? `<div class="secao-talento"><b>Experiência:</b> ${escapeHtmlTalentos(c.experiencia)}</div>` : ''}
       ${c.formacao ? `<div class="secao-talento"><b>Formação:</b> ${escapeHtmlTalentos(c.formacao)}</div>` : ''}
       ${c.habilidades ? `<div class="secao-talento"><b>Habilidades:</b> ${escapeHtmlTalentos(c.habilidades)}</div>` : ''}
-      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank">💬 Falar direto com o candidato pelo WhatsApp</a>
+      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank" onclick="notificarVisualizacaoCurriculo('${c.id}')">💬 Falar direto com o candidato pelo WhatsApp</a>
     </div>
   `; }).join('');
+}
+
+function notificarVisualizacaoCurriculo(curriculoId){
+  if(!meuProfissionalIdTalentos) return;
+  fetch('/.netlify/functions/notificar-visualizacao-curriculo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ curriculoId, profissionalId: meuProfissionalIdTalentos })
+  }).catch(e => console.error('erro ao notificar visualização', e));
 }
 
 function escapeHtmlTalentos(str){

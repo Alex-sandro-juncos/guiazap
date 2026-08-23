@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novidades de quem você segue — GuiaZap</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .feed-wrap { max-width: 600px; margin: 0 auto; padding: 20px 15px 50px; }
+  .voltar { display: inline-block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .card-feed { background: white; border-radius: 12px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+  .card-feed img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
+  .card-feed .info-feed { padding: 12px; }
+  .card-feed .empresa-feed { font-size: 0.78rem; color: var(--verde-escuro); font-weight: 700; }
+  .card-feed .tipo-feed { font-size: 0.68rem; color: #999; }
+  .card-feed .texto-feed { font-size: 0.85rem; color: #333; margin-top: 6px; }
+  .card-feed .data-feed { font-size: 0.68rem; color: #999; margin-top: 6px; }
+  .vazio-feed { text-align: center; padding: 50px 20px; color: #999; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Novidades de quem você segue</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="feed-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+  <div id="feed-lista">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientFeed = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtmlFeed(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function tempoRelativo(dataStr){
+  const diff = Date.now() - new Date(dataStr).getTime();
+  const horas = Math.floor(diff / (1000 * 60 * 60));
+  if(horas < 1) return 'agora há pouco';
+  if(horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `há ${dias} dia${dias > 1 ? 's' : ''}`;
+}
+
+async function initFeed(){
+  const container = document.getElementById('feed-lista');
+  const { data: { session } } = await supabaseClientFeed.auth.getSession();
+
+  if(!session){
+    container.innerHTML = '<div class="vazio-feed">Faça login na <a href="index.html">página inicial</a> pra ver as novidades de quem você segue.</div>';
+    return;
+  }
+
+  const { data: seguindo } = await supabaseClientFeed.from('seguidores').select('profissional_id').eq('user_id', session.user.id);
+  const idsSeguindo = (seguindo || []).map(s => s.profissional_id);
+
+  if(idsSeguindo.length === 0){
+    container.innerHTML = '<div class="vazio-feed">Você ainda não segue nenhuma empresa.<br>Siga empresas Premium pra ver as novidades delas aqui!</div>';
+    return;
+  }
+
+  const [{ data: stories }, { data: produtos }] = await Promise.all([
+    supabaseClientFeed.from('stories').select('*, profissionais(name)').in('profissional_id', idsSeguindo).order('created_at', { ascending: false }),
+    supabaseClientFeed.from('produtos').select('*, profissionais(name)').in('profissional_id', idsSeguindo).order('created_at', { ascending: false }).limit(30)
+  ]);
+
+  const itensFeed = [];
+
+  (stories || []).forEach(s => {
+    itensFeed.push({
+      tipo: 'story',
+      empresa: s.profissionais ? s.profissionais.name : '',
+      foto: s.fotos && s.fotos[0],
+      texto: s.texto,
+      data: s.created_at
+    });
+  });
+
+  (produtos || []).forEach(p => {
+    itensFeed.push({
+      tipo: 'produto',
+      empresa: p.profissionais ? p.profissionais.name : '',
+      foto: p.foto,
+      texto: `${p.nome}${p.preco ? ' — R$ ' + p.preco : ''}`,
+      data: p.created_at
+    });
+  });
+
+  itensFeed.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  if(itensFeed.length === 0){
+    container.innerHTML = '<div class="vazio-feed">Nenhuma novidade ainda das empresas que você segue.</div>';
+    return;
+  }
+
+  container.innerHTML = itensFeed.map(item => `
+    <div class="card-feed">
+      ${item.foto ? `<img src="${escapeHtmlFeed(item.foto)}" loading="lazy">` : ''}
+      <div class="info-feed">
+        <div class="empresa-feed">${escapeHtmlFeed(item.empresa)}</div>
+        <div class="tipo-feed">${item.tipo === 'story' ? '📸 Novidade' : '🛍️ Produto novo'}</div>
+        ${item.texto ? `<div class="texto-feed">${escapeHtmlFeed(item.texto)}</div>` : ''}
+        <div class="data-feed">${tempoRelativo(item.data)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+initFeed();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>
