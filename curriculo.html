@@ -46,7 +46,7 @@
   .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
 
   @media print {
-    header, .cv-form, .voltar-guiazap, .btn-baixar-cv, .btn-modo-escuro-solto { display: none !important; }
+    header, .cv-form, .voltar-guiazap, .btn-baixar-cv, .btn-modo-escuro-solto, .btn-chat-flutuante { display: none !important; }
     body { background: white; }
     #cv-preview { box-shadow: none; padding: 0; }
   }
@@ -535,6 +535,7 @@ async function excluirMeuCurriculo(){
 
 if(supabaseClientCv) initAuthCv();
 </script>
+<a href="chat.html" class="btn-chat-flutuante" title="Chat">💬</a>
 <script src="js/modo-escuro.js"></script>
 </body>
 </html>

@@ -79,10 +79,13 @@
   .chamada-info { color: white; text-align: center; margin-bottom: 20px; }
   .chamada-info .nome-chamada { font-size: 1.3rem; font-weight: 700; }
   .chamada-info .status-chamada { font-size: 0.9rem; color: #ccc; margin-top: 6px; }
-  .videos-chamada { position: relative; width: 100%; max-width: 500px; aspect-ratio: 3/4; background: #222; border-radius: 14px; overflow: hidden; margin-bottom: 20px; }
+  .overlay-chamada { overflow-y: auto; }
+  .videos-chamada { position: relative; width: 100%; max-width: 500px; max-height: 50vh; aspect-ratio: 3/4; background: #222; border-radius: 14px; overflow: hidden; margin-bottom: 20px; flex-shrink: 1; }
+  .videos-chamada.somente-audio { display: none; }
+  .avatar-chamada-audio { width: 110px; height: 110px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 20px; }
   #video-remoto { width: 100%; height: 100%; object-fit: cover; }
   #video-local { position: absolute; bottom: 10px; right: 10px; width: 90px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid white; }
-  .chamada-controles { display: flex; gap: 16px; }
+  .chamada-controles { display: flex; gap: 16px; flex-shrink: 0; padding-bottom: 20px; }
   .btn-controle-chamada {
     width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
     font-size: 1.3rem; display: flex; align-items: center; justify-content: center;
@@ -191,7 +194,8 @@
       <div class="nome-chamada" id="chamada-nome-ativa"></div>
       <div class="status-chamada" id="chamada-status-ativa">Chamando...</div>
     </div>
-    <div class="videos-chamada">
+    <div class="avatar-chamada-audio" id="avatar-chamada-audio" style="display:none;">📞</div>
+    <div class="videos-chamada" id="videos-chamada-box">
       <video id="video-remoto" autoplay playsinline></video>
       <video id="video-local" autoplay playsinline muted></video>
     </div>
@@ -885,6 +889,9 @@ async function aceitarChamada(){
 
   document.getElementById('video-local').srcObject = streamLocalAtual;
   document.getElementById('video-local').style.display = window._comVideoChamadaRecebida ? 'block' : 'none';
+  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !window._comVideoChamadaRecebida);
+  document.getElementById('avatar-chamada-audio').style.display = window._comVideoChamadaRecebida ? 'none' : 'flex';
+  document.getElementById('btn-camera').style.display = window._comVideoChamadaRecebida ? 'flex' : 'none';
 
   const pc = new RTCPeerConnection(STUN_SERVERS);
   streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
@@ -950,6 +957,9 @@ async function iniciarChamada(comVideo){
   document.getElementById('chamada-status-ativa').textContent = 'Chamando...';
   document.getElementById('video-local').srcObject = streamLocalAtual;
   document.getElementById('video-local').style.display = comVideo ? 'block' : 'none';
+  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !comVideo);
+  document.getElementById('avatar-chamada-audio').style.display = comVideo ? 'none' : 'flex';
+  document.getElementById('btn-camera').style.display = comVideo ? 'flex' : 'none';
 
   const pc = new RTCPeerConnection(STUN_SERVERS);
   streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
@@ -1034,6 +1044,9 @@ function fecharOverlayChamada(){
   document.getElementById('overlay-chamada').classList.remove('aberto');
   document.getElementById('video-local').srcObject = null;
   document.getElementById('video-remoto').srcObject = null;
+  document.getElementById('avatar-chamada-audio').style.display = 'none';
+  document.getElementById('videos-chamada-box').classList.remove('somente-audio');
+  document.getElementById('btn-camera').style.display = 'flex';
   microfoneMudo = false;
   cameraDesligada = false;
   chamadaComQuemUserId = null;

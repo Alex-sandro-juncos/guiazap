@@ -3,73 +3,1057 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa de profissionais — GuiaZap</title>
+<title>Chat — GuiaZap</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<meta name="description" content="Veja no mapa os profissionais e empresas cadastrados perto de você no GuiaZap.">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
-  #mapa-area { width: 100%; height: calc(100vh - 140px); min-height: 400px; }
-  .voltar-mapa { display: block; text-align: center; padding: 8px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
-  .popup-mapa { font-size: 0.85rem; }
-  .popup-mapa .nome-popup { font-weight: 700; color: var(--verde-escuro); margin-bottom: 4px; }
-  .popup-mapa a { display: block; margin-top: 6px; background: var(--verde-whats); color: white; text-align: center; padding: 6px; border-radius: 6px; text-decoration: none; font-size: 0.78rem; font-weight: 700; }
+  .chat-wrap { max-width: 700px; margin: 0 auto; padding: 15px; height: calc(100vh - 90px); display: flex; flex-direction: column; }
+  .voltar { display: inline-block; margin-bottom: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+
+  .chat-lista-conversas { overflow-y: auto; flex: 1; }
+  .item-conversa {
+    background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px;
+    cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center;
+  }
+  .item-conversa .nome-conversa { font-weight: 700; font-size: 0.9rem; color: #1c1c1c; }
+  .item-conversa .ultima-msg { font-size: 0.78rem; color: #888; margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item-conversa .bolinha-nao-lida { background: var(--verde-whats); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+
+  .chat-thread { display: none; flex-direction: column; height: 100%; }
+  .chat-thread.aberto { display: flex; }
+  .chat-thread-header { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 10px; }
+  .chat-thread-header .voltar-lista { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px; }
+  .chat-thread-header .nome-topo { font-weight: 700; font-size: 0.95rem; }
+  .chat-mensagens { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .bolha-msg { max-width: 75%; padding: 9px 12px; border-radius: 14px; font-size: 0.88rem; line-height: 1.4; }
+  .bolha-msg.minha { align-self: flex-end; background: var(--verde-whats); color: white; border-bottom-right-radius: 4px; }
+  .bolha-msg.outra { align-self: flex-start; background: white; color: #333; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .bolha-msg .hora-msg { font-size: 0.62rem; opacity: 0.75; margin-top: 4px; display: block; text-align: right; }
+  .check-lida { opacity: 0.8; }
+  .bolha-msg.minha .check-lida { color: rgba(255,255,255,0.7); }
+  .bolha-msg.minha .check-lida.lida { color: #4fc3f7; }
+  .chat-input-row { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+  .chat-input-row input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 50px; font-size: 0.9rem; }
+  .chat-input-row button { background: var(--verde-whats); color: white; border: none; width: 42px; height: 42px; border-radius: 50%; font-size: 1.1rem; cursor: pointer; flex-shrink: 0; }
+  .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.3rem !important; width: 36px !important; height: 36px !important; }
+  .btn-ferramenta-chat.gravando { color: #a4402f !important; }
+  .gravacao-audio-box {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px;
+    background: white; border-radius: 50px; padding: 8px 14px;
+  }
+  .ponto-gravando {
+    width: 10px; height: 10px; border-radius: 50%; background: #a4402f;
+    animation: piscar-gravando 1s infinite;
+  }
+  @keyframes piscar-gravando { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .bolha-msg audio.midia-chat { max-width: 220px; }
+  .vazio-chat { text-align: center; padding: 40px 20px; color: #999; font-size: 0.85rem; }
+
+  .bolha-msg img.midia-chat { max-width: 200px; border-radius: 10px; display: block; cursor: pointer; }
+  .bolha-msg .arquivo-chat { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
+  .bolha-msg .arquivo-chat .icone-arquivo { font-size: 1.5rem; }
+
+  .painel-flutuante {
+    display: none; position: absolute; bottom: 60px; left: 10px; right: 10px;
+    max-width: 480px; margin: 0 auto; background: white; border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 10px; z-index: 10; max-height: 320px; overflow-y: auto;
+  }
+  .painel-flutuante.aberto { display: block; }
+  .grid-emoji { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .grid-emoji button { background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 4px; border-radius: 6px; }
+  .grid-emoji button:hover { background: #f0f0f0; }
+  .busca-gif-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; }
+  .grid-gif { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid-gif img { width: 100%; border-radius: 8px; cursor: pointer; }
+
+  .btn-chamada { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
+
+  .overlay-chamada {
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,0.9);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .overlay-chamada.aberto { display: flex; }
+  .chamada-info { color: white; text-align: center; margin-bottom: 20px; }
+  .chamada-info .nome-chamada { font-size: 1.3rem; font-weight: 700; }
+  .chamada-info .status-chamada { font-size: 0.9rem; color: #ccc; margin-top: 6px; }
+  .overlay-chamada { overflow-y: auto; }
+  .videos-chamada { position: relative; width: 100%; max-width: 500px; max-height: 50vh; aspect-ratio: 3/4; background: #222; border-radius: 14px; overflow: hidden; margin-bottom: 20px; flex-shrink: 1; }
+  .videos-chamada.somente-audio { display: none; }
+  .avatar-chamada-audio { width: 110px; height: 110px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 20px; }
+  #video-remoto { width: 100%; height: 100%; object-fit: cover; }
+  #video-local { position: absolute; bottom: 10px; right: 10px; width: 90px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid white; }
+  .chamada-controles { display: flex; gap: 16px; flex-shrink: 0; padding-bottom: 20px; }
+  .btn-controle-chamada {
+    width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+    font-size: 1.3rem; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.2); color: white;
+  }
+  .btn-controle-chamada.desligar { background: #a4402f; }
+  .btn-controle-chamada.ativo-off { background: rgba(164,64,47,0.7); }
+  .chamada-recebida-caixa {
+    background: white; border-radius: 14px; padding: 24px; text-align: center; max-width: 320px;
+  }
+  .chamada-recebida-caixa .icone-chamando { font-size: 2.5rem; margin-bottom: 8px; }
+  .chamada-recebida-botoes { display: flex; gap: 14px; justify-content: center; margin-top: 18px; }
+  .chamada-recebida-botoes button {
+    width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 1.4rem; cursor: pointer; color: white;
+  }
+  .chamada-recebida-botoes .aceitar { background: var(--verde-whats); }
+  .chamada-recebida-botoes .recusar { background: #a4402f; }
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Mapa de profissionais</p></header>
-<div id="mapa-area"></div>
-<a href="index.html" class="voltar-mapa">← Voltar ao GuiaZap</a>
+<header><div class="logo">GuiaZap</div><p>Chat</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="chat-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:10px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
+
+  <div id="chat-lista-box" class="chat-lista-conversas">
+    <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
+  </div>
+
+  <div id="chat-thread-box" class="chat-thread">
+    <div class="chat-thread-header">
+      <button class="voltar-lista" onclick="fecharConversa()">←</button>
+      <div class="nome-topo" id="chat-nome-topo"></div>
+      <div style="margin-left:auto; display:flex; gap:4px;">
+        <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
+        <button class="btn-chamada" onclick="iniciarChamada(true)" title="Chamada de vídeo">📹</button>
+        <button class="btn-chamada" id="btn-silenciar-conversa" onclick="toggleSilenciarConversa()" title="Silenciar conversa">🔔</button>
+        <input type="range" id="volume-chat" min="0" max="100" value="50" style="width:50px;" title="Volume do som de notificação" onchange="localStorage.setItem('volume_chat', this.value)">
+        <button class="btn-chamada" onclick="apagarConversaAtual()" title="Apagar conversa">🗑️</button>
+      </div>
+    </div>
+    <div class="chat-mensagens" id="chat-mensagens"></div>
+
+    <div class="painel-flutuante" id="painel-emoji">
+      <div class="grid-emoji" id="grid-emoji-lista"></div>
+    </div>
+    <div class="painel-flutuante" id="painel-gif">
+      <input type="text" class="busca-gif-input" id="busca-gif-texto" placeholder="Buscar GIF..." oninput="buscarGifOuSticker('gif')">
+      <div class="grid-gif" id="grid-gif-lista"></div>
+    </div>
+    <div class="painel-flutuante" id="painel-sticker">
+      <input type="text" class="busca-gif-input" id="busca-sticker-texto" placeholder="Buscar figurinha..." oninput="buscarGifOuSticker('sticker')">
+      <div class="grid-gif" id="grid-sticker-lista"></div>
+    </div>
+
+    <div class="gravacao-audio-box" id="gravacao-audio-box" style="display:none;">
+      <span class="ponto-gravando"></span>
+      <span id="gravacao-tempo">0:00</span>
+      <span style="flex:1; font-size:0.8rem; color:#666;">Gravando áudio...</span>
+      <button type="button" class="btn-ferramenta-chat" onclick="cancelarGravacaoAudio()" title="Cancelar">✕</button>
+      <button type="button" onclick="pararGravacaoAudio()" title="Enviar">➤</button>
+    </div>
+
+    <div class="chat-input-row" id="chat-input-row-normal">
+      <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
+      <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
+      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
+      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF">GIF</button>
+      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
+      <input type="text" id="chat-input-texto" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') enviarMensagemChat();">
+      <button type="button" class="btn-ferramenta-chat" id="btn-microfone" onclick="alternarGravacaoAudio()" title="Gravar áudio">🎤</button>
+      <button type="button" onclick="enviarMensagemChat()">➤</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-compartilhar" class="overlay-chamada">
+  <div class="chamada-recebida-caixa" style="max-width:400px; width:90%; max-height:70vh; overflow-y:auto; text-align:left;">
+    <div style="text-align:center; margin-bottom:10px;">
+      <div style="font-weight:700; font-size:1rem;">Enviar pra quem?</div>
+      <div id="compartilhar-preview" style="font-size:0.8rem; color:#666; margin-top:4px;"></div>
+    </div>
+    <div id="compartilhar-lista-conversas"></div>
+    <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-top:10px;" onclick="compartilharComNovoContato()">+ Adicionar novo contato por código</button>
+    <button type="button" class="btn-cancelar" style="width:100%; margin-top:8px;" onclick="fecharOverlayCompartilhar()">Cancelar</button>
+  </div>
+</div>
+
+<div id="overlay-chamada" class="overlay-chamada">
+  <div id="chamada-recebida-view" style="display:none;">
+    <div class="chamada-recebida-caixa">
+      <div class="icone-chamando">📞</div>
+      <div id="chamada-recebida-nome" style="font-weight:700; font-size:1.1rem;"></div>
+      <div style="color:#888; font-size:0.85rem; margin-top:4px;">Chamada recebida...</div>
+      <div class="chamada-recebida-botoes">
+        <button class="recusar" onclick="recusarChamada()">✕</button>
+        <button class="aceitar" onclick="aceitarChamada()">✓</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chamada-ativa-view" style="display:none; width:100%; align-items:center; flex-direction:column;">
+    <div class="chamada-info">
+      <div class="nome-chamada" id="chamada-nome-ativa"></div>
+      <div class="status-chamada" id="chamada-status-ativa">Chamando...</div>
+    </div>
+    <div class="avatar-chamada-audio" id="avatar-chamada-audio" style="display:none;">📞</div>
+    <div class="videos-chamada" id="videos-chamada-box">
+      <video id="video-remoto" autoplay playsinline></video>
+      <video id="video-local" autoplay playsinline muted></video>
+    </div>
+    <div class="chamada-controles">
+      <button class="btn-controle-chamada" id="btn-mudo" onclick="alternarMudo()">🎤</button>
+      <button class="btn-controle-chamada" id="btn-camera" onclick="alternarCamera()">📹</button>
+      <button class="btn-controle-chamada desligar" onclick="encerrarChamada(true)">📵</button>
+    </div>
+  </div>
+</div>
 
 <script src="config.js"></script>
 <script>
-const supabaseClientMapa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserChat = null;
+let meusCadastrosChat = [];
+let conversaAtual = null;
+let souEuAEmpresaNaConversaAtual = false;
+let canalRealtimeAtual = null;
 
-function escapeHtmlMapa(str){
+function escapeHtmlChat(str){
   const d = document.createElement('div');
   d.textContent = str || '';
   return d.innerHTML;
 }
 
-async function initMapa(){
-  const { data, error } = await supabaseClientMapa
-    .from('profissionais')
-    .select('id, name, cat, bairro, cidade, whatsapp, latitude, longitude, plano')
-    .eq('status_pagamento', 'ativo');
+async function initChat(){
+  const { data: { session } } = await supabaseClientChat.auth.getSession();
+  if(!session){
+    document.getElementById('chat-lista-box').innerHTML = '<div class="vazio-chat">Faça login na <a href="index.html">página inicial</a> pra acessar suas conversas.</div>';
+    return;
+  }
+  currentUserChat = session.user;
 
-  const comCoordenadas = (data || []).filter(e => e.latitude != null && e.longitude != null);
+  const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
+  meusCadastrosChat = cadastros || [];
 
-  // Centraliza no meio de todos os pins, ou no Brasil todo se não tiver nenhum
-  const centroLat = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.latitude, 0) / comCoordenadas.length : -15.78;
-  const centroLng = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.longitude, 0) / comCoordenadas.length : -47.93;
+  const params = new URLSearchParams(window.location.search);
+  const empresaId = params.get('empresa');
+  if(empresaId) await abrirOuCriarConversa(empresaId);
 
-  const mapa = L.map('mapa-area').setView([centroLat, centroLng], comCoordenadas.length > 0 ? 12 : 4);
+  const compartilharParam = params.get('compartilhar');
+  if(compartilharParam) await abrirTelaCompartilhar(compartilharParam);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(mapa);
+  carregarListaConversas();
+  ligarCanalDeChamadas();
+}
 
-  comCoordenadas.forEach(e => {
-    const icone = e.plano === 'premium' ? '👑' : '📍';
-    const marker = L.marker([e.latitude, e.longitude]).addTo(mapa);
-    marker.bindPopup(`
-      <div class="popup-mapa">
-        <div class="nome-popup">${icone} ${escapeHtmlMapa(e.name)}</div>
-        <div>${escapeHtmlMapa(e.cat)}</div>
-        <div style="color:#888;">${escapeHtmlMapa([e.bairro, e.cidade].filter(Boolean).join(', '))}</div>
-        <a href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no mapa do GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
-      </div>
-    `);
+let conteudoParaCompartilhar = null;
+
+async function abrirTelaCompartilhar(paramCodificado){
+  try{
+    conteudoParaCompartilhar = JSON.parse(decodeURIComponent(paramCodificado));
+  } catch(e){ console.error(e); return; }
+
+  document.getElementById('compartilhar-preview').textContent = conteudoParaCompartilhar.titulo || 'Conteúdo do GuiaZap';
+  document.getElementById('overlay-compartilhar').classList.add('aberto');
+
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  let filtroOr = `visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`;
+  if(meusIdsEmpresa.length > 0) filtroOr += `,profissional_id.in.(${meusIdsEmpresa.join(',')})`;
+
+  const { data } = await supabaseClientChat.from('conversas').select('id, profissional_id, visitante_user_id, usuario2_id, profissionais(name)').or(filtroOr).order('ultima_mensagem_em', { ascending: false });
+
+  const lista = document.getElementById('compartilhar-lista-conversas');
+  if(!data || data.length === 0){
+    lista.innerHTML = '<p style="text-align:center; color:#999; font-size:0.8rem; padding:10px 0;">Você ainda não tem conversas. Adicione um contato abaixo.</p>';
+    return;
+  }
+
+  const comNomes = await Promise.all(data.map(async (c) => {
+    let nome;
+    if(c.usuario2_id){
+      const outroId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
+      const { data: perfil } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroId).maybeSingle();
+      nome = (perfil && perfil.nome_exibicao) || 'Contato do GuiaZap';
+    } else {
+      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
+      nome = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+    }
+    return { ...c, nome };
+  }));
+
+  lista.innerHTML = comNomes.map(c => `
+    <div class="item-conversa" onclick="enviarConteudoCompartilhado('${c.id}')">
+      <div class="nome-conversa">${escapeHtmlChat(c.nome)}</div>
+    </div>
+  `).join('');
+}
+
+async function enviarConteudoCompartilhado(conversaId){
+  if(!conteudoParaCompartilhar) return;
+  conversaAtual = conversaId;
+  await enviarQualquerMensagem({
+    tipo: 'link',
+    arquivo_url: conteudoParaCompartilhar.url,
+    arquivo_nome: conteudoParaCompartilhar.titulo
   });
+  conversaAtual = null;
+  fecharOverlayCompartilhar();
+  window.history.replaceState({}, '', window.location.pathname);
+  alert('Enviado!');
+  carregarListaConversas();
+}
 
-  if(comCoordenadas.length === 0){
-    document.getElementById('mapa-area').insertAdjacentHTML('afterbegin', '<p style="text-align:center; padding:20px; position:absolute; z-index:1000; background:white; left:50%; transform:translateX(-50%); top:20px; border-radius:8px;">Ainda não temos localização suficiente cadastrada pra mostrar no mapa.</p>');
+async function compartilharComNovoContato(){
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  if(!codigo) return;
+
+  const codigoLimpo = codigo.trim().toUpperCase();
+  const { data: perfilAlvo } = await supabaseClientChat.from('perfis_usuario').select('user_id').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+  if(!perfilAlvo){ alert('Código não encontrado.'); return; }
+
+  const { data: existente } = await supabaseClientChat.from('conversas').select('id').is('profissional_id', null)
+    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+  if(!conversaId){
+    const { data: nova } = await supabaseClientChat.from('conversas').insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id }).select('id').single();
+    conversaId = nova.id;
+  }
+
+  enviarConteudoCompartilhado(conversaId);
+}
+
+function fecharOverlayCompartilhar(){
+  document.getElementById('overlay-compartilhar').classList.remove('aberto');
+  conteudoParaCompartilhar = null;
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
+async function adicionarContatoPorCodigo(){
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  if(!codigo) return;
+
+  const codigoLimpo = codigo.trim().toUpperCase();
+  const { data: perfilAlvo, error } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+
+  if(error || !perfilAlvo){
+    alert('Código não encontrado. Confira se digitou certinho.');
+    return;
+  }
+
+  if(perfilAlvo.user_id === currentUserChat.id){
+    alert('Esse é o seu próprio código!');
+    return;
+  }
+
+  // Confere se já existe uma conversa com essa pessoa (em qualquer ordem)
+  const { data: existente } = await supabaseClientChat
+    .from('conversas')
+    .select('id')
+    .is('profissional_id', null)
+    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+
+  if(!conversaId){
+    const { data: nova, error: erroNova } = await supabaseClientChat
+      .from('conversas')
+      .insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id })
+      .select('id')
+      .single();
+    if(erroNova){ console.error(erroNova); alert('Erro ao adicionar contato.'); return; }
+    conversaId = nova.id;
+  }
+
+  carregarListaConversas();
+  abrirConversa(conversaId);
+}
+
+async function abrirOuCriarConversa(profissionalId){
+  const { data: existente } = await supabaseClientChat
+    .from('conversas')
+    .select('id')
+    .eq('profissional_id', profissionalId)
+    .eq('visitante_user_id', currentUserChat.id)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+
+  if(!conversaId){
+    const { data: nova, error } = await supabaseClientChat
+      .from('conversas')
+      .insert({ profissional_id: profissionalId, visitante_user_id: currentUserChat.id })
+      .select('id')
+      .single();
+    if(error){ console.error(error); return; }
+    conversaId = nova.id;
+  }
+
+  abrirConversa(conversaId);
+}
+
+async function carregarListaConversas(){
+  const box = document.getElementById('chat-lista-box');
+
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  let filtroOr = `visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`;
+  if(meusIdsEmpresa.length > 0){
+    filtroOr += `,profissional_id.in.(${meusIdsEmpresa.join(',')})`;
+  }
+
+  const { data, error } = await supabaseClientChat
+    .from('conversas')
+    .select('id, profissional_id, visitante_user_id, usuario2_id, ultima_mensagem_em, profissionais(name)')
+    .or(filtroOr)
+    .order('ultima_mensagem_em', { ascending: false });
+
+  if(error || !data || data.length === 0){
+    box.innerHTML = '<div class="vazio-chat">Nenhuma conversa ainda. Vá até o perfil de uma empresa e clique em "💬 Chat pelo site", ou adicione uma pessoa pelo código GuiaZap dela, pra começar.</div>';
+    return;
+  }
+
+  const listaComInfo = await Promise.all(data.map(async (c) => {
+    let nomeExibido;
+    if(c.usuario2_id){
+      // Conversa entre pessoas — busca o nome de exibição do OUTRO participante
+      const outroUserId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
+      const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroUserId).maybeSingle();
+      nomeExibido = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+    } else {
+      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
+      nomeExibido = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+    }
+
+    const { data: ultimaMsg } = await supabaseClientChat.from('mensagens_chat').select('texto, tipo, arquivo_nome').eq('conversa_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { count: naoLidas } = await supabaseClientChat.from('mensagens_chat').select('id', { count: 'exact', head: true }).eq('conversa_id', c.id).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
+
+    let resumoUltimaMsg = '';
+    if(ultimaMsg){
+      if(ultimaMsg.tipo === 'imagem') resumoUltimaMsg = '📷 Foto';
+      else if(ultimaMsg.tipo === 'audio') resumoUltimaMsg = '🎤 Áudio';
+      else if(ultimaMsg.tipo === 'arquivo') resumoUltimaMsg = '📄 ' + (ultimaMsg.arquivo_nome || 'Arquivo');
+      else if(ultimaMsg.tipo === 'gif') resumoUltimaMsg = '🎞️ GIF';
+      else if(ultimaMsg.tipo === 'sticker') resumoUltimaMsg = '🏷️ Figurinha';
+      else if(ultimaMsg.tipo === 'chamada_perdida') resumoUltimaMsg = '📞 Chamada perdida';
+      else if(ultimaMsg.tipo === 'chamada_atendida') resumoUltimaMsg = '📞 Chamada realizada';
+      else if(ultimaMsg.tipo === 'link') resumoUltimaMsg = '🔗 ' + (ultimaMsg.arquivo_nome || 'Link compartilhado');
+      else resumoUltimaMsg = ultimaMsg.texto || '';
+    }
+
+    return { ...c, nomeExibido, ultimaMsg: resumoUltimaMsg, naoLidas: naoLidas || 0 };
+  }));
+
+  box.innerHTML = listaComInfo.map(c => `
+    <div class="item-conversa" onclick="abrirConversa('${c.id}')">
+      <div>
+        <div class="nome-conversa">${escapeHtmlChat(c.nomeExibido)}</div>
+        <div class="ultima-msg">${escapeHtmlChat(c.ultimaMsg) || 'Nenhuma mensagem ainda'}</div>
+      </div>
+      ${c.naoLidas > 0 ? `<div class="bolinha-nao-lida">${c.naoLidas}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function abrirConversa(conversaId){
+  conversaAtual = conversaId;
+  document.getElementById('chat-thread-box').classList.add('aberto');
+
+  const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name)').eq('id', conversaId).single();
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
+
+  if(conversa.usuario2_id){
+    const outroUserId = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
+    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroUserId).maybeSingle();
+    document.getElementById('chat-nome-topo').textContent = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+  } else {
+    document.getElementById('chat-nome-topo').textContent = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+  }
+
+  souEuAEmpresaNaConversaAtual = souEuAEmpresa || (conversa.usuario2_id && conversa.usuario2_id === currentUserChat.id);
+  const jaSilenciada = souEuAEmpresaNaConversaAtual ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
+  atualizarBotaoSilenciar(jaSilenciada);
+  document.getElementById('volume-chat').value = localStorage.getItem('volume_chat') || '50';
+
+  await carregarMensagens(conversaId);
+
+  // Marca como lidas todas as mensagens que não foram enviadas por mim
+  await supabaseClientChat.from('mensagens_chat').update({ lida: true }).eq('conversa_id', conversaId).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
+
+  // Liga o tempo real pra essa conversa específica
+  if(canalRealtimeAtual) supabaseClientChat.removeChannel(canalRealtimeAtual);
+  canalRealtimeAtual = supabaseClientChat
+    .channel('conversa-' + conversaId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
+      adicionarBolhaMensagem(payload.new);
+      document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
+      if(payload.new.remetente_user_id !== currentUserChat.id) tocarSomNotificacao();
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
+      atualizarCheckLida(payload.new.id, payload.new.lida);
+    })
+    .subscribe();
+}
+
+function tocarSomNotificacao(){
+  const volumeSalvo = parseInt(localStorage.getItem('volume_chat') || '50', 10);
+  if(volumeSalvo === 0) return;
+
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.frequency.value = 880;
+    gainNode.gain.value = (volumeSalvo / 100) * 0.3;
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    oscillator.stop(ctx.currentTime + 0.3);
+  } catch(e){ console.error('erro ao tocar som de notificação', e); }
+}
+
+function atualizarBotaoSilenciar(silenciada){
+  const btn = document.getElementById('btn-silenciar-conversa');
+  btn.textContent = silenciada ? '🔕' : '🔔';
+  btn.title = silenciada ? 'Reativar notificações dessa conversa' : 'Silenciar conversa';
+}
+
+async function apagarConversaAtual(){
+  if(!conversaAtual) return;
+  const confirmar = confirm('Apagar essa conversa? Ela some pros dois lados, e não tem como desfazer.');
+  if(!confirmar) return;
+
+  const { error } = await supabaseClientChat.from('conversas').delete().eq('id', conversaAtual);
+  if(error){ console.error(error); alert('Erro ao apagar a conversa.'); return; }
+
+  fecharConversa();
+}
+
+async function toggleSilenciarConversa(){
+  if(!conversaAtual) return;
+  const { data: conversa } = await supabaseClientChat.from('conversas').select('silenciada_por_visitante, silenciada_por_empresa').eq('id', conversaAtual).single();
+  const campoParaMudar = souEuAEmpresaNaConversaAtual ? 'silenciada_por_empresa' : 'silenciada_por_visitante';
+  const valorAtual = souEuAEmpresaNaConversaAtual ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
+  const novoValor = !valorAtual;
+
+  await supabaseClientChat.from('conversas').update({ [campoParaMudar]: novoValor }).eq('id', conversaAtual);
+  atualizarBotaoSilenciar(novoValor);
+}
+
+function fecharConversa(){
+  document.getElementById('chat-thread-box').classList.remove('aberto');
+  if(canalRealtimeAtual){ supabaseClientChat.removeChannel(canalRealtimeAtual); canalRealtimeAtual = null; }
+  conversaAtual = null;
+  carregarListaConversas();
+}
+
+async function carregarMensagens(conversaId){
+  const container = document.getElementById('chat-mensagens');
+  container.innerHTML = '';
+  const { data } = await supabaseClientChat.from('mensagens_chat').select('*').eq('conversa_id', conversaId).order('created_at', { ascending: true });
+  (data || []).forEach(m => adicionarBolhaMensagem(m));
+  container.scrollTop = container.scrollHeight;
+}
+
+function conteudoDaMensagem(m){
+  if(m.tipo === 'imagem'){
+    return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat" onclick="window.open('${escapeHtmlChat(m.arquivo_url)}', '_blank')">`;
+  }
+  if(m.tipo === 'audio'){
+    return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>`;
+  }
+  if(m.tipo === 'gif' || m.tipo === 'sticker'){
+    return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat">`;
+  }
+  if(m.tipo === 'arquivo'){
+    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">📄</span> ${escapeHtmlChat(m.arquivo_nome || 'Arquivo')}</a>`;
+  }
+  if(m.tipo === 'chamada_perdida'){
+    return `📞 <i>Chamada perdida</i>`;
+  }
+  if(m.tipo === 'chamada_atendida'){
+    return `📞 <i>Chamada realizada</i>`;
+  }
+  if(m.tipo === 'link'){
+    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">🔗</span> ${escapeHtmlChat(m.arquivo_nome || 'Ver no GuiaZap')}</a>`;
+  }
+  return escapeHtmlChat(m.texto);
+}
+
+function adicionarBolhaMensagem(m){
+  const container = document.getElementById('chat-mensagens');
+  const minha = m.remetente_user_id === currentUserChat.id;
+  const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  container.insertAdjacentHTML('beforeend', `
+    <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}">
+      ${conteudoDaMensagem(m)}
+      <span class="hora-msg">${hora}${minha ? ` <span class="check-lida${m.lida ? ' lida' : ''}">${m.lida ? '✓✓' : '✓'}</span>` : ''}</span>
+    </div>
+  `);
+}
+
+function atualizarCheckLida(mensagemId, lida){
+  const bolha = document.querySelector(`[data-msg-id="${mensagemId}"] .check-lida`);
+  if(bolha){
+    bolha.textContent = lida ? '✓✓' : '✓';
+    bolha.classList.toggle('lida', lida);
   }
 }
 
-initMapa();
+async function enviarMensagemChat(){
+  const input = document.getElementById('chat-input-texto');
+  const texto = input.value.trim();
+  if(!texto || !conversaAtual) return;
+  input.value = '';
+  await enviarQualquerMensagem({ tipo: 'texto', texto });
+}
+
+async function enviarQualquerMensagem(payload){
+  if(!conversaAtual) return;
+
+  const { error } = await supabaseClientChat.from('mensagens_chat').insert({
+    conversa_id: conversaAtual,
+    remetente_user_id: currentUserChat.id,
+    tipo: payload.tipo,
+    texto: payload.texto || null,
+    arquivo_url: payload.arquivo_url || null,
+    arquivo_nome: payload.arquivo_nome || null
+  });
+  if(error){ console.error(error); alert('Erro ao enviar mensagem.'); return; }
+
+  await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
+
+  const resumoParaNotificacao = payload.tipo === 'texto' ? payload.texto
+    : payload.tipo === 'imagem' ? '📷 Foto'
+    : payload.tipo === 'arquivo' ? '📄 Arquivo: ' + (payload.arquivo_nome || '')
+    : payload.tipo === 'gif' ? '🎞️ GIF'
+    : '🏷️ Figurinha';
+
+  fetch('/.netlify/functions/notificar-nova-mensagem', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: resumoParaNotificacao })
+  }).catch(e => console.error('erro ao notificar nova mensagem', e));
+}
+
+// ---------- FERRAMENTAS: EMOJI, ARQUIVO, GIF, FIGURINHA ----------
+
+const LISTA_EMOJIS = ['😀','😂','😍','😘','😉','😊','🙂','😎','🤔','😢','😭','😡','😱','🥳','👍','👎','🙏','👏','💪','🤝','❤️','💚','💙','💜','🔥','⭐','✅','❌','🎉','🎁','📞','💬','😴','🤗','😅','🥰','😇','🙄','😬','🤩','💰','🛒','📦','🚀','⏰','📍','🏠','🚗','☕','🍕'];
+
+function togglePainel(id){
+  document.querySelectorAll('.painel-flutuante').forEach(p => {
+    if(p.id !== id) p.classList.remove('aberto');
+  });
+  const painel = document.getElementById(id);
+  const jaAberto = painel.classList.contains('aberto');
+  painel.classList.toggle('aberto', !jaAberto);
+
+  if(!jaAberto && id === 'painel-emoji' && document.getElementById('grid-emoji-lista').children.length === 0){
+    document.getElementById('grid-emoji-lista').innerHTML = LISTA_EMOJIS.map(e => `<button type="button" onclick="inserirEmoji('${e}')">${e}</button>`).join('');
+  }
+}
+
+function inserirEmoji(emoji){
+  const input = document.getElementById('chat-input-texto');
+  input.value += emoji;
+  input.focus();
+}
+
+let timeoutBuscaGif = null;
+async function buscarGifOuSticker(tipo){
+  clearTimeout(timeoutBuscaGif);
+  timeoutBuscaGif = setTimeout(async () => {
+    const termo = document.getElementById(tipo === 'gif' ? 'busca-gif-texto' : 'busca-sticker-texto').value.trim();
+    const container = document.getElementById(tipo === 'gif' ? 'grid-gif-lista' : 'grid-sticker-lista');
+    container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Buscando...</p>';
+
+    const resp = await fetch(`/.netlify/functions/buscar-gif?q=${encodeURIComponent(termo)}&tipo=${tipo}`);
+    const data = await resp.json();
+
+    if(data.erro === 'GIPHY_API_KEY não configurada ainda'){
+      container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Esse recurso ainda não foi configurado pelo administrador do site.</p>';
+      return;
+    }
+
+    if(!data.resultados || data.resultados.length === 0){
+      container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Nenhum resultado.</p>';
+      return;
+    }
+
+    container.innerHTML = data.resultados.map(r => `<img src="${r.preview || r.url}" onclick="enviarGifOuSticker('${r.url}', '${tipo}')">`).join('');
+  }, 400);
+}
+
+async function enviarGifOuSticker(url, tipo){
+  document.querySelectorAll('.painel-flutuante').forEach(p => p.classList.remove('aberto'));
+  await enviarQualquerMensagem({ tipo, arquivo_url: url });
+}
+
+let mediaRecorderAtual = null;
+let chunksAudioAtual = [];
+let gravandoAudio = false;
+let timerGravacao = null;
+let segundosGravacao = 0;
+
+async function alternarGravacaoAudio(){
+  if(gravandoAudio) return;
+  if(!conversaAtual) return;
+
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunksAudioAtual = [];
+    mediaRecorderAtual = new MediaRecorder(stream);
+    mediaRecorderAtual._streamOriginal = stream;
+
+    mediaRecorderAtual.ondataavailable = (e) => { if(e.data.size > 0) chunksAudioAtual.push(e.data); };
+
+    mediaRecorderAtual.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      if(mediaRecorderAtual._cancelado){ resetarUiGravacao(); return; }
+      if(chunksAudioAtual.length === 0){ resetarUiGravacao(); return; }
+      const blob = new Blob(chunksAudioAtual, { type: 'audio/webm' });
+      await enviarAudioGravado(blob);
+      resetarUiGravacao();
+    };
+
+    mediaRecorderAtual.start();
+    gravandoAudio = true;
+    segundosGravacao = 0;
+
+    document.getElementById('chat-input-row-normal').style.display = 'none';
+    document.getElementById('gravacao-audio-box').style.display = 'flex';
+    atualizarTempoGravacao();
+
+    timerGravacao = setInterval(() => { segundosGravacao++; atualizarTempoGravacao(); }, 1000);
+  } catch(e){
+    alert('Não conseguimos acessar seu microfone. Verifique as permissões do navegador.');
+  }
+}
+
+function atualizarTempoGravacao(){
+  const min = Math.floor(segundosGravacao / 60);
+  const seg = segundosGravacao % 60;
+  document.getElementById('gravacao-tempo').textContent = `${min}:${seg.toString().padStart(2, '0')}`;
+}
+
+function pararGravacaoAudio(){
+  if(mediaRecorderAtual && gravandoAudio){
+    mediaRecorderAtual._cancelado = false;
+    mediaRecorderAtual.stop();
+    gravandoAudio = false;
+    clearInterval(timerGravacao);
+  }
+}
+
+function cancelarGravacaoAudio(){
+  if(mediaRecorderAtual && gravandoAudio){
+    mediaRecorderAtual._cancelado = true;
+    mediaRecorderAtual.stop();
+    gravandoAudio = false;
+    clearInterval(timerGravacao);
+  }
+}
+
+function resetarUiGravacao(){
+  document.getElementById('chat-input-row-normal').style.display = 'flex';
+  document.getElementById('gravacao-audio-box').style.display = 'none';
+  segundosGravacao = 0;
+}
+
+async function enviarAudioGravado(blob){
+  const nomeArquivo = `chat/${currentUserChat.id}/${Date.now()}-audio.webm`;
+  const arquivo = new File([blob], 'audio.webm', { type: 'audio/webm' });
+
+  const { error } = await supabaseClientChat.storage.from('fotos').upload(nomeArquivo, arquivo);
+  if(error){ console.error(error); alert('Erro ao enviar o áudio.'); return; }
+
+  const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
+  await enviarQualquerMensagem({ tipo: 'audio', arquivo_url: urlData.publicUrl });
+}
+
+async function enviarArquivoChat(event){
+  const file = event.target.files[0];
+  if(!file || !currentUserChat || !conversaAtual) return;
+
+  const ehImagem = file.type.startsWith('image/');
+  const nomeArquivo = `chat/${currentUserChat.id}/${Date.now()}-${file.name}`;
+
+  const { error: erroUpload } = await supabaseClientChat.storage.from('fotos').upload(nomeArquivo, file);
+  if(erroUpload){ console.error(erroUpload); alert('Erro ao enviar o arquivo.'); return; }
+
+  const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
+  await enviarQualquerMensagem({
+    tipo: ehImagem ? 'imagem' : 'arquivo',
+    arquivo_url: urlData.publicUrl,
+    arquivo_nome: file.name
+  });
+
+  event.target.value = '';
+}
+
+// ---------- CHAMADA DE VOZ/VÍDEO (WebRTC) ----------
+
+const STUN_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+let canalChamadasPessoal = null;
+let peerConnectionAtual = null;
+let canalEnvioAtual = null;
+let streamLocalAtual = null;
+let chamadaComQuemUserId = null;
+let chamadaComQuemNome = null;
+let microfoneMudo = false;
+let cameraDesligada = false;
+let chamadaFoiAtendida = false;
+let euIniciariAChamada = false;
+let conversaDaChamadaAtual = null;
+
+// Fica sempre "escutando" nesse canal próprio, esperando alguém te ligar —
+// todos os eventos de uma chamada (oferta, resposta, pedaços de conexão,
+// encerramento) chegam por aqui, registrados uma única vez, e a função
+// verifica o estado atual (peerConnectionAtual) pra saber o que fazer.
+function ligarCanalDeChamadas(){
+  canalChamadasPessoal = supabaseClientChat.channel('chamada-user-' + currentUserChat.id, {
+    config: { broadcast: { self: false } }
+  });
+
+  canalChamadasPessoal.on('broadcast', { event: 'offer' }, (msg) => {
+    if(peerConnectionAtual) return; // já está em outra chamada, ignora
+    receberChamadaEntrando(msg.payload);
+  });
+
+  canalChamadasPessoal.on('broadcast', { event: 'answer' }, async (msg) => {
+    if(!peerConnectionAtual) return;
+    await peerConnectionAtual.setRemoteDescription(new RTCSessionDescription(msg.payload.answer));
+  });
+
+  canalChamadasPessoal.on('broadcast', { event: 'ice-candidate' }, async (msg) => {
+    if(!peerConnectionAtual) return;
+    try{ await peerConnectionAtual.addIceCandidate(new RTCIceCandidate(msg.payload.candidate)); } catch(e){ console.error(e); }
+  });
+
+  canalChamadasPessoal.on('broadcast', { event: 'encerrar' }, () => {
+    encerrarChamada(false);
+  });
+
+  canalChamadasPessoal.subscribe();
+}
+
+// Abre um canal "de saída", só pra mandar mensagens pro canal pessoal da
+// outra pessoa (quem recebe já está ouvindo o próprio canal o tempo todo)
+function abrirCanalEnvio(destinatarioId){
+  return new Promise((resolve) => {
+    const canal = supabaseClientChat.channel('chamada-user-' + destinatarioId, {
+      config: { broadcast: { self: false } }
+    });
+    canal.subscribe((status) => { if(status === 'SUBSCRIBED') resolve(canal); });
+  });
+}
+
+async function receberChamadaEntrando(payload){
+  chamadaComQuemUserId = payload.de;
+  chamadaComQuemNome = payload.deNome || 'Alguém';
+  window._ofertaRecebidaChamada = payload.offer;
+  window._comVideoChamadaRecebida = payload.comVideo;
+  euIniciariAChamada = false;
+  chamadaFoiAtendida = false;
+  conversaDaChamadaAtual = payload.conversaId || null;
+
+  document.getElementById('overlay-chamada').classList.add('aberto');
+  document.getElementById('chamada-recebida-view').style.display = 'block';
+  document.getElementById('chamada-ativa-view').style.display = 'none';
+  document.getElementById('chamada-recebida-nome').textContent = chamadaComQuemNome;
+}
+
+async function recusarChamada(){
+  if(chamadaComQuemUserId){
+    const canal = await abrirCanalEnvio(chamadaComQuemUserId);
+    canal.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
+  }
+  fecharOverlayChamada();
+}
+
+async function aceitarChamada(){
+  document.getElementById('chamada-recebida-view').style.display = 'none';
+  document.getElementById('chamada-ativa-view').style.display = 'flex';
+  document.getElementById('chamada-nome-ativa').textContent = chamadaComQuemNome;
+  document.getElementById('chamada-status-ativa').textContent = 'Conectando...';
+
+  try{
+    streamLocalAtual = await navigator.mediaDevices.getUserMedia({ audio: true, video: !!window._comVideoChamadaRecebida });
+  } catch(e){
+    alert('Não conseguimos acessar seu microfone/câmera. Verifique as permissões do navegador.');
+    recusarChamada();
+    return;
+  }
+
+  document.getElementById('video-local').srcObject = streamLocalAtual;
+  document.getElementById('video-local').style.display = window._comVideoChamadaRecebida ? 'block' : 'none';
+  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !window._comVideoChamadaRecebida);
+  document.getElementById('avatar-chamada-audio').style.display = window._comVideoChamadaRecebida ? 'none' : 'flex';
+  document.getElementById('btn-camera').style.display = window._comVideoChamadaRecebida ? 'flex' : 'none';
+
+  const pc = new RTCPeerConnection(STUN_SERVERS);
+  streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
+  pc.ontrack = (event) => {
+    document.getElementById('video-remoto').srcObject = event.streams[0];
+    document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
+  };
+
+  const canalEnvio = await abrirCanalEnvio(chamadaComQuemUserId);
+
+  pc.onicecandidate = (event) => {
+    if(event.candidate){
+      canalEnvio.send({ type: 'broadcast', event: 'ice-candidate', payload: { candidate: event.candidate, de: currentUserChat.id } });
+    }
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(window._ofertaRecebidaChamada));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  canalEnvio.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
+
+  peerConnectionAtual = pc;
+  canalEnvioAtual = canalEnvio;
+}
+
+async function iniciarChamada(comVideo){
+  if(!conversaAtual || peerConnectionAtual) return;
+
+  euIniciariAChamada = true;
+  chamadaFoiAtendida = false;
+  conversaDaChamadaAtual = conversaAtual;
+
+  const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name, user_id)').eq('id', conversaAtual).single();
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
+
+  let destinatarioId, nomeDestinatario;
+  if(conversa.usuario2_id){
+    destinatarioId = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
+    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', destinatarioId).maybeSingle();
+    nomeDestinatario = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+  } else {
+    destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (conversa.profissionais ? conversa.profissionais.user_id : null);
+    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+  }
+
+  if(!destinatarioId){ alert('Não foi possível identificar quem receberá a chamada.'); return; }
+
+  try{
+    streamLocalAtual = await navigator.mediaDevices.getUserMedia({ audio: true, video: comVideo });
+  } catch(e){
+    alert('Não conseguimos acessar seu microfone/câmera. Verifique as permissões do navegador.');
+    return;
+  }
+
+  chamadaComQuemUserId = destinatarioId;
+  chamadaComQuemNome = nomeDestinatario;
+
+  document.getElementById('overlay-chamada').classList.add('aberto');
+  document.getElementById('chamada-recebida-view').style.display = 'none';
+  document.getElementById('chamada-ativa-view').style.display = 'flex';
+  document.getElementById('chamada-nome-ativa').textContent = nomeDestinatario;
+  document.getElementById('chamada-status-ativa').textContent = 'Chamando...';
+  document.getElementById('video-local').srcObject = streamLocalAtual;
+  document.getElementById('video-local').style.display = comVideo ? 'block' : 'none';
+  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !comVideo);
+  document.getElementById('avatar-chamada-audio').style.display = comVideo ? 'none' : 'flex';
+  document.getElementById('btn-camera').style.display = comVideo ? 'flex' : 'none';
+
+  const pc = new RTCPeerConnection(STUN_SERVERS);
+  streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
+  pc.ontrack = (event) => {
+    document.getElementById('video-remoto').srcObject = event.streams[0];
+    document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
+    chamadaFoiAtendida = true;
+  };
+
+  const canalEnvio = await abrirCanalEnvio(destinatarioId);
+
+  pc.onicecandidate = (event) => {
+    if(event.candidate){
+      canalEnvio.send({ type: 'broadcast', event: 'ice-candidate', payload: { candidate: event.candidate, de: currentUserChat.id } });
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
+  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual } });
+
+  // Avisa por notificação push também, caso a pessoa não esteja com o chat
+  // aberto agora — não toca como telefone de verdade, mas ajuda a avisar
+  fetch('/.netlify/functions/enviar-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      titulo: `${comVideo ? '📹' : '📞'} Chamada de ${meuNome}`,
+      mensagem: 'Toque pra atender no GuiaZap',
+      url: '/chat.html',
+      userIds: [destinatarioId],
+      tipo: 'chamada'
+    })
+  }).catch(e => console.error('erro ao notificar chamada', e));
+
+  peerConnectionAtual = pc;
+  canalEnvioAtual = canalEnvio;
+}
+
+function alternarMudo(){
+  if(!streamLocalAtual) return;
+  microfoneMudo = !microfoneMudo;
+  streamLocalAtual.getAudioTracks().forEach(t => { t.enabled = !microfoneMudo; });
+  document.getElementById('btn-mudo').classList.toggle('ativo-off', microfoneMudo);
+  document.getElementById('btn-mudo').textContent = microfoneMudo ? '🔇' : '🎤';
+}
+
+function alternarCamera(){
+  if(!streamLocalAtual) return;
+  const tracks = streamLocalAtual.getVideoTracks();
+  if(tracks.length === 0) return;
+  cameraDesligada = !cameraDesligada;
+  tracks.forEach(t => { t.enabled = !cameraDesligada; });
+  document.getElementById('btn-camera').classList.toggle('ativo-off', cameraDesligada);
+}
+
+async function encerrarChamada(avisarOutraPonta){
+  if(avisarOutraPonta && canalEnvioAtual){
+    canalEnvioAtual.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
+  }
+
+  // Registra no histórico da conversa, só do lado de quem ligou (evita
+  // duplicar o registro dos dois lados)
+  if(euIniciariAChamada && conversaDaChamadaAtual){
+    await supabaseClientChat.from('mensagens_chat').insert({
+      conversa_id: conversaDaChamadaAtual,
+      remetente_user_id: currentUserChat.id,
+      tipo: chamadaFoiAtendida ? 'chamada_atendida' : 'chamada_perdida',
+      texto: null
+    });
+    await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaDaChamadaAtual);
+  }
+
+  if(peerConnectionAtual){ peerConnectionAtual.close(); peerConnectionAtual = null; }
+  if(streamLocalAtual){ streamLocalAtual.getTracks().forEach(t => t.stop()); streamLocalAtual = null; }
+  if(canalEnvioAtual){ supabaseClientChat.removeChannel(canalEnvioAtual); canalEnvioAtual = null; }
+  fecharOverlayChamada();
+}
+
+function fecharOverlayChamada(){
+  document.getElementById('overlay-chamada').classList.remove('aberto');
+  document.getElementById('video-local').srcObject = null;
+  document.getElementById('video-remoto').srcObject = null;
+  document.getElementById('avatar-chamada-audio').style.display = 'none';
+  document.getElementById('videos-chamada-box').classList.remove('somente-audio');
+  document.getElementById('btn-camera').style.display = 'flex';
+  microfoneMudo = false;
+  cameraDesligada = false;
+  chamadaComQuemUserId = null;
+}
+
+initChat();
 </script>
+<script src="js/modo-escuro.js"></script>
 </body>
 </html>
