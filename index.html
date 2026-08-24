@@ -115,37 +115,42 @@
         <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
       </div>
     </div>
-    <div class="field" style="margin-bottom:10px;">
-      <div class="campo-com-limpar">
-        <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="mascaraCep(event); atualizarBotoesLimpar();" onblur="buscarCepFiltro()">
-        <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
-      </div>
-      <span class="cep-msg" id="filter-cep-msg"></span>
-    </div>
-    <div class="filtros">
-      <div class="campo-com-limpar">
-        <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
-        <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
-      </div>
-      <div class="campo-com-limpar">
-        <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
-          <option value="">Cidade</option>
-        </select>
-        <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
-      </div>
-      <div class="campo-com-limpar">
-        <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
-        <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>
-      </div>
-    </div>
-    <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
-    <button type="button" id="btn-seguindo-filtro" class="btn-filtro-favoritos" style="display:none;" onclick="toggleFiltroSeguindo()">👥 Ver só quem eu sigo</button>
 
-    <div class="filtros-rapidos">
-      <button type="button" class="chip-filtro-rapido" id="chip-proximos" onclick="toggleFiltroMaisProximos()">📍 Mais próximos</button>
-      <button type="button" class="chip-filtro-rapido" id="chip-avaliados" onclick="toggleFiltroMelhorAvaliados()">⭐ Melhor avaliados</button>
-      <button type="button" class="chip-filtro-rapido" id="chip-premium-rapido" onclick="toggleFiltroPremiumRapido()">👑 Premium</button>
-      <button type="button" class="chip-filtro-rapido" id="chip-aberto-agora" onclick="toggleFiltroAbertoAgora()">🕐 Aberto agora</button>
+    <button type="button" class="btn-abrir-filtros" id="btn-abrir-filtros" onclick="toggleFiltrosAvancados()">🔧 Filtrar <span class="badge-filtros-ativos" id="badge-filtros-ativos" style="display:none;"></span></button>
+
+    <div id="filtros-avancados" class="filtros-avancados" style="display:none;">
+      <div class="field" style="margin-bottom:10px;">
+        <div class="campo-com-limpar">
+          <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="mascaraCep(event); atualizarBotoesLimpar();" onblur="buscarCepFiltro()">
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
+        </div>
+        <span class="cep-msg" id="filter-cep-msg"></span>
+      </div>
+      <div class="filtros">
+        <div class="campo-com-limpar">
+          <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
+        </div>
+        <div class="campo-com-limpar">
+          <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
+            <option value="">Cidade</option>
+          </select>
+          <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
+        </div>
+        <div class="campo-com-limpar">
+          <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>
+        </div>
+      </div>
+      <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+      <button type="button" id="btn-seguindo-filtro" class="btn-filtro-favoritos" style="display:none;" onclick="toggleFiltroSeguindo()">👥 Ver só quem eu sigo</button>
+
+      <div class="filtros-rapidos">
+        <button type="button" class="chip-filtro-rapido" id="chip-proximos" onclick="toggleFiltroMaisProximos()">📍 Mais próximos</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-avaliados" onclick="toggleFiltroMelhorAvaliados()">⭐ Melhor avaliados</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-premium-rapido" onclick="toggleFiltroPremiumRapido()">👑 Premium</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-aberto-agora" onclick="toggleFiltroAbertoAgora()">🕐 Aberto agora</button>
+      </div>
     </div>
   </div>
 

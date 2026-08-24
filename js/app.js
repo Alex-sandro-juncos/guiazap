@@ -966,6 +966,49 @@ function mostrarQrCode(id){
   box.style.display = 'block';
 }
 
+function toggleOrcamentoOpcoes(id){
+  const box = document.getElementById('orcamento-opcoes-' + id);
+  if(!box) return;
+  const jaAberto = box.style.display === 'flex';
+
+  document.querySelectorAll('.orcamento-opcoes').forEach(el => { el.style.display = 'none'; });
+
+  box.style.display = jaAberto ? 'none' : 'flex';
+}
+
+function toggleFiltrosAvancados(){
+  const painel = document.getElementById('filtros-avancados');
+  const btn = document.getElementById('btn-abrir-filtros');
+  if(!painel) return;
+  const abrindo = painel.style.display === 'none';
+  painel.style.display = abrindo ? 'block' : 'none';
+  if(btn) btn.classList.toggle('aberto', abrindo);
+}
+
+function atualizarBadgeFiltrosAtivos(){
+  const badge = document.getElementById('badge-filtros-ativos');
+  if(!badge) return;
+
+  let contador = 0;
+  if(document.getElementById('filter-cep')?.value) contador++;
+  if(document.getElementById('filter-estado')?.value) contador++;
+  if(document.getElementById('gz-localidade-busca')?.value) contador++;
+  if(document.getElementById('filter-bairro')?.value) contador++;
+  if(mostrandoSoFavoritos) contador++;
+  if(mostrandoSoSeguindo) contador++;
+  if(filtroMaisProximosAtivo) contador++;
+  if(filtroMelhorAvaliadosAtivo) contador++;
+  if(filtroPremiumRapidoAtivo) contador++;
+  if(filtroAbertoAgoraAtivo) contador++;
+
+  if(contador > 0){
+    badge.textContent = contador;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 function toggleOpcoesExtra(id){
   const box = document.getElementById('opcoes-extra-' + id);
   if(!box) return;
@@ -2203,6 +2246,8 @@ function verBuscaCompleta(){
 }
 
 function render(){
+  atualizarBadgeFiltrosAtivos();
+
   const btnVerMinhaEmpresa = document.getElementById('btn-ver-minha-empresa');
   if(btnVerMinhaEmpresa) btnVerMinhaEmpresa.style.display = usuarioTemCadastroProprio() ? 'inline-block' : 'none';
 
@@ -2411,7 +2456,11 @@ function render(){
         <div class="acoes-empresa-coluna">
           <div class="contatos-row">
             <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>
-            <a class="btn-zap btn-orcamento" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank">💰 Pedir orçamento</a>
+            <button type="button" class="btn-zap btn-orcamento" onclick="toggleOrcamentoOpcoes('${e.id}')">💰 Pedir orçamento</button>
+            <div class="orcamento-opcoes" id="orcamento-opcoes-${e.id}" style="display:none;">
+              <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">📱 Pelo WhatsApp</a>
+              <a class="btn-zap" style="background:#6b46c1;" href="chat.html?empresa=${e.id}">💬 Pelo Papo</a>
+            </div>
             ${!isOwner ? `<a href="chat.html?empresa=${e.id}" class="btn-zap" style="background:#6b46c1;">💬 Chat pelo Papo</a>` : ''}
             ${renderContatosExtra(e.contatos_extra)}
           </div>

@@ -65,6 +65,44 @@
     background: white;
   }
 
+  .btn-abrir-filtros {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 11px;
+    background: transparent;
+    border: 1.5px solid var(--verde-escuro);
+    color: var(--verde-escuro);
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+  }
+  .btn-abrir-filtros:hover { background: rgba(18,140,126,0.08); }
+  .btn-abrir-filtros.aberto { background: var(--verde-escuro); color: white; }
+  .badge-filtros-ativos {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 50px;
+    background: #e05d5d;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+  .filtros-avancados {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+  }
+  body.dark-mode .filtros-avancados { border-top-color: #333; }
+
   .btn-cadastro {
     display: block;
     width: 100%;
@@ -1292,6 +1330,16 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 .selo-sem-denuncia { font-size: 0.7rem; color: #1a7a3c; margin-top: 2px; }
 
 .btn-orcamento { background: #0a4a6b; }
+.orcamento-opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -4px;
+}
+.orcamento-opcoes .btn-zap {
+  margin-top: 0;
+  text-align: center;
+}
 
 .selo-disponibilidade { font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
 .selo-disponibilidade.disponivel { color: #1a7a3c; }
