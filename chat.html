@@ -81,6 +81,53 @@
   .grid-gif img { width: 100%; border-radius: 8px; cursor: pointer; }
 
   .btn-chamada { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
+  .btn-config-destaque {
+    background: rgba(18,140,126,0.1);
+    border-radius: 50%;
+    font-size: 1.15rem;
+    padding: 6px 9px;
+  }
+  .btn-config-destaque:hover { background: rgba(18,140,126,0.2); }
+  body.dark-mode .btn-config-destaque { background: rgba(37,211,102,0.15); }
+
+  .aviso-salvar-contato-box {
+    background: #e8f5f0;
+    border: 1px solid #b8e0d2;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+  }
+  body.dark-mode .aviso-salvar-contato-box { background: #16302a; border-color: #2a4a3f; }
+  .aviso-salvar-texto { display: block; color: #0a4a3a; font-weight: 600; margin-bottom: 6px; }
+  body.dark-mode .aviso-salvar-texto { color: #8fd9bb; }
+  .aviso-salvar-linha { display: flex; gap: 6px; align-items: center; }
+  .aviso-salvar-input {
+    flex: 1;
+    padding: 7px 9px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 0.8rem;
+  }
+  .aviso-salvar-btn {
+    background: var(--verde-escuro);
+    color: white;
+    border: none;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .aviso-salvar-fechar {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
 
   .menu-config-chat {
     position: absolute;
@@ -194,7 +241,7 @@
       <div style="margin-left:auto; display:flex; gap:4px; position:relative;">
         <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
         <button class="btn-chamada" onclick="iniciarChamada(true)" title="Chamada de vídeo">📹</button>
-        <button class="btn-chamada" onclick="toggleConfigChat()" title="Configurações da conversa">⚙️</button>
+        <button class="btn-chamada btn-config-destaque" onclick="toggleConfigChat()" title="Configurações da conversa">⚙️</button>
         <div class="menu-config-chat" id="menu-config-chat" style="display:none;">
           <div class="config-chat-secao" id="config-salvar-contato-area"></div>
           <button type="button" class="config-chat-item" id="btn-bloquear-config" onclick="toggleBloquearContatoAtual()">🚫 Bloquear contato</button>
@@ -208,6 +255,7 @@
       </div>
     </div>
     <div class="aviso-bloqueio-box" id="aviso-bloqueio-box" style="display:none;"></div>
+    <div class="aviso-salvar-contato-box" id="aviso-salvar-contato-box" style="display:none;"></div>
     <div class="chat-mensagens" id="chat-mensagens"></div>
 
     <div class="painel-flutuante" id="painel-emoji">
@@ -366,15 +414,31 @@ async function abrirTelaCompartilhar(paramCodificado){
   document.getElementById('overlay-compartilhar').classList.add('aberto');
 
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  let filtroOr = `visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`;
-  if(meusIdsEmpresa.length > 0) filtroOr += `,profissional_id.in.(${meusIdsEmpresa.join(',')})`;
+  const colunasBase = 'id, profissional_id, visitante_user_id, usuario2_id';
 
-  const { data } = await supabaseClientChat.from('conversas').select('id, profissional_id, visitante_user_id, usuario2_id, profissionais(name)').or(filtroOr).order('ultima_mensagem_em', { ascending: false });
+  const { data: comoParticipante } = await supabaseClientChat.from('conversas').select(colunasBase).or(`visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`);
+  let comoEmpresa = [];
+  if(meusIdsEmpresa.length > 0){
+    const { data: dataEmpresa } = await supabaseClientChat.from('conversas').select(colunasBase).in('profissional_id', meusIdsEmpresa);
+    comoEmpresa = dataEmpresa || [];
+  }
+  const mapaConv = {};
+  [...(comoParticipante || []), ...comoEmpresa].forEach(c => { mapaConv[c.id] = c; });
+  const data = Object.values(mapaConv);
 
   const lista = document.getElementById('compartilhar-lista-conversas');
   if(!data || data.length === 0){
     lista.innerHTML = '<p style="text-align:center; color:#999; font-size:0.8rem; padding:10px 0;">Você ainda não tem conversas. Adicione um contato abaixo.</p>';
     return;
+  }
+
+  // Busca os nomes das empresas envolvidas numa consulta separada (sem embed,
+  // pra evitar erro de relação ambígua entre conversas e profissionais)
+  const idsEmpresasEnvolvidas = [...new Set(data.filter(c => c.profissional_id).map(c => c.profissional_id))];
+  let nomesEmpresas = {};
+  if(idsEmpresasEnvolvidas.length > 0){
+    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name').in('id', idsEmpresasEnvolvidas);
+    (empresas || []).forEach(e => { nomesEmpresas[e.id] = e.name; });
   }
 
   const comNomes = await Promise.all(data.map(async (c) => {
@@ -385,7 +449,7 @@ async function abrirTelaCompartilhar(paramCodificado){
       nome = (perfil && perfil.nome_exibicao) || 'Contato do GuiaZap';
     } else {
       const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
-      nome = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+      nome = souEuAEmpresa ? 'Visitante' : (nomesEmpresas[c.profissional_id] || 'Empresa');
     }
     return { ...c, nome };
   }));
@@ -532,7 +596,7 @@ async function carregarListaConversas(){
   const box = document.getElementById('chat-lista-box');
 
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const colunasSelect = 'id, profissional_id, visitante_user_id, usuario2_id, ultima_mensagem_em, profissionais(name)';
+  const colunasSelect = 'id, profissional_id, visitante_user_id, usuario2_id, ultima_mensagem_em';
 
   // Busca em duas consultas separadas (em vez de um único .or() com .in()
   // embutido, que estava dando erro 400) e junta o resultado aqui no JS —
@@ -582,6 +646,15 @@ async function carregarListaConversas(){
     if(c.profissional_id) nomesSalvosPorProfissionalId[c.profissional_id] = c.nome_salvo;
   });
 
+  // Busca os nomes das empresas envolvidas numa consulta separada (sem embed,
+  // pra evitar o erro 400 de relação ambígua entre conversas e profissionais)
+  const idsEmpresasEnvolvidas = [...new Set(data.filter(c => c.profissional_id).map(c => c.profissional_id))];
+  let nomesEmpresas = {};
+  if(idsEmpresasEnvolvidas.length > 0){
+    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name').in('id', idsEmpresasEnvolvidas);
+    (empresas || []).forEach(e => { nomesEmpresas[e.id] = e.name; });
+  }
+
   const listaComInfo = await Promise.all(data.map(async (c) => {
     let nomeExibido;
     if(c.usuario2_id){
@@ -598,7 +671,7 @@ async function carregarListaConversas(){
       if(!souEuAEmpresa && nomesSalvosPorProfissionalId[c.profissional_id]){
         nomeExibido = nomesSalvosPorProfissionalId[c.profissional_id];
       } else {
-        nomeExibido = souEuAEmpresa ? 'Visitante' : (c.profissionais ? c.profissionais.name : 'Empresa');
+        nomeExibido = souEuAEmpresa ? 'Visitante' : (nomesEmpresas[c.profissional_id] || 'Empresa');
       }
     }
 
@@ -633,12 +706,19 @@ async function carregarListaConversas(){
 
 async function abrirConversa(conversaId){
   conversaAtual = conversaId;
+  avisoSalvarContatoFechadoNestaConversa = false;
   document.getElementById('chat-thread-box').classList.add('aberto');
   document.getElementById('menu-config-chat').style.display = 'none';
 
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name, id, user_id)').eq('id', conversaId).single();
+  const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaId).single();
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
+
+  let empresaDaConversa = null;
+  if(conversa.profissional_id){
+    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, id, user_id').eq('id', conversa.profissional_id).maybeSingle();
+    empresaDaConversa = empresa;
+  }
 
   if(conversa.usuario2_id){
     outroLadoUserIdAtual = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
@@ -648,8 +728,8 @@ async function abrirConversa(conversaId){
     document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
   } else {
     outroLadoProfissionalIdAtual = conversa.profissional_id;
-    outroLadoUserIdAtual = souEuAEmpresa ? conversa.visitante_user_id : (conversa.profissionais ? conversa.profissionais.user_id : null);
-    outroLadoNomeAtual = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+    outroLadoUserIdAtual = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaConversa ? empresaDaConversa.user_id : null);
+    outroLadoNomeAtual = souEuAEmpresa ? 'Visitante' : (empresaDaConversa ? empresaDaConversa.name : 'Empresa');
     document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
   }
 
@@ -810,17 +890,66 @@ async function toggleBloquearContatoAtual(){
 
 // ---------- AGENDA DE CONTATOS ----------
 
+let avisoSalvarContatoFechadoNestaConversa = false;
+
 async function montarAreaSalvarContato(){
   const area = document.getElementById('config-salvar-contato-area');
-  if(!area || !outroLadoUserIdAtual) { if(area) area.innerHTML = ''; return; }
+  const banner = document.getElementById('aviso-salvar-contato-box');
+  if(!outroLadoUserIdAtual){
+    if(area) area.innerHTML = '';
+    if(banner) banner.style.display = 'none';
+    return;
+  }
 
   const { data: contatoSalvo } = await supabaseClientChat.from('agenda_contatos').select('id, nome_salvo').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
 
   if(contatoSalvo){
     area.innerHTML = `<div class="config-chat-item-texto">💾 Salvo como <b>${escapeHtmlChat(contatoSalvo.nome_salvo)}</b> <button type="button" class="link-editar-contato" onclick="abrirCampoSalvarContato('${escapeHtmlChat(contatoSalvo.nome_salvo)}')">editar</button></div>`;
+    banner.style.display = 'none';
   } else {
     area.innerHTML = `<button type="button" class="config-chat-item" onclick="abrirCampoSalvarContato('${escapeHtmlChat(outroLadoNomeAtual)}')">💾 Salvar contato</button>`;
+
+    if(avisoSalvarContatoFechadoNestaConversa){
+      banner.style.display = 'none';
+    } else {
+      banner.innerHTML = `
+        <span class="aviso-salvar-texto">💾 Salvar esse contato na sua agenda?</span>
+        <div class="aviso-salvar-linha">
+          <input type="text" id="aviso-salvar-nome-input" class="aviso-salvar-input" value="${escapeHtmlChat(outroLadoNomeAtual)}" placeholder="Nome pra salvar">
+          <button type="button" class="aviso-salvar-btn" onclick="salvarContatoAgendaViaBanner()">Salvar</button>
+          <button type="button" class="aviso-salvar-fechar" onclick="fecharAvisoSalvarContato()" title="Agora não">✕</button>
+        </div>
+      `;
+      banner.style.display = 'block';
+    }
   }
+}
+
+function fecharAvisoSalvarContato(){
+  avisoSalvarContatoFechadoNestaConversa = true;
+  document.getElementById('aviso-salvar-contato-box').style.display = 'none';
+}
+
+async function salvarContatoAgendaViaBanner(){
+  const nome = document.getElementById('aviso-salvar-nome-input').value.trim();
+  if(!nome || !outroLadoUserIdAtual) return;
+
+  const { data: existente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
+
+  if(existente){
+    await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id);
+  } else {
+    await supabaseClientChat.from('agenda_contatos').insert({
+      dono_user_id: currentUserChat.id,
+      contato_user_id: outroLadoUserIdAtual,
+      profissional_id: outroLadoProfissionalIdAtual,
+      nome_salvo: nome
+    });
+  }
+
+  document.getElementById('aviso-salvar-contato-box').style.display = 'none';
+  await montarAreaSalvarContato();
+  carregarListaConversas();
 }
 
 function abrirCampoSalvarContato(nomeAtual){
@@ -1318,9 +1447,15 @@ async function iniciarChamada(comVideo){
   chamadaFoiAtendida = false;
   conversaDaChamadaAtual = conversaAtual;
 
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('*, profissionais(name, user_id)').eq('id', conversaAtual).single();
+  const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaAtual).single();
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
+
+  let empresaDaChamada = null;
+  if(conversa.profissional_id){
+    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, user_id').eq('id', conversa.profissional_id).maybeSingle();
+    empresaDaChamada = empresa;
+  }
 
   let destinatarioId, nomeDestinatario;
   if(conversa.usuario2_id){
@@ -1328,8 +1463,8 @@ async function iniciarChamada(comVideo){
     const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', destinatarioId).maybeSingle();
     nomeDestinatario = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
   } else {
-    destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (conversa.profissionais ? conversa.profissionais.user_id : null);
-    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (conversa.profissionais ? conversa.profissionais.name : 'Empresa');
+    destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaChamada ? empresaDaChamada.user_id : null);
+    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (empresaDaChamada ? empresaDaChamada.name : 'Empresa');
   }
 
   if(!destinatarioId){ alert('Não foi possível identificar quem receberá a chamada.'); return; }
