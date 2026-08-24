@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat — GuiaZap</title>
+<title>Papo — GuiaZap</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
@@ -106,7 +106,7 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Chat</p></header>
+<header><div class="logo">GuiaZap</div><p>Papo</p></header>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 <div class="chat-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
@@ -225,7 +225,7 @@ function escapeHtmlChat(str){
 async function initChat(){
   const { data: { session } } = await supabaseClientChat.auth.getSession();
   if(!session){
-    document.getElementById('chat-lista-box').innerHTML = '<div class="vazio-chat">Faça login na <a href="index.html">página inicial</a> pra acessar suas conversas.</div>';
+    document.getElementById('chat-lista-box').innerHTML = '<div class="vazio-chat">Faça login na <a href="index.html">página inicial</a> pra acessar seus Papos.</div>';
     return;
   }
   currentUserChat = session.user;
@@ -242,6 +242,25 @@ async function initChat(){
 
   carregarListaConversas();
   ligarCanalDeChamadas();
+  atualizarPresencaOnline();
+  setInterval(atualizarPresencaOnline, 20000);
+}
+
+async function atualizarPresencaOnline(){
+  if(!currentUserChat) return;
+  const { data: existente } = await supabaseClientChat.from('presenca_usuarios').select('user_id').eq('user_id', currentUserChat.id).maybeSingle();
+  if(existente){
+    await supabaseClientChat.from('presenca_usuarios').update({ atualizado_em: new Date().toISOString() }).eq('user_id', currentUserChat.id);
+  } else {
+    await supabaseClientChat.from('presenca_usuarios').insert({ user_id: currentUserChat.id });
+  }
+}
+
+async function pessoaEstaOnline(userId){
+  const { data } = await supabaseClientChat.from('presenca_usuarios').select('atualizado_em').eq('user_id', userId).maybeSingle();
+  if(!data) return false;
+  const segundosDesdeUltimaAtualizacao = (Date.now() - new Date(data.atualizado_em).getTime()) / 1000;
+  return segundosDesdeUltimaAtualizacao < 30; // considera "online" se atualizou nos últimos 30s
 }
 
 let conteudoParaCompartilhar = null;
@@ -408,7 +427,7 @@ async function carregarListaConversas(){
     .order('ultima_mensagem_em', { ascending: false });
 
   if(error || !data || data.length === 0){
-    box.innerHTML = '<div class="vazio-chat">Nenhuma conversa ainda. Vá até o perfil de uma empresa e clique em "💬 Chat pelo site", ou adicione uma pessoa pelo código GuiaZap dela, pra começar.</div>';
+    box.innerHTML = '<div class="vazio-chat">Nenhuma conversa ainda. Vá até o perfil de uma empresa e clique em "💬 Papo pelo site", ou adicione uma pessoa pelo código GuiaZap dela, pra começar.</div>';
     return;
   }
 
@@ -493,6 +512,56 @@ async function abrirConversa(conversaId){
       atualizarCheckLida(payload.new.id, payload.new.lida);
     })
     .subscribe();
+}
+
+// ---------- SONS DE CHAMADA (toque + tom de discagem) ----------
+
+let intervaloSomChamada = null;
+let intervaloVibracaoChamada = null;
+let contextoAudioChamada = null;
+
+function tocarBip(frequencia, duracaoMs, volume){
+  try{
+    if(!contextoAudioChamada) contextoAudioChamada = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = contextoAudioChamada.createOscillator();
+    const gainNode = contextoAudioChamada.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(contextoAudioChamada.destination);
+    oscillator.frequency.value = frequencia;
+    gainNode.gain.value = volume;
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.001, contextoAudioChamada.currentTime + duracaoMs / 1000);
+    oscillator.stop(contextoAudioChamada.currentTime + duracaoMs / 1000);
+  } catch(e){ console.error('erro ao tocar som de chamada', e); }
+}
+
+// Tom de discagem — pra quem está ligando, toca enquanto espera a pessoa atender
+function iniciarTomDiscagem(){
+  pararSomChamada();
+  intervaloSomChamada = setInterval(() => {
+    tocarBip(480, 900, 0.12);
+    setTimeout(() => tocarBip(440, 900, 0.12), 100);
+  }, 3000);
+}
+
+// Toque — pra quem está recebendo a chamada, mais forte e chamativo
+function iniciarToqueChamada(){
+  pararSomChamada();
+  intervaloSomChamada = setInterval(() => {
+    tocarBip(880, 400, 0.25);
+    setTimeout(() => tocarBip(1046, 400, 0.25), 450);
+  }, 1800);
+
+  if(navigator.vibrate){
+    intervaloVibracaoChamada = setInterval(() => { navigator.vibrate([400, 200, 400]); }, 1800);
+    navigator.vibrate([400, 200, 400]);
+  }
+}
+
+function pararSomChamada(){
+  if(intervaloSomChamada){ clearInterval(intervaloSomChamada); intervaloSomChamada = null; }
+  if(intervaloVibracaoChamada){ clearInterval(intervaloVibracaoChamada); intervaloVibracaoChamada = null; }
+  if(navigator.vibrate) navigator.vibrate(0);
 }
 
 function tocarSomNotificacao(){
@@ -863,9 +932,11 @@ async function receberChamadaEntrando(payload){
   document.getElementById('chamada-recebida-view').style.display = 'block';
   document.getElementById('chamada-ativa-view').style.display = 'none';
   document.getElementById('chamada-recebida-nome').textContent = chamadaComQuemNome;
+  iniciarToqueChamada();
 }
 
 async function recusarChamada(){
+  pararSomChamada();
   if(chamadaComQuemUserId){
     const canal = await abrirCanalEnvio(chamadaComQuemUserId);
     canal.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
@@ -874,6 +945,7 @@ async function recusarChamada(){
 }
 
 async function aceitarChamada(){
+  pararSomChamada();
   document.getElementById('chamada-recebida-view').style.display = 'none';
   document.getElementById('chamada-ativa-view').style.display = 'flex';
   document.getElementById('chamada-nome-ativa').textContent = chamadaComQuemNome;
@@ -898,6 +970,7 @@ async function aceitarChamada(){
   pc.ontrack = (event) => {
     document.getElementById('video-remoto').srcObject = event.streams[0];
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
+    pararSomChamada();
   };
 
   const canalEnvio = await abrirCanalEnvio(chamadaComQuemUserId);
@@ -950,11 +1023,14 @@ async function iniciarChamada(comVideo){
   chamadaComQuemUserId = destinatarioId;
   chamadaComQuemNome = nomeDestinatario;
 
+  const destinatarioOnline = await pessoaEstaOnline(destinatarioId);
+
   document.getElementById('overlay-chamada').classList.add('aberto');
   document.getElementById('chamada-recebida-view').style.display = 'none';
   document.getElementById('chamada-ativa-view').style.display = 'flex';
   document.getElementById('chamada-nome-ativa').textContent = nomeDestinatario;
-  document.getElementById('chamada-status-ativa').textContent = 'Chamando...';
+  document.getElementById('chamada-status-ativa').textContent = destinatarioOnline ? 'Chamando...' : 'Ligando... (a pessoa não está online agora, mas vai receber a notificação)';
+  iniciarTomDiscagem();
   document.getElementById('video-local').srcObject = streamLocalAtual;
   document.getElementById('video-local').style.display = comVideo ? 'block' : 'none';
   document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !comVideo);
@@ -967,6 +1043,7 @@ async function iniciarChamada(comVideo){
     document.getElementById('video-remoto').srcObject = event.streams[0];
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
     chamadaFoiAtendida = true;
+    pararSomChamada();
   };
 
   const canalEnvio = await abrirCanalEnvio(destinatarioId);
@@ -1041,6 +1118,7 @@ async function encerrarChamada(avisarOutraPonta){
 }
 
 function fecharOverlayChamada(){
+  pararSomChamada();
   document.getElementById('overlay-chamada').classList.remove('aberto');
   document.getElementById('video-local').srcObject = null;
   document.getElementById('video-remoto').srcObject = null;

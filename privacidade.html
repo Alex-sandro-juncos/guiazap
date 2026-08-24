@@ -17,7 +17,83 @@
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Política de Privacidade</p></header>
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
+<div class="legal-wrap">
+<a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+<h1>Política de Privacidade</h1>
+<p class="atualizado">Última atualização: 12 de agosto de 2026</p>
+
+<p>Esta Política explica como o GuiaZap coleta, usa e protege dados pessoais, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).</p>
+
+<h2>1. Dados coletados</h2>
+<ul>
+  <li><strong>De quem se cadastra como profissional/empresa:</strong> nome, e-mail, CPF ou CNPJ, telefone/WhatsApp, categoria de atuação, endereço (estado, cidade, bairro, CEP), foto de perfil (opcional);</li>
+  <li><strong>De visitantes que avaliam:</strong> nome informado e comentário, junto com a nota atribuída;</li>
+  <li><strong>Dados técnicos:</strong> informações de navegação coletadas automaticamente pelos serviços de hospedagem (Netlify) para fins de segurança e desempenho.</li>
+</ul>
+
+<h2>2. Finalidade do uso dos dados</h2>
+<ul>
+  <li>Exibir publicamente o cadastro de empresas/profissionais para busca por visitantes, conforme a própria natureza do serviço (diretório público);</li>
+  <li>Processar a cobrança da assinatura, por meio do Mercado Pago;</li>
+  <li>Autenticação e login na plataforma;</li>
+  <li>Comunicação sobre a conta (recuperação de senha, avisos de pagamento).</li>
+</ul>
+
+<h2>3. Compartilhamento de dados</h2>
+<p>O GuiaZap compartilha dados pessoais apenas com os seguintes prestadores, estritamente para viabilizar o funcionamento da plataforma:</p>
+<ul>
+  <li><strong>Supabase</strong> — armazenamento do banco de dados e autenticação;</li>
+  <li><strong>Mercado Pago</strong> — processamento de pagamentos (o GuiaZap não tem acesso a dados de cartão de crédito);</li>
+  <li><strong>Netlify</strong> — hospedagem do site.</li>
+</ul>
+<p>O GuiaZap não vende, aluga ou compartilha dados pessoais com terceiros para fins de publicidade.</p>
+<p><strong>Importante:</strong> os dados de contato (WhatsApp, categoria, localização) cadastrados por profissionais e empresas são, por natureza do serviço, exibidos publicamente para qualquer visitante do site — essa exposição é o próprio objetivo do cadastro, e o usuário concorda com isso ao se cadastrar.</p>
+
+<h2>4. Direitos do titular dos dados (LGPD)</h2>
+<p>Você pode, a qualquer momento, solicitar:</p>
+<ul>
+  <li>Confirmação de quais dados seus são tratados;</li>
+  <li>Correção de dados incompletos, inexatos ou desatualizados (diretamente pela edição do próprio cadastro, quando logado);</li>
+  <li>Exclusão do cadastro e da conta (também disponível diretamente pela plataforma, ao excluir o próprio cadastro);</li>
+  <li>Informações sobre com quem os dados são compartilhados.</li>
+</ul>
+<p>Solicitações podem ser feitas por e-mail: contato@guiazap.shop</p>
+
+<h2>5. Segurança dos dados</h2>
+<p>O GuiaZap adota medidas técnicas razoáveis para proteger os dados armazenados, incluindo controle de acesso por autenticação e regras de segurança no banco de dados (Row Level Security), que garantem que cada usuário só possa editar ou excluir os próprios cadastros. Senhas de cartão de crédito nunca são armazenadas pelo GuiaZap.</p>
+
+<h2>6. Retenção de dados</h2>
+<p>Os dados são mantidos enquanto a conta estiver ativa. Ao excluir o cadastro ou solicitar a exclusão da conta, os dados pessoais são removidos, ressalvadas informações que a legislação exija manter (ex: registros fiscais de pagamento).</p>
+
+<h2>7. Alterações nesta Política</h2>
+<p>Esta Política pode ser atualizada periodicamente. A versão vigente é sempre a publicada nesta página.</p>
+
+<h2>8. Contato</h2>
+<p>Para dúvidas ou solicitações relacionadas aos seus dados pessoais: contato@guiazap.shop</p>
+</div>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Política de Privacidade — GuiaZap</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .legal-wrap { max-width: 700px; margin: 0 auto; padding: 30px 20px 60px; line-height: 1.6; color: #333; }
+  .legal-wrap h1 { font-size: 1.6rem; margin-bottom: 6px; color: var(--verde-escuro); }
+  .legal-wrap .atualizado { font-size: 0.8rem; color: #888; margin-bottom: 24px; }
+  .legal-wrap h2 { font-size: 1.1rem; margin: 26px 0 8px; color: var(--verde-escuro); }
+  .legal-wrap p, .legal-wrap li { font-size: 0.92rem; margin-bottom: 8px; }
+  .legal-wrap ul { padding-left: 20px; }
+  .legal-wrap .voltar { display: inline-block; margin-bottom: 20px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Política de Privacidade</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 <div class="legal-wrap">
 <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 <h1>Política de Privacidade</h1>

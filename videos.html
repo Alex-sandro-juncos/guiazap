@@ -29,7 +29,7 @@
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Vídeos das Empresas</p></header>
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 <div class="videos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
@@ -139,7 +139,7 @@ async function renderVideos(){
           <button type="button" class="btn-voto aprovado${votoMeu === 'aprovado' ? ' ativo' : ''}" onclick="votarVideo('${v.id}', 'aprovado')">+ Aprovado (${aprovados})</button>
           <button type="button" class="btn-voto nao-gostei${votoMeu === 'nao_gostei' ? ' ativo' : ''}" onclick="votarVideo('${v.id}', 'nao_gostei')">– Não gostei (${naoGostei})</button>
           <button type="button" class="btn-acao-video" onclick="compartilharVideoWhatsapp('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Compartilhar no WhatsApp">📤</button>
-          <button type="button" class="btn-acao-video" onclick="compartilharVideoNoChat('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Enviar no chat do GuiaZap">💬</button>
+          <button type="button" class="btn-acao-video" onclick="compartilharVideoNoChat('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Enviar no Papo do GuiaZap">💬</button>
           <button type="button" class="btn-acao-video" onclick="denunciarVideo('${v.id}')" title="Denunciar">🚩</button>
         </div>
       </div>
@@ -207,6 +207,6 @@ async function denunciarVideo(videoId){
 initVideos();
 </script>
 <script src="js/modo-escuro.js"></script>
-<a href="chat.html" class="btn-chat-flutuante" title="Chat">💬</a>
+<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬</a>
 </body>
 </html>
