@@ -347,7 +347,6 @@
 </div>
 
 <script src="config.js"></script>
-<script src="js/notificacoes.js"></script>
 <script>
 const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUserChat = null;
@@ -445,10 +444,6 @@ async function initChat(){
         conversaId: chamadaPendenteDb.conversa_id
       });
     }
-  }
-
-  if(typeof initNotificacoes === 'function'){
-    initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
   }
 }
 

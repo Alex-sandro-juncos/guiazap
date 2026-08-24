@@ -20,6 +20,15 @@
   .enviar-form .field { margin-bottom: 10px; }
   .enviar-form label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
   .enviar-form input, .enviar-form textarea { width: 100%; padding: 9px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+  .blog-busca-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 50px;
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+  }
 </style>
 </head>
 <body>
@@ -52,6 +61,7 @@
   </div>
 
   <h2 style="font-size:1.1rem; color:var(--verde-escuro); margin-bottom:12px;">Artigos publicados</h2>
+  <input type="text" id="blog-busca" class="blog-busca-input" placeholder="🔍 Buscar por título ou autor..." oninput="renderArtigos()">
   <div id="blog-lista">Carregando...</div>
 </div>
 
@@ -104,16 +114,44 @@ async function enviarArtigo(){
   document.getElementById('blog-conteudo').value = '';
 }
 
+let artigosCarregados = [];
+
+function normalizarBuscaBlog(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 async function loadArtigos(){
   const container = document.getElementById('blog-lista');
   const { data, error } = await supabaseClientBlog.from('blog_posts').select('titulo, slug, autor_nome, conteudo, created_at').eq('aprovado', true).order('created_at', { ascending: false });
 
-  if(error || !data || data.length === 0){
+  if(error || !data){
     container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Ainda não temos artigos publicados. Seja o primeiro a escrever!</p>';
     return;
   }
 
-  container.innerHTML = data.map(p => `
+  artigosCarregados = data;
+  renderArtigos();
+}
+
+function renderArtigos(){
+  const container = document.getElementById('blog-lista');
+  const query = normalizarBuscaBlog(document.getElementById('blog-busca').value);
+
+  const filtrados = artigosCarregados.filter(p =>
+    normalizarBuscaBlog(p.titulo).includes(query) || normalizarBuscaBlog(p.autor_nome).includes(query)
+  );
+
+  if(artigosCarregados.length === 0){
+    container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Ainda não temos artigos publicados. Seja o primeiro a escrever!</p>';
+    return;
+  }
+
+  if(filtrados.length === 0){
+    container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Nenhum artigo encontrado pra essa busca.</p>';
+    return;
+  }
+
+  container.innerHTML = filtrados.map(p => `
     <a href="/blog/${p.slug}" class="card-post">
       <div class="titulo-post">${escapeHtmlBlog(p.titulo)}</div>
       <div class="autor-post">Por ${escapeHtmlBlog(p.autor_nome)} · ${new Date(p.created_at).toLocaleDateString('pt-BR')}</div>

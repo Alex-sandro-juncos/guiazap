@@ -161,6 +161,18 @@ async function atualizarUltimoLogin(){
   entries.forEach(e => { if(e.user_id === currentUser.id) e.ultimo_login = new Date().toISOString(); });
 }
 
+let _notifJaIniciado = false;
+
+function tentarIniciarNotificacoes(){
+  if(!currentUser){ _notifJaIniciado = false; return; }
+  if(_notifJaIniciado || !loaded) return;
+  _notifJaIniciado = true;
+  const meusIds = entries.filter(e => e.user_id === currentUser.id).map(e => e.id);
+  if(typeof initNotificacoes === 'function'){
+    initNotificacoes({ supabaseClient, userId: currentUser.id, empresaIds: meusIds, escutarChamadas: true });
+  }
+}
+
 async function updateAuthUI(){
   const loggedOutBox = document.getElementById('auth-logged-out');
   const loggedInBox = document.getElementById('auth-logged-in');
@@ -191,6 +203,7 @@ async function updateAuthUI(){
   }
   render();
   renderStoriesLinha();
+  tentarIniciarNotificacoes();
 }
 
 async function signUp(){
@@ -341,6 +354,7 @@ async function loadEntries(){
   abrirStorySeVindoDoProduto();
   loadContagemSeguidores().then(render);
   render();
+  tentarIniciarNotificacoes();
 }
 
 function abrirCadastroSePendente(){
@@ -1756,7 +1770,9 @@ async function salvarStoryPessoal(e){
     usuario_id: currentUser.id,
     fotos: storyPessoalFotosSelecionadas,
     texto: document.getElementById('story-pessoal-texto-input').value.trim() || null,
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    visivel_guiazap: true,
+    visivel_papo: document.getElementById('story-pessoal-publicar-no-papo').checked
   };
 
   msg.textContent = 'publicando...';
@@ -1884,7 +1900,9 @@ async function salvarStory(e){
     produto_id: produtoId,
     produto_nome: null,
     produto_preco: null,
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    visivel_guiazap: true,
+    visivel_papo: document.getElementById('story-publicar-no-papo').checked
   };
 
   // Guarda o nome/preço do produto no momento da publicação, pra mostrar na visualização
@@ -2095,6 +2113,7 @@ async function loadStories(){
   const { data, error } = await supabaseClient
     .from('stories')
     .select('*, profissionais(id, name, foto, whatsapp, plano)')
+    .eq('visivel_guiazap', true)
     .order('created_at', { ascending: true });
 
   if(error){ console.error(error); return; }
@@ -2867,6 +2886,10 @@ if(initSupabase()){
   loadContadorPlataforma();
   loadDenunciasPorEmpresa();
   mostrarWelcomeGateSeNecessario();
+
+  // Garantia extra: se por algum motivo de timing o sino de notificações
+  // não tiver iniciado logo de cara, tenta de novo depois de alguns segundos
+  setTimeout(tentarIniciarNotificacoes, 3000);
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada

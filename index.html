@@ -33,10 +33,6 @@
     <div class="welcome-logo">GuiaZap</div>
     <p class="welcome-sub">Encontre profissionais locais e fale direto no WhatsApp</p>
 
-    <button type="button" class="btn-pular-welcome-grande" onclick="pularWelcomeGate()">🔍 Continuar sem cadastro</button>
-
-    <div class="welcome-divisor"><span>ou crie uma conta</span></div>
-
     <div class="welcome-beneficios">
       🎁 <b>Crie sua conta grátis</b> e tenha acesso a ofertas e produtos dedicados — além de receber notificações das empresas que você seguir.
     </div>
@@ -62,6 +58,10 @@
       </div>
       <span class="auth-msg" id="welcome-msg"></span>
     </form>
+
+    <div class="welcome-divisor"><span>ou</span></div>
+
+    <button type="button" class="btn-pular-welcome-grande" onclick="pularWelcomeGate()">🔍 Continuar sem cadastro</button>
   </div>
 </div>
 
@@ -315,12 +315,55 @@
         <span>📢 Notificar meus seguidores por e-mail sobre essa novidade</span>
       </label>
     </div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-publicar-no-papo">
+        <span>💬 Publicar também no Papo</span>
+      </label>
+    </div>
     <div class="form-actions">
       <button type="submit" class="btn-salvar">Publicar novidade</button>
       <button type="button" class="btn-cancelar" onclick="fecharFormStory()">Cancelar</button>
       <span class="form-msg" id="story-msg"></span>
     </div>
   </form>
+
+  <!-- Story pessoal (visitante sem empresa) — mesmo funcionamento do Pacote Básico
+       grátis das empresas: 1 foto, some em 24h, sem custo. -->
+  <form id="story-pessoal-form" onsubmit="return salvarStoryPessoal(event)" style="display:none;">
+    <div class="field">
+      <label>Foto (1 foto — grátis, some em 24h)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStoryPessoal(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStoryPessoal(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="story-pessoal-foto-msg"></span>
+      <div id="story-pessoal-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="story-pessoal-texto-input" rows="3" placeholder="Escreva algo pra sua novidade..." maxlength="200" class="story-textarea-bonito"></textarea>
+    </div>
+    <div id="minha-novidade-pessoal" class="minhas-novidades"></div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-pessoal-publicar-no-papo">
+        <span>💬 Publicar também no Papo</span>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStoryPessoal()">Cancelar</button>
+      <span class="form-msg" id="story-pessoal-msg"></span>
+    </div>
+  </form>
+
 
   <form id="video-form" onsubmit="return salvarVideoEmpresa(event)" style="display:none;">
     <input type="hidden" id="video-profissional-id">
@@ -371,6 +414,7 @@
   <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 
 <script src="js/modo-escuro.js"></script>
+<script src="js/notificacoes.js"></script>
 <script src="config.js"></script>
 <script src="js/app.js"></script>
 </body>

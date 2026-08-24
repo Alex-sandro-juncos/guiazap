@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minha Agenda — GuiaZap</title>
+<meta name="description" content="Seus contatos salvos e bloqueados no GuiaZap.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  .agenda-header { background: #6b46c1; padding: 24px 15px 18px; text-align: center; color: white; }
+  .agenda-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .agenda-header p { font-size: 0.85rem; opacity: 0.95; margin-top: 4px; }
+
+  .agenda-stories-linha {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 10px 15px 4px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .agenda-abas {
+    display: flex;
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--cinza-card);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 2;
+    overflow: hidden;
+  }
+  .agenda-aba {
+    flex: 1;
+    text-align: center;
+    padding: 12px 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #888;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+  }
+  .agenda-aba.ativa { color: #6b46c1; border-bottom-color: #6b46c1; }
+  body.dark-mode .agenda-aba { color: #999; }
+  body.dark-mode .agenda-aba.ativa { color: #a78bda; border-bottom-color: #a78bda; }
+
+  .agenda-conteudo { max-width: 480px; margin: 0 auto; padding: 16px 15px 30px; }
+
+  .agenda-busca {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 50px;
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+  }
+
+  .card-contato {
+    background: var(--cinza-card);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .card-contato img {
+    width: 46px; height: 46px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0;
+  }
+  .card-contato .info-contato { flex: 1; min-width: 0; }
+  .card-contato .nome-contato { font-size: 0.95rem; font-weight: 700; color: #1c1c1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.dark-mode .card-contato .nome-contato { color: #f0f0f0; }
+  .card-contato .tipo-contato { font-size: 0.72rem; color: #8a8270; margin-top: 2px; }
+  .card-contato .acoes-contato { display: flex; gap: 4px; flex-shrink: 0; }
+  .card-contato .icon-btn {
+    background: none; border: none; cursor: pointer; font-size: 1.05rem; padding: 6px; border-radius: 6px;
+  }
+  .card-contato .icon-btn:hover { background: var(--cinza-fundo); }
+
+  .btn-desbloquear {
+    background: var(--verde-escuro);
+    color: white;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .agenda-vazio { text-align: center; padding: 50px 20px; color: #999; }
+  .agenda-vazio-icone { font-size: 2.8rem; margin-bottom: 12px; opacity: 0.6; }
+  .agenda-vazio-texto { font-size: 0.85rem; line-height: 1.5; }
+
+  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+
+  #agenda-story-form {
+    display: none;
+    max-width: 480px;
+    margin: 0 auto 14px;
+    padding: 0 15px;
+  }
+  #agenda-story-form .card-form {
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+
+  .agenda-story-viewer {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+    z-index: 999; display: none; align-items: center; justify-content: center;
+    padding: 10px;
+  }
+  .agenda-story-viewer.aberto { display: flex; }
+  .agenda-story-conteudo {
+    position: relative; width: 100%; max-width: 420px; max-height: 92vh;
+    background: #111; border-radius: 14px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .agenda-story-progresso { height: 3px; background: rgba(255,255,255,0.25); }
+  .agenda-story-progresso-barra { height: 100%; background: white; transition: width 0.3s linear; }
+  .agenda-story-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; position: absolute; top: 6px; left: 8px; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+  .agenda-story-fechar {
+    position: absolute; top: 8px; right: 10px; z-index: 2;
+    background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%;
+    width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer;
+  }
+  .agenda-story-foto-area { position: relative; width: 100%; aspect-ratio: 9/13; background: #000; }
+  .agenda-story-foto { width: 100%; height: 100%; object-fit: contain; }
+  .agenda-story-tap-esquerda, .agenda-story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
+  .agenda-story-tap-esquerda { left: 0; }
+  .agenda-story-tap-direita { right: 0; }
+  .agenda-story-texto {
+    color: white; font-size: 0.85rem; padding: 30px 14px 12px; min-height: 20px;
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+    white-space: pre-line;
+  }
+  .agenda-story-acoes { padding: 10px 14px 16px; flex-shrink: 0; }
+  .agenda-story-acoes a {
+    display: block; text-align: center; padding: 10px; border-radius: 8px;
+    font-size: 0.8rem; font-weight: 700; text-decoration: none; background: var(--verde-whats); color: white;
+  }
+</style>
+</head>
+<body>
+<header class="agenda-header">
+  <h1>📇 Minha Agenda</h1>
+  <p>Seus contatos e novidades do Papo</p>
+</header>
+
+<div class="agenda-stories-linha" id="agenda-stories-linha" style="display:none;"></div>
+
+<form id="agenda-story-form" onsubmit="return salvarStoryPapo(event)">
+  <div class="card-form">
+    <div class="field">
+      <label>Foto</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStoryPapo(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStoryPapo(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="agenda-story-foto-msg"></span>
+      <div id="agenda-story-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="agenda-story-texto-input" rows="3" placeholder="Escreva algo pra sua novidade..." maxlength="200" class="story-textarea-bonito"></textarea>
+    </div>
+    <div class="field" id="agenda-story-empresa-campo" style="display:none;">
+      <label>Publicar como</label>
+      <select id="agenda-story-profissional-id"></select>
+    </div>
+    <div id="agenda-minhas-novidades-papo" class="minhas-novidades"></div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="agenda-story-publicar-guiazap">
+        <span>📣 Publicar também no GuiaZap</span>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStoryPapo()">Cancelar</button>
+      <span class="form-msg" id="agenda-story-msg"></span>
+    </div>
+  </div>
+</form>
+
+<div class="agenda-abas">
+  <button type="button" class="agenda-aba ativa" id="aba-contatos" onclick="trocarAba('contatos')">Contatos</button>
+  <button type="button" class="agenda-aba" id="aba-bloqueados" onclick="trocarAba('bloqueados')">🚫 Bloqueados</button>
+</div>
+
+<div class="agenda-conteudo">
+  <input type="text" id="agenda-busca" class="agenda-busca" placeholder="🔍 Buscar contato..." oninput="renderListaAtual()" style="display:none;">
+  <div id="agenda-lista">
+    <div style="text-align:center; padding:40px; color:#999;">Carregando...</div>
+  </div>
+</div>
+
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:0 auto 10px;">🌙 Modo escuro</button>
+<a href="chat.html" class="voltar-guiazap">← Voltar ao Papo</a>
+
+<div class="agenda-story-viewer" id="agenda-story-viewer">
+  <div class="agenda-story-conteudo">
+    <button class="agenda-story-fechar" onclick="fecharStoryPapoViewer()">✕</button>
+    <div class="agenda-story-progresso"><div class="agenda-story-progresso-barra" id="agenda-story-progresso-barra"></div></div>
+    <div class="agenda-story-nome" id="agenda-story-nome-topo"></div>
+    <div class="agenda-story-foto-area">
+      <img class="agenda-story-foto" id="agenda-story-foto">
+      <div class="agenda-story-tap-esquerda" onclick="voltarStoryPapoSlide()"></div>
+      <div class="agenda-story-tap-direita" onclick="avancarStoryPapoSlide()"></div>
+      <div class="agenda-story-texto" id="agenda-story-texto-viewer"></div>
+    </div>
+    <div class="agenda-story-acoes" id="agenda-story-acoes"></div>
+  </div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="js/notificacoes.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientAgenda = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserAgenda = null;
+let contatosCarregados = [];
+let bloqueadosCarregados = [];
+let abaAtual = 'contatos';
+let meusCadastrosAgenda = [];
+let storiesPapoAgrupados = {};
+let storyPapoFotosSelecionadas = [];
+
+function escapeHtmlAgenda(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initAgenda(){
+  const { data: { session } } = await supabaseClientAgenda.auth.getSession();
+
+  if(!session){
+    // Às vezes a sessão salva no navegador demora uma fração de segundo a
+    // mais pra ficar disponível (ex: acabou de logar em outra aba). Antes de
+    // desistir e mostrar "faça login", espera um pouquinho e confere de novo.
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const { data: { session: sessaoTentativa2 } } = await supabaseClientAgenda.auth.getSession();
+    if(!sessaoTentativa2){
+      document.getElementById('agenda-lista').innerHTML = '<div class="agenda-vazio"><div class="agenda-vazio-icone">🔒</div><div class="agenda-vazio-texto">Faça login na <a href="index.html">página inicial</a> pra ver sua agenda.</div></div>';
+
+      // Continua de olho: se a sessão aparecer (ex: outra aba acabou de
+      // logar e sincronizou), recarrega a agenda sozinha, sem precisar
+      // a pessoa atualizar a página na mão.
+      supabaseClientAgenda.auth.onAuthStateChange((event, sessaoNova) => {
+        if(sessaoNova && !currentUserAgenda) initAgenda();
+      });
+      return;
+    }
+    currentUserAgenda = sessaoTentativa2.user;
+  } else {
+    currentUserAgenda = session.user;
+  }
+
+  const { data: cadastros } = await supabaseClientAgenda.from('profissionais').select('id, name, plano').eq('user_id', currentUserAgenda.id);
+  meusCadastrosAgenda = cadastros || [];
+
+  await Promise.all([carregarContatos(), carregarBloqueados()]);
+  renderListaAtual();
+  await carregarStoriesPapo();
+
+  if(typeof initNotificacoes === 'function'){
+    initNotificacoes({ supabaseClient: supabaseClientAgenda, userId: currentUserAgenda.id, empresaIds: meusCadastrosAgenda.map(c => c.id), escutarChamadas: true });
+  }
+}
+
+async function carregarContatos(){
+  const { data, error } = await supabaseClientAgenda
+    .from('agenda_contatos')
+    .select('id, contato_user_id, profissional_id, nome_salvo')
+    .eq('dono_user_id', currentUserAgenda.id)
+    .order('nome_salvo', { ascending: true });
+
+  if(error){ console.error(error); contatosCarregados = []; return; }
+  contatosCarregados = data || [];
+}
+
+async function carregarBloqueados(){
+  const { data, error } = await supabaseClientAgenda
+    .from('contatos_bloqueados')
+    .select('id, bloqueado_user_id, created_at')
+    .eq('bloqueador_user_id', currentUserAgenda.id)
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); bloqueadosCarregados = []; return; }
+
+  bloqueadosCarregados = await Promise.all((data || []).map(async (b) => {
+    const { data: perfil } = await supabaseClientAgenda.from('perfis_usuario').select('nome_exibicao').eq('user_id', b.bloqueado_user_id).maybeSingle();
+    if(perfil && perfil.nome_exibicao) return { ...b, nome: perfil.nome_exibicao };
+
+    const { data: empresa } = await supabaseClientAgenda.from('profissionais').select('name').eq('user_id', b.bloqueado_user_id).maybeSingle();
+    return { ...b, nome: (empresa && empresa.name) || 'Contato do GuiaZap' };
+  }));
+}
+
+function trocarAba(aba){
+  abaAtual = aba;
+  document.getElementById('aba-contatos').classList.toggle('ativa', aba === 'contatos');
+  document.getElementById('aba-bloqueados').classList.toggle('ativa', aba === 'bloqueados');
+  document.getElementById('agenda-busca').style.display = aba === 'contatos' ? 'block' : 'none';
+  document.getElementById('agenda-busca').value = '';
+  renderListaAtual();
+}
+
+function normalizarBusca(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function renderListaAtual(){
+  if(abaAtual === 'contatos') renderContatos();
+  else renderBloqueados();
+}
+
+function renderContatos(){
+  const lista = document.getElementById('agenda-lista');
+  const query = normalizarBusca(document.getElementById('agenda-busca').value);
+
+  const filtrados = contatosCarregados.filter(c => normalizarBusca(c.nome_salvo).includes(query));
+
+  if(contatosCarregados.length === 0){
+    lista.innerHTML = `
+      <div class="agenda-vazio">
+        <div class="agenda-vazio-icone">📇</div>
+        <div class="agenda-vazio-texto">Você ainda não salvou nenhum contato.<br>Abra uma conversa no Papo e clique em "💾 Salvar contato".</div>
+      </div>
+    `;
+    return;
+  }
+
+  if(filtrados.length === 0){
+    lista.innerHTML = '<div class="agenda-vazio"><div class="agenda-vazio-texto">Nenhum contato encontrado.</div></div>';
+    return;
+  }
+
+  lista.innerHTML = filtrados.map(c => {
+    const ehEmpresa = !!c.profissional_id;
+    const linkChat = ehEmpresa ? `chat.html?empresa=${c.profissional_id}` : `chat.html?pessoa=${c.contato_user_id}`;
+    const fotoFallback = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nome_salvo);
+    return `
+      <div class="card-contato">
+        <img src="${fotoFallback}" alt="${escapeHtmlAgenda(c.nome_salvo)}">
+        <div class="info-contato">
+          <div class="nome-contato">${escapeHtmlAgenda(c.nome_salvo)}</div>
+          <div class="tipo-contato">${ehEmpresa ? '🏢 Empresa' : '👤 Pessoa'}</div>
+        </div>
+        <div class="acoes-contato">
+          <a href="${linkChat}" class="icon-btn" title="Conversar">💬</a>
+          <button type="button" class="icon-btn" title="Editar nome" onclick="editarNomeContato('${c.id}', '${escapeHtmlAgenda(c.nome_salvo).replace(/'/g, "\\'")}')">✎</button>
+          <button type="button" class="icon-btn" title="Remover" onclick="removerContato('${c.id}')">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderBloqueados(){
+  const lista = document.getElementById('agenda-lista');
+
+  if(bloqueadosCarregados.length === 0){
+    lista.innerHTML = `
+      <div class="agenda-vazio">
+        <div class="agenda-vazio-icone">🚫</div>
+        <div class="agenda-vazio-texto">Você não bloqueou ninguém ainda.</div>
+      </div>
+    `;
+    return;
+  }
+
+  lista.innerHTML = bloqueadosCarregados.map(b => {
+    const fotoFallback = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(b.nome);
+    return `
+      <div class="card-contato">
+        <img src="${fotoFallback}" alt="${escapeHtmlAgenda(b.nome)}">
+        <div class="info-contato">
+          <div class="nome-contato">${escapeHtmlAgenda(b.nome)}</div>
+          <div class="tipo-contato">Bloqueado em ${new Date(b.created_at).toLocaleDateString('pt-BR')}</div>
+        </div>
+        <button type="button" class="btn-desbloquear" onclick="desbloquearContato('${b.id}')">Desbloquear</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function editarNomeContato(id, nomeAtual){
+  const novoNome = prompt('Novo nome pra esse contato:', nomeAtual);
+  if(!novoNome || !novoNome.trim()) return;
+
+  const { error } = await supabaseClientAgenda.from('agenda_contatos').update({ nome_salvo: novoNome.trim() }).eq('id', id);
+  if(error){ console.error(error); alert('Erro ao editar. Tente de novo.'); return; }
+
+  await carregarContatos();
+  renderListaAtual();
+}
+
+async function removerContato(id){
+  if(!confirm('Remover esse contato da sua agenda?')) return;
+
+  const { error } = await supabaseClientAgenda.from('agenda_contatos').delete().eq('id', id);
+  if(error){ console.error(error); alert('Erro ao remover. Tente de novo.'); return; }
+
+  await carregarContatos();
+  renderListaAtual();
+}
+
+async function desbloquearContato(id){
+  if(!confirm('Desbloquear esse contato? Ele vai poder te enviar mensagens e ligar de novo.')) return;
+
+  const { error } = await supabaseClientAgenda.from('contatos_bloqueados').delete().eq('id', id);
+  if(error){ console.error(error); alert('Erro ao desbloquear. Tente de novo.'); return; }
+
+  await carregarBloqueados();
+  renderListaAtual();
+}
+
+// ---------- STORIES DO PAPO ----------
+// Mesma regra de quem vê (contatos salvos ou empresas seguidas) que o
+// GuiaZap usa, só que aqui só entram stories marcados como "visivel_papo".
+
+async function carregarStoriesPapo(){
+  const idsEmpresasSalvas = [...new Set(contatosCarregados.filter(c => c.profissional_id).map(c => c.profissional_id))];
+  const idsPessoasSalvas = [...new Set(contatosCarregados.filter(c => c.contato_user_id).map(c => c.contato_user_id))];
+
+  const { data: seguindo } = await supabaseClientAgenda.from('seguidores').select('profissional_id').eq('user_id', currentUserAgenda.id);
+  const idsEmpresasSeguidas = (seguindo || []).map(s => s.profissional_id);
+
+  const idsEmpresas = [...new Set([...idsEmpresasSalvas, ...idsEmpresasSeguidas, ...meusCadastrosAgenda.map(c => c.id)])];
+
+  let storiesEmpresas = [];
+  if(idsEmpresas.length > 0){
+    const { data } = await supabaseClientAgenda.from('stories').select('*, profissionais(id, name, foto)').eq('visivel_papo', true).in('profissional_id', idsEmpresas);
+    storiesEmpresas = data || [];
+  }
+
+  let storiesPessoais = [];
+  const idsPessoas = [...new Set([...idsPessoasSalvas, currentUserAgenda.id])];
+  if(idsPessoas.length > 0){
+    const { data } = await supabaseClientAgenda.from('stories').select('*').eq('visivel_papo', true).in('usuario_id', idsPessoas);
+    storiesPessoais = data || [];
+  }
+
+  const idsNomesPessoais = [...new Set(storiesPessoais.map(s => s.usuario_id))];
+  let nomesPessoais = {};
+  if(idsNomesPessoais.length > 0){
+    const { data: perfis } = await supabaseClientAgenda.from('perfis_usuario').select('user_id, nome_exibicao').in('user_id', idsNomesPessoais);
+    (perfis || []).forEach(p => { nomesPessoais[p.user_id] = p.nome_exibicao; });
+  }
+
+  storiesPapoAgrupados = {};
+  storiesEmpresas.forEach(s => {
+    if(!s.profissionais) return;
+    const chave = 'e_' + s.profissional_id;
+    if(!storiesPapoAgrupados[chave]) storiesPapoAgrupados[chave] = { tipo: 'empresa', id: s.profissional_id, nome: s.profissionais.name, foto: s.profissionais.foto, stories: [] };
+    storiesPapoAgrupados[chave].stories.push(s);
+  });
+  storiesPessoais.forEach(s => {
+    const chave = 'p_' + s.usuario_id;
+    if(!storiesPapoAgrupados[chave]) storiesPapoAgrupados[chave] = { tipo: 'pessoa', id: s.usuario_id, nome: nomesPessoais[s.usuario_id] || 'Você', foto: null, stories: [] };
+    storiesPapoAgrupados[chave].stories.push(s);
+  });
+
+  renderStoriesPapoLinha();
+  renderMinhasNovidadesPapo();
+}
+
+let storiesPapoOrdemChaves = [];
+
+function renderStoriesPapoLinha(){
+  const container = document.getElementById('agenda-stories-linha');
+  container.style.display = 'flex';
+
+  const grupos = Object.entries(storiesPapoAgrupados);
+  storiesPapoOrdemChaves = grupos.map(([chave]) => chave);
+
+  const bolinhaAdicionar = `
+    <div class="story-bolinha story-bolinha-add" onclick="abrirFormStoryPapo()">
+      <div class="story-add-circulo">+</div>
+      <span>Postar</span>
+    </div>
+  `;
+
+  const bolinhas = grupos.map(([chave, grupo]) => {
+    const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
+    const fotoFallback = grupo.foto ? escapeHtmlAgenda(grupo.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.nome);
+    return `
+      <div class="story-bolinha" onclick="abrirStoryPapoViewer('${chave}')">
+        <img src="${primeiraFoto ? escapeHtmlAgenda(primeiraFoto) : fotoFallback}">
+        <span>${escapeHtmlAgenda(grupo.nome.split(' ')[0])}</span>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = bolinhaAdicionar + bolinhas;
+}
+
+function abrirFormStoryPapo(){
+  const form = document.getElementById('agenda-story-form');
+  form.style.display = 'block';
+  document.getElementById('agenda-story-texto-input').value = '';
+  document.getElementById('agenda-story-msg').textContent = '';
+  document.getElementById('agenda-story-publicar-guiazap').checked = false;
+  storyPapoFotosSelecionadas = [];
+  renderStoryPapoFotosPreview();
+
+  const campoEmpresa = document.getElementById('agenda-story-empresa-campo');
+  const selectEmpresa = document.getElementById('agenda-story-profissional-id');
+  if(meusCadastrosAgenda.length > 0){
+    campoEmpresa.style.display = 'block';
+    selectEmpresa.innerHTML = '<option value="">Como eu mesmo (pessoal)</option>' + meusCadastrosAgenda.map(c => `<option value="${c.id}">${escapeHtmlAgenda(c.name)}</option>`).join('');
+  } else {
+    campoEmpresa.style.display = 'none';
+  }
+
+  renderMinhasNovidadesPapo();
+  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function fecharFormStoryPapo(){
+  document.getElementById('agenda-story-form').style.display = 'none';
+}
+
+async function adicionarFotoStoryPapo(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('agenda-story-foto-msg');
+  if(!file) return;
+
+  const selectEmpresa = document.getElementById('agenda-story-profissional-id');
+  const empresaEscolhida = selectEmpresa && selectEmpresa.value ? meusCadastrosAgenda.find(c => c.id === selectEmpresa.value) : null;
+  const plano = empresaEscolhida ? empresaEscolhida.plano : null;
+  const limite = plano === 'premium' ? 10 : (plano === 'completo' ? 5 : 1);
+
+  if(storyPapoFotosSelecionadas.length >= limite){
+    msg.textContent = `Seu plano permite no máximo ${limite} foto${limite > 1 ? 's' : ''}.`;
+    event.target.value = '';
+    return;
+  }
+
+  msg.textContent = 'enviando foto...';
+  const nomeArquivo = `stories/${currentUserAgenda.id}/${Date.now()}.jpg`;
+  const { error } = await supabaseClientAgenda.storage.from('fotos').upload(nomeArquivo, file);
+  event.target.value = '';
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar foto: ' + error.message; return; }
+
+  const { data } = supabaseClientAgenda.storage.from('fotos').getPublicUrl(nomeArquivo);
+  storyPapoFotosSelecionadas.push(data.publicUrl);
+  msg.textContent = '';
+  renderStoryPapoFotosPreview();
+}
+
+function removerFotoStoryPapo(index){
+  storyPapoFotosSelecionadas.splice(index, 1);
+  renderStoryPapoFotosPreview();
+}
+
+function renderStoryPapoFotosPreview(){
+  const container = document.getElementById('agenda-story-fotos-preview');
+  container.innerHTML = storyPapoFotosSelecionadas.map((url, i) => `
+    <div class="story-foto-mini">
+      <img src="${url}">
+      <button type="button" onclick="removerFotoStoryPapo(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+async function salvarStoryPapo(e){
+  e.preventDefault();
+  const msg = document.getElementById('agenda-story-msg');
+
+  if(storyPapoFotosSelecionadas.length === 0){ msg.textContent = 'Adicione uma foto.'; return false; }
+
+  const profissionalId = document.getElementById('agenda-story-profissional-id').value || null;
+  const empresaEscolhida = profissionalId ? meusCadastrosAgenda.find(c => c.id === profissionalId) : null;
+  const plano = empresaEscolhida ? empresaEscolhida.plano : 'basico';
+  const horasDuracao = plano === 'premium' ? (24 * 7) : 24;
+  const expiresAt = new Date(Date.now() + horasDuracao * 60 * 60 * 1000).toISOString();
+
+  const payload = {
+    fotos: storyPapoFotosSelecionadas,
+    texto: document.getElementById('agenda-story-texto-input').value.trim() || null,
+    expires_at: expiresAt,
+    visivel_papo: true,
+    visivel_guiazap: document.getElementById('agenda-story-publicar-guiazap').checked
+  };
+
+  if(profissionalId) payload.profissional_id = profissionalId;
+  else payload.usuario_id = currentUserAgenda.id;
+
+  msg.textContent = 'publicando...';
+  const { error } = await supabaseClientAgenda.from('stories').insert(payload);
+  if(error){ console.error(error); msg.textContent = 'erro ao publicar: ' + error.message; return false; }
+
+  msg.textContent = 'novidade publicada!';
+  setTimeout(fecharFormStoryPapo, 1200);
+  await carregarStoriesPapo();
+  return false;
+}
+
+function renderMinhasNovidadesPapo(){
+  const container = document.getElementById('agenda-minhas-novidades-papo');
+  if(!container) return;
+
+  const chavesProprias = [
+    'p_' + currentUserAgenda.id,
+    ...meusCadastrosAgenda.map(c => 'e_' + c.id)
+  ];
+
+  const minhasStories = chavesProprias.flatMap(chave => (storiesPapoAgrupados[chave] ? storiesPapoAgrupados[chave].stories.map(s => ({ ...s, chave })) : []));
+
+  if(minhasStories.length === 0){ container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <div class="minhas-novidades-label">📸 Suas novidades ativas no Papo:</div>
+    <div class="minhas-novidades-lista">
+      ${minhasStories.map(s => `
+        <div class="minha-novidade-item">
+          <img src="${s.fotos[0]}">
+          <button type="button" class="minha-novidade-btn-excluir" title="Excluir agora" onclick="excluirStoryPapo('${s.id}')">✕</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function excluirStoryPapo(storyId){
+  if(!confirm('Excluir essa novidade?')) return;
+  const { error } = await supabaseClientAgenda.from('stories').delete().eq('id', storyId);
+  if(error){ console.error(error); alert('erro ao excluir'); return; }
+  await carregarStoriesPapo();
+}
+
+// ---------- VISUALIZADOR DE STORY DO PAPO ----------
+
+let storyPapoAtual = null;
+let storyPapoChaveAtual = null;
+let storyPapoSlideAtual = 0;
+let storyPapoTimer = null;
+
+function abrirStoryPapoViewer(chave){
+  const grupo = storiesPapoAgrupados[chave];
+  if(!grupo) return;
+
+  storyPapoAtual = grupo;
+  storyPapoChaveAtual = chave;
+  storyPapoSlideAtual = 0;
+
+  storyPapoAtual.slidesFlat = [];
+  grupo.stories.forEach(s => {
+    s.fotos.forEach(foto => {
+      storyPapoAtual.slidesFlat.push({ foto, texto: s.texto, nome: grupo.nome, tipo: grupo.tipo, id: grupo.id });
+    });
+  });
+
+  document.getElementById('agenda-story-viewer').classList.add('aberto');
+  renderStoryPapoSlideAtual();
+}
+
+function renderStoryPapoSlideAtual(){
+  const slides = storyPapoAtual.slidesFlat;
+  const slide = slides[storyPapoSlideAtual];
+  if(!slide){ fecharStoryPapoViewer(); return; }
+
+  document.getElementById('agenda-story-nome-topo').textContent = slide.nome;
+  document.getElementById('agenda-story-foto').src = slide.foto;
+  document.getElementById('agenda-story-texto-viewer').textContent = slide.texto || '';
+
+  const barra = document.getElementById('agenda-story-progresso-barra');
+  barra.style.width = `${((storyPapoSlideAtual + 1) / slides.length) * 100}%`;
+
+  const acoes = document.getElementById('agenda-story-acoes');
+  const linkChat = slide.tipo === 'empresa' ? `chat.html?empresa=${slide.id}` : `chat.html?pessoa=${slide.id}`;
+  acoes.innerHTML = slide.id !== currentUserAgenda.id ? `<a href="${linkChat}">💬 Falar no Papo</a>` : '';
+
+  clearTimeout(storyPapoTimer);
+  storyPapoTimer = setTimeout(() => avancarStoryPapoSlide(), 5000);
+}
+
+function avancarStoryPapoSlide(){
+  storyPapoSlideAtual++;
+  if(storyPapoSlideAtual >= storyPapoAtual.slidesFlat.length){
+    const indiceAtual = storiesPapoOrdemChaves.indexOf(storyPapoChaveAtual);
+    const proximaChave = storiesPapoOrdemChaves[indiceAtual + 1];
+    if(proximaChave) abrirStoryPapoViewer(proximaChave);
+    else fecharStoryPapoViewer();
+    return;
+  }
+  renderStoryPapoSlideAtual();
+}
+
+function voltarStoryPapoSlide(){
+  storyPapoSlideAtual--;
+  if(storyPapoSlideAtual < 0){
+    const indiceAtual = storiesPapoOrdemChaves.indexOf(storyPapoChaveAtual);
+    const chaveAnterior = storiesPapoOrdemChaves[indiceAtual - 1];
+    if(chaveAnterior){
+      abrirStoryPapoViewer(chaveAnterior);
+      storyPapoSlideAtual = storyPapoAtual.slidesFlat.length - 1;
+      renderStoryPapoSlideAtual();
+    } else {
+      storyPapoSlideAtual = 0;
+      renderStoryPapoSlideAtual();
+    }
+    return;
+  }
+  renderStoryPapoSlideAtual();
+}
+
+function fecharStoryPapoViewer(){
+  clearTimeout(storyPapoTimer);
+  document.getElementById('agenda-story-viewer').classList.remove('aberto');
+}
+
+initAgenda();
+</script>
+</body>
+</html>
