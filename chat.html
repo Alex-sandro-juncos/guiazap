@@ -234,13 +234,15 @@
 <header><div class="logo">GuiaZap</div><p>Papo</p></header>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 <div class="chat-wrap">
-  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+  <div id="chat-topo-lista">
+    <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
-  <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:8px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
-  <a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; margin-bottom:10px; text-decoration:none;">📇 Minha agenda de contatos</a>
+    <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:8px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
+    <a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; margin-bottom:10px; text-decoration:none;">📇 Minha agenda de contatos</a>
 
-  <div id="chat-lista-box" class="chat-lista-conversas">
-    <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
+    <div id="chat-lista-box" class="chat-lista-conversas">
+      <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
+    </div>
   </div>
 
   <div id="chat-thread-box" class="chat-thread">
@@ -366,7 +368,15 @@ function escapeHtmlChat(str){
 
 async function initChat(){
   const { data: { session } } = await supabaseClientChat.auth.getSession();
-  if(!session){
+  let sessaoFinal = session;
+
+  if(!sessaoFinal){
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const { data: { session: sessaoTentativa2 } } = await supabaseClientChat.auth.getSession();
+    sessaoFinal = sessaoTentativa2;
+  }
+
+  if(!sessaoFinal){
     document.getElementById('chat-lista-box').innerHTML = `
       <div class="vazio-chat">
         <div class="vazio-chat-icone">🔒</div>
@@ -374,9 +384,12 @@ async function initChat(){
         <div class="vazio-chat-texto">Entre na sua conta na <a href="index.html">página inicial</a> pra acessar suas conversas.</div>
       </div>
     `;
+    supabaseClientChat.auth.onAuthStateChange((event, sessaoNova) => {
+      if(sessaoNova && !currentUserChat) initChat();
+    });
     return;
   }
-  currentUserChat = session.user;
+  currentUserChat = sessaoFinal.user;
 
   const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
   meusCadastrosChat = cadastros || [];
@@ -760,6 +773,7 @@ async function carregarListaConversas(){
 async function abrirConversa(conversaId){
   conversaAtual = conversaId;
   avisoSalvarContatoFechadoNestaConversa = false;
+  document.getElementById('chat-topo-lista').style.display = 'none';
   document.getElementById('chat-thread-box').classList.add('aberto');
   document.getElementById('menu-config-chat').style.display = 'none';
 
@@ -1073,6 +1087,7 @@ async function toggleSilenciarConversa(){
 
 function fecharConversa(){
   document.getElementById('chat-thread-box').classList.remove('aberto');
+  document.getElementById('chat-topo-lista').style.display = 'block';
   if(canalRealtimeAtual){ supabaseClientChat.removeChannel(canalRealtimeAtual); canalRealtimeAtual = null; }
   conversaAtual = null;
   carregarListaConversas();
