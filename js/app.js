@@ -168,6 +168,7 @@ async function updateAuthUI(){
 
   await loadSeguindo();
   await loadContagemSeguidores();
+  await carregarAgendaContatos();
 
   if(currentUser){
     loggedOutBox.style.display = 'none';
@@ -189,6 +190,7 @@ async function updateAuthUI(){
     if(btnPush) btnPush.style.display = 'none';
   }
   render();
+  renderStoriesLinha();
 }
 
 async function signUp(){
@@ -1094,6 +1096,20 @@ async function loadContagemSeguidores(){
   }
 }
 
+async function carregarAgendaContatos(){
+  contatosSalvosUserIds = new Set();
+  contatosSalvosProfissionalIds = new Set();
+  if(!currentUser) return;
+
+  const { data, error } = await supabaseClient.from('agenda_contatos').select('contato_user_id, profissional_id').eq('dono_user_id', currentUser.id);
+  if(error){ console.error(error); return; }
+
+  (data || []).forEach(c => {
+    if(c.contato_user_id) contatosSalvosUserIds.add(c.contato_user_id);
+    if(c.profissional_id) contatosSalvosProfissionalIds.add(c.profissional_id);
+  });
+}
+
 function toggleListaSeguidores(profissionalId){
   const box = document.getElementById('lista-seguidores-' + profissionalId);
   if(!box) return;
@@ -1664,6 +1680,115 @@ function fecharFormStory(){
   document.getElementById('story-form').style.display = 'none';
 }
 
+// ---------- STORY PESSOAL (visitante sem empresa — igual Pacote Básico grátis) ----------
+
+let storyPessoalFotosSelecionadas = [];
+
+function abrirFormStoryPessoal(){
+  document.getElementById('story-pessoal-form').style.display = 'block';
+  document.getElementById('story-pessoal-texto-input').value = '';
+  document.getElementById('story-pessoal-msg').textContent = '';
+  storyPessoalFotosSelecionadas = [];
+  renderStoryPessoalFotosPreview();
+  renderMinhaNovidadePessoal();
+  document.getElementById('story-pessoal-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function fecharFormStoryPessoal(){
+  document.getElementById('story-pessoal-form').style.display = 'none';
+}
+
+async function adicionarFotoStoryPessoal(event){
+  const file = event.target.files[0];
+  const msg = document.getElementById('story-pessoal-foto-msg');
+  if(!file) return;
+
+  if(storyPessoalFotosSelecionadas.length >= 1){
+    msg.textContent = 'Você já escolheu sua foto — remova ela pra trocar.';
+    event.target.value = '';
+    return;
+  }
+
+  msg.textContent = 'enviando foto...';
+  const nomeArquivo = `stories/${currentUser.id}/${Date.now()}.jpg`;
+  const { error } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file);
+  event.target.value = '';
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar foto: ' + error.message; return; }
+
+  const { data } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
+  storyPessoalFotosSelecionadas.push(data.publicUrl);
+  msg.textContent = '';
+  renderStoryPessoalFotosPreview();
+}
+
+function removerFotoStoryPessoal(index){
+  storyPessoalFotosSelecionadas.splice(index, 1);
+  renderStoryPessoalFotosPreview();
+}
+
+function renderStoryPessoalFotosPreview(){
+  const container = document.getElementById('story-pessoal-fotos-preview');
+  container.innerHTML = storyPessoalFotosSelecionadas.map((url, i) => `
+    <div class="story-foto-mini">
+      <img src="${url}">
+      <button type="button" onclick="removerFotoStoryPessoal(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+async function salvarStoryPessoal(e){
+  e.preventDefault();
+  const msg = document.getElementById('story-pessoal-msg');
+
+  if(storyPessoalFotosSelecionadas.length === 0){ msg.textContent = 'Adicione uma foto.'; return false; }
+
+  const grupoAtual = storiesAgrupadas['p_' + currentUser.id];
+  if(grupoAtual && grupoAtual.stories.length >= 1){
+    msg.textContent = 'Você já tem uma novidade ativa. Espere ela expirar (24h) ou exclua ela antes de postar outra.';
+    msg.style.color = '#a4402f';
+    return false;
+  }
+
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const payload = {
+    usuario_id: currentUser.id,
+    fotos: storyPessoalFotosSelecionadas,
+    texto: document.getElementById('story-pessoal-texto-input').value.trim() || null,
+    expires_at: expiresAt
+  };
+
+  msg.textContent = 'publicando...';
+  const { error } = await supabaseClient.from('stories').insert(payload);
+  if(error){ console.error(error); msg.textContent = 'erro ao publicar: ' + error.message; return false; }
+
+  msg.textContent = 'novidade publicada! fica no ar por 24 horas.';
+  setTimeout(fecharFormStoryPessoal, 1500);
+  loadStories();
+  return false;
+}
+
+function renderMinhaNovidadePessoal(){
+  const container = document.getElementById('minha-novidade-pessoal');
+  if(!container || !currentUser) return;
+
+  const grupo = storiesAgrupadas['p_' + currentUser.id];
+  if(!grupo || grupo.stories.length === 0){ container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <div class="minhas-novidades-label">📸 Sua novidade ativa (some em até 24h):</div>
+    <div class="minhas-novidades-lista">
+      ${grupo.stories.map(s => `
+        <div class="minha-novidade-item">
+          <img src="${s.fotos[0]}">
+          <button type="button" class="minha-novidade-btn-excluir" title="Excluir agora" onclick="excluirStory('${s.id}')">✕</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function onProdutoStoryChange(){
   const produtoId = document.getElementById('story-produto-id').value;
   if(!produtoId) return;
@@ -1736,7 +1861,7 @@ async function salvarStory(e){
   const profissionalIdAtual = document.getElementById('story-profissional-id').value;
 
   // Checa o limite de NOVIDADES simultâneas só agora, na hora de publicar de verdade
-  const grupoAtual = storiesAgrupadas[profissionalIdAtual];
+  const grupoAtual = storiesAgrupadas['e_' + profissionalIdAtual];
   const novidadesAtivas = grupoAtual ? grupoAtual.stories.length : 0;
   const limiteNovidades = plano === 'premium' ? Infinity : (plano === 'completo' ? 3 : 1);
   if(novidadesAtivas >= limiteNovidades){
@@ -1812,7 +1937,10 @@ async function salvarStory(e){
 let storiesAgrupadas = {};
 let storySlideAtual = 0;
 let storyEmpresaAtual = null;
+let storyChaveAtual = null;
 let storyTimer = null;
+let contatosSalvosUserIds = new Set();
+let contatosSalvosProfissionalIds = new Set();
 
 async function renderPainelVerificacao(profissionalId){
   const container = document.getElementById('painel-verificacao-' + profissionalId);
@@ -1936,7 +2064,7 @@ function renderMinhasNovidades(profissionalId){
   const container = document.getElementById('minhas-novidades-' + profissionalId);
   if(!container) return;
 
-  const grupo = storiesAgrupadas[profissionalId];
+  const grupo = storiesAgrupadas['e_' + profissionalId];
   if(!grupo || grupo.stories.length === 0){ container.innerHTML = ''; return; }
 
   const cadastro = entries.find(e => e.id === profissionalId);
@@ -1971,39 +2099,65 @@ async function loadStories(){
 
   if(error){ console.error(error); return; }
 
+  // Stories de pessoa física (usuario_id preenchido) não vêm com o nome já
+  // embutido — busca em lote o nome de exibição de quem postou
+  const idsPessoais = [...new Set((data || []).filter(s => s.usuario_id).map(s => s.usuario_id))];
+  let nomesPessoais = {};
+  if(idsPessoais.length > 0){
+    const { data: perfis } = await supabaseClient.from('perfis_usuario').select('user_id, nome_exibicao').in('user_id', idsPessoais);
+    (perfis || []).forEach(p => { nomesPessoais[p.user_id] = p.nome_exibicao; });
+  }
+
   storiesAgrupadas = {};
   (data || []).forEach(s => {
-    if(!s.profissionais) return;
-    if(!storiesAgrupadas[s.profissional_id]) storiesAgrupadas[s.profissional_id] = { empresa: s.profissionais, stories: [] };
-    storiesAgrupadas[s.profissional_id].stories.push(s);
+    if(s.profissional_id && s.profissionais){
+      const chave = 'e_' + s.profissional_id;
+      if(!storiesAgrupadas[chave]) storiesAgrupadas[chave] = { tipo: 'empresa', id: s.profissional_id, empresa: s.profissionais, stories: [] };
+      storiesAgrupadas[chave].stories.push(s);
+    } else if(s.usuario_id){
+      const chave = 'p_' + s.usuario_id;
+      if(!storiesAgrupadas[chave]) storiesAgrupadas[chave] = { tipo: 'pessoa', id: s.usuario_id, nome: nomesPessoais[s.usuario_id] || 'Alguém do GuiaZap', stories: [] };
+      storiesAgrupadas[chave].stories.push(s);
+    }
   });
 
   renderStoriesLinha();
 
   if(currentUser){
     entries.filter(e => e.user_id === currentUser.id).forEach(e => renderMinhasNovidades(e.id));
+    renderMinhaNovidadePessoal();
   }
 }
 
-let storiesOrdemEmpresas = [];
+let storiesOrdemChaves = [];
 
 function renderStoriesLinha(){
   const container = document.getElementById('stories-linha');
+  if(!container) return;
 
-  // Igual ao resto do site: logado, só vê as próprias novidades (modo gerenciar);
-  // deslogado, vê a fileira pública de todo mundo.
-  let grupos = currentUser
-    ? Object.entries(storiesAgrupadas).filter(([id, g]) => g.empresa.id && entries.some(e => e.id === id && e.user_id === currentUser.id))
-    : Object.entries(storiesAgrupadas);
+  // Regra de privacidade: Stories só aparecem de quem está salvo na agenda de
+  // contatos, ou de empresas que a pessoa segue — igual pediu, não é mais uma
+  // fileira pública pra qualquer visitante. Sem login, ainda não dá pra ter
+  // contato salvo nem seguir ninguém, então só aparece o botão de postar.
+  let grupos = [];
+  if(currentUser){
+    const meusIdsEmpresa = new Set(entries.filter(e => e.user_id === currentUser.id).map(e => e.id));
+    grupos = Object.entries(storiesAgrupadas).filter(([chave, g]) => {
+      if(g.tipo === 'empresa'){
+        return meusIdsEmpresa.has(g.id) || seguindoEmpresas.has(g.id) || contatosSalvosProfissionalIds.has(g.id);
+      }
+      return g.id === currentUser.id || contatosSalvosUserIds.has(g.id);
+    });
+  }
 
   // Empresas do Pacote Premium aparecem primeiro na fileira
   grupos = grupos.sort((a, b) => {
-    const premiumA = a[1].empresa.plano === 'premium' ? 1 : 0;
-    const premiumB = b[1].empresa.plano === 'premium' ? 1 : 0;
+    const premiumA = a[1].tipo === 'empresa' && a[1].empresa.plano === 'premium' ? 1 : 0;
+    const premiumB = b[1].tipo === 'empresa' && b[1].empresa.plano === 'premium' ? 1 : 0;
     return premiumB - premiumA;
   });
 
-  storiesOrdemEmpresas = grupos.map(([id]) => id);
+  storiesOrdemChaves = grupos.map(([chave]) => chave);
 
   // A fileira sempre aparece agora (mesmo sem nenhuma novidade), por causa do botão "+"
   container.style.display = 'flex';
@@ -2015,27 +2169,34 @@ function renderStoriesLinha(){
     </div>
   `;
 
-  const bolinhasEmpresas = grupos.map(([id, grupo]) => {
+  const bolinhasContatos = grupos.map(([chave, grupo]) => {
     const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
+    const nomeExibido = grupo.tipo === 'empresa' ? grupo.empresa.name : grupo.nome;
+    const fotoFallback = grupo.tipo === 'empresa' && grupo.empresa.foto
+      ? escapeHtml(grupo.empresa.foto)
+      : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(nomeExibido);
     return `
-      <div class="story-bolinha" onclick="abrirStoryViewer('${id}')">
-        <img src="${primeiraFoto ? escapeHtml(primeiraFoto) : (grupo.empresa.foto ? escapeHtml(grupo.empresa.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.empresa.name))}">
-        <span>${escapeHtml(grupo.empresa.name.split(' ')[0])}</span>
+      <div class="story-bolinha" onclick="abrirStoryViewer('${chave}')">
+        <img src="${primeiraFoto ? escapeHtml(primeiraFoto) : fotoFallback}">
+        <span>${escapeHtml(nomeExibido.split(' ')[0])}</span>
       </div>
     `;
   }).join('');
 
-  container.innerHTML = bolinhaAdicionar + bolinhasEmpresas;
+  container.innerHTML = bolinhaAdicionar + bolinhasContatos;
 }
 
 function irParaLoginOuPostar(){
   if(currentUser){
-    // Já logado: rola até o próprio card e abre o formulário de postar novidade direto
+    // Já logado com empresa: rola até o próprio card e abre o formulário de postar novidade direto
     const meuCadastro = entries.find(e => e.user_id === currentUser.id);
     if(meuCadastro){
       abrirFormStory(meuCadastro.id, meuCadastro.plano);
       return;
     }
+    // Já logado sem empresa (visitante): abre o formulário de Story pessoal (1 foto, 24h — igual Pacote Básico grátis)
+    abrirFormStoryPessoal();
+    return;
   }
 
   // Não logado ainda: abre a área de login, com uma mensagem explicando o motivo
@@ -2047,18 +2208,29 @@ function irParaLoginOuPostar(){
   document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function abrirStoryViewer(profissionalId){
-  const grupo = storiesAgrupadas[profissionalId];
+function abrirStoryViewer(chave){
+  const grupo = storiesAgrupadas[chave];
   if(!grupo) return;
 
   storyEmpresaAtual = grupo;
+  storyChaveAtual = chave;
   storySlideAtual = 0;
 
-  // Monta a lista completa de fotos (juntando todas as stories dessa empresa, em ordem)
+  // Monta a lista completa de fotos (juntando todas as stories dessa empresa/pessoa, em ordem)
   storyEmpresaAtual.slidesFlat = [];
   grupo.stories.forEach(s => {
     s.fotos.forEach(foto => {
-      storyEmpresaAtual.slidesFlat.push({ foto, texto: s.texto, produto_id: s.produto_id, produto_nome: s.produto_nome, produto_preco: s.produto_preco, whatsapp: grupo.empresa.whatsapp, nome: grupo.empresa.name });
+      storyEmpresaAtual.slidesFlat.push({
+        foto,
+        texto: s.texto,
+        produto_id: s.produto_id,
+        produto_nome: s.produto_nome,
+        produto_preco: s.produto_preco,
+        whatsapp: grupo.tipo === 'empresa' ? grupo.empresa.whatsapp : null,
+        nome: grupo.tipo === 'empresa' ? grupo.empresa.name : grupo.nome,
+        tipo: grupo.tipo,
+        pessoaUserId: grupo.tipo === 'pessoa' ? grupo.id : null
+      });
     });
   });
 
@@ -2085,9 +2257,16 @@ function renderStorySlideAtual(){
 
   const acoes = document.getElementById('story-acoes');
   const infoProduto = slide.produto_nome ? ` (${slide.produto_nome}${slide.produto_preco ? ' - R$ ' + slide.produto_preco : ''})` : '';
-  const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap${infoProduto} e tenho interesse. Foto que vi: ${slide.foto}`);
+
+  const botaoContato = slide.tipo === 'pessoa'
+    ? `<a href="chat.html?pessoa=${slide.pessoaUserId}" class="story-btn-comprar">💬 Falar pelo Papo</a>`
+    : (() => {
+        const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap${infoProduto} e tenho interesse. Foto que vi: ${slide.foto}`);
+        return `<a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>`;
+      })();
+
   acoes.innerHTML = `
-    <a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>
+    ${botaoContato}
     ${slide.produto_id ? `<a href="vitrine.html?produto=${slide.produto_id}" class="story-btn-produto">Ver produto na Vitrine</a>` : ''}
     <button type="button" class="story-btn-compartilhar" onclick="toggleMenuCompartilharStory(event)">📤 Compartilhar</button>
     <div class="menu-compartilhar" id="menu-compartilhar-story" style="display:none;"></div>
@@ -2100,13 +2279,12 @@ function renderStorySlideAtual(){
 function avancarStorySlide(){
   storySlideAtual++;
   if(storySlideAtual >= storyEmpresaAtual.slidesFlat.length){
-    // Acabaram as fotos dessa empresa — pula pra próxima da fileira automaticamente
-    const empresaIdAtual = storyEmpresaAtual.empresa.id;
-    const indiceAtual = storiesOrdemEmpresas.indexOf(empresaIdAtual);
-    const proximoId = storiesOrdemEmpresas[indiceAtual + 1];
+    // Acabaram as fotos dessa empresa/pessoa — pula pra próxima da fileira automaticamente
+    const indiceAtual = storiesOrdemChaves.indexOf(storyChaveAtual);
+    const proximaChave = storiesOrdemChaves[indiceAtual + 1];
 
-    if(proximoId){
-      abrirStoryViewer(proximoId);
+    if(proximaChave){
+      abrirStoryViewer(proximaChave);
     } else {
       fecharStoryViewer();
     }
@@ -2118,13 +2296,12 @@ function avancarStorySlide(){
 function voltarStorySlide(){
   storySlideAtual--;
   if(storySlideAtual < 0){
-    // Já está no primeiro slide dessa empresa — volta pra empresa anterior da fileira
-    const empresaIdAtual = storyEmpresaAtual.empresa.id;
-    const indiceAtual = storiesOrdemEmpresas.indexOf(empresaIdAtual);
-    const anteriorId = storiesOrdemEmpresas[indiceAtual - 1];
+    // Já está no primeiro slide dessa empresa/pessoa — volta pra anterior da fileira
+    const indiceAtual = storiesOrdemChaves.indexOf(storyChaveAtual);
+    const chaveAnterior = storiesOrdemChaves[indiceAtual - 1];
 
-    if(anteriorId){
-      abrirStoryViewer(anteriorId);
+    if(chaveAnterior){
+      abrirStoryViewer(chaveAnterior);
       storySlideAtual = storyEmpresaAtual.slidesFlat.length - 1;
       renderStorySlideAtual();
     } else {
@@ -2456,13 +2633,15 @@ function render(){
         <div class="acoes-empresa-coluna">
           <div class="contatos-row">
             <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>
+            ${!isOwner ? `<a href="chat.html?empresa=${e.id}" class="btn-zap" style="background:#6b46c1;">💬 Chat pelo Papo</a>` : ''}
+            ${renderContatosExtra(e.contatos_extra)}
+          </div>
+          <div class="orcamento-bloco">
             <button type="button" class="btn-zap btn-orcamento" onclick="toggleOrcamentoOpcoes('${e.id}')">💰 Pedir orçamento</button>
             <div class="orcamento-opcoes" id="orcamento-opcoes-${e.id}" style="display:none;">
               <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">📱 Pelo WhatsApp</a>
               <a class="btn-zap" style="background:#6b46c1;" href="chat.html?empresa=${e.id}">💬 Pelo Papo</a>
             </div>
-            ${!isOwner ? `<a href="chat.html?empresa=${e.id}" class="btn-zap" style="background:#6b46c1;">💬 Chat pelo Papo</a>` : ''}
-            ${renderContatosExtra(e.contatos_extra)}
           </div>
           ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
