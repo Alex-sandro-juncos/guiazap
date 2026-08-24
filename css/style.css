@@ -9,6 +9,13 @@
   * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
   body { background: var(--cinza-fundo); padding-bottom: 40px; max-width: 480px; margin: 0 auto; }
 
+  /* Reforço específico pra celular deitado (landscape) — garante que tudo
+     fique centralizado mesmo em telas mais largas de celular */
+  @media (orientation: landscape) and (max-width: 900px) {
+    body { max-width: 480px; margin: 0 auto; }
+    header { max-width: 480px; margin: 0 auto; }
+  }
+
   header {
     background: var(--verde-whats);
     color: white;
