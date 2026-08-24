@@ -33,10 +33,10 @@
   .check-lida { opacity: 0.8; }
   .bolha-msg.minha .check-lida { color: rgba(255,255,255,0.7); }
   .bolha-msg.minha .check-lida.lida { color: #4fc3f7; }
-  .chat-input-row { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
-  .chat-input-row input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 50px; font-size: 0.9rem; }
-  .chat-input-row button { background: var(--verde-whats); color: white; border: none; width: 42px; height: 42px; border-radius: 50%; font-size: 1.1rem; cursor: pointer; flex-shrink: 0; }
-  .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.3rem !important; width: 36px !important; height: 36px !important; }
+  .chat-input-row { display: flex; gap: 3px; margin-top: 10px; align-items: center; }
+  .chat-input-row input[type="text"] { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid #ddd; border-radius: 50px; font-size: 0.88rem; }
+  .chat-input-row button { background: var(--verde-whats); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0; }
+  .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.05rem !important; width: 28px !important; height: 28px !important; }
   .btn-ferramenta-chat.gravando { color: #a4402f !important; }
   .gravacao-audio-box {
     display: flex; align-items: center; gap: 8px; margin-top: 10px;
@@ -89,6 +89,14 @@
   }
   .btn-config-destaque:hover { background: rgba(18,140,126,0.2); }
   body.dark-mode .btn-config-destaque { background: rgba(37,211,102,0.15); }
+  .btn-add-agenda-topo {
+    background: rgba(107,70,193,0.1) !important;
+    border-radius: 50%;
+    font-size: 1rem !important;
+    padding: 6px 8px !important;
+  }
+  .btn-add-agenda-topo:hover { background: rgba(107,70,193,0.2) !important; }
+  body.dark-mode .btn-add-agenda-topo { background: rgba(167,139,218,0.15) !important; }
 
   .aviso-salvar-contato-box {
     background: #e8f5f0;
@@ -240,6 +248,7 @@
       <button class="voltar-lista" onclick="fecharConversa()">←</button>
       <div class="nome-topo" id="chat-nome-topo"></div>
       <div style="margin-left:auto; display:flex; gap:4px; position:relative;">
+        <button class="btn-chamada btn-add-agenda-topo" id="btn-add-agenda-topo" onclick="mostrarAvisoSalvarContato()" title="Adicionar à agenda" style="display:none;">➕📇</button>
         <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
         <button class="btn-chamada" onclick="iniciarChamada(true)" title="Chamada de vídeo">📹</button>
         <button class="btn-chamada btn-config-destaque" onclick="toggleConfigChat()" title="Configurações da conversa">⚙️</button>
@@ -283,7 +292,7 @@
       <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
       <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
       <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
-      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF">GIF</button>
+      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.68rem !important; font-weight:800;">GIF</button>
       <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
       <input type="text" id="chat-input-texto" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') enviarMensagemChat();">
       <button type="button" class="btn-ferramenta-chat" id="btn-microfone" onclick="alternarGravacaoAudio()" title="Gravar áudio">🎤</button>
@@ -386,6 +395,44 @@ async function initChat(){
   ligarCanalDeChamadas();
   atualizarPresencaOnline();
   setInterval(atualizarPresencaOnline, 20000);
+
+  // Se a pessoa aceitou a chamada pelo popup enquanto estava no GuiaZap ou
+  // na Agenda (fora do Papo), a oferta ficou guardada — atende ela agora
+  const atenderPendente = params.get('atenderPendente');
+  const ofertaGuardada = sessionStorage.getItem('chamada_pendente_offer');
+  if(atenderPendente && ofertaGuardada){
+    sessionStorage.removeItem('chamada_pendente_offer');
+    window.history.replaceState({}, '', window.location.pathname + (empresaId ? '?empresa=' + empresaId : ''));
+    try{
+      const payload = JSON.parse(ofertaGuardada);
+      await receberChamadaEntrando(payload);
+      await aceitarChamada();
+    } catch(e){ console.error('erro ao atender chamada pendente', e); }
+  } else if(!peerConnectionAtual) {
+    // Se a pessoa clicou na notificação push vindo de FORA do site inteiro
+    // (sem nenhuma aba do GuiaZap aberta), não teve como o popup ao vivo
+    // avisar — busca no banco se tem alguma chamada recente esperando
+    // resposta e mostra a tela normal de "chamada recebida" pra ela decidir.
+    const { data: chamadaPendenteDb } = await supabaseClientChat
+      .from('chamadas_pendentes')
+      .select('*')
+      .eq('para_user_id', currentUserChat.id)
+      .gt('created_at', new Date(Date.now() - 45000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if(chamadaPendenteDb){
+      await supabaseClientChat.from('chamadas_pendentes').delete().eq('id', chamadaPendenteDb.id);
+      receberChamadaEntrando({
+        de: chamadaPendenteDb.de_user_id,
+        deNome: chamadaPendenteDb.de_nome,
+        offer: chamadaPendenteDb.oferta,
+        comVideo: chamadaPendenteDb.com_video,
+        conversaId: chamadaPendenteDb.conversa_id
+      });
+    }
+  }
 
   if(typeof initNotificacoes === 'function'){
     initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
@@ -901,9 +948,11 @@ let avisoSalvarContatoFechadoNestaConversa = false;
 async function montarAreaSalvarContato(){
   const area = document.getElementById('config-salvar-contato-area');
   const banner = document.getElementById('aviso-salvar-contato-box');
+  const btnTopo = document.getElementById('btn-add-agenda-topo');
   if(!outroLadoUserIdAtual){
     if(area) area.innerHTML = '';
     if(banner) banner.style.display = 'none';
+    if(btnTopo) btnTopo.style.display = 'none';
     return;
   }
 
@@ -912,8 +961,10 @@ async function montarAreaSalvarContato(){
   if(contatoSalvo){
     area.innerHTML = `<div class="config-chat-item-texto">💾 Salvo como <b>${escapeHtmlChat(contatoSalvo.nome_salvo)}</b> <button type="button" class="link-editar-contato" onclick="abrirCampoSalvarContato('${escapeHtmlChat(contatoSalvo.nome_salvo)}')">editar</button></div>`;
     banner.style.display = 'none';
+    if(btnTopo) btnTopo.style.display = 'none';
   } else {
     area.innerHTML = `<button type="button" class="config-chat-item" onclick="abrirCampoSalvarContato('${escapeHtmlChat(outroLadoNomeAtual)}')">💾 Salvar contato</button>`;
+    if(btnTopo) btnTopo.style.display = 'flex';
 
     if(avisoSalvarContatoFechadoNestaConversa){
       banner.style.display = 'none';
@@ -929,6 +980,14 @@ async function montarAreaSalvarContato(){
       banner.style.display = 'block';
     }
   }
+}
+
+function mostrarAvisoSalvarContato(){
+  avisoSalvarContatoFechadoNestaConversa = false;
+  montarAreaSalvarContato().then(() => {
+    const banner = document.getElementById('aviso-salvar-contato-box');
+    if(banner) banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
 }
 
 function fecharAvisoSalvarContato(){
@@ -1315,6 +1374,7 @@ let conversaDaChamadaAtual = null;
 let chamadaComVideoAtual = false;
 let euTenhoVideoAtivo = false;
 let momentoConexaoChamada = null;
+let chamadaPendenteIdAtual = null;
 
 // Fica sempre "escutando" nesse canal próprio, esperando alguém te ligar —
 // todos os eventos de uma chamada (oferta, resposta, pedaços de conexão,
@@ -1533,6 +1593,20 @@ async function iniciarChamada(comVideo){
   const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
   canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual } });
 
+  // Guarda a oferta no banco por um tempinho — se a pessoa estiver totalmente
+  // fora do site, ela só vai ver a notificação push; ao clicar nela, o
+  // chat.html carrega do zero e essa oferta "ao vivo" (via canal) já teria
+  // se perdido. Salvando aqui, dá pra retomar a chamada mesmo nesse caso.
+  const { data: chamadaPendente } = await supabaseClientChat.from('chamadas_pendentes').insert({
+    de_user_id: currentUserChat.id,
+    de_nome: meuNome,
+    para_user_id: destinatarioId,
+    oferta: offer,
+    com_video: comVideo,
+    conversa_id: conversaAtual
+  }).select('id').single();
+  chamadaPendenteIdAtual = chamadaPendente ? chamadaPendente.id : null;
+
   // Avisa por notificação push também, caso a pessoa não esteja com o chat
   // aberto agora — não toca como telefone de verdade, mas ajuda a avisar
   fetch('/.netlify/functions/enviar-push', {
@@ -1630,6 +1704,11 @@ function alternarCamera(){
 async function encerrarChamada(avisarOutraPonta){
   if(avisarOutraPonta && canalEnvioAtual){
     canalEnvioAtual.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
+  }
+
+  if(chamadaPendenteIdAtual){
+    supabaseClientChat.from('chamadas_pendentes').delete().eq('id', chamadaPendenteIdAtual).then(() => {});
+    chamadaPendenteIdAtual = null;
   }
 
   // Registra no histórico da conversa, só do lado de quem ligou (evita
