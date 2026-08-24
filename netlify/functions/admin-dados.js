@@ -31,20 +31,22 @@ exports.handler = async function (event) {
       return resp.json();
     }
 
-    const [feedbackSite, denuncias, denunciasProdutos, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts] = await Promise.all([
+    const [feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios] = await Promise.all([
       buscar('feedback_site'),
       buscar('denuncias'),
       buscar('denuncias_produtos'),
+      buscar('denuncias_blog'),
       buscar('mensagens_empresa'),
       buscar('profissionais', 'name.asc'),
       buscar('produtos', 'nome.asc'),
       buscar('depoimentos'),
-      buscar('blog_posts')
+      buscar('blog_posts'),
+      buscar('blog_comentarios')
     ]);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ feedbackSite, denuncias, denunciasProdutos, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts })
+      body: JSON.stringify({ feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios })
     };
   } catch (err) {
     console.error(err);

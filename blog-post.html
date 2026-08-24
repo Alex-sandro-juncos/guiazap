@@ -16,11 +16,62 @@
   .post-conteudo { font-size: 0.95rem; line-height: 1.7; color: #333; white-space: pre-wrap; }
   .post-cta { background: var(--cinza-card); border-radius: 12px; padding: 18px; margin-top: 30px; text-align: center; }
   .post-cta a { display: inline-block; margin-top: 8px; background: var(--verde-whats); color: white; padding: 9px 18px; border-radius: 50px; font-weight: 700; text-decoration: none; font-size: 0.85rem; }
+
+  .post-denunciar {
+    background: none;
+    border: none;
+    color: #8a8270;
+    font-size: 0.72rem;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 16px;
+    display: block;
+  }
+  .post-denuncia-box {
+    background: #fff3cd;
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 10px;
+    display: none;
+  }
+  .post-denuncia-box select, .post-denuncia-box textarea, .post-denuncia-box input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    box-sizing: border-box;
+  }
+
+  .post-comentarios { margin-top: 34px; }
+  .post-comentarios h2 { font-size: 1.05rem; color: var(--verde-escuro); margin-bottom: 12px; }
+  .comentario-form { background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 18px; }
+  .comentario-form input, .comentario-form textarea {
+    width: 100%;
+    padding: 9px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+  }
+  .comentario-item {
+    background: var(--cinza-card);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .comentario-item .autor-comentario { font-size: 0.82rem; font-weight: 700; color: var(--verde-escuro); }
+  .comentario-item .texto-comentario { font-size: 0.88rem; color: #444; margin-top: 4px; }
+  .comentario-item .data-comentario { font-size: 0.68rem; color: #999; margin-top: 4px; }
+  .comentarios-vazio { font-size: 0.85rem; color: #999; }
 </style>
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Blog</p></header>
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 <div class="post-wrap">
   <a href="/blog.html" class="voltar">← Voltar ao Blog</a>
   <div id="post-conteudo-area">Carregando...</div>
@@ -29,6 +80,7 @@
 <script src="config.js"></script>
 <script>
 const supabaseClientPost = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let postAtualId = null;
 
 function escapeHtmlPost(str){
   const d = document.createElement('div');
@@ -52,6 +104,8 @@ async function initPost(){
     return;
   }
 
+  postAtualId = data.id;
+
   document.title = `${data.titulo} — Blog GuiaZap`;
   document.getElementById('post-titulo-tag').textContent = `${data.titulo} — Blog GuiaZap`;
   document.getElementById('post-descricao-tag').setAttribute('content', data.conteudo.slice(0, 155));
@@ -64,7 +118,106 @@ async function initPost(){
       <p><b>Precisa de um profissional na sua região?</b></p>
       <a href="/index.html">Buscar no GuiaZap</a>
     </div>
+
+    <button type="button" class="post-denunciar" onclick="abrirDenunciaPost()">🚩 Denunciar artigo</button>
+    <div class="post-denuncia-box" id="post-denuncia-box">
+      <select id="denuncia-post-motivo">
+        <option value="">Selecione o motivo</option>
+        <option value="Conteudo ofensivo">Conteúdo ofensivo</option>
+        <option value="Informacao falsa">Informação falsa</option>
+        <option value="Spam ou propaganda">Spam ou propaganda</option>
+        <option value="Plagio">Plágio / conteúdo copiado</option>
+        <option value="Outro">Outro</option>
+      </select>
+      <textarea id="denuncia-post-descricao" rows="2" placeholder="Descreva o problema (opcional)"></textarea>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button type="button" class="btn-auth" onclick="enviarDenunciaPost()">Enviar denúncia</button>
+        <span id="denuncia-post-msg" style="font-size:0.78rem; color:var(--verde-escuro);"></span>
+      </div>
+    </div>
+
+    <div class="post-comentarios">
+      <h2>💬 Comentários</h2>
+      <div class="comentario-form">
+        <input id="comentario-nome" placeholder="Seu nome">
+        <input id="comentario-email" type="email" placeholder="Seu e-mail (não aparece publicado, opcional)">
+        <textarea id="comentario-texto" rows="3" placeholder="Escreva um comentário..."></textarea>
+        <button type="button" class="btn-salvar" onclick="enviarComentario()">Comentar</button>
+        <span id="comentario-msg" style="display:block; margin-top:6px; font-size:0.8rem;"></span>
+      </div>
+      <div id="comentarios-lista">Carregando comentários...</div>
+    </div>
   `;
+
+  await carregarComentarios();
+}
+
+function abrirDenunciaPost(){
+  const box = document.getElementById('post-denuncia-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarDenunciaPost(){
+  const motivo = document.getElementById('denuncia-post-motivo').value;
+  const descricao = document.getElementById('denuncia-post-descricao').value.trim();
+  const msg = document.getElementById('denuncia-post-msg');
+
+  if(!motivo){ msg.textContent = 'Selecione um motivo.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientPost.from('denuncias_blog').insert({
+    post_id: postAtualId,
+    motivo,
+    descricao: descricao || null
+  });
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar denúncia'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'denúncia enviada, obrigado por ajudar a manter o blog confiável.';
+  msg.style.color = 'var(--verde-escuro)';
+  setTimeout(() => { document.getElementById('post-denuncia-box').style.display = 'none'; }, 2500);
+}
+
+async function carregarComentarios(){
+  const container = document.getElementById('comentarios-lista');
+  const { data, error } = await supabaseClientPost.from('blog_comentarios').select('autor_nome, comentario, created_at').eq('post_id', postAtualId).order('created_at', { ascending: false });
+
+  if(error || !data || data.length === 0){
+    container.innerHTML = '<p class="comentarios-vazio">Ainda não tem comentários. Seja o primeiro a comentar!</p>';
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div class="comentario-item">
+      <div class="autor-comentario">${escapeHtmlPost(c.autor_nome)}</div>
+      <div class="texto-comentario">${escapeHtmlPost(c.comentario)}</div>
+      <div class="data-comentario">${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
+    </div>
+  `).join('');
+}
+
+async function enviarComentario(){
+  const nome = document.getElementById('comentario-nome').value.trim();
+  const email = document.getElementById('comentario-email').value.trim();
+  const texto = document.getElementById('comentario-texto').value.trim();
+  const msg = document.getElementById('comentario-msg');
+
+  if(!nome || !texto){ msg.textContent = 'Preencha seu nome e o comentário.'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = 'enviando...';
+  const { error } = await supabaseClientPost.from('blog_comentarios').insert({
+    post_id: postAtualId,
+    autor_nome: nome,
+    autor_email: email || null,
+    comentario: texto
+  });
+
+  if(error){ console.error(error); msg.textContent = 'erro ao enviar comentário'; msg.style.color = '#a4402f'; return; }
+
+  msg.textContent = '✓ Comentário publicado!';
+  msg.style.color = 'var(--verde-escuro)';
+  document.getElementById('comentario-texto').value = '';
+  await carregarComentarios();
 }
 
 initPost();

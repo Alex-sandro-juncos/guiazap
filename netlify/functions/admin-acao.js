@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts', 'blog_comentarios'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
