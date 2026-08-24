@@ -228,7 +228,8 @@
 <div class="chat-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
-  <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:10px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
+  <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:8px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
+  <a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; margin-bottom:10px; text-decoration:none;">📇 Minha agenda de contatos</a>
 
   <div id="chat-lista-box" class="chat-lista-conversas">
     <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
@@ -328,13 +329,14 @@
     </div>
     <div class="chamada-controles">
       <button class="btn-controle-chamada" id="btn-mudo" onclick="alternarMudo()">🎤</button>
-      <button class="btn-controle-chamada" id="btn-camera" onclick="alternarCamera()">📹</button>
+      <button class="btn-controle-chamada" id="btn-camera" onclick="onCliqueBotaoCamera()">📹</button>
       <button class="btn-controle-chamada desligar" onclick="encerrarChamada(true)">📵</button>
     </div>
   </div>
 </div>
 
 <script src="config.js"></script>
+<script src="js/notificacoes.js"></script>
 <script>
 const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUserChat = null;
@@ -384,6 +386,10 @@ async function initChat(){
   ligarCanalDeChamadas();
   atualizarPresencaOnline();
   setInterval(atualizarPresencaOnline, 20000);
+
+  if(typeof initNotificacoes === 'function'){
+    initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
+  }
 }
 
 async function atualizarPresencaOnline(){
@@ -1307,6 +1313,7 @@ let chamadaFoiAtendida = false;
 let euIniciariAChamada = false;
 let conversaDaChamadaAtual = null;
 let chamadaComVideoAtual = false;
+let euTenhoVideoAtivo = false;
 let momentoConexaoChamada = null;
 
 // Fica sempre "escutando" nesse canal próprio, esperando alguém te ligar —
@@ -1319,7 +1326,14 @@ function ligarCanalDeChamadas(){
   });
 
   canalChamadasPessoal.on('broadcast', { event: 'offer' }, (msg) => {
-    if(peerConnectionAtual) return; // já está em outra chamada, ignora
+    if(peerConnectionAtual){
+      // Já estamos numa chamada — só interessa se for o mesmo contato pedindo
+      // pra ligar a câmera no meio da ligação (upgrade pra vídeo)
+      if(msg.payload.renegociacao && msg.payload.de === chamadaComQuemUserId){
+        processarRenegociacaoOferta(msg.payload);
+      }
+      return;
+    }
     receberChamadaEntrando(msg.payload);
   });
 
@@ -1409,11 +1423,12 @@ async function aceitarChamada(){
   document.getElementById('video-local').style.display = window._comVideoChamadaRecebida ? 'block' : 'none';
   document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !window._comVideoChamadaRecebida);
   document.getElementById('avatar-chamada-audio').style.display = window._comVideoChamadaRecebida ? 'none' : 'flex';
-  document.getElementById('btn-camera').style.display = window._comVideoChamadaRecebida ? 'flex' : 'none';
+  document.getElementById('btn-camera').style.display = 'flex';
 
   const pc = new RTCPeerConnection(STUN_SERVERS);
   streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
   chamadaComVideoAtual = !!window._comVideoChamadaRecebida;
+  euTenhoVideoAtivo = !!window._comVideoChamadaRecebida;
   pc.ontrack = (event) => {
     document.getElementById('video-remoto').srcObject = event.streams[0];
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
@@ -1491,11 +1506,12 @@ async function iniciarChamada(comVideo){
   document.getElementById('video-local').style.display = comVideo ? 'block' : 'none';
   document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !comVideo);
   document.getElementById('avatar-chamada-audio').style.display = comVideo ? 'none' : 'flex';
-  document.getElementById('btn-camera').style.display = comVideo ? 'flex' : 'none';
+  document.getElementById('btn-camera').style.display = 'flex';
 
   const pc = new RTCPeerConnection(STUN_SERVERS);
   streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
   chamadaComVideoAtual = comVideo;
+  euTenhoVideoAtivo = comVideo;
   pc.ontrack = (event) => {
     document.getElementById('video-remoto').srcObject = event.streams[0];
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
@@ -1541,6 +1557,65 @@ function alternarMudo(){
   streamLocalAtual.getAudioTracks().forEach(t => { t.enabled = !microfoneMudo; });
   document.getElementById('btn-mudo').classList.toggle('ativo-off', microfoneMudo);
   document.getElementById('btn-mudo').textContent = microfoneMudo ? '🔇' : '🎤';
+}
+
+function onCliqueBotaoCamera(){
+  if(euTenhoVideoAtivo){
+    alternarCamera();
+  } else {
+    ativarVideoNaChamada();
+  }
+}
+
+async function ativarVideoNaChamada(){
+  if(!peerConnectionAtual || !streamLocalAtual || !canalEnvioAtual) return;
+
+  const btnCamera = document.getElementById('btn-camera');
+  btnCamera.disabled = true;
+
+  try{
+    const streamVideo = await navigator.mediaDevices.getUserMedia({ video: true });
+    const videoTrack = streamVideo.getVideoTracks()[0];
+    streamLocalAtual.addTrack(videoTrack);
+    peerConnectionAtual.addTrack(videoTrack, streamLocalAtual);
+
+    document.getElementById('video-local').srcObject = streamLocalAtual;
+    document.getElementById('video-local').style.display = 'block';
+    document.getElementById('videos-chamada-box').classList.remove('somente-audio');
+    document.getElementById('avatar-chamada-audio').style.display = 'none';
+    chamadaComVideoAtual = true;
+    euTenhoVideoAtivo = true;
+
+    // Renegocia a conexão já ativa pra passar a mandar vídeo também pro outro lado
+    const offer = await peerConnectionAtual.createOffer();
+    await peerConnectionAtual.setLocalDescription(offer);
+    const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
+    canalEnvioAtual.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo: true, conversaId: conversaAtual, renegociacao: true } });
+  } catch(e){
+    console.error(e);
+    alert('Não foi possível ativar a câmera. Verifique as permissões do navegador.');
+  }
+
+  btnCamera.disabled = false;
+}
+
+async function processarRenegociacaoOferta(payload){
+  if(!peerConnectionAtual || !canalEnvioAtual) return;
+
+  try{
+    await peerConnectionAtual.setRemoteDescription(new RTCSessionDescription(payload.offer));
+    const answer = await peerConnectionAtual.createAnswer();
+    await peerConnectionAtual.setLocalDescription(answer);
+    canalEnvioAtual.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
+
+    // O outro lado ligou a câmera — mostra a área de vídeo (o vídeo remoto
+    // chega sozinho pelo pc.ontrack assim que a conexão terminar de renegociar)
+    chamadaComVideoAtual = true;
+    document.getElementById('videos-chamada-box').classList.remove('somente-audio');
+    document.getElementById('avatar-chamada-audio').style.display = 'none';
+  } catch(e){
+    console.error('erro ao processar pedido de vídeo do outro lado', e);
+  }
 }
 
 function alternarCamera(){
@@ -1589,6 +1664,7 @@ function fecharOverlayChamada(){
   document.getElementById('btn-camera').style.display = 'flex';
   microfoneMudo = false;
   cameraDesligada = false;
+  euTenhoVideoAtivo = false;
   chamadaComQuemUserId = null;
 }
 
