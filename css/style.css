@@ -7,6 +7,16 @@
     --texto-sub: #6b7280;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+  /* CORRIGIDO: protege contra overflow horizontal — qualquer elemento interno que
+     estoure a largura da tela (ex: linha de botões sem flex-wrap) não vai mais
+     empurrar a página inteira pro lado e cortar o conteúdo, como acontecia no card
+     de profissional em telas de celular estreitas. */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
   body { background: var(--cinza-fundo); padding-bottom: 40px; max-width: 480px; margin: 0 auto; }
 
   /* Reforço específico pra celular deitado (landscape) — garante que tudo
@@ -381,7 +391,31 @@
 
 .btn-auth-outline.ativo { background: var(--verde-escuro); color: white; }
 
-.card-acoes-extra { display: flex; gap: 10px; margin-top: 4px; }
+/* CORRIGIDO: faltava flex-wrap aqui — era a causa direta do print enviado.
+   Sem quebra de linha, os botões "Compartilhar / Denunciar / Reclamar-Sugerir"
+   ficavam todos numa linha só, estourando a largura da tela no celular e
+   empurrando a página inteira pro lado (overflow horizontal). */
+.btn-opcoes-card {
+  background: transparent;
+  border: 1.5px solid #ddd;
+  color: #555;
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 6px;
+  display: inline-block;
+}
+.btn-opcoes-card:hover { background: var(--cinza-fundo); }
+body.dark-mode .btn-opcoes-card { border-color: #555; color: #ccc; }
+
+.card-acoes-extra {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
 .link-compartilhar {
   background: none;
   border: none;

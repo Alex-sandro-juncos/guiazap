@@ -966,6 +966,17 @@ function mostrarQrCode(id){
   box.style.display = 'block';
 }
 
+function toggleOpcoesExtra(id){
+  const box = document.getElementById('opcoes-extra-' + id);
+  if(!box) return;
+  const jaAberto = box.style.display === 'flex';
+
+  // Fecha qualquer outro menu de opções que esteja aberto em outro card
+  document.querySelectorAll('.card-acoes-extra').forEach(el => { el.style.display = 'none'; });
+
+  box.style.display = jaAberto ? 'none' : 'flex';
+}
+
 function toggleMenuCompartilharCadastro(id, nome){
   const menu = document.getElementById('menu-compartilhar-cad-' + id);
   const jaAberto = menu.style.display === 'block';
@@ -2348,7 +2359,8 @@ function render(){
         ${isOwner && !pendente && e.plano !== 'completo' && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
         ${isOwner && !pendente && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_PREMIUM}" class="link-migrar" style="background:linear-gradient(90deg, #fdf6e3, #f9e9b8); border:1.5px solid #d4af37; color:#4a3800;">👑 Migrar para o Pacote Premium (R$25/mês) — seguidores, mais Stories e prioridade</a>` : ''}
         ${isOwner && !pendente && !(e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date()) ? `<a href="${LINK_IMPULSIONAR}" class="link-migrar" style="background:#1c1c1c; color:white; border:none;">🚀 Impulsionar por 24h no topo (R$5,00)</a>` : ''}
-        <div class="card-acoes-extra">
+        <button type="button" class="btn-opcoes-card" onclick="toggleOpcoesExtra('${e.id}')">⋮ Opções</button>
+        <div class="card-acoes-extra" id="opcoes-extra-${e.id}" style="display:none;">
           <button type="button" class="link-compartilhar" onclick="toggleMenuCompartilharCadastro('${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">Compartilhar</button>
           <button type="button" class="link-compartilhar" onclick="compartilharNoChat('${window.location.origin}/index.html?p=${e.id}', '${escapeHtml(e.name).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
           <div class="menu-compartilhar" id="menu-compartilhar-cad-${e.id}" style="display:none;"></div>
