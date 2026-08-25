@@ -8,24 +8,138 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .chat-wrap { max-width: 700px; margin: 0 auto; padding: 15px; height: calc(100vh - 90px); display: flex; flex-direction: column; }
-  .voltar { display: inline-block; margin-bottom: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
-
-  .chat-lista-conversas { overflow-y: auto; flex: 1; }
-  .item-conversa {
-    background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px;
-    cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center;
+  .chat-wrap { max-width: 700px; margin: 0 auto; height: calc(100vh - 56px); display: flex; flex-direction: column; position: relative; }
+  #chat-topo-lista { display: flex; flex-direction: column; height: 100%; position: relative; }
+  #chat-thread-box.aberto { padding: 15px; }
+  .voltar {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--verde-escuro);
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.85rem;
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background: var(--cinza-fundo, #F0F2F5);
+    padding: 6px 0;
   }
-  .item-conversa .nome-conversa { font-weight: 700; font-size: 0.9rem; color: #1c1c1c; }
-  .item-conversa .ultima-msg { font-size: 0.78rem; color: #888; margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item-conversa .bolinha-nao-lida { background: var(--verde-whats); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+  body.dark-mode .voltar { background: #121212; }
+
+  /* ---------- CABEÇALHO ESTILO WHATSAPP ---------- */
+  .papo-header-app { background: var(--verde-whats); padding: 14px 16px 10px; }
+  .papo-header-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .papo-header-topo h1 { color: white; font-size: 1.5rem; font-weight: 800; }
+  .papo-header-icones { display: flex; gap: 18px; align-items: center; position: relative; }
+  .papo-header-icones button { background: none; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 2px; }
+  .menu-papo-mais {
+    position: absolute; top: 34px; right: 0; background: white; border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.25); width: 240px; padding: 8px; z-index: 60;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  body.dark-mode .menu-papo-mais { background: #1e1e1e; }
+  .menu-papo-mais a, .menu-papo-mais button {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    padding: 10px 8px; border-radius: 8px; font-size: 0.85rem; color: #333; text-decoration: none; cursor: pointer;
+  }
+  .menu-papo-mais a:hover, .menu-papo-mais button:hover { background: var(--cinza-fundo); }
+  body.dark-mode .menu-papo-mais a, body.dark-mode .menu-papo-mais button { color: #ddd; }
+
+  .papo-busca-wrap input {
+    width: 100%; padding: 11px 16px; border: none; border-radius: 50px;
+    background: rgba(255,255,255,0.25); color: white; font-size: 0.9rem;
+  }
+  .papo-busca-wrap input::placeholder { color: rgba(255,255,255,0.85); }
+  body.dark-mode .papo-busca-wrap input { background: rgba(0,0,0,0.2); }
+
+  /* ---------- LISTA DE CONVERSAS ---------- */
+  .papo-aba-conteudo { overflow-y: auto; flex: 1; padding-bottom: 80px; }
+  .chat-lista-conversas { overflow-y: visible; }
+  .item-conversa {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    cursor: pointer; border-bottom: 1px solid #f0f0f0;
+  }
+  .item-conversa:active { background: var(--cinza-fundo); }
+  body.dark-mode .item-conversa { border-bottom-color: #232323; }
+  .item-conversa img.avatar-conversa { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
+  .item-conversa .info-conversa { flex: 1; min-width: 0; }
+  .item-conversa .linha-topo-conversa { display: flex; justify-content: space-between; align-items: center; }
+  .item-conversa .nome-conversa { font-weight: 700; font-size: 1rem; color: #1c1c1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.dark-mode .item-conversa .nome-conversa { color: #f0f0f0; }
+  .item-conversa .hora-conversa { font-size: 0.72rem; color: #888; flex-shrink: 0; margin-left: 8px; }
+  .item-conversa .hora-conversa.nao-lida-cor { color: var(--verde-whats); font-weight: 700; }
+  .item-conversa .ultima-msg {
+    font-size: 0.82rem; color: #888; margin-top: 3px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; display: flex; align-items: center; gap: 4px;
+  }
+  .item-conversa .check-lista { font-size: 0.85rem; color: #999; }
+  .item-conversa .check-lista.lido { color: #53bdeb; }
+  .item-conversa .bolinha-nao-lida {
+    background: var(--verde-whats); color: white; border-radius: 50%; min-width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-left: 8px;
+  }
+
+  /* ---------- NAVEGAÇÃO INFERIOR + FAB ---------- */
+  .papo-nav-inferior {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 68px; background: white;
+    border-top: 1px solid #eee; display: flex; justify-content: space-around; align-items: center;
+    z-index: 55; box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+  }
+  body.dark-mode .papo-nav-inferior { background: #1a1a1a; border-top-color: #2a2a2a; }
+  .papo-nav-item {
+    background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    color: #888; font-size: 0.68rem; cursor: pointer; padding: 6px 10px; position: relative;
+  }
+  .papo-nav-item .papo-nav-icone { font-size: 1.3rem; }
+  .papo-nav-item.ativo { color: var(--verde-escuro); font-weight: 700; }
+  body.dark-mode .papo-nav-item { color: #999; }
+  body.dark-mode .papo-nav-item.ativo { color: #4fc3a1; }
+  .papo-nav-badge {
+    position: absolute; top: 0; right: 2px; background: #e05d5d; color: white; font-size: 0.6rem;
+    font-weight: 800; min-width: 15px; height: 15px; border-radius: 50px; display: flex; align-items: center; justify-content: center; padding: 0 3px;
+  }
+  .papo-fab {
+    position: absolute; bottom: 82px; right: 14px;
+    width: 54px; height: 54px; border-radius: 16px; background: var(--verde-whats); color: white;
+    border: none; font-size: 1.8rem; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 56;
+  }
 
   .chat-thread { display: none; flex-direction: column; height: 100%; }
   .chat-thread.aberto { display: flex; }
-  .chat-thread-header { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 10px; }
-  .chat-thread-header .voltar-lista { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px; }
-  .chat-thread-header .nome-topo { font-weight: 700; font-size: 0.95rem; }
-  .chat-mensagens { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .chat-thread-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; margin: -15px -15px 0; background: var(--verde-whats); color: white;
+  }
+  .chat-thread-header .voltar-lista { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px; color: white; }
+  .chat-thread-header .avatar-topo { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.3); flex-shrink: 0; cursor: pointer; }
+  .chat-thread-header .info-topo { line-height: 1.25; min-width: 0; cursor: pointer; }
+  .chat-thread-header .nome-topo { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-thread-header .status-topo { font-size: 0.72rem; opacity: 0.9; }
+  .chat-thread-header .btn-chamada { color: white; }
+  .chat-thread-header .btn-config-destaque { background: rgba(255,255,255,0.18) !important; }
+  .chat-thread-header .btn-config-destaque:hover { background: rgba(255,255,255,0.3) !important; }
+  .chat-thread-header .btn-add-agenda-topo { background: rgba(255,255,255,0.18) !important; }
+
+  .chat-mensagens {
+    flex: 1; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px;
+    background-color: #e9f3ee; margin: 0 -15px;
+    background-image: radial-gradient(circle, rgba(18,140,126,0.06) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  body.dark-mode .chat-mensagens { background-color: #0b1410; }
+
+  .chat-input-area-wrap { display: flex; align-items: flex-end; gap: 8px; margin: 10px -15px -15px; padding: 8px 12px 12px; background: transparent; }
+  .chat-input-pill {
+    flex: 1; display: flex; align-items: center; gap: 2px; background: white; border-radius: 26px;
+    padding: 4px 6px 4px 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  body.dark-mode .chat-input-pill { background: #202c33; }
+  .chat-input-pill input[type="text"] { flex: 1; min-width: 0; border: none; outline: none; background: transparent; padding: 8px 4px; font-size: 0.9rem; color: inherit; }
+  .btn-enviar-msg {
+    background: var(--verde-whats); color: white; border: none; width: 42px; height: 42px; border-radius: 50%;
+    font-size: 1.1rem; cursor: pointer; flex-shrink: 0; padding: 0;
+  }
   .bolha-msg { max-width: 75%; padding: 9px 12px; border-radius: 14px; font-size: 0.88rem; line-height: 1.4; }
   .bolha-msg.minha { align-self: flex-end; background: var(--verde-whats); color: white; border-bottom-right-radius: 4px; }
   .bolha-msg.outra { align-self: flex-start; background: white; color: #333; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
@@ -33,9 +147,6 @@
   .check-lida { opacity: 0.8; }
   .bolha-msg.minha .check-lida { color: rgba(255,255,255,0.7); }
   .bolha-msg.minha .check-lida.lida { color: #4fc3f7; }
-  .chat-input-row { display: flex; gap: 3px; margin-top: 10px; align-items: center; }
-  .chat-input-row input[type="text"] { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid #ddd; border-radius: 50px; font-size: 0.88rem; }
-  .chat-input-row button { background: var(--verde-whats); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0; }
   .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.05rem !important; width: 28px !important; height: 28px !important; }
   .btn-ferramenta-chat.gravando { color: #a4402f !important; }
   .gravacao-audio-box {
@@ -231,28 +342,75 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Papo</p></header>
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 <div class="chat-wrap">
   <div id="chat-topo-lista">
-    <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
-
-    <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-bottom:8px;" onclick="adicionarContatoPorCodigo()">+ Adicionar contato por código GuiaZap</button>
-    <a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; margin-bottom:10px; text-decoration:none;">📇 Minha agenda de contatos</a>
-
-    <div id="chat-lista-box" class="chat-lista-conversas">
-      <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
+    <div class="papo-header-app">
+      <div class="papo-header-topo">
+        <h1>Papo</h1>
+        <div class="papo-header-icones">
+          <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
+          <button type="button" onclick="toggleMenuPapoMais()" title="Mais opções">⋮</button>
+          <div class="menu-papo-mais" id="menu-papo-mais" style="display:none;">
+            <a href="index.html">← Voltar ao GuiaZap</a>
+            <button type="button" onclick="toggleMenuPapoMais(); adicionarContatoPorCodigo()">+ Adicionar contato por código</button>
+            <a href="agenda.html">📇 Ver agenda completa</a>
+          </div>
+        </div>
+      </div>
+      <div class="papo-busca-wrap">
+        <input type="text" id="papo-busca-conversas" placeholder="🔍 Pesquisar conversas..." oninput="filtrarListaConversas()">
+      </div>
     </div>
+
+    <div id="papo-aba-conversas" class="papo-aba-conteudo">
+      <div id="chat-lista-box" class="chat-lista-conversas">
+        <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
+      </div>
+    </div>
+
+    <div id="papo-aba-novidades" class="papo-aba-conteudo" style="display:none;">
+      <div id="papo-novidades-conteudo" style="padding:16px;">Carregando...</div>
+    </div>
+
+    <div id="papo-aba-agenda" class="papo-aba-conteudo" style="display:none;">
+      <div id="papo-agenda-conteudo" style="padding:16px;">Carregando...</div>
+    </div>
+
+    <div id="papo-aba-chamadas" class="papo-aba-conteudo" style="display:none;">
+      <div id="papo-chamadas-conteudo" style="padding:16px;">Carregando...</div>
+    </div>
+
+    <button type="button" class="papo-fab" onclick="adicionarContatoPorCodigo()" title="Adicionar contato por código">+</button>
+
+    <nav class="papo-nav-inferior">
+      <button type="button" class="papo-nav-item ativo" id="nav-conversas" onclick="trocarAbaPapo('conversas')">
+        <span class="papo-nav-icone">💬</span><span>Conversas</span>
+        <span class="papo-nav-badge" id="badge-nav-conversas" style="display:none;"></span>
+      </button>
+      <button type="button" class="papo-nav-item" id="nav-novidades" onclick="trocarAbaPapo('novidades')">
+        <span class="papo-nav-icone">📸</span><span>Novidades</span>
+      </button>
+      <button type="button" class="papo-nav-item" id="nav-agenda" onclick="trocarAbaPapo('agenda')">
+        <span class="papo-nav-icone">📇</span><span>Agenda</span>
+      </button>
+      <button type="button" class="papo-nav-item" id="nav-chamadas" onclick="trocarAbaPapo('chamadas')">
+        <span class="papo-nav-icone">📞</span><span>Chamadas</span>
+      </button>
+    </nav>
   </div>
 
   <div id="chat-thread-box" class="chat-thread">
     <div class="chat-thread-header">
       <button class="voltar-lista" onclick="fecharConversa()">←</button>
-      <div class="nome-topo" id="chat-nome-topo"></div>
-      <div style="margin-left:auto; display:flex; gap:4px; position:relative;">
+      <img class="avatar-topo" id="chat-avatar-topo" src="" alt="">
+      <div class="info-topo" style="flex:1;">
+        <div class="nome-topo" id="chat-nome-topo"></div>
+        <div class="status-topo" id="chat-status-topo"></div>
+      </div>
+      <div style="display:flex; gap:4px; position:relative;">
         <button class="btn-chamada btn-add-agenda-topo" id="btn-add-agenda-topo" onclick="mostrarAvisoSalvarContato()" title="Adicionar à agenda" style="display:none;">➕📇</button>
-        <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
         <button class="btn-chamada" onclick="iniciarChamada(true)" title="Chamada de vídeo">📹</button>
+        <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
         <button class="btn-chamada btn-config-destaque" onclick="toggleConfigChat()" title="Configurações da conversa">⚙️</button>
         <div class="menu-config-chat" id="menu-config-chat" style="display:none;">
           <div class="config-chat-secao" id="config-salvar-contato-area"></div>
@@ -266,8 +424,8 @@
         </div>
       </div>
     </div>
-    <div class="aviso-bloqueio-box" id="aviso-bloqueio-box" style="display:none;"></div>
-    <div class="aviso-salvar-contato-box" id="aviso-salvar-contato-box" style="display:none;"></div>
+    <div class="aviso-bloqueio-box" id="aviso-bloqueio-box" style="display:none; margin:10px 0 0;"></div>
+    <div class="aviso-salvar-contato-box" id="aviso-salvar-contato-box" style="display:none; margin:10px 0 0;"></div>
     <div class="chat-mensagens" id="chat-mensagens"></div>
 
     <div class="painel-flutuante" id="painel-emoji">
@@ -290,15 +448,16 @@
       <button type="button" onclick="pararGravacaoAudio()" title="Enviar">➤</button>
     </div>
 
-    <div class="chat-input-row" id="chat-input-row-normal">
-      <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
-      <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
-      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
-      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.68rem !important; font-weight:800;">GIF</button>
-      <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
-      <input type="text" id="chat-input-texto" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') enviarMensagemChat();">
-      <button type="button" class="btn-ferramenta-chat" id="btn-microfone" onclick="alternarGravacaoAudio()" title="Gravar áudio">🎤</button>
-      <button type="button" onclick="enviarMensagemChat()">➤</button>
+    <div class="chat-input-area-wrap" id="chat-input-row-normal">
+      <div class="chat-input-pill">
+        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
+        <input type="text" id="chat-input-texto" placeholder="Mensagem" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
+        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
+        <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
+        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
+        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
+      </div>
+      <button type="button" class="btn-enviar-msg" id="btn-microfone" onclick="acaoBotaoEnviarOuMic()" title="Gravar áudio">🎤</button>
     </div>
   </div>
 </div>
@@ -356,6 +515,7 @@ let souEuAEmpresaNaConversaAtual = false;
 let canalRealtimeAtual = null;
 let outroLadoUserIdAtual = null;
 let outroLadoNomeAtual = null;
+let outroLadoFotoAtual = null;
 let outroLadoProfissionalIdAtual = null;
 let bloqueadoNaConversaAtual = false; // true se EU bloquei ou fui bloqueado pelo outro lado
 
@@ -363,6 +523,296 @@ function escapeHtmlChat(str){
   const d = document.createElement('div');
   d.textContent = str || '';
   return d.innerHTML;
+}
+
+async function carregarAbaChamadas(){
+  const container = document.getElementById('papo-chamadas-conteudo');
+  if(conversasCarregadasCache.length === 0){
+    container.innerHTML = '<p style="text-align:center; color:#999; padding:30px 0;">Nenhuma chamada ainda.</p>';
+    return;
+  }
+
+  const idsConversas = conversasCarregadasCache.map(c => c.id);
+  const { data: chamadas, error } = await supabaseClientChat
+    .from('mensagens_chat')
+    .select('id, conversa_id, remetente_user_id, tipo, texto, created_at')
+    .in('conversa_id', idsConversas)
+    .in('tipo', ['chamada_atendida', 'chamada_perdida'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if(error || !chamadas || chamadas.length === 0){
+    container.innerHTML = '<p style="text-align:center; color:#999; padding:30px 0;">Nenhuma chamada ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = `<div class="chat-lista-conversas">${chamadas.map(m => {
+    const conversa = conversasCarregadasCache.find(c => c.id === m.conversa_id);
+    const nome = conversa ? conversa.nomeExibido : 'Contato';
+    const fotoFallback = conversa && conversa.fotoExibida ? escapeHtmlChat(conversa.fotoExibida) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(nome);
+    const minha = m.remetente_user_id === currentUserChat.id;
+    return `
+      <div class="item-conversa" onclick="abrirConversa('${m.conversa_id}')">
+        <img class="avatar-conversa" src="${fotoFallback}" alt="">
+        <div class="info-conversa">
+          <div class="linha-topo-conversa">
+            <div class="nome-conversa">${escapeHtmlChat(nome)}</div>
+            <div class="hora-conversa">${formatarHoraOuDataChat(m.created_at)}</div>
+          </div>
+          <div class="ultima-msg">${conteudoDaMensagem(m, minha)}</div>
+        </div>
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+async function carregarAbaAgenda(){
+  const container = document.getElementById('papo-agenda-conteudo');
+  const { data: contatos, error } = await supabaseClientChat.from('agenda_contatos').select('id, contato_user_id, profissional_id, nome_salvo').eq('dono_user_id', currentUserChat.id).order('nome_salvo', { ascending: true });
+
+  const linkAgendaCompleta = `<a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; text-decoration:none; display:block; text-align:center; margin-top:14px;">📇 Ver agenda completa (editar, bloquear, etc)</a>`;
+
+  if(error || !contatos || contatos.length === 0){
+    container.innerHTML = `<p style="text-align:center; color:#999; padding:20px 0;">Você ainda não salvou nenhum contato.</p>${linkAgendaCompleta}`;
+    return;
+  }
+
+  const linhas = contatos.map(c => {
+    const ehEmpresa = !!c.profissional_id;
+    const link = ehEmpresa ? `chat.html?empresa=${c.profissional_id}` : `chat.html?pessoa=${c.contato_user_id}`;
+    const fotoFallback = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nome_salvo);
+    return `
+      <div class="item-conversa" onclick="window.location.href='${link}'">
+        <img class="avatar-conversa" src="${fotoFallback}" alt="">
+        <div class="info-conversa">
+          <div class="nome-conversa">${escapeHtmlChat(c.nome_salvo)}</div>
+          <div class="ultima-msg">${ehEmpresa ? '🏢 Empresa' : '👤 Pessoa'}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `<div class="chat-lista-conversas">${linhas}</div>${linkAgendaCompleta}`;
+}
+
+// ---------- NOVIDADES (Stories do Papo) ----------
+
+let storiesPapoChatAgrupados = {};
+let storiesPapoChatOrdem = [];
+let storyPapoChatAtual = null;
+let storyPapoChatChaveAtual = null;
+let storyPapoChatSlideAtual = 0;
+let storyPapoChatTimer = null;
+
+async function carregarAbaNovidades(){
+  const container = document.getElementById('papo-novidades-conteudo');
+  container.innerHTML = 'Carregando...';
+
+  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
+  const { data: contatosSalvos } = await supabaseClientChat.from('agenda_contatos').select('contato_user_id, profissional_id').eq('dono_user_id', currentUserChat.id);
+  const idsEmpresasSalvas = (contatosSalvos || []).filter(c => c.profissional_id).map(c => c.profissional_id);
+  const idsPessoasSalvas = (contatosSalvos || []).filter(c => c.contato_user_id).map(c => c.contato_user_id);
+
+  const { data: seguindo } = await supabaseClientChat.from('seguidores').select('profissional_id').eq('user_id', currentUserChat.id);
+  const idsEmpresasSeguidas = (seguindo || []).map(s => s.profissional_id);
+
+  const idsEmpresas = [...new Set([...idsEmpresasSalvas, ...idsEmpresasSeguidas, ...meusIdsEmpresa])];
+
+  let storiesEmpresas = [];
+  if(idsEmpresas.length > 0){
+    const { data } = await supabaseClientChat.from('stories').select('*, profissionais(id, name, foto)').eq('visivel_papo', true).in('profissional_id', idsEmpresas);
+    storiesEmpresas = data || [];
+  }
+
+  let storiesPessoais = [];
+  const idsPessoas = [...new Set([...idsPessoasSalvas, currentUserChat.id])];
+  if(idsPessoas.length > 0){
+    const { data } = await supabaseClientChat.from('stories').select('*').eq('visivel_papo', true).in('usuario_id', idsPessoas);
+    storiesPessoais = data || [];
+  }
+
+  const idsNomesPessoais = [...new Set(storiesPessoais.map(s => s.usuario_id))];
+  let nomesPessoais = {};
+  if(idsNomesPessoais.length > 0){
+    const { data: perfis } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').in('user_id', idsNomesPessoais);
+    (perfis || []).forEach(p => { nomesPessoais[p.user_id] = p.nome_exibicao; });
+  }
+
+  storiesPapoChatAgrupados = {};
+  storiesEmpresas.forEach(s => {
+    if(!s.profissionais) return;
+    const chave = 'e_' + s.profissional_id;
+    if(!storiesPapoChatAgrupados[chave]) storiesPapoChatAgrupados[chave] = { tipo: 'empresa', id: s.profissional_id, nome: s.profissionais.name, foto: s.profissionais.foto, stories: [] };
+    storiesPapoChatAgrupados[chave].stories.push(s);
+  });
+  storiesPessoais.forEach(s => {
+    const chave = 'p_' + s.usuario_id;
+    if(!storiesPapoChatAgrupados[chave]) storiesPapoChatAgrupados[chave] = { tipo: 'pessoa', id: s.usuario_id, nome: nomesPessoais[s.usuario_id] || 'Você', foto: null, stories: [] };
+    storiesPapoChatAgrupados[chave].stories.push(s);
+  });
+
+  const grupos = Object.entries(storiesPapoChatAgrupados);
+  storiesPapoChatOrdem = grupos.map(([chave]) => chave);
+
+  if(grupos.length === 0){
+    container.innerHTML = `
+      <p style="text-align:center; color:#999; padding:20px 0;">Nenhuma novidade dos seus contatos por enquanto.</p>
+      <a href="agenda.html" class="btn-baixar-app" style="background:#e91e63; text-decoration:none; display:block; text-align:center;">📸 Postar uma novidade</a>
+    `;
+    return;
+  }
+
+  const bolinhas = grupos.map(([chave, grupo]) => {
+    const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
+    const fotoFallback = grupo.foto ? escapeHtmlChat(grupo.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.nome);
+    return `
+      <div class="story-bolinha" onclick="abrirStoryPapoChatViewer('${chave}')">
+        <img src="${primeiraFoto ? escapeHtmlChat(primeiraFoto) : fotoFallback}">
+        <span>${escapeHtmlChat(grupo.nome.split(' ')[0])}</span>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="stories-linha" style="display:flex; padding:0 0 14px;">${bolinhas}</div>
+    <a href="agenda.html" class="btn-baixar-app" style="background:#e91e63; text-decoration:none; display:block; text-align:center;">📸 Postar uma novidade</a>
+  `;
+}
+
+function abrirStoryPapoChatViewer(chave){
+  const grupo = storiesPapoChatAgrupados[chave];
+  if(!grupo) return;
+
+  storyPapoChatAtual = grupo;
+  storyPapoChatChaveAtual = chave;
+  storyPapoChatSlideAtual = 0;
+
+  storyPapoChatAtual.slidesFlat = [];
+  grupo.stories.forEach(s => {
+    s.fotos.forEach(foto => {
+      storyPapoChatAtual.slidesFlat.push({ foto, texto: s.texto, nome: grupo.nome, tipo: grupo.tipo, id: grupo.id });
+    });
+  });
+
+  if(!document.getElementById('papo-chat-story-viewer')) _criarViewerStoryPapoChat();
+  document.getElementById('papo-chat-story-viewer').classList.add('aberto');
+  renderStoryPapoChatSlideAtual();
+}
+
+function _criarViewerStoryPapoChat(){
+  const viewer = document.createElement('div');
+  viewer.id = 'papo-chat-story-viewer';
+  viewer.className = 'agenda-story-viewer';
+  viewer.innerHTML = `
+    <div class="agenda-story-conteudo">
+      <button class="agenda-story-fechar" onclick="fecharStoryPapoChatViewer()">✕</button>
+      <div class="agenda-story-progresso"><div class="agenda-story-progresso-barra" id="papo-chat-story-progresso-barra"></div></div>
+      <div class="agenda-story-nome" id="papo-chat-story-nome-topo"></div>
+      <div class="agenda-story-foto-area">
+        <img class="agenda-story-foto" id="papo-chat-story-foto">
+        <div class="agenda-story-tap-esquerda" onclick="voltarStoryPapoChatSlide()"></div>
+        <div class="agenda-story-tap-direita" onclick="avancarStoryPapoChatSlide()"></div>
+        <div class="agenda-story-texto" id="papo-chat-story-texto-viewer"></div>
+      </div>
+      <div class="agenda-story-acoes" id="papo-chat-story-acoes"></div>
+    </div>
+  `;
+  document.body.appendChild(viewer);
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .agenda-story-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 999; display: none; align-items: center; justify-content: center; padding: 10px; }
+    .agenda-story-viewer.aberto { display: flex; }
+    .agenda-story-conteudo { position: relative; width: 100%; max-width: 420px; max-height: 92vh; background: #111; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+    .agenda-story-progresso { height: 3px; background: rgba(255,255,255,0.25); }
+    .agenda-story-progresso-barra { height: 100%; background: white; transition: width 0.3s linear; }
+    .agenda-story-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; position: absolute; top: 6px; left: 8px; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+    .agenda-story-fechar { position: absolute; top: 8px; right: 10px; z-index: 2; background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer; }
+    .agenda-story-foto-area { position: relative; width: 100%; aspect-ratio: 9/13; background: #000; }
+    .agenda-story-foto { width: 100%; height: 100%; object-fit: contain; }
+    .agenda-story-tap-esquerda, .agenda-story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
+    .agenda-story-tap-esquerda { left: 0; }
+    .agenda-story-tap-direita { right: 0; }
+    .agenda-story-texto { color: white; font-size: 0.85rem; padding: 30px 14px 12px; min-height: 20px; position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; background: linear-gradient(to top, rgba(0,0,0,0.75), transparent); white-space: pre-line; }
+    .agenda-story-acoes { padding: 10px 14px 16px; flex-shrink: 0; }
+    .agenda-story-acoes a { display: block; text-align: center; padding: 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; text-decoration: none; background: var(--verde-whats); color: white; }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderStoryPapoChatSlideAtual(){
+  const slides = storyPapoChatAtual.slidesFlat;
+  const slide = slides[storyPapoChatSlideAtual];
+  if(!slide){ fecharStoryPapoChatViewer(); return; }
+
+  document.getElementById('papo-chat-story-nome-topo').textContent = slide.nome;
+  document.getElementById('papo-chat-story-foto').src = slide.foto;
+  document.getElementById('papo-chat-story-texto-viewer').textContent = slide.texto || '';
+
+  const barra = document.getElementById('papo-chat-story-progresso-barra');
+  barra.style.width = `${((storyPapoChatSlideAtual + 1) / slides.length) * 100}%`;
+
+  const acoes = document.getElementById('papo-chat-story-acoes');
+  const linkChat = slide.tipo === 'empresa' ? `chat.html?empresa=${slide.id}` : `chat.html?pessoa=${slide.id}`;
+  acoes.innerHTML = slide.id !== currentUserChat.id ? `<a href="${linkChat}">💬 Falar no Papo</a>` : '';
+
+  clearTimeout(storyPapoChatTimer);
+  storyPapoChatTimer = setTimeout(() => avancarStoryPapoChatSlide(), 5000);
+}
+
+function avancarStoryPapoChatSlide(){
+  storyPapoChatSlideAtual++;
+  if(storyPapoChatSlideAtual >= storyPapoChatAtual.slidesFlat.length){
+    const indiceAtual = storiesPapoChatOrdem.indexOf(storyPapoChatChaveAtual);
+    const proximaChave = storiesPapoChatOrdem[indiceAtual + 1];
+    if(proximaChave) abrirStoryPapoChatViewer(proximaChave);
+    else fecharStoryPapoChatViewer();
+    return;
+  }
+  renderStoryPapoChatSlideAtual();
+}
+
+function voltarStoryPapoChatSlide(){
+  storyPapoChatSlideAtual--;
+  if(storyPapoChatSlideAtual < 0){
+    const indiceAtual = storiesPapoChatOrdem.indexOf(storyPapoChatChaveAtual);
+    const chaveAnterior = storiesPapoChatOrdem[indiceAtual - 1];
+    if(chaveAnterior){
+      abrirStoryPapoChatViewer(chaveAnterior);
+      storyPapoChatSlideAtual = storyPapoChatAtual.slidesFlat.length - 1;
+      renderStoryPapoChatSlideAtual();
+    } else {
+      storyPapoChatSlideAtual = 0;
+      renderStoryPapoChatSlideAtual();
+    }
+    return;
+  }
+  renderStoryPapoChatSlideAtual();
+}
+
+function fecharStoryPapoChatViewer(){
+  clearTimeout(storyPapoChatTimer);
+  const viewer = document.getElementById('papo-chat-story-viewer');
+  if(viewer) viewer.classList.remove('aberto');
+}
+
+function toggleMenuPapoMais(){
+  const menu = document.getElementById('menu-papo-mais');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+
+let abaPapoAtual = 'conversas';
+
+function trocarAbaPapo(aba){
+  abaPapoAtual = aba;
+  ['conversas', 'novidades', 'agenda', 'chamadas'].forEach(a => {
+    document.getElementById('papo-aba-' + a).style.display = a === aba ? 'block' : 'none';
+    document.getElementById('nav-' + a).classList.toggle('ativo', a === aba);
+  });
+
+  if(aba === 'novidades') carregarAbaNovidades();
+  else if(aba === 'agenda') carregarAbaAgenda();
+  else if(aba === 'chamadas') carregarAbaChamadas();
 }
 
 async function initChat(){
@@ -653,6 +1103,8 @@ async function abrirOuCriarConversa(profissionalId){
   abrirConversa(conversaId);
 }
 
+let conversasCarregadasCache = [];
+
 async function carregarListaConversas(){
   const box = document.getElementById('chat-lista-box');
 
@@ -687,13 +1139,15 @@ async function carregarListaConversas(){
   const error = erro1 && comoEmpresa.length === 0 ? erro1 : null;
 
   if(error || !data || data.length === 0){
+    conversasCarregadasCache = [];
     box.innerHTML = `
       <div class="vazio-chat">
         <div class="vazio-chat-icone">💬</div>
         <div class="vazio-chat-titulo">Nenhuma conversa ainda</div>
-        <div class="vazio-chat-texto">Vá até o perfil de uma empresa e clique em "💬 Papo pelo site", ou use o botão acima pra adicionar uma pessoa pelo código GuiaZap dela.</div>
+        <div class="vazio-chat-texto">Vá até o perfil de uma empresa e clique em "💬 Papo pelo site", ou toque no + pra adicionar uma pessoa pelo código GuiaZap dela.</div>
       </div>
     `;
+    atualizarBadgeNavConversas(0);
     return;
   }
 
@@ -707,17 +1161,17 @@ async function carregarListaConversas(){
     if(c.profissional_id) nomesSalvosPorProfissionalId[c.profissional_id] = c.nome_salvo;
   });
 
-  // Busca os nomes das empresas envolvidas numa consulta separada (sem embed,
-  // pra evitar o erro 400 de relação ambígua entre conversas e profissionais)
+  // Busca os nomes/fotos das empresas envolvidas numa consulta separada (sem
+  // embed, pra evitar o erro 400 de relação ambígua entre conversas e profissionais)
   const idsEmpresasEnvolvidas = [...new Set(data.filter(c => c.profissional_id).map(c => c.profissional_id))];
-  let nomesEmpresas = {};
+  let empresasPorId = {};
   if(idsEmpresasEnvolvidas.length > 0){
-    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name').in('id', idsEmpresasEnvolvidas);
-    (empresas || []).forEach(e => { nomesEmpresas[e.id] = e.name; });
+    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name, foto').in('id', idsEmpresasEnvolvidas);
+    (empresas || []).forEach(e => { empresasPorId[e.id] = e; });
   }
 
   const listaComInfo = await Promise.all(data.map(async (c) => {
-    let nomeExibido;
+    let nomeExibido, fotoExibida = null;
     if(c.usuario2_id){
       // Conversa entre pessoas — busca o nome de exibição do OUTRO participante
       const outroUserId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
@@ -729,14 +1183,16 @@ async function carregarListaConversas(){
       }
     } else {
       const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
+      const empresa = empresasPorId[c.profissional_id];
       if(!souEuAEmpresa && nomesSalvosPorProfissionalId[c.profissional_id]){
         nomeExibido = nomesSalvosPorProfissionalId[c.profissional_id];
       } else {
-        nomeExibido = souEuAEmpresa ? 'Visitante' : (nomesEmpresas[c.profissional_id] || 'Empresa');
+        nomeExibido = souEuAEmpresa ? 'Visitante' : (empresa ? empresa.name : 'Empresa');
       }
+      fotoExibida = empresa ? empresa.foto : null;
     }
 
-    const { data: ultimaMsg } = await supabaseClientChat.from('mensagens_chat').select('texto, tipo, arquivo_nome, remetente_user_id').eq('conversa_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: ultimaMsg } = await supabaseClientChat.from('mensagens_chat').select('texto, tipo, arquivo_nome, remetente_user_id, lida, created_at').eq('conversa_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
     const { count: naoLidas } = await supabaseClientChat.from('mensagens_chat').select('id', { count: 'exact', head: true }).eq('conversa_id', c.id).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
 
     let resumoUltimaMsg = '';
@@ -751,18 +1207,85 @@ async function carregarListaConversas(){
       else resumoUltimaMsg = ultimaMsg.texto || '';
     }
 
-    return { ...c, nomeExibido, ultimaMsg: resumoUltimaMsg, naoLidas: naoLidas || 0 };
+    return {
+      ...c,
+      nomeExibido,
+      fotoExibida,
+      ultimaMsg: resumoUltimaMsg,
+      naoLidas: naoLidas || 0,
+      ultimaMsgDeMim: ultimaMsg ? ultimaMsg.remetente_user_id === currentUserChat.id : false,
+      ultimaMsgLida: ultimaMsg ? ultimaMsg.lida : false,
+      ultimaMsgData: ultimaMsg ? ultimaMsg.created_at : c.ultima_mensagem_em
+    };
   }));
 
-  box.innerHTML = listaComInfo.map(c => `
+  conversasCarregadasCache = listaComInfo;
+  const totalNaoLidas = listaComInfo.reduce((soma, c) => soma + c.naoLidas, 0);
+  atualizarBadgeNavConversas(totalNaoLidas);
+  renderizarListaConversas(listaComInfo);
+}
+
+function atualizarBadgeNavConversas(total){
+  const badge = document.getElementById('badge-nav-conversas');
+  if(!badge) return;
+  if(total > 0){ badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'flex'; }
+  else badge.style.display = 'none';
+}
+
+function formatarHoraOuDataChat(dataStr){
+  if(!dataStr) return '';
+  const data = new Date(dataStr);
+  const agora = new Date();
+  const mesmoDay = data.toDateString() === agora.toDateString();
+  if(mesmoDay) return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  const ontem = new Date(agora); ontem.setDate(ontem.getDate() - 1);
+  if(data.toDateString() === ontem.toDateString()) return 'Ontem';
+
+  const diffDias = Math.floor((agora - data) / (1000 * 60 * 60 * 24));
+  if(diffDias < 7) return data.toLocaleDateString('pt-BR', { weekday: 'short' });
+  return data.toLocaleDateString('pt-BR');
+}
+
+function renderizarListaConversas(lista){
+  const box = document.getElementById('chat-lista-box');
+
+  if(lista.length === 0){
+    box.innerHTML = '<div class="vazio-chat"><div class="vazio-chat-texto">Nenhuma conversa encontrada.</div></div>';
+    return;
+  }
+
+  box.innerHTML = lista.map(c => {
+    const fotoFallback = c.fotoExibida ? escapeHtmlChat(c.fotoExibida) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nomeExibido);
+    const checkHtml = c.ultimaMsgDeMim ? `<span class="check-lista${c.ultimaMsgLida ? ' lido' : ''}">${c.ultimaMsgLida ? '✓✓' : '✓'}</span>` : '';
+    return `
     <div class="item-conversa" onclick="abrirConversa('${c.id}')">
-      <div>
-        <div class="nome-conversa">${escapeHtmlChat(c.nomeExibido)}</div>
-        <div class="ultima-msg">${escapeHtmlChat(c.ultimaMsg) || 'Nenhuma mensagem ainda'}</div>
+      <img class="avatar-conversa" src="${fotoFallback}" alt="">
+      <div class="info-conversa">
+        <div class="linha-topo-conversa">
+          <div class="nome-conversa">${escapeHtmlChat(c.nomeExibido)}</div>
+          <div class="hora-conversa${c.naoLidas > 0 ? ' nao-lida-cor' : ''}">${formatarHoraOuDataChat(c.ultimaMsgData)}</div>
+        </div>
+        <div class="ultima-msg">
+          ${checkHtml}
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtmlChat(c.ultimaMsg) || 'Nenhuma mensagem ainda'}</span>
+        </div>
       </div>
       ${c.naoLidas > 0 ? `<div class="bolinha-nao-lida">${c.naoLidas}</div>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+function filtrarListaConversas(){
+  const query = normalizarBuscaChat(document.getElementById('papo-busca-conversas').value);
+  if(!query){ renderizarListaConversas(conversasCarregadasCache); return; }
+  const filtradas = conversasCarregadasCache.filter(c => normalizarBuscaChat(c.nomeExibido).includes(query));
+  renderizarListaConversas(filtradas);
+}
+
+function normalizarBuscaChat(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 async function abrirConversa(conversaId){
@@ -778,7 +1301,7 @@ async function abrirConversa(conversaId){
 
   let empresaDaConversa = null;
   if(conversa.profissional_id){
-    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, id, user_id').eq('id', conversa.profissional_id).maybeSingle();
+    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, id, user_id, foto').eq('id', conversa.profissional_id).maybeSingle();
     empresaDaConversa = empresa;
   }
 
@@ -787,12 +1310,24 @@ async function abrirConversa(conversaId){
     outroLadoProfissionalIdAtual = null;
     const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroLadoUserIdAtual).maybeSingle();
     outroLadoNomeAtual = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+    outroLadoFotoAtual = null;
     document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
   } else {
     outroLadoProfissionalIdAtual = conversa.profissional_id;
     outroLadoUserIdAtual = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaConversa ? empresaDaConversa.user_id : null);
     outroLadoNomeAtual = souEuAEmpresa ? 'Visitante' : (empresaDaConversa ? empresaDaConversa.name : 'Empresa');
+    outroLadoFotoAtual = empresaDaConversa ? empresaDaConversa.foto : null;
     document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
+  }
+
+  document.getElementById('chat-avatar-topo').src = outroLadoFotoAtual || ('https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(outroLadoNomeAtual));
+
+  const statusTopoEl = document.getElementById('chat-status-topo');
+  statusTopoEl.textContent = '';
+  if(outroLadoUserIdAtual){
+    pessoaEstaOnline(outroLadoUserIdAtual).then(online => {
+      if(conversaAtual === conversaId) statusTopoEl.textContent = online ? 'online' : '';
+    });
   }
 
   souEuAEmpresaNaConversaAtual = souEuAEmpresa || (conversa.usuario2_id && conversa.usuario2_id === currentUserChat.id);
@@ -1010,16 +1545,19 @@ async function salvarContatoAgendaViaBanner(){
 
   const { data: existente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
 
+  let erro;
   if(existente){
-    await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id);
+    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id));
   } else {
-    await supabaseClientChat.from('agenda_contatos').insert({
+    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').insert({
       dono_user_id: currentUserChat.id,
       contato_user_id: outroLadoUserIdAtual,
       profissional_id: outroLadoProfissionalIdAtual,
       nome_salvo: nome
-    });
+    }));
   }
+
+  if(erro){ console.error(erro); alert('Erro ao salvar contato. Tente de novo.'); return; }
 
   document.getElementById('aviso-salvar-contato-box').style.display = 'none';
   await montarAreaSalvarContato();
@@ -1043,16 +1581,19 @@ async function salvarContatoAgenda(){
 
   const { data: existente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
 
+  let erro;
   if(existente){
-    await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id);
+    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id));
   } else {
-    await supabaseClientChat.from('agenda_contatos').insert({
+    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').insert({
       dono_user_id: currentUserChat.id,
       contato_user_id: outroLadoUserIdAtual,
       profissional_id: outroLadoProfissionalIdAtual,
       nome_salvo: nome
-    });
+    }));
   }
+
+  if(erro){ console.error(erro); alert('Erro ao salvar contato. Tente de novo.'); return; }
 
   await montarAreaSalvarContato();
   carregarListaConversas();
@@ -1082,7 +1623,7 @@ async function toggleSilenciarConversa(){
 
 function fecharConversa(){
   document.getElementById('chat-thread-box').classList.remove('aberto');
-  document.getElementById('chat-topo-lista').style.display = 'block';
+  document.getElementById('chat-topo-lista').style.display = 'flex';
   if(canalRealtimeAtual){ supabaseClientChat.removeChannel(canalRealtimeAtual); canalRealtimeAtual = null; }
   conversaAtual = null;
   carregarListaConversas();
@@ -1174,11 +1715,25 @@ function atualizarCheckLida(mensagemId, lida){
   }
 }
 
+function atualizarBotaoEnviarOuMic(){
+  const btn = document.getElementById('btn-microfone');
+  const temTexto = document.getElementById('chat-input-texto').value.trim().length > 0;
+  btn.textContent = temTexto ? '➤' : '🎤';
+  btn.title = temTexto ? 'Enviar' : 'Gravar áudio';
+}
+
+function acaoBotaoEnviarOuMic(){
+  const temTexto = document.getElementById('chat-input-texto').value.trim().length > 0;
+  if(temTexto) enviarMensagemChat();
+  else alternarGravacaoAudio();
+}
+
 async function enviarMensagemChat(){
   const input = document.getElementById('chat-input-texto');
   const texto = input.value.trim();
   if(!texto || !conversaAtual) return;
   input.value = '';
+  atualizarBotaoEnviarOuMic();
   await enviarQualquerMensagem({ tipo: 'texto', texto });
 }
 
