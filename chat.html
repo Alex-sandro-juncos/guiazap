@@ -9,6 +9,7 @@
 <link rel="manifest" href="papo-manifest.json">
 <meta name="theme-color" content="#25D366">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GuiaPapo">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1930,9 +1931,10 @@ async function enviarQualquerMensagem(payload){
     tipo: payload.tipo,
     texto: payload.texto || null,
     arquivo_url: payload.arquivo_url || null,
-    arquivo_nome: payload.arquivo_nome || null
+    arquivo_nome: payload.arquivo_nome || null,
+    lida: false
   });
-  if(error){ console.error(error); alert('Erro ao enviar mensagem.'); return; }
+  if(error){ console.error('erro ao enviar mensagem:', JSON.stringify(error)); alert('Erro ao enviar mensagem: ' + (error.message || 'desconhecido')); return; }
 
   await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
 
@@ -2464,12 +2466,14 @@ async function encerrarChamada(avisarOutraPonta){
   // "video|segundos" ou "audio|segundos" — segundos é 0 quando não atendida.
   if(euIniciariAChamada && conversaDaChamadaAtual){
     const duracaoSegundos = (chamadaFoiAtendida && momentoConexaoChamada) ? Math.round((Date.now() - momentoConexaoChamada) / 1000) : 0;
-    await supabaseClientChat.from('mensagens_chat').insert({
+    const { error: erroRegistroChamada } = await supabaseClientChat.from('mensagens_chat').insert({
       conversa_id: conversaDaChamadaAtual,
       remetente_user_id: currentUserChat.id,
       tipo: chamadaFoiAtendida ? 'chamada_atendida' : 'chamada_perdida',
-      texto: `${chamadaComVideoAtual ? 'video' : 'audio'}|${duracaoSegundos}`
+      texto: `${chamadaComVideoAtual ? 'video' : 'audio'}|${duracaoSegundos}`,
+      lida: false
     });
+    if(erroRegistroChamada) console.error('erro ao registrar chamada no histórico:', JSON.stringify(erroRegistroChamada));
     await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaDaChamadaAtual);
   }
 
