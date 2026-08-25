@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Papo — GuiaZap</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="papo-manifest.json">
+<meta name="theme-color" content="#25D366">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GuiaPapo">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
@@ -32,6 +38,14 @@
   .papo-header-topo h1 { color: white; font-size: 1.5rem; font-weight: 800; }
   .papo-header-icones { display: flex; gap: 18px; align-items: center; position: relative; }
   .papo-header-icones button { background: none; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 2px; }
+  .papo-header-icones #sino-notificacoes {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: white !important;
+    font-size: 1.25rem !important;
+    padding: 2px !important;
+  }
   .papo-meu-codigo-badge {
     background: rgba(255,255,255,0.22); color: white; border: 1px solid rgba(255,255,255,0.5);
     border-radius: 50px; padding: 5px 12px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
@@ -355,7 +369,9 @@
         <h1>Papo</h1>
         <button type="button" class="papo-meu-codigo-badge" id="papo-meu-codigo-badge" onclick="copiarMeuCodigoPapo()" title="Seu código do Papo — compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone" style="display:none;"></button>
         <div class="papo-header-icones">
-          <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔔</button>
+          <button type="button" id="btn-ativar-push-icone" onclick="ativarNotificacoesPushPapo()" title="Ativar notificações (chamadas e mensagens mesmo com o site fechado)" style="display:none;">🛎️</button>
+          <button type="button" id="sino-notificacoes" title="Notificações">🔔<span class="badge-notif" id="badge-notif" style="display:none;">0</span></button>
+          <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔊</button>
           <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
           <button type="button" onclick="toggleMenuPapoMais()" title="Mais opções">⋮</button>
           <div class="menu-papo-mais" id="menu-papo-mais" style="display:none;">
@@ -363,6 +379,7 @@
             <button type="button" onclick="toggleMenuPapoMais(); adicionarContatoPorCodigo()">+ Adicionar contato por código</button>
             <a href="agenda.html">📇 Ver agenda completa</a>
             <button type="button" onclick="toggleMenuPapoMais(); editarMeuNomeExibicao()">✏️ Meu nome no Papo</button>
+            <button type="button" id="btn-instalar-papo" onclick="instalarAppPapo()" style="display:none;">📲 Instalar o GuiaPapo</button>
           </div>
         </div>
       </div>
@@ -519,6 +536,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="js/notificacoes.js"></script>
 <script>
 const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUserChat = null;
@@ -888,10 +906,10 @@ function urlBase64ToUint8ArrayPapo(base64String){
 }
 
 function atualizarAvisoAtivarPush(){
-  const aviso = document.getElementById('aviso-ativar-push');
-  if(!aviso) return;
+  const icone = document.getElementById('btn-ativar-push-icone');
+  if(!icone) return;
   const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  aviso.style.display = (suportado && currentUserChat && Notification.permission !== 'granted') ? 'block' : 'none';
+  icone.style.display = (suportado && currentUserChat && Notification.permission !== 'granted') ? 'inline-block' : 'none';
 }
 
 async function ativarNotificacoesPushPapo(){
@@ -944,7 +962,7 @@ function aplicarIconeModoVibracao(){
   const btn = document.getElementById('btn-modo-vibracao');
   if(!btn) return;
   const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
-  btn.textContent = ativo ? '📳' : '🔔';
+  btn.textContent = ativo ? '📳' : '🔊';
   btn.title = ativo ? 'Chamada só vibrando (toque no ícone pra ligar o som)' : 'Chamada com som (toque no ícone pra deixar só vibrando)';
 }
 
@@ -988,6 +1006,10 @@ async function initChat(){
 
   const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
   meusCadastrosChat = cadastros || [];
+
+  if(typeof initNotificacoes === 'function'){
+    initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
+  }
 
   const params = new URLSearchParams(window.location.search);
   const empresaId = params.get('empresa');
@@ -2475,6 +2497,36 @@ function fecharOverlayChamada(){
 
 aplicarIconeModoVibracao();
 initChat();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
+  });
+}
+
+let promptInstalacaoPapo = null;
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  promptInstalacaoPapo = event;
+  const btn = document.getElementById('btn-instalar-papo');
+  if(btn) btn.style.display = 'block';
+});
+
+async function instalarAppPapo(){
+  if(!promptInstalacaoPapo) return;
+  promptInstalacaoPapo.prompt();
+  const { outcome } = await promptInstalacaoPapo.userChoice;
+  if(outcome === 'accepted'){
+    const btn = document.getElementById('btn-instalar-papo');
+    if(btn) btn.style.display = 'none';
+  }
+  promptInstalacaoPapo = null;
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btn-instalar-papo');
+  if(btn) btn.style.display = 'none';
+});
 </script>
 <script src="js/modo-escuro.js"></script>
 </body>

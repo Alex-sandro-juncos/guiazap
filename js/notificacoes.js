@@ -9,28 +9,37 @@ let _notifConfig = null;
 let _notifCarregando = false;
 
 function _notifInjetarUI(){
-  if(document.getElementById('sino-notificacoes')) return;
+  let btn = document.getElementById('sino-notificacoes');
+  const jaExistiaManual = !!btn;
 
-  const btn = document.createElement('button');
-  btn.id = 'sino-notificacoes';
-  btn.title = 'Notificações';
-  btn.innerHTML = '🔔<span class="badge-notif" id="badge-notif" style="display:none;">0</span>';
-  btn.onclick = toggleNotificacoes;
-
-  const btnModoEscuro = document.getElementById('btn-modo-escuro');
-  if(btnModoEscuro && btnModoEscuro.parentNode){
-    // Coloca o sino do lado do botão de modo escuro, numa linha só
-    const linha = document.createElement('div');
-    linha.id = 'notif-linha-topo';
-    btnModoEscuro.parentNode.insertBefore(linha, btnModoEscuro);
-    btnModoEscuro.style.margin = '0';
-    linha.appendChild(btnModoEscuro);
-    linha.appendChild(btn);
+  if(btn){
+    // Já existe um botão colocado manualmente na própria página (ex: chat.html) —
+    // só liga o comportamento de clique nele, sem mexer na posição
+    btn.onclick = toggleNotificacoes;
   } else {
-    // Não achou o botão de modo escuro nessa página — mantém flutuando, como fallback
-    btn.classList.add('sino-flutuante-fallback');
-    document.body.appendChild(btn);
+    btn = document.createElement('button');
+    btn.id = 'sino-notificacoes';
+    btn.title = 'Notificações';
+    btn.innerHTML = '🔔<span class="badge-notif" id="badge-notif" style="display:none;">0</span>';
+    btn.onclick = toggleNotificacoes;
+
+    const btnModoEscuro = document.getElementById('btn-modo-escuro');
+    if(btnModoEscuro && btnModoEscuro.parentNode){
+      // Coloca o sino do lado do botão de modo escuro, numa linha só
+      const linha = document.createElement('div');
+      linha.id = 'notif-linha-topo';
+      btnModoEscuro.parentNode.insertBefore(linha, btnModoEscuro);
+      btnModoEscuro.style.margin = '0';
+      linha.appendChild(btn);
+      linha.appendChild(btnModoEscuro);
+    } else {
+      // Não achou o botão de modo escuro nessa página — mantém flutuando, como fallback
+      btn.classList.add('sino-flutuante-fallback');
+      document.body.appendChild(btn);
+    }
   }
+
+  if(document.getElementById('painel-notificacoes')) return;
 
   const painel = document.createElement('div');
   painel.id = 'painel-notificacoes';
