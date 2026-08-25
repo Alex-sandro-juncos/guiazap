@@ -809,17 +809,22 @@ let meuCodigoPapoAtual = null;
 async function exibirBadgeMeuCodigoPapo(){
   if(!currentUserChat) return;
 
-  const { data: perfilExistente } = await supabaseClientChat.from('perfis_usuario').select('codigo_guiazap').eq('user_id', currentUserChat.id).maybeSingle();
+  const nomeDoCadastro = currentUserChat.user_metadata?.nome || currentUserChat.email.split('@')[0];
+
+  const { data: perfilExistente } = await supabaseClientChat.from('perfis_usuario').select('codigo_guiazap, nome_exibicao').eq('user_id', currentUserChat.id).maybeSingle();
 
   if(perfilExistente){
     meuCodigoPapoAtual = perfilExistente.codigo_guiazap;
+    if(!perfilExistente.nome_exibicao){
+      supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: nomeDoCadastro }).eq('user_id', currentUserChat.id).then(() => {});
+    }
   } else {
     // Primeira vez — gera um código novo (mesmo padrão usado na tela inicial)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let codigoNovo, salvo = false, tentativas = 0;
     while(!salvo && tentativas < 5){
       codigoNovo = 'GZ-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      const { error } = await supabaseClientChat.from('perfis_usuario').insert({ user_id: currentUserChat.id, codigo_guiazap: codigoNovo });
+      const { error } = await supabaseClientChat.from('perfis_usuario').insert({ user_id: currentUserChat.id, codigo_guiazap: codigoNovo, nome_exibicao: nomeDoCadastro });
       if(!error) salvo = true; else tentativas++;
     }
     meuCodigoPapoAtual = salvo ? codigoNovo : null;

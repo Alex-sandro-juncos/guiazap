@@ -96,9 +96,15 @@ async function garantirCodigoGuiaZap(){
   if(!currentUser) return null;
   if(meuCodigoGuiaZapAtual) return meuCodigoGuiaZapAtual;
 
-  const { data: perfilExistente } = await supabaseClient.from('perfis_usuario').select('codigo_guiazap').eq('user_id', currentUser.id).maybeSingle();
+  const nomeDoCadastro = currentUser.user_metadata?.nome || currentUser.email.split('@')[0];
+
+  const { data: perfilExistente } = await supabaseClient.from('perfis_usuario').select('codigo_guiazap, nome_exibicao').eq('user_id', currentUser.id).maybeSingle();
   if(perfilExistente){
     meuCodigoGuiaZapAtual = perfilExistente.codigo_guiazap;
+    // Se por algum motivo o perfil existe mas ainda não tem nome salvo, completa agora
+    if(!perfilExistente.nome_exibicao){
+      supabaseClient.from('perfis_usuario').update({ nome_exibicao: nomeDoCadastro }).eq('user_id', currentUser.id).then(() => {});
+    }
     return meuCodigoGuiaZapAtual;
   }
 
@@ -109,7 +115,7 @@ async function garantirCodigoGuiaZap(){
   let salvo = false;
 
   while(!salvo && tentativas < 5){
-    const { error } = await supabaseClient.from('perfis_usuario').insert({ user_id: currentUser.id, codigo_guiazap: codigoNovo });
+    const { error } = await supabaseClient.from('perfis_usuario').insert({ user_id: currentUser.id, codigo_guiazap: codigoNovo, nome_exibicao: nomeDoCadastro });
     if(!error){ salvo = true; } else { codigoNovo = gerarCodigoGuiaZapAleatorio(); tentativas++; }
   }
 
