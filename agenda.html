@@ -100,6 +100,13 @@
   .agenda-vazio-texto { font-size: 0.85rem; line-height: 1.5; }
 
   .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .voltar-fixo {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background: var(--cinza-fundo, #F0F2F5);
+  }
+  body.dark-mode .voltar-fixo { background: #121212; }
 
   #agenda-story-form {
     display: none;
@@ -157,6 +164,14 @@
   <p>Seus contatos e novidades do Papo</p>
 </header>
 
+<a href="chat.html" class="voltar-guiazap voltar-fixo">← Voltar ao Papo</a>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+
+<div id="aviso-ativar-push-agenda" style="display:none; background:#f3eefc; border:1px solid #d8c8f0; border-radius:10px; padding:10px 12px; margin:12px 15px 0; font-size:0.8rem; color:#4a2d7a; max-width:480px; margin-left:auto; margin-right:auto;">
+  🔔 Ative as notificações pra não perder chamadas e mensagens do Papo.
+  <button type="button" onclick="ativarNotificacoesPushAgenda()" style="display:block; width:100%; margin-top:8px; background:#6b46c1; color:white; border:none; padding:8px; border-radius:8px; font-weight:700; font-size:0.78rem; cursor:pointer;">Ativar agora</button>
+</div>
+
 <div class="agenda-stories-linha" id="agenda-stories-linha" style="display:none;"></div>
 
 <form id="agenda-story-form" onsubmit="return salvarStoryPapo(event)">
@@ -211,9 +226,6 @@
   </div>
 </div>
 
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:0 auto 10px;">🌙 Modo escuro</button>
-<a href="chat.html" class="voltar-guiazap">← Voltar ao Papo</a>
-
 <div class="agenda-story-viewer" id="agenda-story-viewer">
   <div class="agenda-story-conteudo">
     <button class="agenda-story-fechar" onclick="fecharStoryPapoViewer()">✕</button>
@@ -248,6 +260,63 @@ function escapeHtmlAgenda(str){
   return d.innerHTML;
 }
 
+const VAPID_PUBLIC_KEY_AGENDA = 'BGuNuGRR8zQZL0ZUeJo4y-zeiGItjWzLelApvMPh-F5Sj2wkcmZWcjHKF3RO6fkLCrh1Pmt0HIu4oPzFLz_41fg';
+
+function urlBase64ToUint8ArrayAgenda(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; ++i){ outputArray[i] = rawData.charCodeAt(i); }
+  return outputArray;
+}
+
+function atualizarAvisoAtivarPushAgenda(){
+  const aviso = document.getElementById('aviso-ativar-push-agenda');
+  if(!aviso) return;
+  const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  aviso.style.display = (suportado && currentUserAgenda && Notification.permission !== 'granted') ? 'block' : 'none';
+}
+
+async function ativarNotificacoesPushAgenda(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    alert('Seu navegador não suporta notificações push.');
+    return;
+  }
+  if(!currentUserAgenda) return;
+
+  const permissao = await Notification.requestPermission();
+  if(permissao !== 'granted'){
+    alert('Você precisa permitir notificações pra ativar esse recurso.');
+    return;
+  }
+
+  try{
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if(!subscription){
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8ArrayAgenda(VAPID_PUBLIC_KEY_AGENDA)
+      });
+    }
+
+    const subJson = subscription.toJSON();
+    const { data: existente } = await supabaseClientAgenda.from('push_subscriptions').select('id').eq('endpoint', subJson.endpoint).maybeSingle();
+    if(existente){
+      await supabaseClientAgenda.from('push_subscriptions').update({ user_id: currentUserAgenda.id, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }).eq('endpoint', subJson.endpoint);
+    } else {
+      await supabaseClientAgenda.from('push_subscriptions').insert({ user_id: currentUserAgenda.id, endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth });
+    }
+
+    alert('🔔 Notificações ativadas!');
+    atualizarAvisoAtivarPushAgenda();
+  } catch(e){
+    console.error(e);
+    alert('Erro ao ativar notificações. Tente de novo.');
+  }
+}
+
 async function initAgenda(){
   const { data: { session } } = await supabaseClientAgenda.auth.getSession();
 
@@ -271,6 +340,7 @@ async function initAgenda(){
     currentUserAgenda = sessaoTentativa2.user;
   } else {
     currentUserAgenda = session.user;
+    atualizarAvisoAtivarPushAgenda();
   }
 
   const { data: cadastros } = await supabaseClientAgenda.from('profissionais').select('id, name, plano').eq('user_id', currentUserAgenda.id);
@@ -358,16 +428,16 @@ function renderContatos(){
     const linkChat = ehEmpresa ? `chat.html?empresa=${c.profissional_id}` : `chat.html?pessoa=${c.contato_user_id}`;
     const fotoFallback = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nome_salvo);
     return `
-      <div class="card-contato">
+      <div class="card-contato" onclick="window.location.href='${linkChat}'" style="cursor:pointer;">
         <img src="${fotoFallback}" alt="${escapeHtmlAgenda(c.nome_salvo)}">
         <div class="info-contato">
           <div class="nome-contato">${escapeHtmlAgenda(c.nome_salvo)}</div>
           <div class="tipo-contato">${ehEmpresa ? '🏢 Empresa' : '👤 Pessoa'}</div>
         </div>
         <div class="acoes-contato">
-          <a href="${linkChat}" class="icon-btn" title="Conversar">💬</a>
-          <button type="button" class="icon-btn" title="Editar nome" onclick="editarNomeContato('${c.id}', '${escapeHtmlAgenda(c.nome_salvo).replace(/'/g, "\\'")}')">✎</button>
-          <button type="button" class="icon-btn" title="Remover" onclick="removerContato('${c.id}')">🗑️</button>
+          <a href="${linkChat}" class="icon-btn" title="Conversar" onclick="event.stopPropagation()">💬</a>
+          <button type="button" class="icon-btn" title="Editar nome" onclick="event.stopPropagation(); editarNomeContato('${c.id}', '${escapeHtmlAgenda(c.nome_salvo).replace(/'/g, "\\'")}')">✎</button>
+          <button type="button" class="icon-btn" title="Remover" onclick="event.stopPropagation(); removerContato('${c.id}')">🗑️</button>
         </div>
       </div>
     `;

@@ -3158,7 +3158,7 @@ async function ativarNotificacoesPush(){
       await supabaseClient.from('push_subscriptions').insert({ user_id: currentUser.id, endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth });
     }
 
-    alert('🔔 Notificações ativadas! Você vai receber avisos de vagas novas e novidades de quem você segue.');
+    alert('🔔 Notificações ativadas! Agora você vai receber avisos de chamadas e mensagens do Papo, vagas novas e novidades de quem você segue — mesmo com o site fechado.');
     atualizarVisibilidadeBotaoPush();
   } catch(e){
     console.error(e);

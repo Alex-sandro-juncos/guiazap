@@ -372,6 +372,10 @@
     </div>
 
     <div id="papo-aba-conversas" class="papo-aba-conteudo">
+      <div id="aviso-ativar-push" style="display:none; background:#f3eefc; border:1px solid #d8c8f0; border-radius:10px; padding:10px 12px; margin:10px 14px 0; font-size:0.8rem; color:#4a2d7a;">
+        🔔 Ative as notificações pra não perder chamadas e mensagens quando o Papo estiver fechado.
+        <button type="button" onclick="ativarNotificacoesPushPapo()" style="display:block; width:100%; margin-top:8px; background:#6b46c1; color:white; border:none; padding:8px; border-radius:8px; font-weight:700; font-size:0.78rem; cursor:pointer;">Ativar agora</button>
+      </div>
       <div id="chat-lista-box" class="chat-lista-conversas">
         <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
       </div>
@@ -872,6 +876,63 @@ async function copiarMeuCodigoPapo(){
   }
 }
 
+const VAPID_PUBLIC_KEY_PAPO = 'BGuNuGRR8zQZL0ZUeJo4y-zeiGItjWzLelApvMPh-F5Sj2wkcmZWcjHKF3RO6fkLCrh1Pmt0HIu4oPzFLz_41fg';
+
+function urlBase64ToUint8ArrayPapo(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; ++i){ outputArray[i] = rawData.charCodeAt(i); }
+  return outputArray;
+}
+
+function atualizarAvisoAtivarPush(){
+  const aviso = document.getElementById('aviso-ativar-push');
+  if(!aviso) return;
+  const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  aviso.style.display = (suportado && currentUserChat && Notification.permission !== 'granted') ? 'block' : 'none';
+}
+
+async function ativarNotificacoesPushPapo(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    alert('Seu navegador não suporta notificações push.');
+    return;
+  }
+  if(!currentUserChat) return;
+
+  const permissao = await Notification.requestPermission();
+  if(permissao !== 'granted'){
+    alert('Você precisa permitir notificações pra ativar esse recurso — sem isso, chamadas e mensagens não vão avisar quando o Papo estiver fechado.');
+    return;
+  }
+
+  try{
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if(!subscription){
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8ArrayPapo(VAPID_PUBLIC_KEY_PAPO)
+      });
+    }
+
+    const subJson = subscription.toJSON();
+    const { data: existente } = await supabaseClientChat.from('push_subscriptions').select('id').eq('endpoint', subJson.endpoint).maybeSingle();
+    if(existente){
+      await supabaseClientChat.from('push_subscriptions').update({ user_id: currentUserChat.id, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }).eq('endpoint', subJson.endpoint);
+    } else {
+      await supabaseClientChat.from('push_subscriptions').insert({ user_id: currentUserChat.id, endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth });
+    }
+
+    alert('🔔 Notificações ativadas! Agora chamadas e mensagens vão te avisar mesmo com o Papo fechado.');
+    atualizarAvisoAtivarPush();
+  } catch(e){
+    console.error(e);
+    alert('Erro ao ativar notificações. Tente de novo.');
+  }
+}
+
 function toggleModoVibracaoChamada(){
   const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
   const novoValor = !ativo;
@@ -923,6 +984,7 @@ async function initChat(){
   }
   currentUserChat = sessaoFinal.user;
   exibirBadgeMeuCodigoPapo();
+  atualizarAvisoAtivarPush();
 
   const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
   meusCadastrosChat = cadastros || [];
