@@ -91,21 +91,32 @@ function gerarCodigoGuiaZapAleatorio(){
 
 let meuCodigoGuiaZapAtual = null;
 
+async function descobrirNomeParaExibicao(user){
+  if(user.user_metadata?.nome) return user.user_metadata.nome;
+
+  // Sem nome salvo no cadastro — tenta usar o nome da empresa dela, se for dona de alguma
+  const { data: minhaEmpresa } = await supabaseClient.from('profissionais').select('name').eq('user_id', user.id).limit(1).maybeSingle();
+  if(minhaEmpresa) return minhaEmpresa.name;
+
+  return user.email.split('@')[0];
+}
+
 async function garantirCodigoGuiaZap(){
   if(!currentUser) return null;
   if(meuCodigoGuiaZapAtual) return meuCodigoGuiaZapAtual;
-
-  const nomeDoCadastro = currentUser.user_metadata?.nome || currentUser.email.split('@')[0];
 
   const { data: perfilExistente } = await supabaseClient.from('perfis_usuario').select('codigo_guiazap, nome_exibicao').eq('user_id', currentUser.id).maybeSingle();
   if(perfilExistente){
     meuCodigoGuiaZapAtual = perfilExistente.codigo_guiazap;
     // Se por algum motivo o perfil existe mas ainda não tem nome salvo, completa agora
     if(!perfilExistente.nome_exibicao){
+      const nomeDoCadastro = await descobrirNomeParaExibicao(currentUser);
       supabaseClient.from('perfis_usuario').update({ nome_exibicao: nomeDoCadastro }).eq('user_id', currentUser.id).then(() => {});
     }
     return meuCodigoGuiaZapAtual;
   }
+
+  const nomeDoCadastro = await descobrirNomeParaExibicao(currentUser);
 
   // Primeira vez — gera um código novo e tenta salvar (tenta de novo se, por
   // pouquíssima chance, o código sortido já existir em outra pessoa)
@@ -1035,13 +1046,19 @@ function mostrarQrCode(id){
   box.style.display = 'block';
 }
 
+function fecharTodosMenusFlutuantes(){
+  document.querySelectorAll('.card-acoes-extra, .menu-compartilhar, .orcamento-opcoes').forEach(el => { el.style.display = 'none'; });
+  const painelFiltros = document.getElementById('filtros-avancados');
+  if(painelFiltros) painelFiltros.style.display = 'none';
+  const btnFiltros = document.getElementById('btn-abrir-filtros');
+  if(btnFiltros) btnFiltros.classList.remove('aberto');
+}
+
 function toggleOrcamentoOpcoes(id){
   const box = document.getElementById('orcamento-opcoes-' + id);
   if(!box) return;
   const jaAberto = box.style.display === 'flex';
-
-  document.querySelectorAll('.orcamento-opcoes').forEach(el => { el.style.display = 'none'; });
-
+  fecharTodosMenusFlutuantes();
   box.style.display = jaAberto ? 'none' : 'flex';
 }
 
@@ -1050,6 +1067,7 @@ function toggleFiltrosAvancados(){
   const btn = document.getElementById('btn-abrir-filtros');
   if(!painel) return;
   const abrindo = painel.style.display === 'none';
+  fecharTodosMenusFlutuantes();
   painel.style.display = abrindo ? 'block' : 'none';
   if(btn) btn.classList.toggle('aberto', abrindo);
 }
@@ -1082,19 +1100,14 @@ function toggleOpcoesExtra(id){
   const box = document.getElementById('opcoes-extra-' + id);
   if(!box) return;
   const jaAberto = box.style.display === 'flex';
-
-  // Fecha qualquer outro menu de opções que esteja aberto em outro card
-  document.querySelectorAll('.card-acoes-extra').forEach(el => { el.style.display = 'none'; });
-
+  fecharTodosMenusFlutuantes();
   box.style.display = jaAberto ? 'none' : 'flex';
 }
 
 function toggleMenuCompartilharCadastro(id, nome){
   const menu = document.getElementById('menu-compartilhar-cad-' + id);
   const jaAberto = menu.style.display === 'block';
-
-  document.querySelectorAll('.menu-compartilhar').forEach(m => { m.style.display = 'none'; });
-
+  fecharTodosMenusFlutuantes();
   if(jaAberto) return;
 
   const link = `${window.location.origin}/index.html?p=${id}`;
@@ -1517,6 +1530,108 @@ async function aplicarCupom(profissionalId){
 }
 
 let produtosDestaqueTodos = [];
+
+// ---------- VÍDEOS EM DESTAQUE (com visualizador tela cheia, estilo Story) ----------
+
+let videosDestaqueTodos = [];
+let videoViewerIndiceAtual = 0;
+let videoViewerJaContabilizadas = new Set();
+
+async function loadVideosDestaque(){
+  const secao = document.getElementById('destaque-videos-section');
+  const container = document.getElementById('destaque-videos-lista');
+  if(!secao || !container) return;
+
+  const { data, error } = await supabaseClient
+    .from('videos_empresa')
+    .select('*, profissionais(name, cat, whatsapp, plano, verificado, status_pagamento)')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if(error || !data){ secao.style.display = 'none'; return; }
+
+  videosDestaqueTodos = data.filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
+
+  if(videosDestaqueTodos.length === 0){ secao.style.display = 'none'; return; }
+
+  // Mostra vídeos de todo mundo, mas dá prioridade pros de quem a pessoa segue/salvou
+  const meusIdsEmpresaVideos = currentUser ? new Set(entries.filter(e => e.user_id === currentUser.id).map(e => e.id)) : new Set();
+  videosDestaqueTodos.sort((a, b) => {
+    const prioridadeA = calcularPrioridadeStory({ tipo: 'empresa', id: a.profissional_id, empresa: a.profissionais }, meusIdsEmpresaVideos);
+    const prioridadeB = calcularPrioridadeStory({ tipo: 'empresa', id: b.profissional_id, empresa: b.profissionais }, meusIdsEmpresaVideos);
+    if(prioridadeA !== prioridadeB) return prioridadeB - prioridadeA;
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+
+  secao.style.display = 'block';
+  container.innerHTML = videosDestaqueTodos.map((v, i) => `
+    <div class="destaque-card video-thumb-card" onclick="abrirVideoViewer(${i})">
+      <video src="${escapeHtml(v.video_url)}" muted preload="metadata" playsinline></video>
+      <div class="video-thumb-play">▶️</div>
+      <div class="destaque-info">
+        <div class="destaque-nome">${escapeHtml(v.titulo)}</div>
+        <div class="destaque-empresa">${escapeHtml(v.profissionais.name)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function abrirVideoViewer(indice){
+  videoViewerIndiceAtual = indice;
+  document.getElementById('video-viewer').classList.add('aberto');
+  tocarVideoViewerAtual();
+}
+
+function renderVideoViewerSegmentos(){
+  const container = document.getElementById('video-viewer-segmentos');
+  container.innerHTML = videosDestaqueTodos.map((v, i) => `<div class="video-viewer-segmento${i <= videoViewerIndiceAtual ? ' preenchido' : ''}"></div>`).join('');
+}
+
+function tocarVideoViewerAtual(){
+  const v = videosDestaqueTodos[videoViewerIndiceAtual];
+  if(!v){ fecharVideoViewer(); return; }
+
+  document.getElementById('video-viewer-nome').textContent = v.profissionais.name;
+  document.getElementById('video-viewer-titulo').textContent = v.titulo;
+  document.getElementById('video-viewer-meta').textContent = `${v.profissionais.cat || ''} · 👁️ ${v.visualizacoes || 0} visualizações`;
+
+  const player = document.getElementById('video-viewer-player');
+  player.pause();
+  player.src = v.video_url;
+  player.currentTime = 0;
+  player.muted = false;
+  player.onended = () => avancarVideoViewer();
+  player.play().catch(() => {});
+
+  const acoes = document.getElementById('video-viewer-acoes');
+  const msgZap = encodeURIComponent(`Olá! Vi seu vídeo "${v.titulo}" no GuiaZap e tenho interesse.`);
+  acoes.innerHTML = `<a href="https://wa.me/55${(v.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Falar no WhatsApp</a>`;
+
+  renderVideoViewerSegmentos();
+
+  if(!videoViewerJaContabilizadas.has(v.id)){
+    videoViewerJaContabilizadas.add(v.id);
+    supabaseClient.rpc('incrementar_visualizacao_video', { vid: v.id }).catch(e => console.error(e));
+  }
+}
+
+function avancarVideoViewer(){
+  videoViewerIndiceAtual++;
+  if(videoViewerIndiceAtual >= videosDestaqueTodos.length){ fecharVideoViewer(); return; }
+  tocarVideoViewerAtual();
+}
+
+function voltarVideoViewer(){
+  videoViewerIndiceAtual--;
+  if(videoViewerIndiceAtual < 0) videoViewerIndiceAtual = 0;
+  tocarVideoViewerAtual();
+}
+
+function fecharVideoViewer(){
+  const player = document.getElementById('video-viewer-player');
+  if(player) player.pause();
+  document.getElementById('video-viewer').classList.remove('aberto');
+}
 
 async function loadProdutosDestaque(){
   const container = document.getElementById('destaque-produtos-lista');
@@ -2203,27 +2318,32 @@ async function loadStories(){
 
 let storiesOrdemChaves = [];
 
+function calcularPrioridadeStory(grupo, meusIdsEmpresa){
+  if(grupo.tipo === 'empresa'){
+    if(meusIdsEmpresa.has(grupo.id)) return 3; // minha própria empresa
+    if(seguindoEmpresas.has(grupo.id) || contatosSalvosProfissionalIds.has(grupo.id)) return 2; // sigo ou salvei
+    return 0;
+  }
+  if(currentUser && grupo.id === currentUser.id) return 3;
+  if(contatosSalvosUserIds.has(grupo.id)) return 2;
+  return 0;
+}
+
 function renderStoriesLinha(){
   const container = document.getElementById('stories-linha');
   if(!container) return;
 
-  // Regra de privacidade: Stories só aparecem de quem está salvo na agenda de
-  // contatos, ou de empresas que a pessoa segue — igual pediu, não é mais uma
-  // fileira pública pra qualquer visitante. Sem login, ainda não dá pra ter
-  // contato salvo nem seguir ninguém, então só aparece o botão de postar.
-  let grupos = [];
-  if(currentUser){
-    const meusIdsEmpresa = new Set(entries.filter(e => e.user_id === currentUser.id).map(e => e.id));
-    grupos = Object.entries(storiesAgrupadas).filter(([chave, g]) => {
-      if(g.tipo === 'empresa'){
-        return meusIdsEmpresa.has(g.id) || seguindoEmpresas.has(g.id) || contatosSalvosProfissionalIds.has(g.id);
-      }
-      return g.id === currentUser.id || contatosSalvosUserIds.has(g.id);
-    });
-  }
+  // Mostra os Stories de todo mundo (não só quem você segue/salvou), mas
+  // dá prioridade na fileira pra quem você segue/tem salvo/é sua empresa
+  const meusIdsEmpresa = currentUser ? new Set(entries.filter(e => e.user_id === currentUser.id).map(e => e.id)) : new Set();
+  let grupos = Object.entries(storiesAgrupadas);
 
-  // Empresas do Pacote Premium aparecem primeiro na fileira
   grupos = grupos.sort((a, b) => {
+    const prioridadeA = calcularPrioridadeStory(a[1], meusIdsEmpresa);
+    const prioridadeB = calcularPrioridadeStory(b[1], meusIdsEmpresa);
+    if(prioridadeA !== prioridadeB) return prioridadeB - prioridadeA;
+
+    // Empate: empresas do Pacote Premium aparecem primeiro
     const premiumA = a[1].tipo === 'empresa' && a[1].empresa.plano === 'premium' ? 1 : 0;
     const premiumB = b[1].tipo === 'empresa' && b[1].empresa.plano === 'premium' ? 1 : 0;
     return premiumB - premiumA;
@@ -2937,6 +3057,7 @@ if(initSupabase()){
   initAuth();
   loadEntries();
   loadStories();
+  loadVideosDestaque();
   loadContadorPlataforma();
   loadDenunciasPorEmpresa();
   mostrarWelcomeGateSeNecessario();

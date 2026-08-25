@@ -175,6 +175,34 @@
     </div>
   </div>
 
+  <div class="destaque-vitrine" id="destaque-videos-section" style="display:none;">
+    <div class="destaque-header">
+      <h2>🎥 Vídeos em destaque</h2>
+      <a href="videos.html" class="ver-vitrine-link">Ver todos →</a>
+    </div>
+    <div class="destaque-scroll" id="destaque-videos-lista">
+      <div class="destaque-carregando">carregando vídeos...</div>
+    </div>
+  </div>
+
+  <div class="video-viewer" id="video-viewer">
+    <div class="video-viewer-conteudo">
+      <div class="video-viewer-segmentos" id="video-viewer-segmentos"></div>
+      <button class="story-fechar" onclick="fecharVideoViewer()">✕</button>
+      <div class="video-viewer-nome" id="video-viewer-nome"></div>
+      <div class="video-viewer-area">
+        <video id="video-viewer-player" playsinline controls></video>
+        <button type="button" class="video-viewer-seta esquerda" onclick="voltarVideoViewer()">‹</button>
+        <button type="button" class="video-viewer-seta direita" onclick="avancarVideoViewer()">›</button>
+      </div>
+      <div class="video-viewer-info">
+        <div class="video-viewer-titulo" id="video-viewer-titulo"></div>
+        <div class="video-viewer-meta" id="video-viewer-meta"></div>
+      </div>
+      <div class="story-acoes" id="video-viewer-acoes"></div>
+    </div>
+  </div>
+
   <div class="destaque-vitrine">
     <div class="destaque-header">
       <h2>🛍️ Produtos em destaque</h2>

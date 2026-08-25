@@ -362,6 +362,7 @@
             <a href="index.html">← Voltar ao GuiaZap</a>
             <button type="button" onclick="toggleMenuPapoMais(); adicionarContatoPorCodigo()">+ Adicionar contato por código</button>
             <a href="agenda.html">📇 Ver agenda completa</a>
+            <button type="button" onclick="toggleMenuPapoMais(); editarMeuNomeExibicao()">✏️ Meu nome no Papo</button>
           </div>
         </div>
       </div>
@@ -806,19 +807,44 @@ function fecharStoryPapoChatViewer(){
 
 let meuCodigoPapoAtual = null;
 
-async function exibirBadgeMeuCodigoPapo(){
+async function editarMeuNomeExibicao(){
   if(!currentUserChat) return;
 
-  const nomeDoCadastro = currentUserChat.user_metadata?.nome || currentUserChat.email.split('@')[0];
+  const { data: perfilAtual } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', currentUserChat.id).maybeSingle();
+  const nomeAtual = perfilAtual ? perfilAtual.nome_exibicao : '';
+
+  const novoNome = prompt('Esse é o nome que outras pessoas veem quando você conversa com elas no Papo (pessoa a pessoa):', nomeAtual || '');
+  if(!novoNome || !novoNome.trim()) return;
+
+  const { error } = await supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: novoNome.trim() }).eq('user_id', currentUserChat.id);
+  if(error){ console.error(error); alert('Erro ao salvar. Tente de novo.'); return; }
+
+  alert('Nome atualizado!');
+}
+
+async function descobrirNomeParaExibicaoChat(user){
+  if(user.user_metadata?.nome) return user.user_metadata.nome;
+
+  const { data: minhaEmpresa } = await supabaseClientChat.from('profissionais').select('name').eq('user_id', user.id).limit(1).maybeSingle();
+  if(minhaEmpresa) return minhaEmpresa.name;
+
+  return user.email.split('@')[0];
+}
+
+async function exibirBadgeMeuCodigoPapo(){
+  if(!currentUserChat) return;
 
   const { data: perfilExistente } = await supabaseClientChat.from('perfis_usuario').select('codigo_guiazap, nome_exibicao').eq('user_id', currentUserChat.id).maybeSingle();
 
   if(perfilExistente){
     meuCodigoPapoAtual = perfilExistente.codigo_guiazap;
     if(!perfilExistente.nome_exibicao){
-      supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: nomeDoCadastro }).eq('user_id', currentUserChat.id).then(() => {});
+      descobrirNomeParaExibicaoChat(currentUserChat).then(nome => {
+        supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: nome }).eq('user_id', currentUserChat.id).then(() => {});
+      });
     }
   } else {
+    const nomeDoCadastro = await descobrirNomeParaExibicaoChat(currentUserChat);
     // Primeira vez — gera um código novo (mesmo padrão usado na tela inicial)
     let codigoNovo, salvo = false, tentativas = 0;
     while(!salvo && tentativas < 5){
