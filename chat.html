@@ -1008,6 +1008,13 @@ async function initChat(){
   const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
   meusCadastrosChat = cadastros || [];
 
+  const inputMsg = document.getElementById('chat-input-texto');
+  if(inputMsg){
+    inputMsg.addEventListener('input', atualizarBotaoEnviarOuMic);
+    inputMsg.addEventListener('keyup', atualizarBotaoEnviarOuMic);
+    inputMsg.addEventListener('paste', () => setTimeout(atualizarBotaoEnviarOuMic, 10));
+  }
+
   if(typeof initNotificacoes === 'function'){
     initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
   }
@@ -1901,7 +1908,9 @@ function atualizarCheckLida(mensagemId, lida){
 
 function atualizarBotaoEnviarOuMic(){
   const btn = document.getElementById('btn-microfone');
-  const temTexto = document.getElementById('chat-input-texto').value.trim().length > 0;
+  const input = document.getElementById('chat-input-texto');
+  if(!btn || !input) return;
+  const temTexto = input.value.trim().length > 0;
   btn.textContent = temTexto ? '➤' : '🎤';
   btn.title = temTexto ? 'Enviar' : 'Gravar áudio';
 }
@@ -2080,7 +2089,7 @@ async function enviarAudioGravado(blob){
   const arquivo = new File([blob], 'audio.webm', { type: 'audio/webm' });
 
   const { error } = await supabaseClientChat.storage.from('fotos').upload(nomeArquivo, arquivo);
-  if(error){ console.error(error); alert('Erro ao enviar o áudio.'); return; }
+  if(error){ console.error('erro ao enviar áudio:', JSON.stringify(error)); alert('Erro ao enviar o áudio: ' + (error.message || 'desconhecido')); return; }
 
   const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
   await enviarQualquerMensagem({ tipo: 'audio', arquivo_url: urlData.publicUrl });
