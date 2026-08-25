@@ -257,10 +257,12 @@ function _tocarBipPopup(frequencia, duracaoMs, volume){
 
 function _tocarSomChamadaPopup(){
   _pararSomChamadaPopup();
-  _chamadaIntervaloSom = setInterval(() => {
-    _tocarBipPopup(880, 400, 0.25);
-    setTimeout(() => _tocarBipPopup(1046, 400, 0.25), 450);
-  }, 1800);
+  if(localStorage.getItem('modo_vibracao_chamada') !== '1'){
+    _chamadaIntervaloSom = setInterval(() => {
+      _tocarBipPopup(880, 400, 0.25);
+      setTimeout(() => _tocarBipPopup(1046, 400, 0.25), 450);
+    }, 1800);
+  }
   if(navigator.vibrate) navigator.vibrate([400, 200, 400]);
 }
 

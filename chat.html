@@ -348,6 +348,7 @@
       <div class="papo-header-topo">
         <h1>Papo</h1>
         <div class="papo-header-icones">
+          <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔔</button>
           <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
           <button type="button" onclick="toggleMenuPapoMais()" title="Mais opções">⋮</button>
           <div class="menu-papo-mais" id="menu-papo-mais" style="display:none;">
@@ -794,6 +795,21 @@ function fecharStoryPapoChatViewer(){
   clearTimeout(storyPapoChatTimer);
   const viewer = document.getElementById('papo-chat-story-viewer');
   if(viewer) viewer.classList.remove('aberto');
+}
+
+function toggleModoVibracaoChamada(){
+  const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
+  const novoValor = !ativo;
+  localStorage.setItem('modo_vibracao_chamada', novoValor ? '1' : '0');
+  aplicarIconeModoVibracao();
+}
+
+function aplicarIconeModoVibracao(){
+  const btn = document.getElementById('btn-modo-vibracao');
+  if(!btn) return;
+  const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
+  btn.textContent = ativo ? '📳' : '🔔';
+  btn.title = ativo ? 'Chamada só vibrando (toque no ícone pra ligar o som)' : 'Chamada com som (toque no ícone pra deixar só vibrando)';
 }
 
 function toggleMenuPapoMais(){
@@ -1391,10 +1407,13 @@ function iniciarTomDiscagem(){
 // Toque — pra quem está recebendo a chamada, mais forte e chamativo
 function iniciarToqueChamada(){
   pararSomChamada();
-  intervaloSomChamada = setInterval(() => {
-    tocarBip(880, 400, 0.25);
-    setTimeout(() => tocarBip(1046, 400, 0.25), 450);
-  }, 1800);
+
+  if(localStorage.getItem('modo_vibracao_chamada') !== '1'){
+    intervaloSomChamada = setInterval(() => {
+      tocarBip(880, 400, 0.25);
+      setTimeout(() => tocarBip(1046, 400, 0.25), 450);
+    }, 1800);
+  }
 
   if(navigator.vibrate){
     intervaloVibracaoChamada = setInterval(() => { navigator.vibrate([400, 200, 400]); }, 1800);
@@ -2312,6 +2331,7 @@ function fecharOverlayChamada(){
   chamadaComQuemUserId = null;
 }
 
+aplicarIconeModoVibracao();
 initChat();
 </script>
 <script src="js/modo-escuro.js"></script>
