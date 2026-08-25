@@ -1938,7 +1938,7 @@ async function enviarQualquerMensagem(payload){
     conversa_id: conversaAtual,
     remetente_user_id: currentUserChat.id,
     tipo: payload.tipo,
-    texto: payload.texto || null,
+    texto: payload.texto || '',
     arquivo_url: payload.arquivo_url || null,
     arquivo_nome: payload.arquivo_nome || null,
     lida: false
