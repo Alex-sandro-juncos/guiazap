@@ -1027,6 +1027,17 @@ async function initChat(){
   const pessoaId = params.get('pessoa');
   if(pessoaId) await abrirOuCriarConversaComPessoa(pessoaId);
 
+  const mensagemPreenchida = params.get('msg');
+  if(mensagemPreenchida && (empresaId || pessoaId)){
+    const inputTexto = document.getElementById('chat-input-texto');
+    if(inputTexto){
+      inputTexto.value = decodeURIComponent(mensagemPreenchida);
+      atualizarBotaoEnviarOuMic();
+      inputTexto.focus();
+    }
+    window.history.replaceState({}, '', window.location.pathname + '?' + (empresaId ? 'empresa=' + empresaId : 'pessoa=' + pessoaId));
+  }
+
   const compartilharParam = params.get('compartilhar');
   if(compartilharParam) await abrirTelaCompartilhar(compartilharParam);
 
@@ -1959,6 +1970,22 @@ async function enviarQualquerMensagem(payload){
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: resumoParaNotificacao })
   }).catch(e => console.error('erro ao notificar nova mensagem', e));
+
+  // Se a mensagem que acabei de mandar era o endereço que o robô de
+  // atendimento automático estava esperando, chama a função que calcula o
+  // frete por rota real (o banco de dados sozinho não consegue fazer isso)
+  if(payload.tipo === 'texto' && !souEuAEmpresaNaConversaAtual && outroLadoProfissionalIdAtual){
+    setTimeout(async () => {
+      const { data: estadoAtual } = await supabaseClientChat.from('atendimento_estado').select('estado').eq('conversa_id', conversaAtual).maybeSingle();
+      if(estadoAtual && estadoAtual.estado === 'calculando_frete'){
+        fetch('/.netlify/functions/calcular-frete-entrega', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversaId: conversaAtual, profissionalId: outroLadoProfissionalIdAtual, endereco: payload.texto })
+        }).catch(e => console.error('erro ao calcular frete', e));
+      }
+    }, 600);
+  }
 }
 
 // ---------- FERRAMENTAS: EMOJI, ARQUIVO, GIF, FIGURINHA ----------

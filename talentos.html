@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Banco de Talentos — GuiaZap</title>
-<meta name="description" content="Empresas do GuiaZap consultam currículos de candidatos disponíveis na região.">
+<meta name="description" content="Empresas do GuiaZap consultam currículos de candidatos disponíveis na região e conversam pelo Papo.">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -165,7 +165,7 @@ function renderTalentos(){
       ${c.experiencia ? `<div class="secao-talento"><b>Experiência:</b> ${escapeHtmlTalentos(c.experiencia)}</div>` : ''}
       ${c.formacao ? `<div class="secao-talento"><b>Formação:</b> ${escapeHtmlTalentos(c.formacao)}</div>` : ''}
       ${c.habilidades ? `<div class="secao-talento"><b>Habilidades:</b> ${escapeHtmlTalentos(c.habilidades)}</div>` : ''}
-      <a class="btn-zap-mini" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}?text=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" target="_blank" onclick="notificarVisualizacaoCurriculo('${c.id}')">💬 Falar direto com o candidato pelo WhatsApp</a>
+      ${c.user_id ? `<a class="btn-zap-mini" style="background:#6b46c1;" href="chat.html?pessoa=${c.user_id}&msg=${encodeURIComponent('Olá ' + c.nome + '! Vi seu currículo no Banco de Talentos do GuiaZap e gostaria de conversar.')}" onclick="notificarVisualizacaoCurriculo('${c.id}')">💬 Falar direto com o candidato pelo Papo</a>` : ''}
     </div>
   `; }).join('');
 }
@@ -187,6 +187,6 @@ function escapeHtmlTalentos(str){
 
 initTalentos();
 </script>
-<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
+<a href="chat.html" class="btn-chat-flutuante" title="Chat">💬</a>
 </body>
 </html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meus Pedidos — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .pedidos-header { background: #0f766e; padding: 24px 15px; text-align: center; color: white; }
+  .pedidos-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .pedidos-wrap { max-width: 500px; margin: 0 auto; padding: 15px 15px 40px; }
+  .voltar { display: block; margin-bottom: 14px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .abas-pedidos { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; }
+  .abas-pedidos button {
+    flex-shrink: 0; padding: 7px 14px; border-radius: 50px; border: 1px solid #ddd; background: white;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer; color: #666;
+  }
+  .abas-pedidos button.ativa { background: #0f766e; color: white; border-color: #0f766e; }
+  .card-pedido {
+    background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .card-pedido .topo-pedido { display: flex; justify-content: space-between; align-items: center; }
+  .card-pedido .status-pedido { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 50px; }
+  .status-aguardando_confirmacao { background: #fff3cd; color: #7c4a03; }
+  .status-aceito, .status-preparando { background: #e0f2fe; color: #075985; }
+  .status-pronto, .status-saiu_entrega { background: #ede9fe; color: #6b46c1; }
+  .status-concluido { background: #e8f5e9; color: #1a7a3c; }
+  .status-recusado, .status-cancelado { background: #fdeaea; color: #a4402f; }
+  .card-pedido .itens-pedido { font-size: 0.85rem; color: #444; margin-top: 8px; line-height: 1.5; }
+  .card-pedido .total-pedido { font-size: 0.9rem; font-weight: 700; color: var(--verde-escuro); margin-top: 8px; }
+  .card-pedido .data-pedido { font-size: 0.72rem; color: #999; margin-top: 4px; }
+  .acoes-pedido { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .acoes-pedido button {
+    flex: 1; min-width: 100px; padding: 8px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.78rem; cursor: pointer;
+  }
+  .btn-aceitar { background: var(--verde-whats); color: white; }
+  .btn-recusar { background: #a4402f; color: white; }
+  .btn-avancar { background: #0f766e; color: white; }
+  .vazio-pedidos { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="pedidos-header">
+  <h1>📦 Meus Pedidos</h1>
+</header>
+
+<div class="pedidos-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <select id="filtro-empresa-pedidos" onchange="renderPedidos()" style="width:100%; margin-bottom:12px; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+    <option value="">Todas as minhas empresas</option>
+  </select>
+
+  <div class="abas-pedidos">
+    <button type="button" class="ativa" data-status="" onclick="mudarAbaPedidos('', this)">Todos</button>
+    <button type="button" data-status="aguardando_confirmacao" onclick="mudarAbaPedidos('aguardando_confirmacao', this)">🟡 Novos</button>
+    <button type="button" data-status="aceito,preparando" onclick="mudarAbaPedidos('aceito,preparando', this)">👨‍🍳 Em andamento</button>
+    <button type="button" data-status="pronto,saiu_entrega" onclick="mudarAbaPedidos('pronto,saiu_entrega', this)">🛵 Pronto/Entrega</button>
+    <button type="button" data-status="concluido" onclick="mudarAbaPedidos('concluido', this)">✅ Concluídos</button>
+  </div>
+
+  <div id="lista-pedidos">Carregando...</div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientPedidos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserPedidos = null;
+let minhasEmpresasPedidos = [];
+let todosPedidos = [];
+let abaStatusAtual = '';
+
+function escapeHtmlPedidos(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initPedidos(){
+  const { data: { session } } = await supabaseClientPedidos.auth.getSession();
+  if(!session){
+    document.getElementById('lista-pedidos').innerHTML = '<div class="vazio-pedidos">🔒 Faça login na <a href="index.html">página inicial</a> pra ver seus pedidos.</div>';
+    return;
+  }
+  currentUserPedidos = session.user;
+
+  const { data: empresas } = await supabaseClientPedidos.from('profissionais').select('id, name').eq('user_id', currentUserPedidos.id);
+  minhasEmpresasPedidos = empresas || [];
+
+  if(minhasEmpresasPedidos.length === 0){
+    document.getElementById('lista-pedidos').innerHTML = '<div class="vazio-pedidos">Você ainda não tem nenhuma empresa cadastrada.</div>';
+    return;
+  }
+
+  document.getElementById('filtro-empresa-pedidos').innerHTML = '<option value="">Todas as minhas empresas</option>' +
+    minhasEmpresasPedidos.map(e => `<option value="${e.id}">${escapeHtmlPedidos(e.name)}</option>`).join('');
+
+  await carregarPedidos();
+}
+
+async function carregarPedidos(){
+  const idsEmpresas = minhasEmpresasPedidos.map(e => e.id);
+  const { data, error } = await supabaseClientPedidos
+    .from('pedidos')
+    .select('*, profissionais(name)')
+    .in('profissional_id', idsEmpresas)
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); document.getElementById('lista-pedidos').innerHTML = '<div class="vazio-pedidos">Erro ao carregar pedidos.</div>'; return; }
+
+  todosPedidos = data || [];
+  renderPedidos();
+}
+
+function mudarAbaPedidos(status, btn){
+  abaStatusAtual = status;
+  document.querySelectorAll('.abas-pedidos button').forEach(b => b.classList.remove('ativa'));
+  btn.classList.add('ativa');
+  renderPedidos();
+}
+
+function renderPedidos(){
+  const empresaFiltro = document.getElementById('filtro-empresa-pedidos').value;
+  const statusFiltro = abaStatusAtual ? abaStatusAtual.split(',') : null;
+
+  let lista = todosPedidos.filter(p => {
+    if(empresaFiltro && p.profissional_id !== empresaFiltro) return false;
+    if(statusFiltro && !statusFiltro.includes(p.status)) return false;
+    return true;
+  });
+
+  const container = document.getElementById('lista-pedidos');
+  if(lista.length === 0){
+    container.innerHTML = '<div class="vazio-pedidos">Nenhum pedido por aqui.</div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(p => {
+    const itens = (p.itens || []).map(i => `${escapeHtmlPedidos(i.nome)} — R$ ${escapeHtmlPedidos(i.preco)}`).join('<br>');
+    const nomeEmpresa = p.profissionais ? p.profissionais.name : '';
+    const dataFormatada = new Date(p.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+    let acoes = '';
+    if(p.status === 'aguardando_confirmacao'){
+      acoes = `
+        <button type="button" class="btn-aceitar" onclick="mudarStatusPedido('${p.id}', 'aceito')">✅ Aceitar</button>
+        <button type="button" class="btn-recusar" onclick="mudarStatusPedido('${p.id}', 'recusado')">❌ Recusar</button>
+      `;
+    } else if(p.status === 'aceito'){
+      acoes = `<button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'preparando')">👨‍🍳 Marcar como preparando</button>`;
+    } else if(p.status === 'preparando'){
+      acoes = `<button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'pronto')">📦 Marcar como pronto</button>`;
+    } else if(p.status === 'pronto'){
+      acoes = `
+        <button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'saiu_entrega')">🛵 Saiu pra entrega</button>
+        <button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'concluido')">✅ Concluir (retirada)</button>
+      `;
+    } else if(p.status === 'saiu_entrega'){
+      acoes = `<button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'concluido')">✅ Marcar como entregue</button>`;
+    }
+
+    return `
+      <div class="card-pedido">
+        <div class="topo-pedido">
+          <b style="font-size:0.85rem;">${escapeHtmlPedidos(nomeEmpresa)}</b>
+          <span class="status-pedido status-${p.status}">${statusTextoPedidos(p.status)}</span>
+        </div>
+        <div class="itens-pedido">${itens}</div>
+        <div class="total-pedido">Total: R$ ${Number(p.total).toFixed(2).replace('.', ',')}</div>
+        <div class="data-pedido">${dataFormatada}</div>
+        ${acoes ? `<div class="acoes-pedido">${acoes}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function statusTextoPedidos(status){
+  const mapa = {
+    aguardando_confirmacao: '🟡 Aguardando',
+    aceito: '✅ Aceito',
+    preparando: '👨‍🍳 Preparando',
+    pronto: '📦 Pronto',
+    saiu_entrega: '🛵 Em entrega',
+    concluido: '✅ Concluído',
+    recusado: '❌ Recusado',
+    cancelado: '🚫 Cancelado'
+  };
+  return mapa[status] || status;
+}
+
+async function mudarStatusPedido(pedidoId, novoStatus){
+  const { error } = await supabaseClientPedidos.from('pedidos').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', pedidoId);
+  if(error){ console.error(error); alert('Erro ao atualizar pedido.'); return; }
+
+  // Avisa o cliente no Papo sobre a mudança de status
+  const pedido = todosPedidos.find(p => p.id === pedidoId);
+  if(pedido && pedido.conversa_id){
+    await supabaseClientPedidos.from('mensagens_chat').insert({
+      conversa_id: pedido.conversa_id,
+      remetente_user_id: currentUserPedidos.id,
+      tipo: 'texto',
+      texto: `📦 Seu pedido foi atualizado: ${statusTextoPedidos(novoStatus)}`,
+      lida: false
+    });
+    await supabaseClientPedidos.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', pedido.conversa_id);
+  }
+
+  await carregarPedidos();
+}
+
+initPedidos();
+</script>
+</body>
+</html>

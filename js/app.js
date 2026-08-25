@@ -400,6 +400,12 @@ async function loadEntries(){
   loadContagemSeguidores().then(render);
   render();
   tentarIniciarNotificacoes();
+
+  const btnPedidos = document.getElementById('btn-meus-pedidos');
+  if(btnPedidos){
+    const temEmpresaPropria = currentUser && entries.some(e => e.user_id === currentUser.id);
+    btnPedidos.style.display = temEmpresaPropria ? 'block' : 'none';
+  }
 }
 
 function abrirCadastroSePendente(){
@@ -1740,6 +1746,59 @@ let storyLimiteFotos = 1;
 
 let arquivoVideoSelecionado = null;
 
+async function abrirConfigAtendimento(profissionalId){
+  document.getElementById('atendimento-profissional-id').value = profissionalId;
+  document.getElementById('atendimento-msg').textContent = 'carregando...';
+
+  const { data: config } = await supabaseClient.from('atendimento_config').select('*').eq('profissional_id', profissionalId).maybeSingle();
+
+  document.getElementById('atendimento-ativo').checked = config ? config.ativo : false;
+  document.getElementById('atendimento-boas-vindas').value = config ? (config.mensagem_boas_vindas || '') : '';
+  document.getElementById('atendimento-pix').checked = config ? config.aceita_pix : true;
+  document.getElementById('atendimento-dinheiro').checked = config ? config.aceita_dinheiro : true;
+  document.getElementById('atendimento-cartao').checked = config ? config.aceita_cartao : true;
+  document.getElementById('atendimento-faz-entrega').checked = config ? config.faz_entrega : false;
+  document.getElementById('atendimento-taxa-base').value = config ? config.taxa_base_entrega : '';
+  document.getElementById('atendimento-valor-km').value = config ? config.valor_por_km : '';
+  document.getElementById('atendimento-taxa-campo').style.display = (config && config.faz_entrega) ? 'block' : 'none';
+  document.getElementById('atendimento-msg').textContent = '';
+
+  document.getElementById('atendimento-form').style.display = 'block';
+  document.getElementById('atendimento-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function fecharConfigAtendimento(){
+  document.getElementById('atendimento-form').style.display = 'none';
+}
+
+async function salvarConfigAtendimento(e){
+  e.preventDefault();
+  const msg = document.getElementById('atendimento-msg');
+  const profissionalId = document.getElementById('atendimento-profissional-id').value;
+
+  const payload = {
+    profissional_id: profissionalId,
+    ativo: document.getElementById('atendimento-ativo').checked,
+    mensagem_boas_vindas: document.getElementById('atendimento-boas-vindas').value.trim() || null,
+    aceita_pix: document.getElementById('atendimento-pix').checked,
+    aceita_dinheiro: document.getElementById('atendimento-dinheiro').checked,
+    aceita_cartao: document.getElementById('atendimento-cartao').checked,
+    faz_entrega: document.getElementById('atendimento-faz-entrega').checked,
+    taxa_base_entrega: parseFloat(document.getElementById('atendimento-taxa-base').value) || 0,
+    valor_por_km: parseFloat(document.getElementById('atendimento-valor-km').value) || 0,
+    updated_at: new Date().toISOString()
+  };
+
+  msg.textContent = 'salvando...';
+  const { error } = await supabaseClient.from('atendimento_config').upsert(payload, { onConflict: 'profissional_id' });
+
+  if(error){ console.error(error); msg.textContent = 'erro ao salvar: ' + error.message; return false; }
+
+  msg.textContent = 'configuração salva!';
+  setTimeout(fecharConfigAtendimento, 1200);
+  return false;
+}
+
 async function abrirFormVideo(profissionalId, plano){
   document.getElementById('video-profissional-id').value = profissionalId;
   document.getElementById('video-plano').value = plano;
@@ -2852,6 +2911,8 @@ function render(){
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<button type="button" class="link-ver-produtos" style="background:#6b46c1; border:none; cursor:pointer;" onclick="abrirFormVideo('${e.id}', '${e.plano}')">🎥 Postar vídeo</button>` : ''}
+          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
+          ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
           ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
           ${isOwner && e.plano === 'premium' ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>
