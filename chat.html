@@ -32,6 +32,12 @@
   .papo-header-topo h1 { color: white; font-size: 1.5rem; font-weight: 800; }
   .papo-header-icones { display: flex; gap: 18px; align-items: center; position: relative; }
   .papo-header-icones button { background: none; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 2px; }
+  .papo-meu-codigo-badge {
+    background: rgba(255,255,255,0.22); color: white; border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 50px; padding: 5px 12px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
+    cursor: pointer;
+  }
+  .papo-meu-codigo-badge:hover { background: rgba(255,255,255,0.32); }
   .menu-papo-mais {
     position: absolute; top: 34px; right: 0; background: white; border-radius: 10px;
     box-shadow: 0 4px 18px rgba(0,0,0,0.25); width: 240px; padding: 8px; z-index: 60;
@@ -347,6 +353,7 @@
     <div class="papo-header-app">
       <div class="papo-header-topo">
         <h1>Papo</h1>
+        <button type="button" class="papo-meu-codigo-badge" id="papo-meu-codigo-badge" onclick="copiarMeuCodigoPapo()" title="Seu código do Papo — compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone" style="display:none;"></button>
         <div class="papo-header-icones">
           <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔔</button>
           <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
@@ -797,6 +804,44 @@ function fecharStoryPapoChatViewer(){
   if(viewer) viewer.classList.remove('aberto');
 }
 
+let meuCodigoPapoAtual = null;
+
+async function exibirBadgeMeuCodigoPapo(){
+  if(!currentUserChat) return;
+
+  const { data: perfilExistente } = await supabaseClientChat.from('perfis_usuario').select('codigo_guiazap').eq('user_id', currentUserChat.id).maybeSingle();
+
+  if(perfilExistente){
+    meuCodigoPapoAtual = perfilExistente.codigo_guiazap;
+  } else {
+    // Primeira vez — gera um código novo (mesmo padrão usado na tela inicial)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let codigoNovo, salvo = false, tentativas = 0;
+    while(!salvo && tentativas < 5){
+      codigoNovo = 'GZ-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      const { error } = await supabaseClientChat.from('perfis_usuario').insert({ user_id: currentUserChat.id, codigo_guiazap: codigoNovo });
+      if(!error) salvo = true; else tentativas++;
+    }
+    meuCodigoPapoAtual = salvo ? codigoNovo : null;
+  }
+
+  const badge = document.getElementById('papo-meu-codigo-badge');
+  if(meuCodigoPapoAtual && badge){
+    badge.textContent = '🔑 ' + meuCodigoPapoAtual;
+    badge.style.display = 'inline-block';
+  }
+}
+
+async function copiarMeuCodigoPapo(){
+  if(!meuCodigoPapoAtual) return;
+  try{
+    await navigator.clipboard.writeText(meuCodigoPapoAtual);
+    alert('Código copiado! Esse é o número que outras pessoas usam pra te adicionar no Papo, sem precisar do seu e-mail ou telefone.');
+  } catch(e){
+    prompt('Copie seu código abaixo:', meuCodigoPapoAtual);
+  }
+}
+
 function toggleModoVibracaoChamada(){
   const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
   const novoValor = !ativo;
@@ -842,19 +887,12 @@ async function initChat(){
   }
 
   if(!sessaoFinal){
-    document.getElementById('chat-lista-box').innerHTML = `
-      <div class="vazio-chat">
-        <div class="vazio-chat-icone">🔒</div>
-        <div class="vazio-chat-titulo">Faça login pra ver seus Papos</div>
-        <div class="vazio-chat-texto">Entre na sua conta na <a href="index.html">página inicial</a> pra acessar suas conversas.</div>
-      </div>
-    `;
-    supabaseClientChat.auth.onAuthStateChange((event, sessaoNova) => {
-      if(sessaoNova && !currentUserChat) initChat();
-    });
+    localStorage.setItem('abrirCadastroPapoAoCarregar', '1');
+    window.location.href = 'index.html';
     return;
   }
   currentUserChat = sessaoFinal.user;
+  exibirBadgeMeuCodigoPapo();
 
   const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
   meusCadastrosChat = cadastros || [];

@@ -90,21 +90,16 @@ function gerarCodigoGuiaZapAleatorio(){
   return 'GZ-' + codigo;
 }
 
-async function mostrarMeuCodigoGuiaZap(){
-  if(!currentUser) return;
-  const box = document.getElementById('codigo-guiazap-box');
-  const jaAberto = box.style.display === 'block';
-  box.style.display = jaAberto ? 'none' : 'block';
-  if(jaAberto) return;
+let meuCodigoGuiaZapAtual = null;
 
-  const input = document.getElementById('codigo-guiazap-input');
-  input.value = 'carregando...';
+async function garantirCodigoGuiaZap(){
+  if(!currentUser) return null;
+  if(meuCodigoGuiaZapAtual) return meuCodigoGuiaZapAtual;
 
   const { data: perfilExistente } = await supabaseClient.from('perfis_usuario').select('codigo_guiazap').eq('user_id', currentUser.id).maybeSingle();
-
   if(perfilExistente){
-    input.value = perfilExistente.codigo_guiazap;
-    return;
+    meuCodigoGuiaZapAtual = perfilExistente.codigo_guiazap;
+    return meuCodigoGuiaZapAtual;
   }
 
   // Primeira vez — gera um código novo e tenta salvar (tenta de novo se, por
@@ -118,7 +113,32 @@ async function mostrarMeuCodigoGuiaZap(){
     if(!error){ salvo = true; } else { codigoNovo = gerarCodigoGuiaZapAleatorio(); tentativas++; }
   }
 
-  input.value = salvo ? codigoNovo : 'erro ao gerar, tente de novo';
+  meuCodigoGuiaZapAtual = salvo ? codigoNovo : null;
+  return meuCodigoGuiaZapAtual;
+}
+
+async function exibirBadgeMeuCodigoGuiaZap(){
+  const codigo = await garantirCodigoGuiaZap();
+  const badge = document.getElementById('meu-codigo-inline-box');
+  const valor = document.getElementById('meu-codigo-inline-valor');
+  if(!badge || !valor) return;
+  if(codigo){
+    valor.textContent = codigo;
+    badge.style.display = 'block';
+  }
+}
+
+async function mostrarMeuCodigoGuiaZap(){
+  if(!currentUser) return;
+  const box = document.getElementById('codigo-guiazap-box');
+  const jaAberto = box.style.display === 'block';
+  box.style.display = jaAberto ? 'none' : 'block';
+  if(jaAberto) return;
+
+  const input = document.getElementById('codigo-guiazap-input');
+  input.value = 'carregando...';
+  const codigo = await garantirCodigoGuiaZap();
+  input.value = codigo || 'erro ao gerar, tente de novo';
 }
 
 function copiarCodigoGuiaZap(){
@@ -189,8 +209,10 @@ async function updateAuthUI(){
     addBtn.style.display = 'block';
     abrirCadastroSePendente();
     abrirStorySeVindoDoProduto();
+    abrirLoginSeVeioDoPapo();
     atualizarUltimoLogin();
     atualizarVisibilidadeBotaoPush();
+    exibirBadgeMeuCodigoGuiaZap();
   } else {
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
@@ -198,6 +220,7 @@ async function updateAuthUI(){
     document.getElementById('trocar-senha-box').style.display = 'none';
     closeForm();
     abrirStorySeVindoDoProduto();
+    abrirLoginSeVeioDoPapo();
     const btnPush = document.getElementById('btn-ativar-push');
     if(btnPush) btnPush.style.display = 'none';
   }
@@ -240,6 +263,7 @@ async function signIn(){
 
 async function signOut(){
   modoGerenciarAtivo = false;
+  meuCodigoGuiaZapAtual = null;
   await supabaseClient.auth.signOut();
   document.getElementById('auth-email').value = '';
   document.getElementById('auth-password').value = '';
@@ -362,6 +386,26 @@ function abrirCadastroSePendente(){
     localStorage.removeItem('abrirCadastroAposLogin');
     setTimeout(() => openForm(), 300);
   }
+}
+
+function abrirLoginSeVeioDoPapo(){
+  if(localStorage.getItem('abrirCadastroPapoAoCarregar') !== '1') return;
+
+  if(currentUser){
+    localStorage.removeItem('abrirCadastroPapoAoCarregar');
+    window.location.href = 'chat.html';
+    return;
+  }
+
+  const authBox = document.getElementById('auth-form-fields');
+  if(authBox.style.display === 'none') toggleAuthForm();
+
+  const msg = document.getElementById('auth-msg');
+  if(msg) msg.textContent = '🔒 Crie uma conta (ou entre na sua) pra poder usar o Papo';
+
+  setTimeout(() => {
+    document.getElementById('auth-logged-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
 }
 
 function abrirStorySeVindoDoProduto(){
@@ -2837,6 +2881,7 @@ function escapeHtml(str){
 
 function mostrarWelcomeGateSeNecessario(){
   if(localStorage.getItem('jaVisitouGuiaZap') === '1') return;
+  if(localStorage.getItem('abrirCadastroPapoAoCarregar') === '1') return;
   document.getElementById('welcome-gate').style.display = 'flex';
 }
 
