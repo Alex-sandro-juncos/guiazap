@@ -33,6 +33,8 @@
 <div class="videos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
+  <button type="button" id="btn-postar-video-aqui" class="btn-baixar-app" style="display:none; background:#6b46c1; border:none; cursor:pointer; width:100%; margin-bottom:14px;" onclick="irPostarVideo()">🎥 Postar um vídeo</button>
+
   <div class="filtros-video">
     <button type="button" class="chip-filtro-rapido ativo" id="filtro-recentes" onclick="mudarOrdemVideos('recentes')">Mais recentes</button>
     <button type="button" class="chip-filtro-rapido" id="filtro-vistos" onclick="mudarOrdemVideos('vistos')">Mais vistos</button>
@@ -72,6 +74,16 @@ function tempoRelativoVideo(dataStr){
 async function initVideos(){
   const { data: { session } } = await supabaseClientVideos.auth.getSession();
   usuarioAtualVideos = session ? session.user : null;
+
+  if(usuarioAtualVideos){
+    const { data: minhasEmpresas } = await supabaseClientVideos.from('profissionais').select('id, plano').eq('user_id', usuarioAtualVideos.id).in('plano', ['completo', 'premium']);
+    if(minhasEmpresas && minhasEmpresas.length > 0){
+      const btn = document.getElementById('btn-postar-video-aqui');
+      btn.style.display = 'block';
+      btn.dataset.profissionalId = minhasEmpresas[0].id;
+      btn.dataset.plano = minhasEmpresas[0].plano;
+    }
+  }
 
   const { data, error } = await supabaseClientVideos
     .from('videos_empresa')
@@ -202,6 +214,12 @@ async function denunciarVideo(videoId){
   const { error } = await supabaseClientVideos.from('denuncias_videos').insert({ video_id: videoId, motivo: motivo || null });
   if(error){ console.error(error); alert('Erro ao denunciar.'); return; }
   alert('Denúncia enviada. Nossa equipe vai analisar.');
+}
+
+function irPostarVideo(){
+  const btn = document.getElementById('btn-postar-video-aqui');
+  localStorage.setItem('abrirFormVideoAoCarregar', JSON.stringify({ profissionalId: btn.dataset.profissionalId, plano: btn.dataset.plano }));
+  window.location.href = 'index.html';
 }
 
 initVideos();

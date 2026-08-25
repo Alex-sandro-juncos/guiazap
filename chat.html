@@ -368,6 +368,7 @@
     <div class="papo-header-app">
       <div class="papo-header-topo">
         <h1>Papo</h1>
+        <button type="button" id="btn-instalar-papo-topo" onclick="instalarAppPapo()" title="Instalar o GuiaPapo no seu celular" style="display:none; background:none; border:none; color:white; font-size:1.15rem; cursor:pointer; padding:2px;">📲</button>
         <button type="button" class="papo-meu-codigo-badge" id="papo-meu-codigo-badge" onclick="copiarMeuCodigoPapo()" title="Seu código do Papo — compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone" style="display:none;"></button>
         <div class="papo-header-icones">
           <button type="button" id="btn-ativar-push-icone" onclick="ativarNotificacoesPushPapo()" title="Ativar notificações (chamadas e mensagens mesmo com o site fechado)" style="display:none;">🛎️</button>
@@ -2444,19 +2445,43 @@ async function processarRenegociacaoOferta(payload){
   if(!peerConnectionAtual || !canalEnvioAtual) return;
 
   try{
+    // A resposta técnica (SDP) precisa ser enviada de qualquer forma pra
+    // conexão continuar funcionando — isso não liga a MINHA câmera sozinho,
+    // só permite que eu comece a ver o vídeo que o outro lado já decidiu mandar.
     await peerConnectionAtual.setRemoteDescription(new RTCSessionDescription(payload.offer));
     const answer = await peerConnectionAtual.createAnswer();
     await peerConnectionAtual.setLocalDescription(answer);
     canalEnvioAtual.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
 
-    // O outro lado ligou a câmera — mostra a área de vídeo (o vídeo remoto
-    // chega sozinho pelo pc.ontrack assim que a conexão terminar de renegociar)
-    chamadaComVideoAtual = true;
     document.getElementById('videos-chamada-box').classList.remove('somente-audio');
     document.getElementById('avatar-chamada-audio').style.display = 'none';
+
+    // Pergunta pra pessoa se ela também quer ligar a própria câmera —
+    // em vez de já ligar tudo sozinho sem avisar
+    mostrarAvisoOutroLadoAtivouVideo();
   } catch(e){
     console.error('erro ao processar pedido de vídeo do outro lado', e);
   }
+}
+
+function mostrarAvisoOutroLadoAtivouVideo(){
+  if(document.getElementById('aviso-video-outro-lado')) return;
+
+  const aviso = document.createElement('div');
+  aviso.id = 'aviso-video-outro-lado';
+  aviso.style.cssText = 'position:absolute; bottom:100px; left:12px; right:12px; background:rgba(0,0,0,0.85); color:white; border-radius:12px; padding:12px 14px; z-index:50; text-align:center; font-size:0.85rem;';
+  aviso.innerHTML = `
+    <div style="margin-bottom:10px;">📹 ${chamadaComQuemNome || 'A pessoa'} ativou a câmera. Quer ativar a sua também?</div>
+    <div style="display:flex; gap:8px; justify-content:center;">
+      <button type="button" onclick="ativarVideoNaChamada(); document.getElementById('aviso-video-outro-lado').remove();" style="background:var(--verde-whats); color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Sim, ativar</button>
+      <button type="button" onclick="document.getElementById('aviso-video-outro-lado').remove();" style="background:rgba(255,255,255,0.2); color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Agora não</button>
+    </div>
+  `;
+  const containerChamada = document.getElementById('chamada-ativa-view');
+  if(containerChamada) containerChamada.appendChild(aviso);
+  else document.body.appendChild(aviso);
+
+  setTimeout(() => { const el = document.getElementById('aviso-video-outro-lado'); if(el) el.remove(); }, 12000);
 }
 
 function alternarCamera(){
@@ -2526,11 +2551,18 @@ if('serviceWorker' in navigator){
 }
 
 let promptInstalacaoPapo = null;
+
+function _controlarBotoesInstalarPapo(mostrar){
+  ['btn-instalar-papo', 'btn-instalar-papo-topo'].forEach(id => {
+    const btn = document.getElementById(id);
+    if(btn) btn.style.display = mostrar ? (id === 'btn-instalar-papo-topo' ? 'inline-block' : 'block') : 'none';
+  });
+}
+
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   promptInstalacaoPapo = event;
-  const btn = document.getElementById('btn-instalar-papo');
-  if(btn) btn.style.display = 'block';
+  _controlarBotoesInstalarPapo(true);
 });
 
 async function instalarAppPapo(){
@@ -2538,15 +2570,13 @@ async function instalarAppPapo(){
   promptInstalacaoPapo.prompt();
   const { outcome } = await promptInstalacaoPapo.userChoice;
   if(outcome === 'accepted'){
-    const btn = document.getElementById('btn-instalar-papo');
-    if(btn) btn.style.display = 'none';
+    _controlarBotoesInstalarPapo(false);
   }
   promptInstalacaoPapo = null;
 }
 
 window.addEventListener('appinstalled', () => {
-  const btn = document.getElementById('btn-instalar-papo');
-  if(btn) btn.style.display = 'none';
+  _controlarBotoesInstalarPapo(false);
 });
 </script>
 <script src="js/modo-escuro.js"></script>

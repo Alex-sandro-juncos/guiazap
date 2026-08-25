@@ -226,6 +226,7 @@ async function updateAuthUI(){
     abrirCadastroSePendente();
     abrirStorySeVindoDoProduto();
     abrirLoginSeVeioDoPapo();
+    abrirFormVideoSePendente();
     atualizarUltimoLogin();
     atualizarVisibilidadeBotaoPush();
     exibirBadgeMeuCodigoGuiaZap();
@@ -406,6 +407,18 @@ function abrirCadastroSePendente(){
     localStorage.removeItem('abrirCadastroAposLogin');
     setTimeout(() => openForm(), 300);
   }
+}
+
+function abrirFormVideoSePendente(){
+  if(!currentUser) return;
+  const pendente = localStorage.getItem('abrirFormVideoAoCarregar');
+  if(!pendente) return;
+  localStorage.removeItem('abrirFormVideoAoCarregar');
+
+  try{
+    const { profissionalId, plano } = JSON.parse(pendente);
+    if(profissionalId) setTimeout(() => abrirFormVideo(profissionalId, plano), 400);
+  } catch(e){ console.error(e); }
 }
 
 function abrirLoginSeVeioDoPapo(){
