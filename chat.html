@@ -152,7 +152,7 @@
 
   .chat-input-area-wrap { display: flex; align-items: flex-end; gap: 8px; margin: 10px -15px -15px; padding: 8px 12px 12px; background: transparent; }
   .chat-input-pill {
-    flex: 1; display: flex; align-items: center; gap: 2px; background: white; border-radius: 26px;
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; background: white; border-radius: 26px;
     padding: 4px 6px 4px 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   body.dark-mode .chat-input-pill { background: #202c33; }
@@ -482,7 +482,7 @@
     <div class="chat-input-area-wrap" id="chat-input-row-normal">
       <div class="chat-input-pill">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
-        <input type="text" id="chat-input-texto" placeholder="Mensagem" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
+        <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
         <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
@@ -2319,6 +2319,7 @@ async function iniciarChamada(comVideo){
   document.getElementById('btn-camera').style.display = 'flex';
 
   const pc = new RTCPeerConnection(STUN_SERVERS);
+  peerConnectionAtual = pc;
   streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
   chamadaComVideoAtual = comVideo;
   euTenhoVideoAtivo = comVideo;
@@ -2331,6 +2332,16 @@ async function iniciarChamada(comVideo){
   };
 
   const canalEnvio = await abrirCanalEnvio(destinatarioId);
+  canalEnvioAtual = canalEnvio;
+
+  // Se a pessoa cancelou enquanto isso tudo carregava (ex: clicou muito
+  // rápido em desligar), para tudo aqui em vez de continuar discando —
+  // sem essa checagem, a chamada seguia tocando pro outro lado mesmo
+  // depois de cancelada.
+  if(!peerConnectionAtual){
+    supabaseClientChat.removeChannel(canalEnvio);
+    return;
+  }
 
   pc.onicecandidate = (event) => {
     if(event.candidate){
@@ -2370,9 +2381,6 @@ async function iniciarChamada(comVideo){
       tipo: 'chamada'
     })
   }).catch(e => console.error('erro ao notificar chamada', e));
-
-  peerConnectionAtual = pc;
-  canalEnvioAtual = canalEnvio;
 }
 
 function alternarMudo(){
