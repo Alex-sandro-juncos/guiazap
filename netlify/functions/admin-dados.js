@@ -31,7 +31,7 @@ exports.handler = async function (event) {
       return resp.json();
     }
 
-    const [feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios] = await Promise.all([
+    const [feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios, perfisUsuario] = await Promise.all([
       buscar('feedback_site'),
       buscar('denuncias'),
       buscar('denuncias_produtos'),
@@ -41,12 +41,13 @@ exports.handler = async function (event) {
       buscar('produtos', 'nome.asc'),
       buscar('depoimentos'),
       buscar('blog_posts'),
-      buscar('blog_comentarios')
+      buscar('blog_comentarios'),
+      buscar('perfis_usuario')
     ]);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios })
+      body: JSON.stringify({ feedbackSite, denuncias, denunciasProdutos, denunciasBlog, mensagensEmpresa, profissionais, produtos, depoimentos, blogPosts, blogComentarios, perfisUsuario })
     };
   } catch (err) {
     console.error(err);

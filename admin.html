@@ -426,11 +426,13 @@ function normalizarTextoAdmin(str){
 }
 
 function textoBuscavelDoItem(item){
+  const perfilDono = item.user_id ? (dadosAdmin.perfisUsuario || []).find(p => p.user_id === item.user_id) : null;
   // Junta os campos relevantes de cada tipo de item, pra buscar em todos de uma vez
   return normalizarTextoAdmin([
     item.name, item.nome, item.cat, item.categoria, item.marca,
     item.cidade, item.user_email, item.remetente_email,
-    item.mensagem, item.denunciante_email
+    item.mensagem, item.denunciante_email,
+    perfilDono ? perfilDono.codigo_guiazap : null
   ].filter(Boolean).join(' '));
 }
 
@@ -469,9 +471,10 @@ function renderAdmin(){
     }
     if(abaAtual === 'empresas'){
       const ativo = item.status_pagamento === 'ativo';
+      const perfilDono = (dadosAdmin.perfisUsuario || []).find(p => p.user_id === item.user_id);
       return `<div class="admin-item">
         <div class="tipo">${item.verificado ? '✅ ' : ''}${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
-        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
+        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}${perfilDono && perfilDono.codigo_guiazap ? ` · 🔑 ${perfilDono.codigo_guiazap}` : ''}</div>
         <div class="admin-acoes">
           ${ativo
             ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>`
