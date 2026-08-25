@@ -84,10 +84,9 @@ async function toggleStatusDisponibilidade(profissionalId){
 }
 
 function gerarCodigoGuiaZapAleatorio(){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem letras/números fáceis de confundir (0, O, I, 1)
-  let codigo = '';
-  for(let i = 0; i < 6; i++){ codigo += chars[Math.floor(Math.random() * chars.length)]; }
-  return 'GZ-' + codigo;
+  let codigo = 'GZ';
+  for(let i = 0; i < 8; i++){ codigo += Math.floor(Math.random() * 10); }
+  return codigo;
 }
 
 let meuCodigoGuiaZapAtual = null;
@@ -219,6 +218,8 @@ async function updateAuthUI(){
     atualizarUltimoLogin();
     atualizarVisibilidadeBotaoPush();
     exibirBadgeMeuCodigoGuiaZap();
+    const btnChatFlutuante = document.getElementById('btn-chat-flutuante');
+    if(btnChatFlutuante) btnChatFlutuante.style.display = 'flex';
   } else {
     loggedOutBox.style.display = 'block';
     loggedInBox.style.display = 'none';
@@ -226,6 +227,8 @@ async function updateAuthUI(){
     document.getElementById('trocar-senha-box').style.display = 'none';
     closeForm();
     abrirStorySeVindoDoProduto();
+    const btnChatFlutuante = document.getElementById('btn-chat-flutuante');
+    if(btnChatFlutuante) btnChatFlutuante.style.display = 'none';
     abrirLoginSeVeioDoPapo();
     const btnPush = document.getElementById('btn-ativar-push');
     if(btnPush) btnPush.style.display = 'none';

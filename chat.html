@@ -820,10 +820,9 @@ async function exibirBadgeMeuCodigoPapo(){
     }
   } else {
     // Primeira vez — gera um código novo (mesmo padrão usado na tela inicial)
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let codigoNovo, salvo = false, tentativas = 0;
     while(!salvo && tentativas < 5){
-      codigoNovo = 'GZ-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      codigoNovo = 'GZ' + Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
       const { error } = await supabaseClientChat.from('perfis_usuario').insert({ user_id: currentUserChat.id, codigo_guiazap: codigoNovo, nome_exibicao: nomeDoCadastro });
       if(!error) salvo = true; else tentativas++;
     }
@@ -1047,7 +1046,7 @@ async function enviarConteudoCompartilhado(conversaId){
 }
 
 async function compartilharComNovoContato(){
-  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ12345678):');
   if(!codigo) return;
 
   const codigoLimpo = codigo.trim().toUpperCase();
@@ -1099,7 +1098,7 @@ async function abrirOuCriarConversaComPessoa(userId){
 }
 
 async function adicionarContatoPorCodigo(){
-  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ-AB12CD):');
+  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ12345678):');
   if(!codigo) return;
 
   const codigoLimpo = codigo.trim().toUpperCase();
@@ -1113,6 +1112,18 @@ async function adicionarContatoPorCodigo(){
   if(perfilAlvo.user_id === currentUserChat.id){
     alert('Esse é o seu próprio código!');
     return;
+  }
+
+  // Pede um nome pra salvar esse contato na agenda, já sugerindo o nome de
+  // exibição da pessoa como ponto de partida
+  const nomeParaSalvar = prompt('Encontrado! Qual nome você quer salvar pra esse contato?', perfilAlvo.nome_exibicao || '');
+  if(nomeParaSalvar && nomeParaSalvar.trim()){
+    const { data: contatoExistente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', perfilAlvo.user_id).maybeSingle();
+    if(contatoExistente){
+      await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nomeParaSalvar.trim() }).eq('id', contatoExistente.id);
+    } else {
+      await supabaseClientChat.from('agenda_contatos').insert({ dono_user_id: currentUserChat.id, contato_user_id: perfilAlvo.user_id, nome_salvo: nomeParaSalvar.trim() });
+    }
   }
 
   // Confere se já existe uma conversa com essa pessoa (em qualquer ordem)
