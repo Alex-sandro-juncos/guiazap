@@ -252,6 +252,7 @@ function _mostrarPopupChamadaEntrando(payload){
 function _tocarBipPopup(frequencia, duracaoMs, volume){
   try{
     if(!_chamadaContextoAudio) _chamadaContextoAudio = new (window.AudioContext || window.webkitAudioContext)();
+    if(_chamadaContextoAudio.state === 'suspended') _chamadaContextoAudio.resume();
     const osc = _chamadaContextoAudio.createOscillator();
     const gain = _chamadaContextoAudio.createGain();
     osc.connect(gain);

@@ -1616,6 +1616,10 @@ let contextoAudioChamada = null;
 function tocarBip(frequencia, duracaoMs, volume){
   try{
     if(!contextoAudioChamada) contextoAudioChamada = new (window.AudioContext || window.webkitAudioContext)();
+    // Navegadores às vezes criam o contexto "suspenso" quando ele nasce fora
+    // de um clique direto (ex: depois de esperar a câmera/microfone liberar)
+    // — sem isso, o som fica mudo pra sempre, sem nenhum erro no console.
+    if(contextoAudioChamada.state === 'suspended') contextoAudioChamada.resume();
     const oscillator = contextoAudioChamada.createOscillator();
     const gainNode = contextoAudioChamada.createGain();
     oscillator.connect(gainNode);
@@ -1631,6 +1635,8 @@ function tocarBip(frequencia, duracaoMs, volume){
 // Tom de discagem — pra quem está ligando, toca enquanto espera a pessoa atender
 function iniciarTomDiscagem(){
   pararSomChamada();
+  tocarBip(480, 900, 0.12);
+  setTimeout(() => tocarBip(440, 900, 0.12), 100);
   intervaloSomChamada = setInterval(() => {
     tocarBip(480, 900, 0.12);
     setTimeout(() => tocarBip(440, 900, 0.12), 100);
