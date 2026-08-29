@@ -17,15 +17,26 @@ exports.handler = async function (event) {
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const headers = { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` };
 
-    // Descobre quem são os dois participantes dessa conversa
+    // Descobre quem são os dois participantes dessa conversa (sem embed —
+    // relação conversas↔profissionais dá erro 400 quando combinada assim)
     const conversaResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/conversas?id=eq.${conversaId}&select=visitante_user_id,profissional_id,usuario2_id,silenciada_por_visitante,silenciada_por_empresa,profissionais(name,user_id)`,
+      `${SUPABASE_URL}/rest/v1/conversas?id=eq.${conversaId}&select=visitante_user_id,profissional_id,usuario2_id,silenciada_por_visitante,silenciada_por_empresa`,
       { headers }
     );
     const conversas = await conversaResp.json();
     const conversa = conversas[0];
     if (!conversa) {
       return { statusCode: 200, body: JSON.stringify({ enviado: false, motivo: 'conversa não encontrada' }) };
+    }
+
+    let empresa = null;
+    if (conversa.profissional_id) {
+      const empresaResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/profissionais?id=eq.${conversa.profissional_id}&select=name,user_id`,
+        { headers }
+      );
+      const empresas = await empresaResp.json();
+      empresa = empresas[0] || null;
     }
 
     let destinatarioUserId;
@@ -46,8 +57,8 @@ exports.handler = async function (event) {
       const remetentePerfil = await remetenteResp.json();
       nomeRemetente = (remetentePerfil[0] && remetentePerfil[0].nome_exibicao) || 'Um contato do GuiaZap';
     } else {
-      const donoEmpresaUserId = conversa.profissionais ? conversa.profissionais.user_id : null;
-      const nomeEmpresa = conversa.profissionais ? conversa.profissionais.name : 'Empresa';
+      const donoEmpresaUserId = empresa ? empresa.user_id : null;
+      const nomeEmpresa = empresa ? empresa.name : 'Empresa';
 
       if (remetenteUserId === conversa.visitante_user_id) {
         destinatarioUserId = donoEmpresaUserId;
@@ -76,7 +87,8 @@ exports.handler = async function (event) {
         titulo: `💬 Nova mensagem de ${nomeRemetente}`,
         mensagem: texto.slice(0, 100),
         url: '/chat.html',
-        userIds: [destinatarioUserId]
+        userIds: [destinatarioUserId],
+        tipo: 'mensagem'
       })
     });
 

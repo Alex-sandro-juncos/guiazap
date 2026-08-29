@@ -58,7 +58,8 @@ self.addEventListener('push', (event) => {
     // Padrão de vibração mais forte e repetido pra chamada (chama mais
     // atenção), padrão simples pra notificações comuns
     vibrate: ehChamada ? [400, 200, 400, 200, 400, 200, 400] : [200, 100, 200],
-    requireInteraction: ehChamada // chamada fica na tela até a pessoa interagir, não some sozinha
+    requireInteraction: ehChamada, // chamada fica na tela até a pessoa interagir, não some sozinha
+    silent: false // nunca silenciosa — sempre toca o som padrão de notificação do aparelho
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

@@ -19,7 +19,7 @@
     height: 100%;
     overflow: hidden;
     padding-bottom: 0 !important;
-    margin: 0;
+    margin: 0 auto;
   }
   .chat-wrap { max-width: 700px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; position: relative; }
   #chat-topo-lista { display: flex; flex-direction: column; height: 100%; position: relative; }
@@ -125,6 +125,23 @@
   .papo-nav-badge {
     position: absolute; top: 0; right: 2px; background: #e05d5d; color: white; font-size: 0.6rem;
     font-weight: 800; min-width: 15px; height: 15px; border-radius: 50px; display: flex; align-items: center; justify-content: center; padding: 0 3px;
+  }
+  #btn-instalar-papo-baixo {
+    color: var(--verde-whats) !important;
+    font-weight: 800 !important;
+    animation: papoPulsarInstalar 1.8s infinite;
+  }
+  #btn-instalar-papo-baixo .papo-nav-icone {
+    background: var(--verde-whats);
+    color: white;
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.95rem !important;
+  }
+  @keyframes papoPulsarInstalar {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
   }
   .papo-fab {
     position: absolute; bottom: 82px; right: 14px;
@@ -420,8 +437,6 @@
 
     <button type="button" class="papo-fab" onclick="adicionarContatoPorCodigo()" title="Adicionar contato por código">+</button>
 
-    <button type="button" id="btn-instalar-papo-baixo" onclick="instalarAppPapo()" style="display:none; position:absolute; bottom:82px; left:14px; right:78px; background:var(--verde-whats); color:white; border:none; padding:11px 8px; border-radius:10px; font-weight:700; font-size:0.8rem; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,0.2); z-index:54;">📲 Baixar o GuiaPapo</button>
-
     <nav class="papo-nav-inferior">
       <button type="button" class="papo-nav-item ativo" id="nav-conversas" onclick="trocarAbaPapo('conversas')">
         <span class="papo-nav-icone">💬</span><span>Conversas</span>
@@ -435,6 +450,9 @@
       </button>
       <button type="button" class="papo-nav-item" id="nav-chamadas" onclick="trocarAbaPapo('chamadas')">
         <span class="papo-nav-icone">📞</span><span>Chamadas</span>
+      </button>
+      <button type="button" class="papo-nav-item" id="btn-instalar-papo-baixo" onclick="instalarAppPapo()" style="display:none;">
+        <span class="papo-nav-icone">📲</span><span>Baixar</span>
       </button>
     </nav>
   </div>
@@ -2589,10 +2607,9 @@ let promptInstalacaoPapo = null;
 let vindoParaInstalarApp = new URLSearchParams(window.location.search).get('instalarApp') === '1';
 
 function _controlarBotoesInstalarPapo(mostrar){
-  ['btn-instalar-papo', 'btn-instalar-papo-topo', 'btn-instalar-papo-baixo'].forEach(id => {
-    const btn = document.getElementById(id);
-    if(btn) btn.style.display = mostrar ? (id === 'btn-instalar-papo-topo' ? 'inline-block' : 'block') : 'none';
-  });
+  document.getElementById('btn-instalar-papo')?.style.setProperty('display', mostrar ? 'block' : 'none');
+  document.getElementById('btn-instalar-papo-topo')?.style.setProperty('display', mostrar ? 'inline-block' : 'none');
+  document.getElementById('btn-instalar-papo-baixo')?.style.setProperty('display', mostrar ? 'flex' : 'none');
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
