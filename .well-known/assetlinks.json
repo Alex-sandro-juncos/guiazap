@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "shop.guiazap.twa",
+        "sha256_cert_fingerprints": ["07:49:E1:71:F8:E1:3B:A0:B2:1F:97:A3:74:77:17:98:F8:9B:87:AC:4C:38:7C:B4:23:D5:18:1F:4C:9E:69:5A"]
+      }
+    }]
