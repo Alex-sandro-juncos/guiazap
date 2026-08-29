@@ -15,7 +15,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .chat-wrap { max-width: 700px; margin: 0 auto; height: calc(100vh - 56px); display: flex; flex-direction: column; position: relative; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    padding-bottom: 0 !important;
+    margin: 0;
+  }
+  .chat-wrap { max-width: 700px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; position: relative; }
   #chat-topo-lista { display: flex; flex-direction: column; height: 100%; position: relative; }
   #chat-thread-box.aberto { padding: 15px; }
   .voltar {
@@ -413,6 +419,8 @@
     </div>
 
     <button type="button" class="papo-fab" onclick="adicionarContatoPorCodigo()" title="Adicionar contato por código">+</button>
+
+    <button type="button" id="btn-instalar-papo-baixo" onclick="instalarAppPapo()" style="display:none; position:absolute; bottom:82px; left:14px; right:78px; background:var(--verde-whats); color:white; border:none; padding:11px 8px; border-radius:10px; font-weight:700; font-size:0.8rem; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,0.2); z-index:54;">📲 Baixar o GuiaPapo</button>
 
     <nav class="papo-nav-inferior">
       <button type="button" class="papo-nav-item ativo" id="nav-conversas" onclick="trocarAbaPapo('conversas')">
@@ -2578,9 +2586,10 @@ if('serviceWorker' in navigator){
 }
 
 let promptInstalacaoPapo = null;
+let vindoParaInstalarApp = new URLSearchParams(window.location.search).get('instalarApp') === '1';
 
 function _controlarBotoesInstalarPapo(mostrar){
-  ['btn-instalar-papo', 'btn-instalar-papo-topo'].forEach(id => {
+  ['btn-instalar-papo', 'btn-instalar-papo-topo', 'btn-instalar-papo-baixo'].forEach(id => {
     const btn = document.getElementById(id);
     if(btn) btn.style.display = mostrar ? (id === 'btn-instalar-papo-topo' ? 'inline-block' : 'block') : 'none';
   });
@@ -2590,10 +2599,20 @@ window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   promptInstalacaoPapo = event;
   _controlarBotoesInstalarPapo(true);
+
+  if(vindoParaInstalarApp){
+    vindoParaInstalarApp = false;
+    instalarAppPapo();
+  }
 });
 
 async function instalarAppPapo(){
-  if(!promptInstalacaoPapo) return;
+  if(!promptInstalacaoPapo){
+    if(vindoParaInstalarApp){
+      alert('Seu navegador já tem o GuiaPapo instalado, ou não oferece instalação nesse momento. Se estiver no celular, procure a opção "Adicionar à tela inicial" no menu do navegador.');
+    }
+    return;
+  }
   promptInstalacaoPapo.prompt();
   const { outcome } = await promptInstalacaoPapo.userChoice;
   if(outcome === 'accepted'){

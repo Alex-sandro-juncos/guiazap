@@ -217,6 +217,7 @@
   <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
   <a href="blog.html" class="btn-baixar-app" style="background:#0f766e;">📝 Blog — Dicas e novidades locais</a>
   <button type="button" id="btn-instalar-pwa" class="btn-baixar-app" style="display:none; background:#0a4a6b; border:none; cursor:pointer; width:100%;" onclick="instalarPWA()">📲 Instalar o GuiaZap no seu celular</button>
+  <a href="chat.html?instalarApp=1" class="btn-baixar-app" style="background:var(--verde-whats);">📲 Baixar o GuiaPapo (app separado)</a>
   <button type="button" id="btn-ativar-push" class="btn-baixar-app" style="display:none; background:#7c3aed; border:none; cursor:pointer; width:100%;" onclick="ativarNotificacoesPush()">🔔 Ativar notificações (essencial pra receber chamadas e mensagens do Papo)</button>
   <a href="pedidos.html" class="btn-baixar-app" id="btn-meus-pedidos" style="display:none; background:#0f766e;">📦 Meus Pedidos</a>
   <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
@@ -452,8 +453,12 @@
         <span>Faz entrega</span>
       </label>
       <div id="atendimento-taxa-campo" style="display:none; margin-top:6px;">
-        <label>Taxa de entrega (R$)</label>
-        <input type="number" id="atendimento-taxa" min="0" step="0.5" placeholder="5.00">
+        <p style="font-size:0.75rem; color:#8a8270; margin-bottom:6px;">📏 O frete é calculado automaticamente pela distância real até o endereço do cliente: <b>taxa fixa + (km × valor por km)</b>.</p>
+        <label>Taxa fixa da entrega (R$)</label>
+        <input type="number" id="atendimento-taxa-base" min="0" step="0.5" placeholder="5.00">
+        <label style="margin-top:8px;">Valor por km rodado (R$)</label>
+        <input type="number" id="atendimento-valor-km" min="0" step="0.1" placeholder="1.50">
+        <p style="font-size:0.7rem; color:#8a8270; margin-top:4px;">⚠️ Pra isso funcionar, sua empresa precisa ter localização cadastrada (é automático quando você preenche cidade/bairro no seu cadastro).</p>
       </div>
     </div>
     <p style="font-size:0.75rem; color:#8a8270; margin-bottom:6px;">💡 O cardápio usado pelo robô é a sua Vitrine de produtos. Cadastre os itens lá pra eles aparecerem no menu automático.</p>
