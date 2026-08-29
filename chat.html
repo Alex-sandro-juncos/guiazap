@@ -462,7 +462,7 @@
       <button type="button" class="papo-nav-item" id="nav-chamadas" onclick="trocarAbaPapo('chamadas')">
         <span class="papo-nav-icone">📞</span><span>Chamadas</span>
       </button>
-      <button type="button" class="papo-nav-item" id="btn-instalar-papo-baixo" onclick="instalarAppPapo()" style="display:none;">
+      <button type="button" class="papo-nav-item" id="btn-instalar-papo-baixo" onclick="instalarAppPapo()">
         <span class="papo-nav-icone">📲</span><span>Baixar</span>
       </button>
     </nav>
@@ -2620,7 +2620,6 @@ let vindoParaInstalarApp = new URLSearchParams(window.location.search).get('inst
 function _controlarBotoesInstalarPapo(mostrar){
   document.getElementById('btn-instalar-papo')?.style.setProperty('display', mostrar ? 'block' : 'none');
   document.getElementById('btn-instalar-papo-topo')?.style.setProperty('display', mostrar ? 'inline-block' : 'none');
-  document.getElementById('btn-instalar-papo-baixo')?.style.setProperty('display', mostrar ? 'flex' : 'none');
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
@@ -2636,9 +2635,11 @@ window.addEventListener('beforeinstallprompt', (event) => {
 
 async function instalarAppPapo(){
   if(!promptInstalacaoPapo){
-    if(vindoParaInstalarApp){
-      alert('Seu navegador já tem o GuiaPapo instalado, ou não oferece instalação nesse momento. Se estiver no celular, procure a opção "Adicionar à tela inicial" no menu do navegador.');
-    }
+    const ehCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const dica = ehCelular
+      ? 'Toque no menu do navegador (⋮ ou o ícone de compartilhar) e procure "Adicionar à tela inicial" ou "Instalar app".'
+      : 'Procure o ícone de instalar (⊕ ou uma tela com seta) na barra de endereço do navegador, do lado direito.';
+    alert('📲 Pra instalar o GuiaPapo:\n\n' + dica);
     return;
   }
   promptInstalacaoPapo.prompt();
