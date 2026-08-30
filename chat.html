@@ -2379,10 +2379,30 @@ async function aceitarChamada(){
   await pc.setRemoteDescription(new RTCSessionDescription(window._ofertaRecebidaChamada));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  canalEnvio.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
+  await aguardarColetaIceCompleta(pc);
+  canalEnvio.send({ type: 'broadcast', event: 'answer', payload: { answer: pc.localDescription, de: currentUserChat.id } });
 
   peerConnectionAtual = pc;
   canalEnvioAtual = canalEnvio;
+}
+
+// Espera o navegador terminar de reunir os "caminhos de conexão" (ICE) e
+// embuti-los na própria oferta/resposta — importante pra quando quem recebe
+// está totalmente fora do site: os pedaços que chegariam aos poucos (via
+// canal em tempo real) se perderiam, porque ninguém estaria "escutando"
+// ainda nesse momento. Assim, a conexão já vem completa desde o início.
+function aguardarColetaIceCompleta(pc){
+  if(pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise((resolve) => {
+    function verificar(){
+      if(pc.iceGatheringState === 'complete'){
+        pc.removeEventListener('icegatheringstatechange', verificar);
+        resolve();
+      }
+    }
+    pc.addEventListener('icegatheringstatechange', verificar);
+    setTimeout(resolve, 3000); // não espera pra sempre, no máximo 3 segundos
+  });
 }
 
 async function iniciarChamada(comVideo){
@@ -2472,6 +2492,8 @@ async function iniciarChamada(comVideo){
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  await aguardarColetaIceCompleta(pc);
+  const ofertaCompleta = pc.localDescription; // já vem com os caminhos de conexão embutidos
   const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
 
   // Guarda a oferta no banco por um tempinho — se a pessoa estiver totalmente
@@ -2485,7 +2507,7 @@ async function iniciarChamada(comVideo){
     de_user_id: currentUserChat.id,
     de_nome: meuNome,
     para_user_id: destinatarioId,
-    oferta: offer,
+    oferta: ofertaCompleta,
     com_video: comVideo,
     conversa_id: conversaAtual
   }).select('id').single();
@@ -2495,7 +2517,7 @@ async function iniciarChamada(comVideo){
   }
   chamadaPendenteIdAtual = chamadaPendente ? chamadaPendente.id : null;
 
-  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual, chamadaPendenteId: chamadaPendenteIdAtual } });
+  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer: ofertaCompleta, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual, chamadaPendenteId: chamadaPendenteIdAtual } });
 
   // Reforço: enquanto a chamada ainda estiver "chamando" (não atendida),
   // confere de tempos em tempos se a chamada pendente ainda existe no banco.
