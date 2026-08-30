@@ -2454,7 +2454,7 @@ async function iniciarChamada(comVideo){
   // fora do site, ela só vai ver a notificação push; ao clicar nela, o
   // chat.html carrega do zero e essa oferta "ao vivo" (via canal) já teria
   // se perdido. Salvando aqui, dá pra retomar a chamada mesmo nesse caso.
-  const { data: chamadaPendente } = await supabaseClientChat.from('chamadas_pendentes').insert({
+  const { data: chamadaPendente, error: erroChamadaPendente } = await supabaseClientChat.from('chamadas_pendentes').insert({
     de_user_id: currentUserChat.id,
     de_nome: meuNome,
     para_user_id: destinatarioId,
@@ -2462,6 +2462,10 @@ async function iniciarChamada(comVideo){
     com_video: comVideo,
     conversa_id: conversaAtual
   }).select('id').single();
+  if(erroChamadaPendente){
+    console.error('erro ao salvar chamada pendente:', JSON.stringify(erroChamadaPendente));
+    alert('⚠️ Erro ao salvar chamada pendente (isso é só um aviso de teste, a chamada continua tocando normalmente): ' + (erroChamadaPendente.message || JSON.stringify(erroChamadaPendente)));
+  }
   chamadaPendenteIdAtual = chamadaPendente ? chamadaPendente.id : null;
 
   // Avisa por notificação push também, caso a pessoa não esteja com o chat
