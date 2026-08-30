@@ -58,7 +58,11 @@ exports.handler = async function (event) {
       const payload = JSON.stringify({ title: titulo, body: mensagem, url: url || '/', tipo: tipo || null });
 
       try {
-        await webpush.sendNotification(pushSubscription, payload);
+        // Chamadas pedem urgência alta — isso ajuda o sistema de notificação
+        // (FCM, por trás do Chrome) a tentar furar o modo Doze/economia de
+        // energia do Android, que às vezes atrasa notificações comuns.
+        const opcoesEnvio = tipo === 'chamada' ? { urgency: 'high', TTL: 30 } : { TTL: 300 };
+        await webpush.sendNotification(pushSubscription, payload, opcoesEnvio);
         enviados++;
       } catch (err) {
         // Se a inscrição não existe mais (usuário desinstalou, etc), remove do banco
