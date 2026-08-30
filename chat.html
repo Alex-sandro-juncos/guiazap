@@ -2443,6 +2443,17 @@ function aguardarColetaIceCompleta(pc){
 }
 
 async function iniciarChamada(comVideo){
+  try{
+    await iniciarChamadaInterna(comVideo);
+  } catch(e){
+    console.error('erro ao iniciar chamada:', e);
+    alert('⚠️ Erro ao iniciar a chamada (isso é só um aviso de teste): ' + (e.message || JSON.stringify(e)));
+    if(peerConnectionAtual){ peerConnectionAtual.close(); peerConnectionAtual = null; }
+    fecharOverlayChamada();
+  }
+}
+
+async function iniciarChamadaInterna(comVideo){
   if(!conversaAtual || peerConnectionAtual) return;
   if(bloqueadoNaConversaAtual){ alert('Não é possível ligar nessa conversa.'); return; }
 
@@ -2450,7 +2461,11 @@ async function iniciarChamada(comVideo){
   chamadaFoiAtendida = false;
   conversaDaChamadaAtual = conversaAtual;
 
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaAtual).single();
+  const { data: conversa, error: erroConversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaAtual).single();
+  if(erroConversa || !conversa){
+    alert('⚠️ Erro ao buscar dados da conversa: ' + (erroConversa ? erroConversa.message : 'conversa não encontrada'));
+    return;
+  }
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
 
