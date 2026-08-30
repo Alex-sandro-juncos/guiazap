@@ -2221,6 +2221,9 @@ let chamadaComVideoAtual = false;
 let euTenhoVideoAtivo = false;
 let momentoConexaoChamada = null;
 let chamadaPendenteIdAtual = null;
+let intervaloChecagemRecusa = null;
+let chamadaPendenteIdRecebidaAtual = null;
+let intervaloChecagemDesligou = null;
 
 // Fica sempre "escutando" nesse canal próprio, esperando alguém te ligar —
 // todos os eventos de uma chamada (oferta, resposta, pedaços de conexão,
@@ -2299,18 +2302,40 @@ async function receberChamadaEntrando(payload){
   document.getElementById('chamada-ativa-view').style.display = 'none';
   document.getElementById('chamada-recebida-nome').textContent = chamadaComQuemNome;
   iniciarToqueChamada();
+
+  // Reforço: enquanto a tela de "chamada recebida" estiver aberta, confere
+  // de tempos em tempos se quem ligou já desistiu (chamada pendente sumiu
+  // do banco), caso o aviso em tempo real de "desligou" não chegue.
+  chamadaPendenteIdRecebidaAtual = payload.chamadaPendenteId || null;
+  if(chamadaPendenteIdRecebidaAtual){
+    clearInterval(intervaloChecagemDesligou);
+    intervaloChecagemDesligou = setInterval(async () => {
+      if(chamadaFoiAtendida){ clearInterval(intervaloChecagemDesligou); return; }
+      const { data: aindaExiste } = await supabaseClientChat.from('chamadas_pendentes').select('id').eq('id', chamadaPendenteIdRecebidaAtual).maybeSingle();
+      if(!aindaExiste){
+        clearInterval(intervaloChecagemDesligou);
+        pararSomChamada();
+        fecharOverlayChamada();
+      }
+    }, 3000);
+  }
 }
 
 async function recusarChamada(){
+  clearInterval(intervaloChecagemDesligou);
   pararSomChamada();
   if(chamadaComQuemUserId){
     const canal = await abrirCanalEnvio(chamadaComQuemUserId);
     canal.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
+    // Apaga também no banco (sinal de reserva) — se o aviso em tempo real
+    // não chegar por algum motivo, quem ligou vai perceber pelo polling abaixo
+    supabaseClientChat.from('chamadas_pendentes').delete().eq('de_user_id', chamadaComQuemUserId).eq('para_user_id', currentUserChat.id).then(() => {});
   }
   fecharOverlayChamada();
 }
 
 async function aceitarChamada(){
+  clearInterval(intervaloChecagemDesligou);
   pararSomChamada();
   document.getElementById('chamada-recebida-view').style.display = 'none';
   document.getElementById('chamada-ativa-view').style.display = 'flex';
@@ -2448,12 +2473,14 @@ async function iniciarChamada(comVideo){
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
-  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual } });
 
   // Guarda a oferta no banco por um tempinho — se a pessoa estiver totalmente
   // fora do site, ela só vai ver a notificação push; ao clicar nela, o
   // chat.html carrega do zero e essa oferta "ao vivo" (via canal) já teria
   // se perdido. Salvando aqui, dá pra retomar a chamada mesmo nesse caso.
+  // Também serve de sinal de reforço nos dois sentidos: se essa linha sumir
+  // do banco, quer dizer que a chamada acabou (recusada ou desligada), pro
+  // caso do aviso em tempo real não chegar por algum motivo.
   const { data: chamadaPendente, error: erroChamadaPendente } = await supabaseClientChat.from('chamadas_pendentes').insert({
     de_user_id: currentUserChat.id,
     de_nome: meuNome,
@@ -2467,6 +2494,24 @@ async function iniciarChamada(comVideo){
     alert('⚠️ Erro ao salvar chamada pendente (isso é só um aviso de teste, a chamada continua tocando normalmente): ' + (erroChamadaPendente.message || JSON.stringify(erroChamadaPendente)));
   }
   chamadaPendenteIdAtual = chamadaPendente ? chamadaPendente.id : null;
+
+  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual, chamadaPendenteId: chamadaPendenteIdAtual } });
+
+  // Reforço: enquanto a chamada ainda estiver "chamando" (não atendida),
+  // confere de tempos em tempos se a chamada pendente ainda existe no banco.
+  // Se ela sumiu (porque quem recebeu recusou) mas o aviso em tempo real não
+  // chegou por algum motivo, isso pega o caso mesmo assim.
+  if(chamadaPendenteIdAtual){
+    clearInterval(intervaloChecagemRecusa);
+    intervaloChecagemRecusa = setInterval(async () => {
+      if(!peerConnectionAtual || chamadaFoiAtendida){ clearInterval(intervaloChecagemRecusa); return; }
+      const { data: aindaExiste } = await supabaseClientChat.from('chamadas_pendentes').select('id').eq('id', chamadaPendenteIdAtual).maybeSingle();
+      if(!aindaExiste){
+        clearInterval(intervaloChecagemRecusa);
+        encerrarChamada(false);
+      }
+    }, 3000);
+  }
 
   // Avisa por notificação push também, caso a pessoa não esteja com o chat
   // aberto agora — não toca como telefone de verdade, mas ajuda a avisar
@@ -2584,6 +2629,7 @@ function alternarCamera(){
 }
 
 async function encerrarChamada(avisarOutraPonta){
+  clearInterval(intervaloChecagemRecusa);
   if(avisarOutraPonta && canalEnvioAtual){
     canalEnvioAtual.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
   }
@@ -2618,6 +2664,8 @@ async function encerrarChamada(avisarOutraPonta){
 }
 
 function fecharOverlayChamada(){
+  clearInterval(intervaloChecagemRecusa);
+  clearInterval(intervaloChecagemDesligou);
   pararSomChamada();
   document.getElementById('overlay-chamada').classList.remove('aberto');
   document.getElementById('video-local').srcObject = null;
