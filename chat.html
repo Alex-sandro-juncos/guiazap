@@ -1108,6 +1108,7 @@ async function initChat(){
 
   carregarListaConversas();
   ligarCanalDeChamadas();
+  ligarAtualizacaoEmTempoRealDaLista();
   atualizarPresencaOnline();
   setInterval(atualizarPresencaOnline, 20000);
 
@@ -1369,6 +1370,30 @@ async function abrirOuCriarConversa(profissionalId){
 }
 
 let conversasCarregadasCache = [];
+
+let canalListaEmTempoReal = null;
+let timeoutAtualizarLista = null;
+
+function ligarAtualizacaoEmTempoRealDaLista(){
+  if(canalListaEmTempoReal) supabaseClientChat.removeChannel(canalListaEmTempoReal);
+
+  canalListaEmTempoReal = supabaseClientChat
+    .channel('lista-conversas-tempo-real')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_chat' }, (payload) => {
+      // Atualiza a lista sozinha assim que chega mensagem nova em qualquer
+      // conversa (a própria carregarListaConversas já sabe filtrar quais
+      // conversas são minhas). Agrupa em pequenos intervalos pra não
+      // atualizar excessivamente se chegarem várias mensagens juntas.
+      clearTimeout(timeoutAtualizarLista);
+      timeoutAtualizarLista = setTimeout(() => {
+        carregarListaConversas();
+        if(payload.new.remetente_user_id !== currentUserChat.id && payload.new.conversa_id !== conversaAtual){
+          tocarSomNotificacao();
+        }
+      }, 400);
+    })
+    .subscribe();
+}
 
 async function carregarListaConversas(){
   const box = document.getElementById('chat-lista-box');
