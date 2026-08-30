@@ -342,7 +342,7 @@ function renderProdutos(){
           </div>
         </div>
         <div class="acoes-produto-coluna">
-          ${p.link_externo ? `<a class="btn-comprar-externo" href="${escapeHtmlV(p.link_externo)}" target="_blank" rel="nofollow noopener">🛒 Comprar</a>` : ''}
+          ${p.link_externo ? `<button type="button" class="btn-comprar-externo" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🛒 Comprar</button>` : ''}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#6b46c1;" onclick="compartilharProdutoNoChat('${p.id}', '${escapeHtmlV(p.nome).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
@@ -843,6 +843,7 @@ async function salvarProduto(e){
   if(!payload.nome || !payload.profissional_id){ msg.textContent = 'Preencha o nome do produto.'; return false; }
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){ msg.textContent = 'O link da foto precisa começar com http:// ou https://'; return false; }
   if(payload.link_externo && !/^https?:\/\//i.test(payload.link_externo)){ msg.textContent = 'O link externo de compra precisa começar com http:// ou https://'; return false; }
+  if(payload.link_externo && payload.link_externo.includes('@')){ msg.textContent = 'Link inválido — não pode conter "@" (isso é usado em golpes de phishing pra esconder o destino real do link).'; return false; }
 
   msg.textContent = 'salvando...';
   let error;
@@ -898,6 +899,34 @@ function escapeHtmlV(str){
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+// Mostra uma tela de aviso antes de abrir um link externo cadastrado pelo
+// vendedor — o GuiaZap não verifica esses links, então é importante a pessoa
+// ver claramente pra onde vai antes de clicar de verdade, como proteção
+// contra links maliciosos/phishing.
+function avisarSaidaLinkExterno(url){
+  let dominio = url;
+  try{ dominio = new URL(url).hostname; } catch(e){ /* usa a url inteira se não conseguir extrair */ }
+
+  if(document.getElementById('overlay-saida-link')) document.getElementById('overlay-saida-link').remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'overlay-saida-link';
+  overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:white; border-radius:14px; padding:24px 20px; max-width:340px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+      <div style="font-size:2.2rem; margin-bottom:10px;">⚠️</div>
+      <div style="font-weight:800; font-size:1rem; margin-bottom:8px;">Você está saindo do GuiaZap</div>
+      <div style="font-size:0.82rem; color:#666; margin-bottom:6px;">Esse link foi cadastrado pelo vendedor e não é verificado pelo GuiaZap:</div>
+      <div style="font-size:0.85rem; font-weight:700; color:#0a4a3a; word-break:break-all; background:#f2f2f2; padding:8px; border-radius:8px; margin-bottom:16px;">${escapeHtmlV(dominio)}</div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" onclick="document.getElementById('overlay-saida-link').remove()" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd; background:white; font-weight:700; cursor:pointer;">Cancelar</button>
+        <button type="button" onclick="window.open('${escapeHtmlV(url)}', '_blank', 'noopener,noreferrer'); document.getElementById('overlay-saida-link').remove();" style="flex:1; padding:10px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">Continuar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 if(initSupabaseV()){

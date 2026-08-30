@@ -1250,7 +1250,13 @@ async function compartilharComNovoContato(){
   if(!codigo) return;
 
   const codigoLimpo = codigo.trim().toUpperCase();
-  const { data: perfilAlvo } = await supabaseClientChat.from('perfis_usuario').select('user_id').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+  const respBusca = await fetch('/.netlify/functions/buscar-codigo-guiazap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo: codigoLimpo })
+  });
+  const resultadoBusca = await respBusca.json();
+  const perfilAlvo = resultadoBusca.encontrado ? { user_id: resultadoBusca.userId } : null;
   if(!perfilAlvo){ alert('Código não encontrado.'); return; }
 
   const { data: existente } = await supabaseClientChat.from('conversas').select('id').is('profissional_id', null)
@@ -1302,9 +1308,15 @@ async function adicionarContatoPorCodigo(){
   if(!codigo) return;
 
   const codigoLimpo = codigo.trim().toUpperCase();
-  const { data: perfilAlvo, error } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').eq('codigo_guiazap', codigoLimpo).maybeSingle();
+  const respBusca = await fetch('/.netlify/functions/buscar-codigo-guiazap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo: codigoLimpo })
+  });
+  const resultadoBusca = await respBusca.json();
+  const perfilAlvo = resultadoBusca.encontrado ? { user_id: resultadoBusca.userId, nome_exibicao: resultadoBusca.nome } : null;
 
-  if(error || !perfilAlvo){
+  if(!perfilAlvo){
     alert('Código não encontrado. Confira se digitou certinho.');
     return;
   }
