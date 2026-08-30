@@ -219,6 +219,14 @@ function _iniciarEscutaChamadas(){
   _chamadaCanalListener.on('broadcast', { event: 'offer' }, (msg) => {
     _mostrarPopupChamadaEntrando(msg.payload);
   });
+  _chamadaCanalListener.on('broadcast', { event: 'encerrar' }, () => {
+    // Quem ligou cancelou/desligou antes de eu atender — fecha o popup e
+    // para o som, senão ele fica tocando pra sempre sem ninguém do outro lado
+    _pararSomChamadaPopup();
+    const overlay = document.getElementById('popup-chamada-overlay');
+    if(overlay) overlay.classList.remove('aberto');
+    _chamadaPayloadPendente = null;
+  });
   _chamadaCanalListener.subscribe();
 }
 

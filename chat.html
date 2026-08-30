@@ -1120,7 +1120,7 @@ async function initChat(){
       .from('chamadas_pendentes')
       .select('*')
       .eq('para_user_id', currentUserChat.id)
-      .gt('created_at', new Date(Date.now() - 45000).toISOString())
+      .gt('created_at', new Date(Date.now() - 90000).toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
