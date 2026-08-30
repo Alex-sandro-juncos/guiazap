@@ -62,7 +62,17 @@ exports.handler = async function (event) {
 
       if (remetenteUserId === conversa.visitante_user_id) {
         destinatarioUserId = donoEmpresaUserId;
-        nomeRemetente = 'Um visitante';
+
+        const empresaDoVisitanteResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${remetenteUserId}&select=name&limit=1`, { headers });
+        const empresaDoVisitante = await empresaDoVisitanteResp.json();
+        if (empresaDoVisitante && empresaDoVisitante[0]) {
+          nomeRemetente = empresaDoVisitante[0].name;
+        } else {
+          const perfilVisitanteResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${remetenteUserId}&select=nome_exibicao`, { headers });
+          const perfilVisitante = await perfilVisitanteResp.json();
+          nomeRemetente = (perfilVisitante[0] && perfilVisitante[0].nome_exibicao) || 'Um visitante';
+        }
+
         destinatarioSilenciou = conversa.silenciada_por_empresa;
       } else {
         destinatarioUserId = conversa.visitante_user_id;

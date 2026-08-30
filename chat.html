@@ -601,6 +601,18 @@ let outroLadoFotoAtual = null;
 let outroLadoProfissionalIdAtual = null;
 let bloqueadoNaConversaAtual = false; // true se EU bloquei ou fui bloqueado pelo outro lado
 
+async function resolverNomeVisitante(userId){
+  if(!userId) return 'Visitante';
+
+  const { data: empresaDele } = await supabaseClientChat.from('profissionais').select('name').eq('user_id', userId).limit(1).maybeSingle();
+  if(empresaDele) return empresaDele.name;
+
+  const { data: perfilDele } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', userId).maybeSingle();
+  if(perfilDele && perfilDele.nome_exibicao) return perfilDele.nome_exibicao;
+
+  return 'Visitante';
+}
+
 function escapeHtmlChat(str){
   const d = document.createElement('div');
   d.textContent = str || '';
@@ -1201,7 +1213,7 @@ async function abrirTelaCompartilhar(paramCodificado){
       nome = (perfil && perfil.nome_exibicao) || 'Contato do GuiaZap';
     } else {
       const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
-      nome = souEuAEmpresa ? 'Visitante' : (nomesEmpresas[c.profissional_id] || 'Empresa');
+      nome = souEuAEmpresa ? await resolverNomeVisitante(c.visitante_user_id) : (nomesEmpresas[c.profissional_id] || 'Empresa');
     }
     return { ...c, nome };
   }));
@@ -1440,7 +1452,7 @@ async function carregarListaConversas(){
       if(!souEuAEmpresa && nomesSalvosPorProfissionalId[c.profissional_id]){
         nomeExibido = nomesSalvosPorProfissionalId[c.profissional_id];
       } else {
-        nomeExibido = souEuAEmpresa ? 'Visitante' : (empresa ? empresa.name : 'Empresa');
+        nomeExibido = souEuAEmpresa ? await resolverNomeVisitante(c.visitante_user_id) : (empresa ? empresa.name : 'Empresa');
       }
       fotoExibida = empresa ? empresa.foto : null;
     }
@@ -1568,7 +1580,7 @@ async function abrirConversa(conversaId){
   } else {
     outroLadoProfissionalIdAtual = conversa.profissional_id;
     outroLadoUserIdAtual = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaConversa ? empresaDaConversa.user_id : null);
-    outroLadoNomeAtual = souEuAEmpresa ? 'Visitante' : (empresaDaConversa ? empresaDaConversa.name : 'Empresa');
+    outroLadoNomeAtual = souEuAEmpresa ? await resolverNomeVisitante(conversa.visitante_user_id) : (empresaDaConversa ? empresaDaConversa.name : 'Empresa');
     outroLadoFotoAtual = empresaDaConversa ? empresaDaConversa.foto : null;
     document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
   }
@@ -2430,7 +2442,7 @@ async function iniciarChamada(comVideo){
     nomeDestinatario = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
   } else {
     destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaChamada ? empresaDaChamada.user_id : null);
-    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (empresaDaChamada ? empresaDaChamada.name : 'Empresa');
+    nomeDestinatario = souEuAEmpresa ? await resolverNomeVisitante(conversa.visitante_user_id) : (empresaDaChamada ? empresaDaChamada.name : 'Empresa');
   }
 
   if(!destinatarioId){ alert('Não foi possível identificar quem receberá a chamada.'); return; }
@@ -2494,7 +2506,8 @@ async function iniciarChamada(comVideo){
   await pc.setLocalDescription(offer);
   await aguardarColetaIceCompleta(pc);
   const ofertaCompleta = pc.localDescription; // já vem com os caminhos de conexão embutidos
-  const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
+  const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : await descobrirNomeParaExibicaoChat(currentUserChat);
+  const meuCodigoParaChamada = meuCodigoPapoAtual || null;
 
   // Guarda a oferta no banco por um tempinho — se a pessoa estiver totalmente
   // fora do site, ela só vai ver a notificação push; ao clicar nela, o

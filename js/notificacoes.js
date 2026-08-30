@@ -395,7 +395,13 @@ async function carregarNotificacoes(){
           link = `chat.html?pessoa=${outroId}`;
         } else if(conversa.profissional_id){
           if(souEuAEmpresa){
-            nome = 'Um visitante';
+            const { data: empresaDoVisitante } = await supabaseClient.from('profissionais').select('name').eq('user_id', conversa.visitante_user_id).limit(1).maybeSingle();
+            if(empresaDoVisitante){
+              nome = empresaDoVisitante.name;
+            } else {
+              const { data: perfilVisitante } = await supabaseClient.from('perfis_usuario').select('nome_exibicao').eq('user_id', conversa.visitante_user_id).maybeSingle();
+              nome = (perfilVisitante && perfilVisitante.nome_exibicao) || 'Um visitante';
+            }
           } else {
             const { data: empresa } = await supabaseClient.from('profissionais').select('name').eq('id', conversa.profissional_id).maybeSingle();
             nome = (empresa && empresa.name) || 'Empresa';
