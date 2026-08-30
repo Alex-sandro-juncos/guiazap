@@ -248,6 +248,7 @@ async function updateAuthUI(){
   render();
   renderStoriesLinha();
   tentarIniciarNotificacoes();
+  atualizarVisibilidadeBotaoPush();
 }
 
 async function signUp(){
@@ -400,6 +401,7 @@ async function loadEntries(){
   loadContagemSeguidores().then(render);
   render();
   tentarIniciarNotificacoes();
+  atualizarVisibilidadeBotaoPush();
 
   const btnPedidos = document.getElementById('btn-meus-pedidos');
   if(btnPedidos){
@@ -3194,7 +3196,17 @@ function atualizarVisibilidadeBotaoPush(){
   const btn = document.getElementById('btn-ativar-push');
   if(!btn) return;
   const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  btn.style.display = (suportado && currentUser && Notification.permission !== 'granted') ? 'block' : 'none';
+  btn.style.display = (suportado && currentUser) ? 'inline-block' : 'none';
+  btn.textContent = Notification.permission === 'granted' ? '🔔' : '🛎️';
+  btn.title = Notification.permission === 'granted'
+    ? 'Notificações ativadas (toque pra verificar/reativar)'
+    : 'Ativar notificações (essencial pra receber chamadas e mensagens do Papo)';
+
+  // Move o botão pro topo, do lado do sino amarelo, assim que essa linha existir
+  const linhaTopo = document.getElementById('notif-linha-topo');
+  if(linhaTopo && btn.parentElement !== linhaTopo){
+    linhaTopo.insertBefore(btn, linhaTopo.firstChild);
+  }
 }
 
 async function ativarNotificacoesPush(){

@@ -960,7 +960,11 @@ function atualizarAvisoAtivarPush(){
   const icone = document.getElementById('btn-ativar-push-icone');
   if(!icone) return;
   const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  icone.style.display = (suportado && currentUserChat && Notification.permission !== 'granted') ? 'inline-block' : 'none';
+  icone.style.display = (suportado && currentUserChat) ? 'inline-block' : 'none';
+  icone.title = Notification.permission === 'granted'
+    ? 'Notificações ativadas (toque pra verificar/reativar)'
+    : 'Ativar notificações (chamadas e mensagens mesmo com o site fechado)';
+  icone.textContent = Notification.permission === 'granted' ? '🔔' : '🛎️';
 }
 
 async function ativarNotificacoesPushPapo(){
