@@ -2454,7 +2454,14 @@ async function iniciarChamada(comVideo){
 }
 
 async function iniciarChamadaInterna(comVideo){
-  if(!conversaAtual || peerConnectionAtual) return;
+  if(!conversaAtual){
+    alert('⚠️ Erro de teste: nenhuma conversa está aberta no momento (conversaAtual vazio).');
+    return;
+  }
+  if(peerConnectionAtual){
+    alert('⚠️ Erro de teste: já existe uma chamada em andamento nos bastidores (isso pode ser de um teste anterior que não foi limpo direito).');
+    return;
+  }
   if(bloqueadoNaConversaAtual){ alert('Não é possível ligar nessa conversa.'); return; }
 
   euIniciariAChamada = true;
