@@ -1139,13 +1139,17 @@ async function initChat(){
       .maybeSingle();
 
     if(chamadaPendenteDb){
-      await supabaseClientChat.from('chamadas_pendentes').delete().eq('id', chamadaPendenteDb.id);
+      // Importante: NÃO apaga aqui. Apagar antes da pessoa decidir faria o
+      // sistema de "quem ligou" pensar que foi recusado assim que a tela
+      // carrega — antes mesmo da pessoa ver o botão de atender. Só apaga de
+      // verdade dentro de aceitarChamada()/recusarChamada().
       receberChamadaEntrando({
         de: chamadaPendenteDb.de_user_id,
         deNome: chamadaPendenteDb.de_nome,
         offer: chamadaPendenteDb.oferta,
         comVideo: chamadaPendenteDb.com_video,
-        conversaId: chamadaPendenteDb.conversa_id
+        conversaId: chamadaPendenteDb.conversa_id,
+        chamadaPendenteId: chamadaPendenteDb.id
       });
     }
   }
@@ -2312,6 +2316,15 @@ function abrirCanalEnvio(destinatarioId){
 }
 
 async function receberChamadaEntrando(payload){
+  // Trava contra duplicidade: se o aviso ao vivo e a checagem no banco
+  // dispararem quase juntos pro mesmo chamador, a segunda tentativa é
+  // ignorada — evita dois toques tocando ao mesmo tempo, onde o segundo
+  // "perde" a referência do primeiro e ele fica tocando pra sempre.
+  const overlayJaAberto = document.getElementById('overlay-chamada').classList.contains('aberto');
+  if(overlayJaAberto && chamadaComQuemUserId === payload.de){
+    return;
+  }
+
   // Se eu bloqueei quem está ligando, ou fui bloqueado por essa pessoa, recusa
   // automaticamente — a chamada nem chega a tocar.
   const { data: bloqueioExistente } = await supabaseClientChat
