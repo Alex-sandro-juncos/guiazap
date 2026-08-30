@@ -251,7 +251,7 @@
 <header class="vitrine-header">
   <h1>GuiaZap Vitrine</h1>
   <p>Produtos de empresas da sua região, tudo num só lugar</p>
-  <button type="button" class="btn-modo-escuro" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="border-color:white; color:white; margin-top:8px;">🌙 Modo escuro</button>
+  <button type="button" class="btn-modo-escuro" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="border-color:white; color:white; margin-top:8px;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 </header>
 
 <div class="vitrine-busca">
@@ -371,6 +371,13 @@
     </label>
     <label class="foto-ou">Quando marcado, a foto e os detalhes desse produto ficam borrados até o visitante confirmar que tem 18 anos ou mais.</label>
   </div>
+  <div class="field">
+    <label class="checkbox-18mais">
+      <input type="checkbox" id="p-disponivel-venda" checked>
+      <span>🛒 Este produto está à venda (permite adicionar ao carrinho)</span>
+    </label>
+    <label class="foto-ou">Desmarque se for só um item de exposição/portfólio (ex: trabalhos já feitos, modelos de referência) — nesse caso não aparece botão de comprar, só a foto e descrição.</label>
+  </div>
   <div class="form-actions">
     <button type="submit" class="btn-salvar">Salvar produto</button>
     <button type="button" class="btn-cancelar" onclick="fecharFormProduto()">Cancelar</button>
@@ -381,7 +388,21 @@
 <div class="grid-produtos" id="v-grid"></div>
 <a href="index.html" class="voltar-guiazap">← Voltar ao GuiaZap</a>
 
-<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
+<button type="button" id="btn-carrinho-flutuante" onclick="abrirCarrinho()" style="display:none; position:fixed; bottom:82px; right:14px; width:54px; height:54px; border-radius:50%; background:#0f766e; color:white; border:none; font-size:1.5rem; cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,0.3); z-index:900;">
+  🛒<span id="badge-carrinho" style="position:absolute; top:-4px; right:-4px; background:#e05d5d; color:white; font-size:0.65rem; font-weight:800; min-width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white;">0</span>
+</button>
+
+<div id="overlay-carrinho" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:flex-end; justify-content:center;">
+  <div style="background:white; width:100%; max-width:480px; border-radius:18px 18px 0 0; max-height:82vh; display:flex; flex-direction:column;">
+    <div style="padding:16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <b style="font-size:1rem;">🛒 Seu carrinho</b>
+      <button type="button" onclick="fecharCarrinho()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+    </div>
+    <div id="carrinho-conteudo" style="padding:14px; overflow-y:auto; flex:1;"></div>
+  </div>
+</div>
+
+<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬</a>
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>

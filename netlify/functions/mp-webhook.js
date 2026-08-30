@@ -9,6 +9,7 @@ const crypto = require('crypto');
 
 const VALOR_PACOTE_COMPLETO = 10; // R$10 -> se o pagamento for igual/maior que isso, considera Pacote Completo
 const VALOR_PACOTE_PREMIUM = 25; // R$25 -> se o pagamento for igual/maior que isso, considera Pacote Premium
+const VALOR_PACOTE_VENDAS = 40; // R$40 -> se o pagamento for igual/maior que isso, considera Pacote Vendas
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
 
@@ -174,7 +175,7 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: `pagamento do selo verificado processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
       }
 
-      const planoPago = valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico');
+      const planoPago = valorPago >= VALOR_PACOTE_VENDAS ? 'vendas' : (valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico'));
 
       // Caso 1: existe um cadastro PENDENTE desse e-mail -> é um cadastro novo, ativa
       const emailFiltro = `user_email=eq.${encodeURIComponent(payerEmail)}`;
@@ -196,10 +197,15 @@ exports.handler = async function (event) {
           `${emailFiltro}&status_pagamento=eq.ativo&plano=in.(basico,completo)`,
           { plano: 'premium' }
         );
+      } else if (planoPago === 'vendas') {
+        upgradeFeito = await atualizarSupabase(
+          `${emailFiltro}&status_pagamento=eq.ativo&plano=in.(basico,completo,premium)`,
+          { plano: 'vendas' }
+        );
       }
 
       if ((ativadoNovo && ativadoNovo.length > 0) || (upgradeFeito && upgradeFeito.length > 0)) {
-        const nomePlano = planoPago === 'premium' ? 'Premium' : planoPago === 'completo' ? 'Completo' : 'Básico';
+        const nomePlano = planoPago === 'vendas' ? 'Vendas' : planoPago === 'premium' ? 'Premium' : planoPago === 'completo' ? 'Completo' : 'Básico';
         await enviarEmail(
           payerEmail,
           'Pagamento confirmado — cadastro ativo no GuiaZap!',

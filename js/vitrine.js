@@ -57,7 +57,7 @@ async function initAuthV(){
       .select('id, name')
       .eq('user_id', currentUserV.id)
       .eq('status_pagamento', 'ativo')
-      .in('plano', ['completo', 'premium']);
+      .eq('plano', 'vendas');
     meusCadastros = data || [];
 
     const sel = document.getElementById('p-profissional');
@@ -342,7 +342,12 @@ function renderProdutos(){
           </div>
         </div>
         <div class="acoes-produto-coluna">
-          ${p.link_externo ? `<button type="button" class="btn-comprar-externo" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🛒 Comprar</button>` : ''}
+          ${p.disponivel_venda === false
+            ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
+            : `
+              <button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%; margin-bottom:4px;" onclick="adicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>
+              ${p.link_externo ? `<button type="button" class="btn-comprar-externo" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🔗 Comprar direto no site do vendedor</button>` : ''}
+            `}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#6b46c1;" onclick="compartilharProdutoNoChat('${p.id}', '${escapeHtmlV(p.nome).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
@@ -749,6 +754,7 @@ function fecharFormProduto(){
   document.getElementById('p-foto').value = '';
   document.getElementById('p-link-externo').value = '';
   document.getElementById('p-18mais').checked = false;
+  document.getElementById('p-disponivel-venda').checked = true;
   document.getElementById('p-foto-preview').style.display = 'none';
   document.getElementById('p-foto-msg').textContent = '';
 }
@@ -771,6 +777,7 @@ function editarProduto(id){
   document.getElementById('p-foto').value = p.foto || '';
   document.getElementById('p-link-externo').value = p.link_externo || '';
   document.getElementById('p-18mais').checked = !!p.produto_18_mais;
+  document.getElementById('p-disponivel-venda').checked = p.disponivel_venda !== false;
   if(p.foto){
     const preview = document.getElementById('p-foto-preview');
     preview.src = p.foto;
@@ -837,6 +844,7 @@ async function salvarProduto(e){
     foto: document.getElementById('p-foto').value.trim() || null,
     codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,
     link_externo: document.getElementById('p-link-externo').value.trim() || null,
+    disponivel_venda: document.getElementById('p-disponivel-venda').checked,
     produto_18_mais: document.getElementById('p-18mais').checked
   };
 
@@ -901,6 +909,183 @@ function escapeHtmlV(str){
   return d.innerHTML;
 }
 
+// ---------- CARRINHO DE COMPRAS ----------
+
+let carrinhoV = JSON.parse(localStorage.getItem('carrinho_vitrine') || '[]');
+
+function salvarCarrinhoV(){
+  localStorage.setItem('carrinho_vitrine', JSON.stringify(carrinhoV));
+  atualizarBadgeCarrinho();
+}
+
+function precoTextoParaNumeroV(precoTexto){
+  if(!precoTexto) return 0;
+  let limpo = String(precoTexto).replace(/[^0-9,.]/g, '');
+  if(limpo.includes(',')) limpo = limpo.replace(/\./g, '').replace(',', '.');
+  return parseFloat(limpo) || 0;
+}
+
+function adicionarAoCarrinho(produtoId){
+  const p = produtos.find(x => x.id === produtoId);
+  if(!p) return;
+
+  const itemExistente = carrinhoV.find(i => i.produtoId === produtoId);
+  if(itemExistente){
+    itemExistente.quantidade++;
+  } else {
+    carrinhoV.push({
+      produtoId: p.id,
+      nome: p.nome,
+      preco: p.preco,
+      foto: p.foto || '',
+      profissionalId: p.profissional_id,
+      empresaNome: p.profissionais ? p.profissionais.name : 'Empresa',
+      quantidade: 1
+    });
+  }
+  salvarCarrinhoV();
+
+  // Pequeno feedback visual de confirmação
+  const badge = document.getElementById('badge-carrinho');
+  if(badge){
+    badge.style.transform = 'scale(1.4)';
+    setTimeout(() => { badge.style.transform = 'scale(1)'; }, 200);
+  }
+}
+
+function removerDoCarrinho(produtoId){
+  carrinhoV = carrinhoV.filter(i => i.produtoId !== produtoId);
+  salvarCarrinhoV();
+  renderCarrinho();
+}
+
+function alterarQuantidadeCarrinho(produtoId, delta){
+  const item = carrinhoV.find(i => i.produtoId === produtoId);
+  if(!item) return;
+  item.quantidade += delta;
+  if(item.quantidade <= 0){
+    removerDoCarrinho(produtoId);
+    return;
+  }
+  salvarCarrinhoV();
+  renderCarrinho();
+}
+
+function atualizarBadgeCarrinho(){
+  const btn = document.getElementById('btn-carrinho-flutuante');
+  const badge = document.getElementById('badge-carrinho');
+  if(!btn || !badge) return;
+  const total = carrinhoV.reduce((soma, i) => soma + i.quantidade, 0);
+  badge.textContent = total > 99 ? '99+' : total;
+  btn.style.display = total > 0 ? 'block' : 'none';
+}
+
+function abrirCarrinho(){
+  renderCarrinho();
+  document.getElementById('overlay-carrinho').style.display = 'flex';
+}
+
+function fecharCarrinho(){
+  document.getElementById('overlay-carrinho').style.display = 'none';
+}
+
+function renderCarrinho(){
+  const container = document.getElementById('carrinho-conteudo');
+  if(carrinhoV.length === 0){
+    container.innerHTML = '<p style="text-align:center; color:#999; padding:30px 0;">Seu carrinho está vazio.</p>';
+    return;
+  }
+
+  // Agrupa por empresa, já que cada pedido é fechado com um vendedor por vez
+  const porEmpresa = {};
+  carrinhoV.forEach(item => {
+    if(!porEmpresa[item.profissionalId]) porEmpresa[item.profissionalId] = { empresaNome: item.empresaNome, itens: [] };
+    porEmpresa[item.profissionalId].itens.push(item);
+  });
+
+  container.innerHTML = Object.entries(porEmpresa).map(([profissionalId, grupo]) => {
+    const totalGrupo = grupo.itens.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
+    const linhasItens = grupo.itens.map(item => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f2f2f2;">
+        <img src="${escapeHtmlV(item.foto || 'https://via.placeholder.com/50')}" style="width:46px; height:46px; border-radius:8px; object-fit:cover; flex-shrink:0;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtmlV(item.nome)}</div>
+          <div style="font-size:0.78rem; color:#888;">R$ ${escapeHtmlV(item.preco)} cada</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button type="button" onclick="alterarQuantidadeCarrinho('${item.produtoId}', -1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">−</button>
+          <span style="min-width:18px; text-align:center; font-weight:700; font-size:0.85rem;">${item.quantidade}</span>
+          <button type="button" onclick="alterarQuantidadeCarrinho('${item.produtoId}', 1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">+</button>
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:800; font-size:0.9rem; color:var(--verde-escuro); margin-bottom:4px;">🏪 ${escapeHtmlV(grupo.empresaNome)}</div>
+        ${linhasItens}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+          <span style="font-weight:700; font-size:0.9rem;">Subtotal: R$ ${totalGrupo.toFixed(2).replace('.', ',')}</span>
+          <button type="button" onclick="finalizarPedidoCarrinho('${profissionalId}')" style="background:var(--verde-whats); color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:700; font-size:0.82rem; cursor:pointer;">Finalizar pedido</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function finalizarPedidoCarrinho(profissionalId){
+  if(!currentUserV){
+    alert('Você precisa estar logado pra finalizar um pedido. Faça login no GuiaZap primeiro.');
+    return;
+  }
+
+  const itensDaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
+  if(itensDaEmpresa.length === 0) return;
+
+  const itensPayload = itensDaEmpresa.map(i => ({ id: i.produtoId, nome: i.nome, preco: i.preco }));
+  const subtotal = itensDaEmpresa.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
+
+  // Acha ou cria a conversa com essa empresa
+  const { data: existente } = await supabaseClientV.from('conversas').select('id').eq('profissional_id', profissionalId).eq('visitante_user_id', currentUserV.id).maybeSingle();
+  let conversaId = existente ? existente.id : null;
+  if(!conversaId){
+    const { data: nova, error } = await supabaseClientV.from('conversas').insert({ profissional_id: profissionalId, visitante_user_id: currentUserV.id }).select('id').single();
+    if(error){ alert('Erro ao criar a conversa. Tente de novo.'); return; }
+    conversaId = nova.id;
+  }
+
+  // Cria o pedido (retirada — combine a entrega direto com o vendedor pelo Papo)
+  const { error: erroPedido } = await supabaseClientV.from('pedidos').insert({
+    conversa_id: conversaId,
+    profissional_id: profissionalId,
+    cliente_user_id: currentUserV.id,
+    itens: itensPayload,
+    subtotal,
+    taxa_entrega: 0,
+    total: subtotal,
+    status: 'aguardando_confirmacao'
+  });
+  if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido. Tente de novo.'); return; }
+
+  // Manda um resumo bonito pro vendedor ver na conversa
+  const resumo = itensDaEmpresa.map(i => `${i.quantidade}x ${i.nome} — R$ ${i.preco}`).join('\n');
+  await supabaseClientV.from('mensagens_chat').insert({
+    conversa_id: conversaId,
+    remetente_user_id: currentUserV.id,
+    tipo: 'texto',
+    texto: `🛒 Novo pedido pela Vitrine:\n${resumo}\n\nTotal: R$ ${subtotal.toFixed(2).replace('.', ',')}\n\n(Combine a entrega ou retirada direto por aqui)`,
+    lida: false
+  });
+  await supabaseClientV.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
+
+  // Limpa esses itens do carrinho e avisa a pessoa
+  carrinhoV = carrinhoV.filter(i => i.profissionalId !== profissionalId);
+  salvarCarrinhoV();
+  fecharCarrinho();
+  alert('🎉 Pedido enviado! Você já pode combinar os detalhes com o vendedor pelo Papo.');
+  window.location.href = `chat.html?empresa=${profissionalId}`;
+}
+
 // Mostra uma tela de aviso antes de abrir um link externo cadastrado pelo
 // vendedor — o GuiaZap não verifica esses links, então é importante a pessoa
 // ver claramente pra onde vai antes de clicar de verdade, como proteção
@@ -928,6 +1113,8 @@ function avisarSaidaLinkExterno(url){
   `;
   document.body.appendChild(overlay);
 }
+
+atualizarBadgeCarrinho();
 
 if(initSupabaseV()){
   initAuthV().then(loadProdutos);

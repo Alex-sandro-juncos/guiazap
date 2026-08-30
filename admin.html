@@ -165,12 +165,14 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
         : acao === 'desverificar'
           ? `Remover o selo de verificado de "${nome}"?`
           : acao === 'plano_completo'
-            ? `Mudar "${nome}" pro Pacote Completo? Ela ganha acesso à Vitrine, sem precisar pagar.`
+            ? `Mudar "${nome}" pro Pacote Completo? Ela ganha acesso ao Banco de Talentos e mais Stories, sem precisar pagar.`
             : acao === 'plano_basico'
-              ? `Mudar "${nome}" pro Pacote Básico? Ela perde o acesso à Vitrine (produtos somem da busca pública, mas continuam salvos).`
+              ? `Mudar "${nome}" pro Pacote Básico? Ela perde os benefícios extras (mas continua aparecendo na busca normal).`
               : acao === 'plano_premium'
                 ? `Mudar "${nome}" pro Pacote Premium? Ela ganha: até 10 fotos por Story, botão de "Seguir" pros visitantes, e prioridade na fileira de novidades.`
-                : acao === 'confirmar_whatsapp_verificacao'
+                : acao === 'plano_vendas'
+                  ? `Mudar "${nome}" pro Pacote Vendas? Ela ganha acesso à Vitrine de produtos, carrinho de pedidos, atendimento automático e cálculo de frete — além de tudo do Premium.`
+                  : acao === 'confirmar_whatsapp_verificacao'
                   ? `Confirmar que "${nome}" mandou a mensagem certa no WhatsApp do GuiaZap?`
                   : acao === 'aprovar_selo'
                     ? `Aprovar o Selo Verificado de "${nome}"? Isso adiciona o ✅ no cadastro dela.`
@@ -205,57 +207,25 @@ function renderBlogAdmin(busca){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin){ lista.innerHTML = ''; return; }
 
-  let todosOsPosts = dadosAdmin.blogPosts || [];
-  if(busca) todosOsPosts = todosOsPosts.filter(p => normalizarTextoAdmin(p.titulo + ' ' + p.autor_nome).includes(busca));
+  let pendentes = (dadosAdmin.blogPosts || []).filter(p => !p.aprovado);
+  if(busca) pendentes = pendentes.filter(p => normalizarTextoAdmin(p.titulo + ' ' + p.autor_nome).includes(busca));
 
-  const pendentes = todosOsPosts.filter(p => !p.aprovado);
-  const publicados = todosOsPosts.filter(p => p.aprovado);
+  if(pendentes.length === 0){
+    lista.innerHTML = '<div class="admin-vazio">Nenhum artigo pendente no momento.</div>';
+    return;
+  }
 
-  const cardPost = (p, pendente) => `
+  lista.innerHTML = pendentes.map(p => `
     <div class="admin-item">
-      <div class="tipo">📝 ${p.titulo}${pendente ? '' : ' <span style="font-weight:400; color:#1a7a3c; font-size:0.72rem;">· publicado</span>'}</div>
-      <div class="meta">Por ${p.autor_nome}${p.autor_email ? ' (' + p.autor_email + ')' : ''} · ${formatarData(p.created_at)}</div>
+      <div class="tipo">📝 ${p.titulo}</div>
+      <div class="meta">Por ${p.autor_nome}${p.autor_email ? ' (' + p.autor_email + ')' : ''}</div>
       <div class="meta" style="max-height:120px; overflow-y:auto; margin-top:6px;">${p.conteudo}</div>
       <div class="admin-acoes" style="margin-top:8px;">
-        ${pendente ? `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_post', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">✅ Aprovar</button>` : ''}
+        <button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_post', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">✅ Aprovar</button>
         <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">Excluir</button>
       </div>
     </div>
-  `;
-
-  let comentarios = dadosAdmin.blogComentarios || [];
-  if(busca) comentarios = comentarios.filter(c => normalizarTextoAdmin(c.autor_nome + ' ' + c.comentario).includes(busca));
-
-  const cardComentario = (c) => {
-    const post = todosOsPosts.find(p => p.id === c.post_id) || (dadosAdmin.blogPosts || []).find(p => p.id === c.post_id);
-    return `
-      <div class="admin-item">
-        <div class="tipo">💬 ${c.autor_nome}${c.autor_email ? ' (' + c.autor_email + ')' : ''}</div>
-        <div class="meta">Em: ${post ? post.titulo : '(artigo excluído)'}</div>
-        <div class="mensagem">${c.comentario}</div>
-        <div class="meta">${formatarData(c.created_at)}</div>
-        <div class="admin-acoes" style="margin-top:8px;">
-          <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'blog_comentarios', '${c.id}', 'comentário')">Excluir comentário</button>
-        </div>
-      </div>
-    `;
-  };
-
-  const partes = [];
-  if(pendentes.length > 0){
-    partes.push(`<h3 style="font-size:0.9rem; color:var(--verde-escuro); margin:14px 0 8px;">⏳ Pendentes de aprovação</h3>`);
-    partes.push(pendentes.map(p => cardPost(p, true)).join(''));
-  }
-  if(publicados.length > 0){
-    partes.push(`<h3 style="font-size:0.9rem; color:var(--verde-escuro); margin:14px 0 8px;">✅ Publicados</h3>`);
-    partes.push(publicados.map(p => cardPost(p, false)).join(''));
-  }
-  if(comentarios.length > 0){
-    partes.push(`<h3 style="font-size:0.9rem; color:var(--verde-escuro); margin:14px 0 8px;">💬 Comentários</h3>`);
-    partes.push(comentarios.map(cardComentario).join(''));
-  }
-
-  lista.innerHTML = partes.length === 0 ? '<div class="admin-vazio">Nada por aqui ainda.</div>' : partes.join('');
+  `).join('');
 }
 
 function renderDepoimentosAdmin(busca){
@@ -342,17 +312,6 @@ function renderDenunciasAgrupadas(busca){
     gruposProduto[d.produto_id].push(d);
   });
 
-  // Agrupa denúncias de artigo do blog por post_id
-  const gruposBlog = {};
-  (dadosAdmin.denunciasBlog || []).forEach(d => {
-    if(busca && !normalizarTextoAdmin(d.motivo + ' ' + (d.descricao || '')).includes(busca)) {
-      const postCombina = (dadosAdmin.blogPosts || []).some(p => p.id === d.post_id && normalizarTextoAdmin(p.titulo + ' ' + p.autor_nome).includes(busca));
-      if(!postCombina) return;
-    }
-    if(!gruposBlog[d.post_id]) gruposBlog[d.post_id] = [];
-    gruposBlog[d.post_id].push(d);
-  });
-
   const cardsEmpresa = Object.keys(gruposEmpresa).map(profissionalId => {
     const denunciasDoAlvo = gruposEmpresa[profissionalId].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     const empresa = (dadosAdmin.profissionais || []).find(p => p.id === profissionalId);
@@ -395,26 +354,7 @@ function renderDenunciasAgrupadas(busca){
     </div>`;
   });
 
-  const cardsBlog = Object.keys(gruposBlog).map(postId => {
-    const denunciasDoAlvo = gruposBlog[postId].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    const post = (dadosAdmin.blogPosts || []).find(p => p.id === postId);
-    const nome = post ? post.titulo : '(artigo não encontrado / já excluído)';
-
-    return `<div class="admin-item">
-      <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Artigo do blog${post ? ' · por ' + post.autor_nome : ''} · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
-      ${denunciasDoAlvo.map(d => `
-        <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
-          <b>${d.motivo}</b>${d.descricao ? ' — ' + d.descricao : ''}
-          <div class="meta">${d.denunciante_email || 'anônimo'} · ${formatarData(d.created_at)}</div>
-        </div>
-      `).join('')}
-      ${post ? `<div class="admin-acoes" style="margin-top:8px;">
-        <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'blog_posts', '${postId}', '${nome.replace(/'/g,"\\'")}')">Excluir artigo</button>
-      </div>` : ''}
-    </div>`;
-  });
-
-  const todosOsCards = [...cardsEmpresa, ...cardsProduto, ...cardsBlog];
+  const todosOsCards = [...cardsEmpresa, ...cardsProduto];
 
   lista.innerHTML = todosOsCards.length === 0
     ? '<div class="admin-vazio">Nada por aqui ainda.</div>'
@@ -426,13 +366,11 @@ function normalizarTextoAdmin(str){
 }
 
 function textoBuscavelDoItem(item){
-  const perfilDono = item.user_id ? (dadosAdmin.perfisUsuario || []).find(p => p.user_id === item.user_id) : null;
   // Junta os campos relevantes de cada tipo de item, pra buscar em todos de uma vez
   return normalizarTextoAdmin([
     item.name, item.nome, item.cat, item.categoria, item.marca,
     item.cidade, item.user_email, item.remetente_email,
-    item.mensagem, item.denunciante_email,
-    perfilDono ? perfilDono.codigo_guiazap : null
+    item.mensagem, item.denunciante_email
   ].filter(Boolean).join(' '));
 }
 
@@ -471,10 +409,9 @@ function renderAdmin(){
     }
     if(abaAtual === 'empresas'){
       const ativo = item.status_pagamento === 'ativo';
-      const perfilDono = (dadosAdmin.perfisUsuario || []).find(p => p.user_id === item.user_id);
       return `<div class="admin-item">
         <div class="tipo">${item.verificado ? '✅ ' : ''}${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
-        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}${perfilDono && perfilDono.codigo_guiazap ? ` · 🔑 ${perfilDono.codigo_guiazap}` : ''}</div>
+        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
         <div class="admin-acoes">
           ${ativo
             ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>`
@@ -489,6 +426,9 @@ function renderAdmin(){
           ${item.plano === 'premium'
             ? `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Premium</button>`
             : `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Premium</button>`}
+          ${item.plano === 'vendas'
+            ? `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Vendas</button>`
+            : `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_vendas', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">💼 Mudar p/ Vendas</button>`}
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </div>`;

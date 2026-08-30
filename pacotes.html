@@ -68,7 +68,7 @@
 </head>
 <body>
 <header><div class="logo">GuiaZap</div><p>Escolha seu pacote</p></header>
-<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 <div class="pacotes-wrap">
   <h1>Como você quer aparecer no GuiaZap?</h1>
   <p class="sub">Escolha o pacote e depois complete seu cadastro</p>
@@ -95,14 +95,10 @@
 
   <div class="card-pacote destaque">
     <span class="selo-recomendado">MAIS COMPLETO</span>
-    <h2>Pacote Contato + Vitrine</h2>
+    <h2>Pacote Completo</h2>
     <div class="preco">R$ 10<span>/mês</span></div>
     <ul>
       <li>Tudo do Pacote Contato</li>
-      <li>Anuncie seus produtos na Vitrine GuiaZap</li>
-      <li>Apareça também para quem busca por produto</li>
-      <li>Visitantes podem compartilhar seus produtos no WhatsApp e redes sociais</li>
-      <li>🛒 Link externo de compra em cada produto (útil pra afiliados/representantes de marca)</li>
       <li>🎯 Acesso ao Banco de Talentos — consulte currículos sem precisar publicar vaga</li>
       <li>Até <b>3 novidades (Stories)</b> ativas ao mesmo tempo, com até <b>5 fotos</b> cada, <b>24h</b> no ar</li>
       <li>Mais visibilidade para o seu negócio</li>
@@ -116,7 +112,7 @@
     <h2>Pacote Premium</h2>
     <div class="preco">R$ 25<span>/mês</span></div>
     <ul>
-      <li>Tudo do Pacote Contato + Vitrine</li>
+      <li>Tudo do Pacote Completo</li>
       <li>Selo dourado exclusivo "👑 Premium"</li>
       <li>Visitantes podem <b>seguir</b> sua empresa (sempre em contato)</li>
       <li><b>Novidades (Stories) ilimitadas</b>, com até <b>10 fotos</b> cada, ficando <b>7 dias</b> no ar (em vez de 24h)</li>
@@ -128,12 +124,29 @@
     <p style="font-size:0.72rem; color:#888; margin-top:8px; text-align:center;">⏳ Após pagar, pode levar até 15 minutos pra ativar automaticamente.</p>
   </div>
 
+  <div class="card-pacote destaque" style="border-color:#0f766e; box-shadow:0 4px 14px rgba(15,118,110,0.35); background:linear-gradient(180deg, #eafff9, var(--cinza-card) 40%);">
+    <span class="selo-recomendado" style="background:#0f766e;">💼 VENDAS</span>
+    <h2>Pacote Vendas</h2>
+    <div class="preco">R$ 40<span>/mês</span></div>
+    <ul>
+      <li>Tudo do Pacote Premium</li>
+      <li>🛍️ Vitrine de produtos — cadastre e venda pelo GuiaZap</li>
+      <li>🛒 Carrinho de compras com pedidos organizados</li>
+      <li>🤖 Atendimento automático por menu no Papo — recebe pedido mesmo com você offline</li>
+      <li>🛵 Frete calculado automaticamente pela distância real (rota, não linha reta)</li>
+      <li>🔗 Link externo de compra em cada produto (útil pra afiliados/representantes de marca)</li>
+      <li>Selo exclusivo "💼 Vendas" no seu cadastro</li>
+    </ul>
+    <a href="index.html?plano=vendas" class="btn-escolher" style="background:#0f766e;">Escolher este pacote</a>
+    <p style="font-size:0.72rem; color:#888; margin-top:8px; text-align:center;">⏳ Após pagar, pode levar até 15 minutos pra ativar automaticamente.</p>
+  </div>
+
   <div class="card-pacote" style="border-color:#1565c0; margin-top:8px; position:relative;">
     <span class="selo-recomendado" style="background:#e3f2fd; color:#0d47a1;">EXTRA — QUALQUER PACOTE</span>
     <h2>🔵 Selo Verificado</h2>
     <div class="preco">R$ 15<span> pagamento único</span></div>
     <ul>
-      <li>Disponível pra qualquer pacote (Contato, Completo ou Premium)</li>
+      <li>Disponível pra qualquer pacote (Contato, Completo, Premium ou Vendas)</li>
       <li>Confirmação real de CPF/CNPJ direto na Receita Federal</li>
       <li>Envio de documento pra análise</li>
       <li>Confirmação por e-mail e por WhatsApp</li>
@@ -167,6 +180,6 @@ async function carregarContadorCampanha(){
 carregarContadorCampanha();
 </script>
 <script src="js/modo-escuro.js"></script>
-<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
+<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬</a>
 </body>
 </html>

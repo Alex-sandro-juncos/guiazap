@@ -387,7 +387,7 @@ async function loadEntries(){
   }
 
   const planoParam = params.get('plano');
-  if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium'){
+  if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium' || planoParam === 'vendas'){
     planoEscolhido = planoParam;
     localStorage.setItem('planoEscolhido', planoEscolhido);
     localStorage.setItem('abrirCadastroAposLogin', '1');
@@ -405,8 +405,8 @@ async function loadEntries(){
 
   const btnPedidos = document.getElementById('btn-meus-pedidos');
   if(btnPedidos){
-    const temEmpresaPropria = currentUser && entries.some(e => e.user_id === currentUser.id);
-    btnPedidos.style.display = temEmpresaPropria ? 'block' : 'none';
+    const temEmpresaVendas = currentUser && entries.some(e => e.user_id === currentUser.id && e.plano === 'vendas');
+    btnPedidos.style.display = temEmpresaVendas ? 'block' : 'none';
   }
 }
 
@@ -701,6 +701,13 @@ function populateEstados(){
 const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Pacote 1 é grátis e ativa sozinho
 const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
 const LINK_ASSINATURA_PREMIUM = "https://mpago.la/2JLXkQM"; // Plano Premium (R$25/mês) criado no Mercado Pago
+const LINK_ASSINATURA_VENDAS = "https://mpago.la/1HiQNoL"; // Plano Vendas (R$40/mês, 30 dias de teste grátis) criado no Mercado Pago
+
+// O Pacote Vendas inclui tudo do Premium — então em qualquer lugar que
+// diferencia "tem Premium", o Vendas também deve contar.
+function ehPremiumOuVendas(plano){
+  return plano === 'premium' || plano === 'vendas';
+}
 const LINK_SELO_VERIFICADO = "https://mpago.la/13aLx8F"; // Selo Verificado (R$15, pagamento único) criado no Mercado Pago
 const LINK_IMPULSIONAR = "https://mpago.la/2rGLFyJ"; // Impulsionamento avulso (R$5, pagamento único) criado no Mercado Pago
 const WHATSAPP_ADMIN_GUIAZAP = "5546999209402"; // número do WhatsApp do GuiaZap que recebe a confirmação
@@ -709,6 +716,7 @@ const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com
 let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
 
 function linkDoPlano(plano){
+  if(plano === 'vendas') return LINK_ASSINATURA_VENDAS;
   if(plano === 'premium') return LINK_ASSINATURA_PREMIUM;
   return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
 }
@@ -1181,7 +1189,7 @@ async function loadContagemSeguidores(){
   listaSeguidoresPorEmpresa = {};
   if(!currentUser) return;
 
-  const minhasEmpresasPremium = entries.filter(e => e.user_id === currentUser.id && e.plano === 'premium');
+  const minhasEmpresasPremium = entries.filter(e => e.user_id === currentUser.id && ehPremiumOuVendas(e.plano));
   if(minhasEmpresasPremium.length === 0) return;
 
   for(const empresa of minhasEmpresasPremium){
@@ -1671,7 +1679,7 @@ async function loadProdutosDestaque(){
   }
 
   produtosDestaqueTodos = data
-    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && (p.profissionais.plano === 'completo' || p.profissionais.plano === 'premium'));
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && p.profissionais.plano === 'vendas');
 
   const titulo = document.querySelector('.destaque-header h2');
   if(titulo) titulo.textContent = '🛍️ Produtos em destaque';
@@ -1808,7 +1816,7 @@ async function abrirFormVideo(profissionalId, plano){
   document.getElementById('video-arquivo-msg').textContent = '';
   arquivoVideoSelecionado = null;
 
-  const limiteTexto = plano === 'premium'
+  const limiteTexto = ehPremiumOuVendas(plano)
     ? 'Seu plano permite vídeos de até 60 segundos e 100MB, sem limite de quantidade'
     : 'Seu plano permite vídeos de até 30 segundos e 50MB, até 3 vídeos ativos';
   document.getElementById('video-limite-texto').textContent = limiteTexto;
@@ -1828,11 +1836,11 @@ function selecionarArquivoVideo(event){
   if(!file) return;
 
   const plano = document.getElementById('video-plano').value;
-  const limiteDuracao = plano === 'premium' ? 60 : 30;
-  const limiteTamanho = plano === 'premium' ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
+  const limiteDuracao = ehPremiumOuVendas(plano) ? 60 : 30;
+  const limiteTamanho = ehPremiumOuVendas(plano) ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
 
   if(file.size > limiteTamanho){
-    msg.textContent = `Esse arquivo é grande demais (máximo ${plano === 'premium' ? '100MB' : '50MB'} no seu plano).`;
+    msg.textContent = `Esse arquivo é grande demais (máximo ${ehPremiumOuVendas(plano) ? '100MB' : '50MB'} no seu plano).`;
     msg.style.color = '#a4402f';
     event.target.value = '';
     arquivoVideoSelecionado = null;
@@ -1908,15 +1916,15 @@ async function abrirFormStory(profissionalId, plano){
   storyFotosSelecionadas = [];
   renderStoryFotosPreview();
 
-  storyLimiteFotos = plano === 'premium' ? 10 : (plano === 'completo' ? 5 : 1);
-  document.getElementById('story-limite-texto').textContent = plano === 'premium'
+  storyLimiteFotos = ehPremiumOuVendas(plano) ? 10 : (plano === 'completo' ? 5 : 1);
+  document.getElementById('story-limite-texto').textContent = ehPremiumOuVendas(plano)
     ? 'até 10 fotos — Pacote Premium'
     : plano === 'completo'
       ? 'até 5 fotos — Pacote Completo'
       : '1 foto — Pacote Básico';
 
   const campoProduto = document.getElementById('story-produto-campo');
-  if(plano === 'completo' || plano === 'premium'){
+  if(plano === 'vendas'){
     campoProduto.style.display = 'block';
     const { data: produtos } = await supabaseClient.from('produtos').select('id, nome').eq('profissional_id', profissionalId);
     const sel = document.getElementById('story-produto-id');
@@ -1926,7 +1934,7 @@ async function abrirFormStory(profissionalId, plano){
   }
 
   const campoNotificar = document.getElementById('story-notificar-campo');
-  campoNotificar.style.display = plano === 'premium' ? 'block' : 'none';
+  campoNotificar.style.display = ehPremiumOuVendas(plano) ? 'block' : 'none';
   document.getElementById('story-notificar-seguidores').checked = true;
 
   document.getElementById('story-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2121,7 +2129,7 @@ async function salvarStory(e){
   // Checa o limite de NOVIDADES simultâneas só agora, na hora de publicar de verdade
   const grupoAtual = storiesAgrupadas['e_' + profissionalIdAtual];
   const novidadesAtivas = grupoAtual ? grupoAtual.stories.length : 0;
-  const limiteNovidades = plano === 'premium' ? Infinity : (plano === 'completo' ? 3 : 1);
+  const limiteNovidades = ehPremiumOuVendas(plano) ? Infinity : (plano === 'completo' ? 3 : 1);
   if(novidadesAtivas >= limiteNovidades){
     const textoAviso = plano === 'basico'
       ? 'Seu plano permite só 1 novidade ativa por vez. Espere a atual expirar (ou exclua ela) pra publicar outra.'
@@ -2132,7 +2140,7 @@ async function salvarStory(e){
     return false;
   }
 
-  const horasDuracao = plano === 'premium' ? (24 * 7) : 24;
+  const horasDuracao = ehPremiumOuVendas(plano) ? (24 * 7) : 24;
   const expiresAt = new Date(Date.now() + horasDuracao * 60 * 60 * 1000).toISOString();
 
   const payload = {
@@ -2328,7 +2336,7 @@ function renderMinhasNovidades(profissionalId){
   if(!grupo || grupo.stories.length === 0){ container.innerHTML = ''; return; }
 
   const cadastro = entries.find(e => e.id === profissionalId);
-  const textoValidade = cadastro && cadastro.plano === 'premium' ? 'somem em até 7 dias' : 'somem em até 24h';
+  const textoValidade = cadastro && ehPremiumOuVendas(cadastro.plano) ? 'somem em até 7 dias' : 'somem em até 24h';
 
   container.innerHTML = `
     <div class="minhas-novidades-label">📸 Suas novidades ativas (${textoValidade}):</div>
@@ -2418,8 +2426,8 @@ function renderStoriesLinha(){
     if(prioridadeA !== prioridadeB) return prioridadeB - prioridadeA;
 
     // Empate: empresas do Pacote Premium aparecem primeiro
-    const premiumA = a[1].tipo === 'empresa' && a[1].empresa.plano === 'premium' ? 1 : 0;
-    const premiumB = b[1].tipo === 'empresa' && b[1].empresa.plano === 'premium' ? 1 : 0;
+    const premiumA = a[1].tipo === 'empresa' && ehPremiumOuVendas(a[1].empresa.plano) ? 1 : 0;
+    const premiumB = b[1].tipo === 'empresa' && ehPremiumOuVendas(b[1].empresa.plano) ? 1 : 0;
     return premiumB - premiumA;
   });
 
@@ -2716,7 +2724,7 @@ function render(){
     })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
     .filter(e => !mostrandoSoSeguindo || seguindoEmpresas.has(e.id))
-    .filter(e => !filtroPremiumRapidoAtivo || e.plano === 'premium')
+    .filter(e => !filtroPremiumRapidoAtivo || ehPremiumOuVendas(e.plano))
     .filter(e => !filtroAbertoAgoraAtivo || estaAbertoAgora(e))
     .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
     .filter(e => !estado || e.estado === estado)
@@ -2744,8 +2752,8 @@ function render(){
         const mediaB = mediaDe(b.id).media;
         if(mediaA !== mediaB) return mediaB - mediaA;
       }
-      const premiumA = a.plano === 'premium' ? 1 : 0;
-      const premiumB = b.plano === 'premium' ? 1 : 0;
+      const premiumA = ehPremiumOuVendas(a.plano) ? 1 : 0;
+      const premiumB = ehPremiumOuVendas(b.plano) ? 1 : 0;
       if(premiumA !== premiumB) return premiumB - premiumA;
       return a.name.localeCompare(b.name, 'pt-BR');
     });
@@ -2797,7 +2805,7 @@ function render(){
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
-          <h3>${escapeHtml(e.name)}${e.verificado && e.plano === 'premium' ? ' <span title="Empresa Verificada e Premium" class="selo-verificado-premium">✅👑 Verificada Premium</span>' : e.verificado ? ' <span title="Empresa verificada pelo GuiaZap" class="selo-verificado">✅ Empresa verificada</span>' : ''}${e.plano === 'premium' && !e.verificado ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
+          <h3>${escapeHtml(e.name)}${e.verificado && ehPremiumOuVendas(e.plano) ? ' <span title="Empresa Verificada e Premium" class="selo-verificado-premium">✅👑 Verificada Premium</span>' : e.verificado ? ' <span title="Empresa verificada pelo GuiaZap" class="selo-verificado">✅ Empresa verificada</span>' : ''}${ehPremiumOuVendas(e.plano) && !e.verificado ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
           ${e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date() ? '<div class="selo-impulsionado">🚀 Impulsionado — no topo agora</div>' : ''}
           <div class="selo-disponibilidade ${e.status_disponibilidade === 'atendimento' ? 'atendimento' : 'disponivel'}" ${isOwner ? `onclick="toggleStatusDisponibilidade('${e.id}')" style="cursor:pointer;"` : ''}>
             ${e.status_disponibilidade === 'atendimento' ? '🟡 Em atendimento' : '🟢 Disponível agora'}
@@ -2807,7 +2815,7 @@ function render(){
           ${!denunciasPorEmpresa[e.id] ? '<div class="selo-sem-denuncia">✓ Sem denúncias pendentes</div>' : ''}
           ${filtroMaisProximosAtivo && minhaLatitude && e.latitude != null && e.longitude != null ? `<div class="distancia-km">📍 ${calcularDistanciaKm(minhaLatitude, minhaLongitude, e.latitude, e.longitude).toFixed(1)} km de você</div>` : ''}
           ${e.horario_dias && e.horario_abre && e.horario_fecha ? `<div class="selo-horario ${estaAbertoAgora(e) ? 'aberto' : 'fechado'}">${estaAbertoAgora(e) ? '🟢 Aberto agora' : '🔴 Fechado agora'}</div>` : ''}
-          ${isOwner && e.plano === 'premium' ? `
+          ${isOwner && ehPremiumOuVendas(e.plano) ? `
             <div class="contagem-seguidores" onclick="toggleListaSeguidores('${e.id}')">
               👥 ${contagemSeguidoresPorEmpresa[e.id] ?? '...'} seguidor${contagemSeguidoresPorEmpresa[e.id] === 1 ? '' : 'es'}
               <span class="link-ver-lista">(ver lista)</span>
@@ -2825,7 +2833,7 @@ function render(){
           ` : ''}
           <div style="display:flex; align-items:center; gap:4px;">
             <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavorito('${e.id}', event)">${favoritosEmpresas.has(e.id) ? '❤️' : '🤍'}</button>
-            ${!isOwner && e.plano === 'premium' ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? 'Deixar de seguir' : '+ Seguir'}</button>` : ''}
+            ${!isOwner && ehPremiumOuVendas(e.plano) ? `<button class="btn-seguir${seguindoEmpresas.has(e.id) ? ' seguindo' : ''}" onclick="toggleSeguir('${e.id}', event)">${seguindoEmpresas.has(e.id) ? 'Deixar de seguir' : '+ Seguir'}</button>` : ''}
             ${isOwner ? `<span class="owner-actions">
               <button class="icon-btn" title="Editar" onclick="editEntry('${e.id}')">✎</button>
               <button class="icon-btn" title="Excluir" onclick="deleteEntry('${e.id}')">✕</button>
@@ -2844,8 +2852,9 @@ function render(){
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
-        ${isOwner && !pendente && e.plano !== 'completo' && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês) e anunciar na Vitrine</a>` : ''}
-        ${isOwner && !pendente && e.plano !== 'premium' ? `<a href="${LINK_ASSINATURA_PREMIUM}" class="link-migrar" style="background:linear-gradient(90deg, #fdf6e3, #f9e9b8); border:1.5px solid #d4af37; color:#4a3800;">👑 Migrar para o Pacote Premium (R$25/mês) — seguidores, mais Stories e prioridade</a>` : ''}
+        ${isOwner && !pendente && e.plano !== 'completo' && !ehPremiumOuVendas(e.plano) ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês)</a>` : ''}
+        ${isOwner && !pendente && !ehPremiumOuVendas(e.plano) ? `<a href="${LINK_ASSINATURA_PREMIUM}" class="link-migrar" style="background:linear-gradient(90deg, #fdf6e3, #f9e9b8); border:1.5px solid #d4af37; color:#4a3800;">👑 Migrar para o Pacote Premium (R$25/mês) — seguidores, mais Stories e prioridade</a>` : ''}
+        ${isOwner && !pendente && e.plano !== 'vendas' ? `<a href="${LINK_ASSINATURA_VENDAS}" class="link-migrar" style="background:#0f766e; color:white; border:none;">💼 Migrar para o Pacote Vendas (R$40/mês) — Vitrine, pedidos e atendimento automático</a>` : ''}
         ${isOwner && !pendente && !(e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date()) ? `<a href="${LINK_IMPULSIONAR}" class="link-migrar" style="background:#1c1c1c; color:white; border:none;">🚀 Impulsionar por 24h no topo (R$5,00)</a>` : ''}
         <button type="button" class="btn-opcoes-card" onclick="toggleOpcoesExtra('${e.id}')">⋮ Opções</button>
         <div class="card-acoes-extra" id="opcoes-extra-${e.id}" style="display:none;">
@@ -2909,14 +2918,14 @@ function render(){
               <a class="btn-zap" style="background:#6b46c1;" href="chat.html?empresa=${e.id}">💬 Pelo Papo</a>
             </div>
           </div>
-          ${e.plano === 'completo' || e.plano === 'premium' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
-          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
+          ${e.plano === 'vendas' ? `<a href="vitrine.html?empresa=${e.id}" class="link-ver-produtos">🛍️ Ver produtos desta empresa</a>` : ''}
+          ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1;">🎯 Consultar Banco de Talentos</a>` : ''}
           ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#e91e63; border:none; cursor:pointer;" onclick="abrirFormStory('${e.id}', '${e.plano}')">📸 Postar novidade (24h)</button>` : ''}
-          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<button type="button" class="link-ver-produtos" style="background:#6b46c1; border:none; cursor:pointer;" onclick="abrirFormVideo('${e.id}', '${e.plano}')">🎥 Postar vídeo</button>` : ''}
-          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
-          ${isOwner ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
-          ${isOwner && (e.plano === 'completo' || e.plano === 'premium') ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
-          ${isOwner && e.plano === 'premium' ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
+          ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<button type="button" class="link-ver-produtos" style="background:#6b46c1; border:none; cursor:pointer;" onclick="abrirFormVideo('${e.id}', '${e.plano}')">🎥 Postar vídeo</button>` : ''}
+          ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
+          ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
+          ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
+          ${isOwner && ehPremiumOuVendas(e.plano) ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>
         ${isOwner ? `<div class="minhas-novidades" id="minhas-novidades-${e.id}"></div>` : ''}
         ${isOwner && !e.verificado ? `<div id="painel-verificacao-${e.id}"></div>` : ''}
