@@ -1679,7 +1679,7 @@ async function loadProdutosDestaque(){
   }
 
   produtosDestaqueTodos = data
-    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo' && p.profissionais.plano === 'vendas');
+    .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
 
   const titulo = document.querySelector('.destaque-header h2');
   if(titulo) titulo.textContent = '🛍️ Produtos em destaque';
