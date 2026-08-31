@@ -2313,6 +2313,16 @@ function ligarCanalDeChamadas(){
     encerrarChamada(false);
   });
 
+  canalChamadasPessoal.on('broadcast', { event: 'aceito_em_outro_lugar' }, () => {
+    // Se essa aba estava tocando a mesma chamada (mas não foi ela que
+    // atendeu), para de tocar e fecha a tela — a chamada já foi atendida
+    // em outra aba/tela aberta com a mesma conta.
+    if(!peerConnectionAtual && document.getElementById('chamada-recebida-view').style.display !== 'none'){
+      pararSomChamada();
+      document.getElementById('overlay-chamada').classList.remove('aberto');
+    }
+  });
+
   canalChamadasPessoal.subscribe();
 }
 
@@ -2399,6 +2409,14 @@ async function recusarChamada(){
 async function aceitarChamada(){
   clearInterval(intervaloChecagemDesligou);
   pararSomChamada();
+
+  // Avisa outras abas/telas abertas com a mesma conta (ex: GuiaZap aberto
+  // junto com o Papo) que a chamada já foi atendida aqui — sem isso, cada
+  // aba fica tocando por conta própria e não sabe que a outra já atendeu.
+  if(canalChamadasPessoal){
+    canalChamadasPessoal.send({ type: 'broadcast', event: 'aceito_em_outro_lugar', payload: {} });
+  }
+
   document.getElementById('chamada-recebida-view').style.display = 'none';
   document.getElementById('chamada-ativa-view').style.display = 'flex';
   document.getElementById('chamada-nome-ativa').textContent = chamadaComQuemNome;

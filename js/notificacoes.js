@@ -227,6 +227,14 @@ function _iniciarEscutaChamadas(){
     if(overlay) overlay.classList.remove('aberto');
     _chamadaPayloadPendente = null;
   });
+  _chamadaCanalListener.on('broadcast', { event: 'aceito_em_outro_lugar' }, () => {
+    // A chamada já foi atendida em outra aba/tela aberta com a mesma conta
+    // (ex: o Papo estava aberto junto) — para de tocar esse popup também
+    _pararSomChamadaPopup();
+    const overlay = document.getElementById('popup-chamada-overlay');
+    if(overlay) overlay.classList.remove('aberto');
+    _chamadaPayloadPendente = null;
+  });
   _chamadaCanalListener.subscribe();
 }
 
@@ -308,6 +316,13 @@ async function _recusarChamadaPopup(){
 function _aceitarChamadaPopup(){
   _pararSomChamadaPopup();
   if(!_chamadaPayloadPendente) return;
+
+  // Avisa outras abas/telas abertas com a mesma conta (ex: uma aba do Papo
+  // separada) que a chamada já vai ser atendida aqui
+  if(_chamadaCanalListener){
+    _chamadaCanalListener.send({ type: 'broadcast', event: 'aceito_em_outro_lugar', payload: {} });
+  }
+
   sessionStorage.setItem('chamada_pendente_offer', JSON.stringify(_chamadaPayloadPendente));
   window.location.href = 'chat.html?atenderPendente=1';
 }
