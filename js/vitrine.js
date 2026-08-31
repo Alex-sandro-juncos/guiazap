@@ -1061,6 +1061,75 @@ function renderCarrinho(){
   }).join('');
 }
 
+// ---------- MODAIS DE ENTREGA (substituem os popups feios do navegador) ----------
+
+let _resolverEscolhaEntregaCallback = null;
+function abrirModalEscolhaEntrega(){
+  document.getElementById('overlay-escolha-entrega').style.display = 'flex';
+  return new Promise(resolve => { _resolverEscolhaEntregaCallback = resolve; });
+}
+function resolverEscolhaEntrega(quer){
+  document.getElementById('overlay-escolha-entrega').style.display = 'none';
+  if(_resolverEscolhaEntregaCallback) _resolverEscolhaEntregaCallback(quer);
+}
+
+let _resolverEnderecoCallback = null;
+function abrirModalEndereco(){
+  ['end-cep','end-rua','end-numero','end-complemento','end-bairro','end-cidade','end-estado'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('end-cep-msg').textContent = '';
+  document.getElementById('overlay-endereco-entrega').style.display = 'flex';
+  return new Promise(resolve => { _resolverEnderecoCallback = resolve; });
+}
+function resolverEndereco(enderecoTexto){
+  document.getElementById('overlay-endereco-entrega').style.display = 'none';
+  if(_resolverEnderecoCallback) _resolverEnderecoCallback(enderecoTexto);
+}
+
+function mascaraCepEndereco(event){
+  let v = event.target.value.replace(/\D/g, '').slice(0, 8);
+  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  event.target.value = v;
+}
+
+async function buscarCepEndereco(){
+  const cep = document.getElementById('end-cep').value.replace(/\D/g, '');
+  const msg = document.getElementById('end-cep-msg');
+  if(cep.length !== 8){ msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : ''; return; }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro){ msg.textContent = 'CEP não encontrado — preencha manualmente'; return; }
+
+    document.getElementById('end-rua').value = data.logradouro || '';
+    document.getElementById('end-bairro').value = data.bairro || '';
+    document.getElementById('end-cidade').value = data.localidade || '';
+    document.getElementById('end-estado').value = data.uf || '';
+    msg.textContent = '✓ Endereço encontrado';
+    document.getElementById('end-numero').focus();
+  } catch(e){
+    msg.textContent = 'erro ao buscar CEP, preencha manualmente';
+  }
+}
+
+function confirmarEnderecoEntrega(){
+  const rua = document.getElementById('end-rua').value.trim();
+  const numero = document.getElementById('end-numero').value.trim();
+  const complemento = document.getElementById('end-complemento').value.trim();
+  const bairro = document.getElementById('end-bairro').value.trim();
+  const cidade = document.getElementById('end-cidade').value.trim();
+  const estado = document.getElementById('end-estado').value.trim();
+
+  if(!rua || !numero || !bairro || !cidade || !estado){
+    alert('Preenche pelo menos rua, número, bairro, cidade e estado.');
+    return;
+  }
+
+  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}`;
+  resolverEndereco(enderecoCompleto);
+}
+
 async function finalizarPedidoCarrinho(profissionalId){
   if(!currentUserV){
     alert('Você precisa estar logado pra finalizar um pedido. Faça login no GuiaZap primeiro.');
@@ -1082,30 +1151,32 @@ async function finalizarPedidoCarrinho(profissionalId){
   let enderecoEntrega = null;
 
   if(config && config.faz_entrega){
-    const quer = confirm('Essa empresa faz entrega!\n\nOK = Quero receber em casa (entrega)\nCancelar = Vou retirar no local');
+    const quer = await abrirModalEscolhaEntrega();
     if(quer){
-      const endereco = prompt('Qual o endereço completo pra entrega? (rua, número, bairro e cidade)');
-      if(!endereco || !endereco.trim()) return;
+      const endereco = await abrirModalEndereco();
+      if(!endereco) return;
 
-      alert('🔍 Calculando o frete, aguarde um instante...');
+      document.getElementById('overlay-calculando-frete').style.display = 'flex';
 
       try{
         const respFrete = await fetch('/.netlify/functions/calcular-frete-carrinho', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profissionalId, endereco: endereco.trim() })
+          body: JSON.stringify({ profissionalId, endereco })
         });
         const dadosFrete = await respFrete.json();
+        document.getElementById('overlay-calculando-frete').style.display = 'none';
 
         if(!dadosFrete.encontrado){
           alert('⚠️ Não conseguimos calcular o frete pra esse endereço. O pedido vai ser feito como retirada — combine a entrega direto com o vendedor pelo Papo.');
         } else {
           taxaEntrega = dadosFrete.valorFrete;
-          enderecoEntrega = endereco.trim();
+          enderecoEntrega = endereco;
           alert(`📏 Distância: ${dadosFrete.distanciaKm} km\n🛵 Frete: R$ ${taxaEntrega.toFixed(2).replace('.', ',')}`);
         }
       } catch(e){
         console.error(e);
+        document.getElementById('overlay-calculando-frete').style.display = 'none';
         alert('⚠️ Erro ao calcular o frete. O pedido vai ser feito como retirada.');
       }
     }
