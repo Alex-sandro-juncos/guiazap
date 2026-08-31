@@ -2007,7 +2007,14 @@ function conteudoDaMensagem(m, minha){
   if(m.tipo === 'link'){
     return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">🔗</span> ${escapeHtmlChat(m.arquivo_nome || 'Ver no GuiaZap')}</a>`;
   }
-  return escapeHtmlChat(m.texto);
+  return linkificarTexto(escapeHtmlChat(m.texto));
+}
+
+// Transforma qualquer link (http/https) dentro de um texto normal em algo
+// clicável — sem isso, links do Mercado Pago e outros mandados como texto
+// (ex: pelo robô de atendimento automático) ficavam sem funcionar
+function linkificarTexto(textoEscapado){
+  return textoEscapado.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:inherit; text-decoration:underline; word-break:break-all;">$1</a>');
 }
 
 function adicionarBolhaMensagem(m){

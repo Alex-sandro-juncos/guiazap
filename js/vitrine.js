@@ -1075,6 +1075,45 @@ async function finalizarPedidoCarrinho(profissionalId){
   const subtotal = itensDaEmpresa.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
   const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
+  // Confere se essa empresa faz entrega — se fizer, pergunta retirada ou
+  // entrega, e calcula o frete de verdade antes de criar o pedido
+  const { data: config } = await supabaseClientV.from('atendimento_config').select('faz_entrega').eq('profissional_id', profissionalId).maybeSingle();
+
+  let taxaEntrega = 0;
+  let enderecoEntrega = null;
+
+  if(config && config.faz_entrega){
+    const quer = confirm('Essa empresa faz entrega!\n\nOK = Quero receber em casa (entrega)\nCancelar = Vou retirar no local');
+    if(quer){
+      const endereco = prompt('Qual o endereço completo pra entrega? (rua, número, bairro e cidade)');
+      if(!endereco || !endereco.trim()) return;
+
+      alert('🔍 Calculando o frete, aguarde um instante...');
+
+      try{
+        const respFrete = await fetch('/.netlify/functions/calcular-frete-carrinho', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profissionalId, endereco: endereco.trim() })
+        });
+        const dadosFrete = await respFrete.json();
+
+        if(!dadosFrete.encontrado){
+          alert('⚠️ Não conseguimos calcular o frete pra esse endereço. O pedido vai ser feito como retirada — combine a entrega direto com o vendedor pelo Papo.');
+        } else {
+          taxaEntrega = dadosFrete.valorFrete;
+          enderecoEntrega = endereco.trim();
+          alert(`📏 Distância: ${dadosFrete.distanciaKm} km\n🛵 Frete: R$ ${taxaEntrega.toFixed(2).replace('.', ',')}`);
+        }
+      } catch(e){
+        console.error(e);
+        alert('⚠️ Erro ao calcular o frete. O pedido vai ser feito como retirada.');
+      }
+    }
+  }
+
+  const total = subtotal + taxaEntrega;
+
   // Acha ou cria a conversa com essa empresa
   const { data: existente } = await supabaseClientV.from('conversas').select('id').eq('profissional_id', profissionalId).eq('visitante_user_id', currentUserV.id).maybeSingle();
   let conversaId = existente ? existente.id : null;
@@ -1084,21 +1123,31 @@ async function finalizarPedidoCarrinho(profissionalId){
     conversaId = nova.id;
   }
 
-  // Cria o pedido esperando pagamento (retirada — combine a entrega direto
-  // com o vendedor pelo Papo). O pagamento é feito de verdade a seguir, via
-  // link do Mercado Pago com o valor exato — não é mais só um texto informativo.
+  // Cria o pedido esperando pagamento. O pagamento é feito de verdade a
+  // seguir, via link do Mercado Pago com o valor exato (produtos + frete).
   const { error: erroPedido } = await supabaseClientV.from('pedidos').insert({
     conversa_id: conversaId,
     profissional_id: profissionalId,
     cliente_user_id: currentUserV.id,
     itens: itensPayload,
     subtotal,
-    taxa_entrega: 0,
-    total: subtotal,
+    taxa_entrega: taxaEntrega,
+    total,
     status: 'aguardando_pagamento',
     codigo_confirmacao: codigoConfirmacao
   });
   if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido: ' + (erroPedido.message || JSON.stringify(erroPedido))); return; }
+
+  // Se teve endereço de entrega, manda ele registrado na conversa também
+  if(enderecoEntrega){
+    await supabaseClientV.from('mensagens_chat').insert({
+      conversa_id: conversaId,
+      remetente_user_id: currentUserV.id,
+      tipo: 'texto',
+      texto: `📍 Endereço pra entrega: ${enderecoEntrega}`,
+      lida: false
+    });
+  }
 
   // Limpa esses itens do carrinho
   carrinhoV = carrinhoV.filter(i => i.profissionalId !== profissionalId);
