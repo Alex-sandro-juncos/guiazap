@@ -358,10 +358,9 @@ function renderProdutos(){
         <div class="acoes-produto-coluna">
           ${p.disponivel_venda === false
             ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
-            : `
-              <button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%; margin-bottom:4px;" onclick="adicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>
-              ${p.link_externo ? `<button type="button" class="btn-comprar-externo" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🔗 Comprar direto no site do vendedor</button>` : ''}
-            `}
+            : p.link_externo
+              ? `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🔗 Comprar direto no site do vendedor</button>`
+              : `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="adicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>`}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#6b46c1;" onclick="compartilharProdutoNoChat('${p.id}', '${escapeHtmlV(p.nome).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
@@ -1163,7 +1162,6 @@ async function finalizarPedidoCarrinho(profissionalId){
   }).catch(e => console.error('erro ao gerar link de pagamento', e));
 
   alert('🎉 Pedido enviado! Você vai receber o link de pagamento no Papo em instantes.');
-  window.location.href = `chat.html?empresa=${profissionalId}`;
   window.location.href = `chat.html?empresa=${profissionalId}`;
 }
 
