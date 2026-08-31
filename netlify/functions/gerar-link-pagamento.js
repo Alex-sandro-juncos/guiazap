@@ -107,7 +107,8 @@ exports.handler = async function (event) {
 
     if (!prefData.init_point) {
       console.error('erro ao criar preferência do Mercado Pago:', JSON.stringify(prefData));
-      await responderNoChat('⚠️ Não consegui gerar o link de pagamento agora. Digite *5* pra falar com um atendente.', donoUserId);
+      const detalheErro = prefData.message || prefData.error || JSON.stringify(prefData).slice(0, 300);
+      await responderNoChat('⚠️ Erro de teste ao gerar o link (Mercado Pago): ' + detalheErro, donoUserId);
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
     }
 
