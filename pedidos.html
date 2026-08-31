@@ -149,7 +149,7 @@ function renderPedidos(){
     if(p.status === 'aguardando_confirmacao'){
       acoes = `
         <button type="button" class="btn-aceitar" onclick="mudarStatusPedido('${p.id}', 'aceito')">✅ Aceitar</button>
-        <button type="button" class="btn-recusar" onclick="mudarStatusPedido('${p.id}', 'recusado')">❌ Recusar</button>
+        <button type="button" class="btn-recusar" onclick="recusarPedido('${p.id}')">❌ Recusar</button>
       `;
     } else if(p.status === 'aceito'){
       acoes = `<button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'preparando')">👨‍🍳 Marcar como preparando</button>`;
@@ -194,6 +194,37 @@ function statusTextoPedidos(status){
     cancelado: '🚫 Cancelado'
   };
   return mapa[status] || status;
+}
+
+async function recusarPedido(pedidoId){
+  const pedido = todosPedidos.find(p => p.id === pedidoId);
+  if(!pedido) return;
+
+  const jaFoiPago = pedido.status === 'aguardando_confirmacao' || pedido.status === 'aceito' || pedido.status === 'preparando' || pedido.status === 'pronto' || pedido.status === 'saiu_entrega';
+  const confirmou = confirm(jaFoiPago
+    ? 'Recusar esse pedido? O valor já pago será estornado automaticamente pro cliente.'
+    : 'Recusar esse pedido?');
+  if(!confirmou) return;
+
+  try{
+    const resp = await fetch('/.netlify/functions/estornar-pagamento-pedido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedidoId })
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      alert('Erro ao recusar/estornar o pedido: ' + (data.error || 'tente novamente'));
+      return;
+    }
+    alert(data.estornado ? 'Pedido recusado e valor estornado ao cliente.' : 'Pedido recusado.');
+  } catch(e){
+    console.error(e);
+    alert('Erro ao recusar o pedido. Tente novamente.');
+    return;
+  }
+
+  await carregarPedidos();
 }
 
 async function mudarStatusPedido(pedidoId, novoStatus){

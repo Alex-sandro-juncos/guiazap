@@ -49,7 +49,7 @@ exports.handler = async function (event) {
     await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${pedidoId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ status: 'aguardando_confirmacao', pago_em: new Date().toISOString() })
+      body: JSON.stringify({ status: 'aguardando_confirmacao', pago_em: new Date().toISOString(), mp_payment_id: String(paymentId) })
     });
 
     // 4. Avisa a empresa automaticamente no Papo
