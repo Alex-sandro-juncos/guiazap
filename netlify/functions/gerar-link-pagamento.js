@@ -62,17 +62,31 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
     }
 
-    // 3. Monta os itens pra preferência do Mercado Pago
-    const itensMp = (pedido.itens || []).map((item) => {
-      let preco = String(item.preco || '0').replace(/[^0-9,.]/g, '');
-      if (preco.includes(',')) preco = preco.replace(/\./g, '').replace(',', '.');
-      return {
-        title: item.nome,
-        quantity: 1,
-        currency_id: 'BRL',
-        unit_price: parseFloat(preco) || 0
-      };
-    });
+    // 3. Monta os itens pra preferência do Mercado Pago, ignorando qualquer
+    // item com preço inválido/zero (o Mercado Pago rejeita unit_price <= 0)
+    const itensSemPreco = [];
+    const itensMp = (pedido.itens || [])
+      .map((item) => {
+        let preco = String(item.preco || '0').replace(/[^0-9,.]/g, '');
+        if (preco.includes(',')) preco = preco.replace(/\./g, '').replace(',', '.');
+        const valor = parseFloat(preco) || 0;
+        if (valor <= 0) itensSemPreco.push(item.nome);
+        return {
+          title: item.nome || 'Produto',
+          quantity: 1,
+          currency_id: 'BRL',
+          unit_price: valor
+        };
+      })
+      .filter((item) => item.unit_price > 0);
+
+    if (itensMp.length === 0) {
+      await responderNoChat(
+        '⚠️ Não consegui gerar o pagamento porque nenhum item do pedido tem preço válido cadastrado. Peça pra empresa conferir o preço dos produtos na Vitrine.',
+        donoUserId
+      );
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    }
 
     if (pedido.taxa_entrega && parseFloat(pedido.taxa_entrega) > 0) {
       itensMp.push({
@@ -122,7 +136,7 @@ exports.handler = async function (event) {
     // 6. Manda o link no chat
     const totalFormatado = Number(pedido.total).toFixed(2).replace('.', ',');
     await responderNoChat(
-      `💳 Prontinho! Clica no link abaixo pra pagar R$ ${totalFormatado} com segurança pelo Mercado Pago:\n\n${prefData.init_point}\n\n🔑 Seu código de confirmação: *${pedido.codigo_confirmacao}*\nAssim que o pagamento for confirmado, a empresa já recebe o aviso automaticamente.`,
+      `${itensSemPreco.length > 0 ? `⚠️ Atenção: ${itensSemPreco.join(', ')} ficou(aram) de fora do pagamento por não ter preço cadastrado.\n\n` : ''}💳 Prontinho! Clica no link abaixo pra pagar R$ ${totalFormatado} com segurança pelo Mercado Pago:\n\n${prefData.init_point}\n\n🔑 Seu código de confirmação: *${pedido.codigo_confirmacao}*\nAssim que o pagamento for confirmado, a empresa já recebe o aviso automaticamente.`,
       donoUserId
     );
 
