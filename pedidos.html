@@ -24,6 +24,7 @@
   }
   .card-pedido .topo-pedido { display: flex; justify-content: space-between; align-items: center; }
   .card-pedido .status-pedido { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 50px; }
+  .status-aguardando_pagamento { background: #e0e7ff; color: #3730a3; }
   .status-aguardando_confirmacao { background: #fff3cd; color: #7c4a03; }
   .status-aceito, .status-preparando { background: #e0f2fe; color: #075985; }
   .status-pronto, .status-saiu_entrega { background: #ede9fe; color: #6b46c1; }
@@ -182,6 +183,7 @@ function renderPedidos(){
 
 function statusTextoPedidos(status){
   const mapa = {
+    aguardando_pagamento: '💳 Aguardando pagamento',
     aguardando_confirmacao: '🟡 Aguardando',
     aceito: '✅ Aceito',
     preparando: '👨‍🍳 Preparando',

@@ -103,9 +103,12 @@ exports.handler = async function (event) {
     const valorPorKm = config ? parseFloat(config.valor_por_km || 0) : 0;
     const valorFrete = Math.round((taxaBase + distanciaKm * valorPorKm) * 100) / 100;
 
-    // 4. Busca o carrinho e as formas de pagamento aceitas
+    // 4. Busca o carrinho e quem é o cliente dessa conversa
     const estados = await buscar('atendimento_estado', `conversa_id=eq.${conversaId}&select=carrinho`);
     const carrinho = estados[0] ? estados[0].carrinho : [];
+
+    const conversas = await buscar('conversas', `id=eq.${conversaId}&select=visitante_user_id`);
+    const clienteUserId = conversas[0] ? conversas[0].visitante_user_id : null;
 
     function precoParaNumero(precoTexto) {
       if (!precoTexto) return 0;
@@ -116,29 +119,42 @@ exports.handler = async function (event) {
 
     const subtotal = (carrinho || []).reduce((soma, item) => soma + precoParaNumero(item.preco), 0);
     const total = Math.round((subtotal + valorFrete) * 100) / 100;
+    const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
-    let resumoItens = (carrinho || []).map(i => `• ${i.nome} — R$ ${i.preco}`).join('\n');
+    // 5. Cria o pedido já esperando pagamento
+    await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        conversa_id: conversaId,
+        profissional_id: profissionalId,
+        cliente_user_id: clienteUserId,
+        itens: carrinho,
+        subtotal,
+        taxa_entrega: valorFrete,
+        total,
+        status: 'aguardando_pagamento',
+        codigo_confirmacao: codigoConfirmacao
+      })
+    });
 
-    const opcoesPagamento = [];
-    if (!config || config.aceita_pix) opcoesPagamento.push('Pix');
-    if (!config || config.aceita_dinheiro) opcoesPagamento.push('Dinheiro');
-    if (!config || config.aceita_cartao) opcoesPagamento.push('Cartão');
-    const perguntaPagamento = opcoesPagamento.map((nome, i) => `${i + 1}️⃣ ${nome}`).join('\n');
+    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n💳 Gerando o link de pagamento, aguarde um instante...`);
 
-    const respostaFinal = `🧾 Confira seu pedido:\n${resumoItens}\n\n📍 Endereço: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\nSubtotal + frete: R$ ${total.toFixed(2).replace('.', ',')}\n\n💳 Como você vai pagar?\n${perguntaPagamento}`;
-
-    await responderNoChat(respostaFinal);
-
-    // Guarda o endereço e o frete calculado — o próximo passo (escolher a
-    // forma de pagamento) é tratado pelo gatilho do banco, como texto normal
+    // Passa pro estado de "gerando pagamento" — e já chama a função de
+    // pagamento direto (não dá pra depender de uma mensagem nova do cliente
+    // pra perceber essa mudança, já que essa etapa não veio de um texto dele)
     await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({
-        estado: 'escolhendo_pagamento',
-        lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10 }]
-      })
+      body: JSON.stringify({ estado: 'gerando_pagamento', carrinho: [], lista_atual: [] })
     });
+
+    const SITE_URL = process.env.URL || 'https://guiazap.shop';
+    fetch(`${SITE_URL}/.netlify/functions/gerar-link-pagamento`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversaId, profissionalId })
+    }).catch(e => console.error('erro ao encadear gerar-link-pagamento', e));
 
     return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
   } catch (err) {

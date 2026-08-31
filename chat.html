@@ -2096,6 +2096,13 @@ async function enviarQualquerMensagem(payload){
           body: JSON.stringify({ conversaId: conversaAtual, profissionalId: outroLadoProfissionalIdAtual, endereco: payload.texto })
         }).catch(e => console.error('erro ao calcular frete', e));
       }
+      if(estadoAtual && estadoAtual.estado === 'gerando_pagamento'){
+        fetch('/.netlify/functions/gerar-link-pagamento', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversaId: conversaAtual, profissionalId: outroLadoProfissionalIdAtual })
+        }).catch(e => console.error('erro ao gerar link de pagamento', e));
+      }
     }, 600);
   }
 }
