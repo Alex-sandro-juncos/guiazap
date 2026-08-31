@@ -103,7 +103,7 @@ exports.handler = async function (event) {
     const valorPorKm = config ? parseFloat(config.valor_por_km || 0) : 0;
     const valorFrete = Math.round((taxaBase + distanciaKm * valorPorKm) * 100) / 100;
 
-    // 4. Busca o carrinho atual pra montar o pedido final
+    // 4. Busca o carrinho e as formas de pagamento aceitas
     const estados = await buscar('atendimento_estado', `conversa_id=eq.${conversaId}&select=carrinho`);
     const carrinho = estados[0] ? estados[0].carrinho : [];
 
@@ -118,16 +118,24 @@ exports.handler = async function (event) {
     const total = Math.round((subtotal + valorFrete) * 100) / 100;
 
     let resumoItens = (carrinho || []).map(i => `• ${i.nome} — R$ ${i.preco}`).join('\n');
-    const respostaFinal = `🧾 Confira seu pedido:\n${resumoItens}\n\n📍 Endereço: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\nTotal: R$ ${total.toFixed(2).replace('.', ',')}\n\nConfirma o pedido? Responda *sim* ou *não*.`;
+
+    const opcoesPagamento = [];
+    if (!config || config.aceita_pix) opcoesPagamento.push('Pix');
+    if (!config || config.aceita_dinheiro) opcoesPagamento.push('Dinheiro');
+    if (!config || config.aceita_cartao) opcoesPagamento.push('Cartão');
+    const perguntaPagamento = opcoesPagamento.map((nome, i) => `${i + 1}️⃣ ${nome}`).join('\n');
+
+    const respostaFinal = `🧾 Confira seu pedido:\n${resumoItens}\n\n📍 Endereço: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\nSubtotal + frete: R$ ${total.toFixed(2).replace('.', ',')}\n\n💳 Como você vai pagar?\n${perguntaPagamento}`;
 
     await responderNoChat(respostaFinal);
 
-    // Guarda o endereço e o frete calculado pro passo de confirmação usar
+    // Guarda o endereço e o frete calculado — o próximo passo (escolher a
+    // forma de pagamento) é tratado pelo gatilho do banco, como texto normal
     await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({
-        estado: 'confirmando_pedido_entrega',
+        estado: 'escolhendo_pagamento',
         lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10 }]
       })
     });

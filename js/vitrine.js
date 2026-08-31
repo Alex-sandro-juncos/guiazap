@@ -41,12 +41,26 @@ async function loadSeguindoV(){
 function initSupabaseV(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   supabaseClientV = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Se a pessoa trocar de conta (sair e entrar em outra) sem sair da página,
+  // troca pro carrinho certo daquela conta — sem isso, o carrinho de uma
+  // conta "vazava" pra outra no mesmo navegador
+  supabaseClientV.auth.onAuthStateChange((event, session) => {
+    const novoUserId = session ? session.user.id : null;
+    const userIdAnterior = currentUserV ? currentUserV.id : null;
+    if(novoUserId !== userIdAnterior){
+      currentUserV = session ? session.user : null;
+      carregarCarrinhoDoUsuarioAtual();
+    }
+  });
+
   return true;
 }
 
 async function initAuthV(){
   const { data: { session } } = await supabaseClientV.auth.getSession();
   currentUserV = session ? session.user : null;
+  carregarCarrinhoDoUsuarioAtual();
   await loadSeguindoV();
   document.getElementById('v-add-btn').style.display = currentUserV ? 'inline-block' : 'none';
   document.getElementById('v-ver-meus-btn').style.display = 'none';
@@ -911,10 +925,21 @@ function escapeHtmlV(str){
 
 // ---------- CARRINHO DE COMPRAS ----------
 
-let carrinhoV = JSON.parse(localStorage.getItem('carrinho_vitrine') || '[]');
+let carrinhoV = [];
+
+// Cada conta (ou visitante sem login) tem seu próprio carrinho — sem isso,
+// trocar de conta no mesmo navegador mostrava o carrinho de outra pessoa
+function chaveCarrinhoV(){
+  return 'carrinho_vitrine_' + (currentUserV ? currentUserV.id : 'visitante');
+}
+
+function carregarCarrinhoDoUsuarioAtual(){
+  carrinhoV = JSON.parse(localStorage.getItem(chaveCarrinhoV()) || '[]');
+  atualizarBadgeCarrinho();
+}
 
 function salvarCarrinhoV(){
-  localStorage.setItem('carrinho_vitrine', JSON.stringify(carrinhoV));
+  localStorage.setItem(chaveCarrinhoV(), JSON.stringify(carrinhoV));
   atualizarBadgeCarrinho();
 }
 
@@ -1046,8 +1071,12 @@ async function finalizarPedidoCarrinho(profissionalId){
   const itensDaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
   if(itensDaEmpresa.length === 0) return;
 
+  const formaPagamento = prompt('Como você vai pagar? (Ex: Pix, Dinheiro, Cartão)');
+  if(!formaPagamento || !formaPagamento.trim()) return;
+
   const itensPayload = itensDaEmpresa.map(i => ({ id: i.produtoId, nome: i.nome, preco: i.preco }));
   const subtotal = itensDaEmpresa.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
+  const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
   // Acha ou cria a conversa com essa empresa
   const { data: existente } = await supabaseClientV.from('conversas').select('id').eq('profissional_id', profissionalId).eq('visitante_user_id', currentUserV.id).maybeSingle();
@@ -1067,7 +1096,9 @@ async function finalizarPedidoCarrinho(profissionalId){
     subtotal,
     taxa_entrega: 0,
     total: subtotal,
-    status: 'aguardando_confirmacao'
+    status: 'aguardando_confirmacao',
+    forma_pagamento: formaPagamento.trim(),
+    codigo_confirmacao: codigoConfirmacao
   });
   if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido. Tente de novo.'); return; }
 
@@ -1077,7 +1108,7 @@ async function finalizarPedidoCarrinho(profissionalId){
     conversa_id: conversaId,
     remetente_user_id: currentUserV.id,
     tipo: 'texto',
-    texto: `🛒 Novo pedido pela Vitrine:\n${resumo}\n\nTotal: R$ ${subtotal.toFixed(2).replace('.', ',')}\n\n(Combine a entrega ou retirada direto por aqui)`,
+    texto: `🛒 Novo pedido pela Vitrine:\n${resumo}\n\nTotal: R$ ${subtotal.toFixed(2).replace('.', ',')}\n💳 Pagamento: ${formaPagamento.trim()}\n🔑 Código de confirmação: ${codigoConfirmacao}\n\n(Combine a entrega ou retirada direto por aqui)`,
     lida: false
   });
   await supabaseClientV.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
@@ -1086,7 +1117,7 @@ async function finalizarPedidoCarrinho(profissionalId){
   carrinhoV = carrinhoV.filter(i => i.profissionalId !== profissionalId);
   salvarCarrinhoV();
   fecharCarrinho();
-  alert('🎉 Pedido enviado! Você já pode combinar os detalhes com o vendedor pelo Papo.');
+  alert(`🎉 Pedido enviado!\n\n🔑 Seu código de confirmação: ${codigoConfirmacao}\nGuarde esse código — você vai precisar informar ele na hora de receber o pedido.\n\nVocê já pode combinar os detalhes com o vendedor pelo Papo.`);
   window.location.href = `chat.html?empresa=${profissionalId}`;
 }
 

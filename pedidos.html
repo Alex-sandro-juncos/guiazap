@@ -171,6 +171,8 @@ function renderPedidos(){
         </div>
         <div class="itens-pedido">${itens}</div>
         <div class="total-pedido">Total: R$ ${Number(p.total).toFixed(2).replace('.', ',')}</div>
+        ${p.forma_pagamento ? `<div class="data-pedido">💳 ${escapeHtmlPedidos(p.forma_pagamento)}</div>` : ''}
+        ${p.codigo_confirmacao && !['concluido', 'recusado', 'cancelado'].includes(p.status) ? `<div style="background:#fff3cd; color:#7c4a03; font-weight:800; padding:6px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem;">🔑 Código de confirmação: ${escapeHtmlPedidos(p.codigo_confirmacao)}</div>` : ''}
         <div class="data-pedido">${dataFormatada}</div>
         ${acoes ? `<div class="acoes-pedido">${acoes}</div>` : ''}
       </div>
@@ -193,11 +195,23 @@ function statusTextoPedidos(status){
 }
 
 async function mudarStatusPedido(pedidoId, novoStatus){
+  const pedido = todosPedidos.find(p => p.id === pedidoId);
+
+  // Antes de marcar como concluído (entregue/retirado), confere o código
+  // de confirmação — garante que é realmente a pessoa certa recebendo
+  if(novoStatus === 'concluido' && pedido && pedido.codigo_confirmacao){
+    const digitado = prompt(`Peça pro cliente informar o código de confirmação dele, e digite aqui:`);
+    if(digitado === null) return; // cancelou
+    if(digitado.trim() !== pedido.codigo_confirmacao){
+      alert('❌ Código incorreto! Confira com o cliente antes de confirmar a entrega.');
+      return;
+    }
+  }
+
   const { error } = await supabaseClientPedidos.from('pedidos').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', pedidoId);
   if(error){ console.error(error); alert('Erro ao atualizar pedido.'); return; }
 
   // Avisa o cliente no Papo sobre a mudança de status
-  const pedido = todosPedidos.find(p => p.id === pedidoId);
   if(pedido && pedido.conversa_id){
     await supabaseClientPedidos.from('mensagens_chat').insert({
       conversa_id: pedido.conversa_id,
