@@ -1674,22 +1674,19 @@ async function loadProdutosDestaque(){
 
   if(error || !data){
     container.innerHTML = '';
-    document.querySelector('.destaque-vitrine').style.display = 'none';
+    document.getElementById('destaque-produtos-section').style.display = 'none';
     return;
   }
 
   produtosDestaqueTodos = data
     .filter(p => p.profissionais && p.profissionais.status_pagamento === 'ativo');
 
-  const titulo = document.querySelector('.destaque-header h2');
-  if(titulo) titulo.textContent = '🛍️ Produtos em destaque';
-
   renderProdutosDestaque();
 }
 
 function renderProdutosDestaque(){
   const container = document.getElementById('destaque-produtos-lista');
-  const secao = document.querySelector('.destaque-vitrine');
+  const secao = document.getElementById('destaque-produtos-section');
   if(!container || !secao) return;
 
   const query = normalizarTexto(document.getElementById('search').value);
