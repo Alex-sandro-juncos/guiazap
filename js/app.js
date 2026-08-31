@@ -1765,8 +1765,8 @@ async function abrirConfigAtendimento(profissionalId){
   document.getElementById('atendimento-dinheiro').checked = config ? config.aceita_dinheiro : true;
   document.getElementById('atendimento-cartao').checked = config ? config.aceita_cartao : true;
   document.getElementById('atendimento-faz-entrega').checked = config ? config.faz_entrega : false;
-  document.getElementById('atendimento-taxa-base').value = config ? config.taxa_base_entrega : '';
-  document.getElementById('atendimento-valor-km').value = config ? config.valor_por_km : '';
+  document.getElementById('atendimento-taxa-base').value = config ? config.taxa_base_entrega : 6.5;
+  document.getElementById('atendimento-valor-km').value = config ? config.valor_por_km : 1.5;
   document.getElementById('atendimento-taxa-campo').style.display = (config && config.faz_entrega) ? 'block' : 'none';
   document.getElementById('atendimento-msg').textContent = '';
 
