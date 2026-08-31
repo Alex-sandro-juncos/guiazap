@@ -1071,9 +1071,6 @@ async function finalizarPedidoCarrinho(profissionalId){
   const itensDaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
   if(itensDaEmpresa.length === 0) return;
 
-  const formaPagamento = prompt('Como você vai pagar? (Ex: Pix, Dinheiro, Cartão)');
-  if(!formaPagamento || !formaPagamento.trim()) return;
-
   const itensPayload = itensDaEmpresa.map(i => ({ id: i.produtoId, nome: i.nome, preco: i.preco }));
   const subtotal = itensDaEmpresa.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
   const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
@@ -1087,7 +1084,9 @@ async function finalizarPedidoCarrinho(profissionalId){
     conversaId = nova.id;
   }
 
-  // Cria o pedido (retirada — combine a entrega direto com o vendedor pelo Papo)
+  // Cria o pedido esperando pagamento (retirada — combine a entrega direto
+  // com o vendedor pelo Papo). O pagamento é feito de verdade a seguir, via
+  // link do Mercado Pago com o valor exato — não é mais só um texto informativo.
   const { error: erroPedido } = await supabaseClientV.from('pedidos').insert({
     conversa_id: conversaId,
     profissional_id: profissionalId,
@@ -1096,28 +1095,26 @@ async function finalizarPedidoCarrinho(profissionalId){
     subtotal,
     taxa_entrega: 0,
     total: subtotal,
-    status: 'aguardando_confirmacao',
-    forma_pagamento: formaPagamento.trim(),
+    status: 'aguardando_pagamento',
     codigo_confirmacao: codigoConfirmacao
   });
   if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido: ' + (erroPedido.message || JSON.stringify(erroPedido))); return; }
 
-  // Manda um resumo bonito pro vendedor ver na conversa
-  const resumo = itensDaEmpresa.map(i => `${i.quantidade}x ${i.nome} — R$ ${i.preco}`).join('\n');
-  await supabaseClientV.from('mensagens_chat').insert({
-    conversa_id: conversaId,
-    remetente_user_id: currentUserV.id,
-    tipo: 'texto',
-    texto: `🛒 Novo pedido pela Vitrine:\n${resumo}\n\nTotal: R$ ${subtotal.toFixed(2).replace('.', ',')}\n💳 Pagamento: ${formaPagamento.trim()}\n🔑 Código de confirmação: ${codigoConfirmacao}\n\n(Combine a entrega ou retirada direto por aqui)`,
-    lida: false
-  });
-  await supabaseClientV.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
-
-  // Limpa esses itens do carrinho e avisa a pessoa
+  // Limpa esses itens do carrinho
   carrinhoV = carrinhoV.filter(i => i.profissionalId !== profissionalId);
   salvarCarrinhoV();
   fecharCarrinho();
-  alert(`🎉 Pedido enviado!\n\n🔑 Seu código de confirmação: ${codigoConfirmacao}\nGuarde esse código — você vai precisar informar ele na hora de receber o pedido.\n\nVocê já pode combinar os detalhes com o vendedor pelo Papo.`);
+
+  // Gera o link de pagamento de verdade (mesma função usada pelo atendimento
+  // automático) e manda pro Papo, onde o link vai chegar como mensagem
+  fetch('/.netlify/functions/gerar-link-pagamento', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversaId, profissionalId })
+  }).catch(e => console.error('erro ao gerar link de pagamento', e));
+
+  alert('🎉 Pedido enviado! Você vai receber o link de pagamento no Papo em instantes.');
+  window.location.href = `chat.html?empresa=${profissionalId}`;
   window.location.href = `chat.html?empresa=${profissionalId}`;
 }
 
