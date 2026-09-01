@@ -256,6 +256,24 @@ async function mudarStatusPedido(pedidoId, novoStatus){
     await supabaseClientPedidos.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', pedido.conversa_id);
   }
 
+  // Se o pedido é de ENTREGA e acabou de ficar pronto, avisa todos os
+  // motoboys cadastrados dessa empresa que tem uma corrida disponível
+  if(novoStatus === 'pronto' && pedido && pedido.taxa_entrega > 0){
+    const { data: motoboysDaEmpresa } = await supabaseClientPedidos.from('motoboys').select('user_id').eq('profissional_id', pedido.profissional_id).eq('ativo', true);
+    if(motoboysDaEmpresa && motoboysDaEmpresa.length > 0){
+      fetch('/.netlify/functions/enviar-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: '🛵 Nova entrega disponível!',
+          mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
+          url: '/entregas.html',
+          userIds: motoboysDaEmpresa.map(m => m.user_id)
+        })
+      }).catch(e => console.error('erro ao notificar motoboys', e));
+    }
+  }
+
   await carregarPedidos();
 }
 

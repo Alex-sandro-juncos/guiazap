@@ -1348,7 +1348,8 @@ async function finalizarPedidoCarrinho(profissionalId){
     taxa_entrega: taxaEntrega,
     total,
     status: 'aguardando_pagamento',
-    codigo_confirmacao: codigoConfirmacao
+    codigo_confirmacao: codigoConfirmacao,
+    endereco_entrega: enderecoEntrega
   });
   if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido: ' + (erroPedido.message || JSON.stringify(erroPedido))); return; }
 

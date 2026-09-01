@@ -125,6 +125,26 @@ exports.handler = async function (event) {
 
       const valorPago = payment.transaction_amount || 0;
 
+      // O Pacote Entregador custa o MESMO valor do Pacote Completo (R$10) —
+      // não dá pra diferenciar só pelo valor. Se o pagamento veio de uma
+      // assinatura (preapproval), confere se é especificamente o plano do
+      // Entregador antes de cair na lógica normal por valor.
+      let planoPagoForcado = null;
+      const idPlanoEntregador = process.env.MP_PLANO_ID_ENTREGADOR;
+      if (idPlanoEntregador && payment.preapproval_id) {
+        try {
+          const preResp = await fetch(`https://api.mercadopago.com/preapproval/${payment.preapproval_id}`, {
+            headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
+          });
+          const preapproval = await preResp.json();
+          if (preapproval.preapproval_plan_id === idPlanoEntregador) {
+            planoPagoForcado = 'entregador';
+          }
+        } catch (e) {
+          console.error('erro ao consultar preapproval pra identificar plano Entregador', e);
+        }
+      }
+
       // Compara valores com uma pequena margem de tolerância (evita problema
       // de arredondamento de centavos)
       function proximoDe(valor, alvo, tolerancia){
@@ -175,7 +195,7 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: `pagamento do selo verificado processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
       }
 
-      const planoPago = valorPago >= VALOR_PACOTE_VENDAS ? 'vendas' : (valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico'));
+      const planoPago = planoPagoForcado || (valorPago >= VALOR_PACOTE_VENDAS ? 'vendas' : (valorPago >= VALOR_PACOTE_PREMIUM ? 'premium' : (valorPago >= VALOR_PACOTE_COMPLETO ? 'completo' : 'basico')));
 
       // Caso 1: existe um cadastro PENDENTE desse e-mail -> é um cadastro novo, ativa
       const emailFiltro = `user_email=eq.${encodeURIComponent(payerEmail)}`;
@@ -292,8 +312,17 @@ exports.handler = async function (event) {
       const idPlanoCampanha100 = process.env.MP_PLANO_ID_CAMPANHA100;
       const ehCampanha100 = idPlanoCampanha100 && subscription.preapproval_plan_id === idPlanoCampanha100;
 
+      // Mesma lógica pro Pacote Entregador — precisa saber que é esse plano
+      // específico, já que o valor sozinho (R$10) é igual ao do Completo
+      const idPlanoEntregadorSub = process.env.MP_PLANO_ID_ENTREGADOR;
+      const ehPlanoEntregador = idPlanoEntregadorSub && subscription.preapproval_plan_id === idPlanoEntregadorSub;
+
       if (status === 'authorized') {
-        const camposAtivar = ehCampanha100 ? { status_pagamento: 'ativo', plano: 'premium' } : { status_pagamento: 'ativo' };
+        const camposAtivar = ehCampanha100
+          ? { status_pagamento: 'ativo', plano: 'premium' }
+          : ehPlanoEntregador
+            ? { status_pagamento: 'ativo', plano: 'entregador' }
+            : { status_pagamento: 'ativo' };
         const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.pendente`, camposAtivar);
 
         // Se for a campanha, registra o resgate (só se ainda não passou de 100)

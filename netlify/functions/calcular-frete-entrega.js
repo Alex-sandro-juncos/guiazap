@@ -153,7 +153,8 @@ exports.handler = async function (event) {
         taxa_entrega: valorFrete,
         total,
         status: 'aguardando_pagamento',
-        codigo_confirmacao: codigoConfirmacao
+        codigo_confirmacao: codigoConfirmacao,
+        endereco_entrega: endereco
       })
     });
 

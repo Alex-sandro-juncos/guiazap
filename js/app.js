@@ -357,7 +357,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -387,7 +387,7 @@ async function loadEntries(){
   }
 
   const planoParam = params.get('plano');
-  if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium' || planoParam === 'vendas'){
+  if(planoParam === 'basico' || planoParam === 'completo' || planoParam === 'premium' || planoParam === 'vendas' || planoParam === 'entregador'){
     planoEscolhido = planoParam;
     localStorage.setItem('planoEscolhido', planoEscolhido);
     localStorage.setItem('abrirCadastroAposLogin', '1');
@@ -707,6 +707,7 @@ const LINK_ASSINATURA_BASICO = "https://mpago.la/1Ddksty"; // hoje sem uso: Paco
 const LINK_ASSINATURA_COMPLETO = "https://mpago.la/1Ddksty"; // mesmo plano do Mercado Pago, editado para cobrar R$10 (Pacote Completo)
 const LINK_ASSINATURA_PREMIUM = "https://mpago.la/2JLXkQM"; // Plano Premium (R$25/mês) criado no Mercado Pago
 const LINK_ASSINATURA_VENDAS = "https://mpago.la/1HiQNoL"; // Plano Vendas (R$40/mês, 30 dias de teste grátis) criado no Mercado Pago
+const LINK_ASSINATURA_ENTREGADOR = "https://mpago.la/2wYvctj"; // Pacote Entregador (R$10/mês) criado no Mercado Pago
 
 // O Pacote Vendas inclui tudo do Premium — então em qualquer lugar que
 // diferencia "tem Premium", o Vendas também deve contar.
@@ -721,6 +722,7 @@ const LINK_ASSINATURA = LINK_ASSINATURA_COMPLETO; // mantém compatibilidade com
 let planoEscolhido = localStorage.getItem('planoEscolhido') || 'basico';
 
 function linkDoPlano(plano){
+  if(plano === 'entregador') return LINK_ASSINATURA_ENTREGADOR;
   if(plano === 'vendas') return LINK_ASSINATURA_VENDAS;
   if(plano === 'premium') return LINK_ASSINATURA_PREMIUM;
   return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
@@ -745,6 +747,10 @@ async function openForm(entry){
   document.getElementById('f-cidade').value = entry ? entry.cidade : '';
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
+  const planoDoFormulario = entry ? entry.plano : planoEscolhido;
+  document.getElementById('campo-veiculo-entregador').style.display = planoDoFormulario === 'entregador' ? 'block' : 'none';
+  document.getElementById('f-veiculo-modelo').value = entry ? (entry.veiculo_modelo || '') : '';
+  document.getElementById('f-veiculo-placa').value = entry ? (entry.veiculo_placa || '') : '';
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
   document.getElementById('foto-msg').textContent = '';
   const preview = document.getElementById('foto-preview');
@@ -932,6 +938,9 @@ async function saveEntry(e){
   }
 
   const id = document.getElementById('edit-id').value;
+  const cadastroExistente = id ? entries.find(e => e.id === id) : null;
+  const planoAtualDoCadastro = cadastroExistente ? cadastroExistente.plano : planoEscolhido;
+
   const payload = {
     name: document.getElementById('f-name').value.trim(),
     documento: document.getElementById('f-documento').value.replace(/\D/g,''),
@@ -945,9 +954,15 @@ async function saveEntry(e){
     categorias_extra: coletarCategoriasExtra(),
     horario_dias: Array.from(document.querySelectorAll('.f-horario-dia:checked')).map(el => el.value).join(',') || null,
     horario_abre: document.getElementById('f-horario-abre').value || null,
-    horario_fecha: document.getElementById('f-horario-fecha').value || null
+    horario_fecha: document.getElementById('f-horario-fecha').value || null,
+    veiculo_modelo: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-modelo').value.trim() : null,
+    veiculo_placa: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null
   };
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
+  if(planoAtualDoCadastro === 'entregador' && (!payload.veiculo_modelo || !payload.veiculo_placa)){
+    document.getElementById('form-msg').textContent = 'Preencha o modelo da moto e a placa — obrigatório pro Pacote Entregador (segurança pra quem vai te contratar).';
+    return false;
+  }
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){
     document.getElementById('form-msg').textContent = 'O link da foto precisa começar com http:// ou https://';
     return false;
@@ -1782,6 +1797,89 @@ async function abrirConfigAtendimento(profissionalId){
 
 function fecharConfigAtendimento(){
   document.getElementById('atendimento-form').style.display = 'none';
+}
+
+// ---------- GERENCIAR MOTOBOYS ----------
+
+async function abrirGerenciarMotoboys(profissionalId){
+  document.getElementById('motoboys-profissional-id').value = profissionalId;
+  document.getElementById('motoboy-codigo-input').value = '';
+  document.getElementById('motoboy-add-msg').textContent = '';
+  document.getElementById('motoboys-form').style.display = 'block';
+  document.getElementById('motoboys-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  await carregarListaMotoboys(profissionalId);
+}
+
+function fecharGerenciarMotoboys(){
+  document.getElementById('motoboys-form').style.display = 'none';
+}
+
+async function carregarListaMotoboys(profissionalId){
+  const container = document.getElementById('lista-motoboys');
+  container.innerHTML = 'Carregando...';
+
+  const { data, error } = await supabaseClient.from('motoboys').select('id, nome_exibicao, ativo').eq('profissional_id', profissionalId).order('created_at', { ascending: false });
+  if(error){ container.innerHTML = 'Erro ao carregar motoboys.'; return; }
+
+  if(!data || data.length === 0){
+    container.innerHTML = '<p style="font-size:0.82rem; color:#888;">Nenhum motoboy cadastrado ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = data.map(m => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0;">
+      <span style="font-size:0.85rem;">${escapeHtml(m.nome_exibicao || 'Motoboy')} ${!m.ativo ? '<span style="color:#a4402f; font-size:0.72rem;">(inativo)</span>' : ''}</span>
+      <button type="button" class="link-cancelar" onclick="removerMotoboy('${m.id}', '${profissionalId}')">Remover</button>
+    </div>
+  `).join('');
+}
+
+async function adicionarMotoboy(){
+  const profissionalId = document.getElementById('motoboys-profissional-id').value;
+  const codigo = document.getElementById('motoboy-codigo-input').value.trim();
+  const msg = document.getElementById('motoboy-add-msg');
+
+  if(!codigo){ msg.textContent = 'Digite o código GuiaZap do motoboy.'; return; }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch('/.netlify/functions/buscar-codigo-guiazap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo })
+    });
+    const data = await resp.json();
+
+    if(!data.encontrado){
+      msg.textContent = 'Código não encontrado. Confira se digitou certo.';
+      return;
+    }
+
+    const { error } = await supabaseClient.from('motoboys').insert({
+      profissional_id: profissionalId,
+      user_id: data.userId,
+      nome_exibicao: data.nome
+    });
+
+    if(error){
+      msg.textContent = error.message.includes('duplicate') ? 'Esse motoboy já está cadastrado.' : 'Erro ao adicionar.';
+      return;
+    }
+
+    msg.textContent = '✓ Motoboy adicionado!';
+    document.getElementById('motoboy-codigo-input').value = '';
+    await carregarListaMotoboys(profissionalId);
+  } catch(e){
+    console.error(e);
+    msg.textContent = 'Erro ao adicionar motoboy.';
+  }
+}
+
+async function removerMotoboy(motoboyId, profissionalId){
+  if(!confirm('Remover esse motoboy?')) return;
+  const { error } = await supabaseClient.from('motoboys').delete().eq('id', motoboyId);
+  if(error){ alert('Erro ao remover.'); return; }
+  await carregarListaMotoboys(profissionalId);
 }
 
 async function salvarConfigAtendimento(e){
@@ -2928,6 +3026,7 @@ function render(){
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<button type="button" class="link-ver-produtos" style="background:#6b46c1; border:none; cursor:pointer;" onclick="abrirFormVideo('${e.id}', '${e.plano}')">🎥 Postar vídeo</button>` : ''}
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
+          ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#1c1c1c; border:none; cursor:pointer;" onclick="abrirGerenciarMotoboys('${e.id}')">🛵 Gerenciar motoboys</button>` : ''}
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
           ${isOwner && ehPremiumOuVendas(e.plano) ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>

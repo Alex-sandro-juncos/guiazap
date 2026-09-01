@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minhas Entregas — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .entregas-header { background: #1c1c1c; padding: 24px 15px; text-align: center; color: white; }
+  .entregas-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .entregas-wrap { max-width: 500px; margin: 0 auto; padding: 15px 15px 40px; }
+  .voltar { display: block; margin-bottom: 14px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .abas-entregas { display: flex; gap: 6px; margin-bottom: 14px; }
+  .abas-entregas button {
+    flex: 1; padding: 9px; border-radius: 50px; border: 1px solid #ddd; background: white;
+    font-size: 0.8rem; font-weight: 700; cursor: pointer; color: #666;
+  }
+  .abas-entregas button.ativa { background: #1c1c1c; color: white; border-color: #1c1c1c; }
+  .card-entrega {
+    background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .card-entrega .empresa-entrega { font-weight: 800; font-size: 0.9rem; color: var(--verde-escuro); }
+  .card-entrega .endereco-entrega { font-size: 0.88rem; margin-top: 6px; line-height: 1.4; }
+  .card-entrega .itens-entrega { font-size: 0.8rem; color: #666; margin-top: 6px; line-height: 1.4; }
+  .card-entrega .total-entrega { font-size: 0.85rem; font-weight: 700; margin-top: 6px; }
+  .btn-aceitar-entrega { width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: none; background: var(--verde-whats); color: white; font-weight: 700; cursor: pointer; }
+  .btn-concluir-entrega { width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: none; background: #0f766e; color: white; font-weight: 700; cursor: pointer; }
+  .vazio-entregas { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="entregas-header">
+  <h1>🛵 Minhas Entregas</h1>
+</header>
+
+<div class="entregas-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="abas-entregas">
+    <button type="button" class="ativa" data-aba="disponiveis" onclick="mudarAbaEntregas('disponiveis', this)">📦 Disponíveis</button>
+    <button type="button" data-aba="minhas" onclick="mudarAbaEntregas('minhas', this)">🛵 Minhas corridas</button>
+  </div>
+
+  <div id="lista-entregas">Carregando...</div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientEntregas = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserEntregas = null;
+let entregasDisponiveis = [];
+let minhasEntregas = [];
+let abaEntregasAtual = 'disponiveis';
+
+function escapeHtmlEntregas(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initEntregas(){
+  const { data: { session } } = await supabaseClientEntregas.auth.getSession();
+  if(!session){
+    document.getElementById('lista-entregas').innerHTML = '<div class="vazio-entregas">🔒 Faça login na <a href="index.html">página inicial</a> pra ver suas entregas.</div>';
+    return;
+  }
+  currentUserEntregas = session.user;
+
+  const { data: cadastros } = await supabaseClientEntregas.from('motoboys').select('id').eq('user_id', currentUserEntregas.id).eq('ativo', true);
+  if(!cadastros || cadastros.length === 0){
+    document.getElementById('lista-entregas').innerHTML = '<div class="vazio-entregas">Você ainda não está cadastrado como motoboy de nenhuma empresa. Peça pro dono da empresa te adicionar (usando seu código GuiaZap).</div>';
+    return;
+  }
+
+  await carregarEntregas();
+
+  // Atualiza sozinho quando aparecer entrega nova ou alguém aceitar uma
+  supabaseClientEntregas
+    .channel('entregas-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { carregarEntregas(); })
+    .subscribe();
+}
+
+async function carregarEntregas(){
+  const { data: disponiveis } = await supabaseClientEntregas
+    .from('pedidos')
+    .select('*, profissionais(name)')
+    .eq('status', 'pronto')
+    .is('motoboy_user_id', null)
+    .gt('taxa_entrega', 0)
+    .order('created_at', { ascending: true });
+  entregasDisponiveis = disponiveis || [];
+
+  const { data: minhas } = await supabaseClientEntregas
+    .from('pedidos')
+    .select('*, profissionais(name)')
+    .eq('motoboy_user_id', currentUserEntregas.id)
+    .in('status', ['pronto', 'saiu_entrega'])
+    .order('created_at', { ascending: true });
+  minhasEntregas = minhas || [];
+
+  renderEntregas();
+}
+
+function mudarAbaEntregas(aba, btn){
+  abaEntregasAtual = aba;
+  document.querySelectorAll('.abas-entregas button').forEach(b => b.classList.remove('ativa'));
+  btn.classList.add('ativa');
+  renderEntregas();
+}
+
+function renderEntregas(){
+  const container = document.getElementById('lista-entregas');
+  const lista = abaEntregasAtual === 'disponiveis' ? entregasDisponiveis : minhasEntregas;
+
+  if(lista.length === 0){
+    container.innerHTML = abaEntregasAtual === 'disponiveis'
+      ? '<div class="vazio-entregas">Nenhuma entrega disponível no momento.</div>'
+      : '<div class="vazio-entregas">Você não tem nenhuma corrida em andamento.</div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(p => {
+    const itens = (p.itens || []).map(i => `${escapeHtmlEntregas(i.nome)}`).join(', ');
+    const nomeEmpresa = p.profissionais ? p.profissionais.name : 'Empresa';
+
+    const acao = abaEntregasAtual === 'disponiveis'
+      ? `<button type="button" class="btn-aceitar-entrega" onclick="aceitarEntrega('${p.id}')">✅ Aceitar essa entrega</button>`
+      : p.status === 'pronto'
+        ? `<button type="button" class="btn-concluir-entrega" onclick="marcarSaiuParaEntrega('${p.id}')">🛵 Saí para entregar</button>`
+        : `<button type="button" class="btn-concluir-entrega" onclick="concluirEntrega('${p.id}')">✅ Confirmar entrega feita</button>`;
+
+    return `
+      <div class="card-entrega">
+        <div class="empresa-entrega">🏪 ${escapeHtmlEntregas(nomeEmpresa)}</div>
+        <div class="endereco-entrega">📍 ${escapeHtmlEntregas(p.endereco_entrega || 'Endereço não informado')}</div>
+        <div class="itens-entrega">${itens}</div>
+        <div class="total-entrega">🛵 Taxa de entrega: R$ ${Number(p.taxa_entrega).toFixed(2).replace('.', ',')}</div>
+        ${acao}
+      </div>
+    `;
+  }).join('');
+}
+
+async function aceitarEntrega(pedidoId){
+  // Usa .is('motoboy_user_id', null) na condição — se outro motoboy já
+  // aceitou entre o carregamento da lista e o clique, essa atualização não
+  // vai encontrar nenhuma linha (protege contra dois motoboys pegando a mesma corrida)
+  const { data, error } = await supabaseClientEntregas
+    .from('pedidos')
+    .update({ motoboy_user_id: currentUserEntregas.id })
+    .eq('id', pedidoId)
+    .is('motoboy_user_id', null)
+    .select();
+
+  if(error || !data || data.length === 0){
+    alert('Ops! Essa entrega já foi aceita por outro motoboy.');
+    await carregarEntregas();
+    return;
+  }
+
+  alert('🛵 Entrega aceita! Vai aparecer em "Minhas corridas".');
+  mudarAbaEntregas('minhas', document.querySelector('[data-aba="minhas"]'));
+}
+
+async function marcarSaiuParaEntrega(pedidoId){
+  const { error } = await supabaseClientEntregas.from('pedidos').update({ status: 'saiu_entrega' }).eq('id', pedidoId).eq('motoboy_user_id', currentUserEntregas.id);
+  if(error){ alert('Erro ao atualizar. Tente de novo.'); return; }
+  await carregarEntregas();
+}
+
+async function concluirEntrega(pedidoId){
+  const pedido = minhasEntregas.find(p => p.id === pedidoId);
+  if(!pedido) return;
+
+  const digitado = prompt('Peça pro cliente informar o código de confirmação dele, e digite aqui:');
+  if(digitado === null) return;
+  if(digitado.trim() !== pedido.codigo_confirmacao){
+    alert('❌ Código incorreto! Confira com o cliente antes de confirmar.');
+    return;
+  }
+
+  const { error } = await supabaseClientEntregas.from('pedidos').update({ status: 'concluido' }).eq('id', pedidoId).eq('motoboy_user_id', currentUserEntregas.id);
+  if(error){ alert('Erro ao concluir. Tente de novo.'); return; }
+
+  alert('🎉 Entrega concluída!');
+  await carregarEntregas();
+}
+
+initEntregas();
+</script>
+</body>
+</html>

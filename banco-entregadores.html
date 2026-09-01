@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de Entregadores — GuiaZap</title>
+<meta name="description" content="Encontre entregadores/motoboys disponíveis na sua região pelo GuiaZap.">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .banco-header { background: #1c1c1c; padding: 28px 15px; text-align: center; color: white; }
+  .banco-header h1 { font-size: 1.7rem; font-weight: 800; }
+  .banco-header p { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
+  .banco-wrap { max-width: 560px; margin: 0 auto; padding: 15px 15px 40px; }
+  .voltar { display: block; margin-bottom: 14px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .filtros-banco { display: flex; gap: 8px; margin-bottom: 14px; }
+  .filtros-banco input, .filtros-banco select { flex: 1; padding: 9px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem; }
+  .card-entregador {
+    background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07); display: flex; gap: 12px;
+  }
+  .card-entregador img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+  .card-entregador .nome-entregador { font-weight: 800; font-size: 0.95rem; }
+  .card-entregador .local-entregador { font-size: 0.78rem; color: #777; margin-top: 2px; }
+  .card-entregador .veiculo-entregador { font-size: 0.78rem; color: #444; margin-top: 4px; background: #f2f2f2; display: inline-block; padding: 2px 8px; border-radius: 50px; }
+  .card-entregador .btn-chamar-entregador { display: inline-block; margin-top: 8px; background: var(--verde-whats); color: white; padding: 7px 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; text-decoration: none; }
+  .vazio-banco { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="banco-header">
+  <h1>🛵 Banco de Entregadores</h1>
+  <p>Encontre e chame um entregador direto — sem comissão, sem intermediário</p>
+</header>
+
+<div class="banco-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="filtros-banco">
+    <input type="text" id="banco-busca" placeholder="Buscar por cidade ou bairro..." oninput="renderBancoEntregadores()">
+  </div>
+
+  <div id="lista-banco-entregadores">Carregando...</div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientBanco = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let todosEntregadoresBanco = [];
+
+function escapeHtmlBanco(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function normalizarTextoBanco(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+async function carregarBancoEntregadores(){
+  const { data, error } = await supabaseClientBanco
+    .from('profissionais')
+    .select('id, name, foto, whatsapp, cidade, bairro, veiculo_modelo, veiculo_placa')
+    .eq('plano', 'entregador')
+    .eq('status_pagamento', 'ativo')
+    .order('name', { ascending: true });
+
+  if(error){ console.error(error); document.getElementById('lista-banco-entregadores').innerHTML = '<div class="vazio-banco">Erro ao carregar.</div>'; return; }
+
+  todosEntregadoresBanco = data || [];
+  renderBancoEntregadores();
+}
+
+function renderBancoEntregadores(){
+  const query = normalizarTextoBanco(document.getElementById('banco-busca').value);
+  const container = document.getElementById('lista-banco-entregadores');
+
+  const filtrados = todosEntregadoresBanco.filter(e =>
+    normalizarTextoBanco(e.cidade).includes(query) || normalizarTextoBanco(e.bairro).includes(query) || normalizarTextoBanco(e.name).includes(query)
+  );
+
+  if(filtrados.length === 0){
+    container.innerHTML = '<div class="vazio-banco">Nenhum entregador encontrado ainda.</div>';
+    return;
+  }
+
+  container.innerHTML = filtrados.map(e => `
+    <div class="card-entregador">
+      <img src="${e.foto ? escapeHtmlBanco(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtmlBanco(e.name)}">
+      <div style="flex:1;">
+        <div class="nome-entregador">${escapeHtmlBanco(e.name)}</div>
+        <div class="local-entregador">📍 ${escapeHtmlBanco(e.cidade)} · ${escapeHtmlBanco(e.bairro)}</div>
+        ${e.veiculo_modelo ? `<div class="veiculo-entregador">🛵 ${escapeHtmlBanco(e.veiculo_modelo)}${e.veiculo_placa ? ' · Placa ' + escapeHtmlBanco(e.veiculo_placa) : ''}</div>` : ''}
+        <br>
+        <a class="btn-chamar-entregador" href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no Banco de Entregadores do GuiaZap e preciso de uma entrega.')}" target="_blank">💬 Chamar no WhatsApp</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+carregarBancoEntregadores();
+</script>
+</body>
+</html>
