@@ -769,6 +769,7 @@ function fecharFormProduto(){
   document.getElementById('p-link-externo').value = '';
   document.getElementById('p-18mais').checked = false;
   document.getElementById('p-disponivel-venda').checked = true;
+  document.getElementById('p-cardapio-bot').checked = false;
   document.getElementById('p-foto-preview').style.display = 'none';
   document.getElementById('p-foto-msg').textContent = '';
   document.getElementById('variacoes-produto-list').innerHTML = '';
@@ -852,6 +853,7 @@ function editarProduto(id){
   document.getElementById('p-link-externo').value = p.link_externo || '';
   document.getElementById('p-18mais').checked = !!p.produto_18_mais;
   document.getElementById('p-disponivel-venda').checked = p.disponivel_venda !== false;
+  document.getElementById('p-cardapio-bot').checked = !!p.no_cardapio_bot;
   carregarVariacoesProduto(p.variacoes);
   carregarAdicionaisProduto(p.adicionais);
   if(p.foto){
@@ -921,6 +923,7 @@ async function salvarProduto(e){
     codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,
     link_externo: document.getElementById('p-link-externo').value.trim() || null,
     disponivel_venda: document.getElementById('p-disponivel-venda').checked,
+    no_cardapio_bot: document.getElementById('p-cardapio-bot').checked,
     variacoes: coletarVariacoesProduto(),
     adicionais: coletarAdicionaisProduto(),
     produto_18_mais: document.getElementById('p-18mais').checked
@@ -1606,7 +1609,8 @@ async function salvarProdutosExtraidosIA(){
     descricao: p.descricao || null,
     variacoes: p.variacoes || [],
     adicionais: [],
-    disponivel_venda: true
+    disponivel_venda: true,
+    no_cardapio_bot: true
   }));
 
   const { error } = await supabaseClientV.from('produtos').insert(payloads);
