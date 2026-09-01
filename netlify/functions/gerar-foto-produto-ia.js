@@ -34,27 +34,32 @@ exports.handler = async function (event) {
         Authorization: `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'dall-e-3',
+        model: 'gpt-image-2',
         prompt,
         n: 1,
-        size: '1024x1024',
-        quality: 'standard'
+        size: '1024x1024'
       })
     });
 
     const dadosGeracao = await respGeracao.json();
 
     if (!respGeracao.ok || !dadosGeracao.data || !dadosGeracao.data[0]) {
-      console.error('erro ao gerar imagem no DALL-E:', JSON.stringify(dadosGeracao));
+      console.error('erro ao gerar imagem:', JSON.stringify(dadosGeracao));
       return { statusCode: 500, body: JSON.stringify({ error: 'erro ao gerar a imagem: ' + JSON.stringify(dadosGeracao.error || dadosGeracao) }) };
     }
 
-    const urlImagemGerada = dadosGeracao.data[0].url;
-
-    // 2. Baixa a imagem gerada (o link da OpenAI expira depois de um tempo,
-    // então precisa salvar uma cópia permanente no nosso próprio Storage)
-    const respImagem = await fetch(urlImagemGerada);
-    const bufferImagem = Buffer.from(await respImagem.arrayBuffer());
+    // Modelos mais novos costumam devolver a imagem já em base64 (b64_json)
+    // em vez de um link temporário — trata os dois formatos possíveis
+    let bufferImagem;
+    if (dadosGeracao.data[0].b64_json) {
+      bufferImagem = Buffer.from(dadosGeracao.data[0].b64_json, 'base64');
+    } else if (dadosGeracao.data[0].url) {
+      const respImagem = await fetch(dadosGeracao.data[0].url);
+      bufferImagem = Buffer.from(await respImagem.arrayBuffer());
+    } else {
+      console.error('resposta sem imagem reconhecível:', JSON.stringify(dadosGeracao));
+      return { statusCode: 500, body: JSON.stringify({ error: 'a API não devolveu uma imagem reconhecível' }) };
+    }
 
     // 3. Sobe pro Storage do Supabase
     const nomeArquivo = `produtos-ia/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
