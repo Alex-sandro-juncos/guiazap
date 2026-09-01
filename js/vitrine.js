@@ -907,6 +907,42 @@ function onFotoProdutoLinkChange(){
   else { preview.style.display = 'none'; }
 }
 
+async function gerarFotoProdutoComIA(){
+  const nome = document.getElementById('p-nome').value.trim();
+  const descricao = document.getElementById('p-descricao').value.trim();
+  const categoria = document.getElementById('p-categoria').value.trim();
+  const msg = document.getElementById('p-foto-ia-msg');
+
+  if(!nome){ msg.textContent = 'Preencha o nome do produto primeiro.'; return; }
+
+  msg.textContent = '🎨 Gerando foto, aguarde (pode levar até 30 segundos)...';
+  msg.style.color = '#6b46c1';
+
+  try{
+    const resp = await fetch('/.netlify/functions/gerar-foto-produto-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nomeProduto: nome, descricaoProduto: descricao, categoria })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok || data.error){
+      msg.textContent = '⚠️ ' + (data.error || 'Erro ao gerar a foto');
+      msg.style.color = '#a4402f';
+      return;
+    }
+
+    document.getElementById('p-foto').value = data.fotoUrl;
+    onFotoProdutoLinkChange();
+    msg.textContent = '✓ Foto gerada! Confira se ficou boa antes de salvar.';
+    msg.style.color = 'var(--verde-escuro)';
+  } catch(e){
+    console.error(e);
+    msg.textContent = '⚠️ Erro ao gerar a foto. Tenta de novo.';
+    msg.style.color = '#a4402f';
+  }
+}
+
 async function salvarProduto(e){
   e.preventDefault();
   const msg = document.getElementById('p-msg');
@@ -1807,6 +1843,10 @@ function renderProdutosExtraidosIA(){
         ${meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('')}
       </select>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:0.82rem; cursor:pointer;">
+      <input type="checkbox" id="cardapio-ia-gerar-fotos">
+      <span>🎨 Gerar foto com IA pros produtos selecionados (demora mais, mas fica com imagem)</span>
+    </label>
     <button type="button" onclick="salvarProdutosExtraidosIA()" style="width:100%; margin-top:10px; padding:13px; border-radius:10px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.9rem; cursor:pointer;">✅ Publicar ${selecionados} produto${selecionados !== 1 ? 's' : ''} selecionado${selecionados !== 1 ? 's' : ''}</button>
     <span id="cardapio-ia-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
   `;
@@ -1819,24 +1859,47 @@ function toggleProdutoExtraidoIA(indice){
 
 async function salvarProdutosExtraidosIA(){
   const profissionalId = document.getElementById('cardapio-ia-empresa').value;
+  const gerarFotos = document.getElementById('cardapio-ia-gerar-fotos').checked;
   const msg = document.getElementById('cardapio-ia-msg');
   const selecionados = _produtosExtraidosIA.filter(p => p.selecionado);
 
   if(selecionados.length === 0){ msg.textContent = 'Selecione pelo menos um produto.'; return; }
 
-  msg.textContent = 'publicando...';
+  const payloads = [];
+  for(let i = 0; i < selecionados.length; i++){
+    const p = selecionados[i];
+    let fotoUrl = null;
 
-  const payloads = selecionados.map(p => ({
-    profissional_id: profissionalId,
-    nome: p.nome,
-    preco: p.preco || null,
-    categoria: p.categoria || null,
-    descricao: p.descricao || null,
-    variacoes: p.variacoes || [],
-    adicionais: [],
-    disponivel_venda: true,
-    no_cardapio_bot: true
-  }));
+    if(gerarFotos){
+      msg.textContent = `🎨 Gerando foto ${i+1} de ${selecionados.length}...`;
+      try{
+        const resp = await fetch('/.netlify/functions/gerar-foto-produto-ia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nomeProduto: p.nome, descricaoProduto: p.descricao, categoria: p.categoria })
+        });
+        const data = await resp.json();
+        if(resp.ok && data.fotoUrl) fotoUrl = data.fotoUrl;
+      } catch(e){
+        console.error('erro ao gerar foto pra ' + p.nome, e);
+      }
+    }
+
+    payloads.push({
+      profissional_id: profissionalId,
+      nome: p.nome,
+      preco: p.preco || null,
+      categoria: p.categoria || null,
+      descricao: p.descricao || null,
+      variacoes: p.variacoes || [],
+      adicionais: [],
+      foto: fotoUrl,
+      disponivel_venda: true,
+      no_cardapio_bot: true
+    });
+  }
+
+  msg.textContent = 'publicando...';
 
   const { error } = await supabaseClientV.from('produtos').insert(payloads);
   if(error){ console.error(error); msg.textContent = 'Erro ao publicar: ' + error.message; return; }

@@ -405,6 +405,8 @@
     <img id="p-foto-preview" class="foto-preview" style="display:none;">
     <label class="foto-ou">ou cole um link de foto já existente</label>
     <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
+    <button type="button" onclick="gerarFotoProdutoComIA()" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:1.5px solid #6b46c1; background:white; color:#6b46c1; font-weight:700; font-size:0.82rem; cursor:pointer;">🎨 Gerar foto com IA (baseado no nome do produto)</button>
+    <span class="foto-msg" id="p-foto-ia-msg"></span>
   </div>
   <div class="field">
     <label>Link externo de compra (opcional)</label>
