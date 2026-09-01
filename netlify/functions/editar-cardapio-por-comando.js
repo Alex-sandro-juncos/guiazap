@@ -69,7 +69,7 @@ Regras importantes:
 
     if (!resp.ok) {
       console.error('erro da API da Anthropic:', JSON.stringify(data));
-      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao consultar a IA' }) };
+      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao consultar a IA: ' + JSON.stringify(data.error || data) }) };
     }
 
     const textoResposta = data.content && data.content[0] ? data.content[0].text : '';
@@ -86,6 +86,6 @@ Regras importantes:
     return { statusCode: 200, body: JSON.stringify(resultado) };
   } catch (err) {
     console.error(err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'erro ao processar o comando' }) };
+    return { statusCode: 500, body: JSON.stringify({ error: 'erro ao processar o comando: ' + err.message }) };
   }
 };
