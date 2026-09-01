@@ -360,7 +360,7 @@ function renderProdutos(){
             ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
             : p.link_externo
               ? `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🔗 Comprar direto no site do vendedor</button>`
-              : `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="adicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>`}
+              : `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="prepararAdicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>`}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#6b46c1;" onclick="compartilharProdutoNoChat('${p.id}', '${escapeHtmlV(p.nome).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
@@ -770,6 +770,66 @@ function fecharFormProduto(){
   document.getElementById('p-disponivel-venda').checked = true;
   document.getElementById('p-foto-preview').style.display = 'none';
   document.getElementById('p-foto-msg').textContent = '';
+  document.getElementById('variacoes-produto-list').innerHTML = '';
+  document.getElementById('adicionais-produto-list').innerHTML = '';
+}
+
+// ---------- VARIAÇÕES E ADICIONAIS (linhas dinâmicas no formulário) ----------
+
+function adicionarLinhaVariacao(nome, preco){
+  const container = document.getElementById('variacoes-produto-list');
+  const linha = document.createElement('div');
+  linha.className = 'contato-extra-linha';
+  linha.innerHTML = `
+    <input type="text" class="var-nome" placeholder="Ex: 500g" value="${nome ? escapeHtmlV(nome) : ''}">
+    <input type="text" class="var-preco" placeholder="Ex: 23,00" value="${preco ? escapeHtmlV(preco) : ''}">
+    <button type="button" class="ce-remover" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(linha);
+}
+
+function adicionarLinhaAdicional(nome, preco){
+  const container = document.getElementById('adicionais-produto-list');
+  const linha = document.createElement('div');
+  linha.className = 'contato-extra-linha';
+  linha.innerHTML = `
+    <input type="text" class="add-nome" placeholder="Ex: Bacon extra" value="${nome ? escapeHtmlV(nome) : ''}">
+    <input type="text" class="add-preco" placeholder="Ex: 6,00" value="${preco ? escapeHtmlV(preco) : ''}">
+    <button type="button" class="ce-remover" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(linha);
+}
+
+function carregarVariacoesProduto(lista){
+  document.getElementById('variacoes-produto-list').innerHTML = '';
+  (lista || []).forEach(v => adicionarLinhaVariacao(v.nome, v.preco));
+}
+
+function carregarAdicionaisProduto(lista){
+  document.getElementById('adicionais-produto-list').innerHTML = '';
+  (lista || []).forEach(a => adicionarLinhaAdicional(a.nome, a.preco));
+}
+
+function coletarVariacoesProduto(){
+  const linhas = document.querySelectorAll('#variacoes-produto-list .contato-extra-linha');
+  const resultado = [];
+  linhas.forEach(linha => {
+    const nome = linha.querySelector('.var-nome').value.trim();
+    const preco = linha.querySelector('.var-preco').value.trim();
+    if(nome && preco) resultado.push({ nome, preco });
+  });
+  return resultado;
+}
+
+function coletarAdicionaisProduto(){
+  const linhas = document.querySelectorAll('#adicionais-produto-list .contato-extra-linha');
+  const resultado = [];
+  linhas.forEach(linha => {
+    const nome = linha.querySelector('.add-nome').value.trim();
+    const preco = linha.querySelector('.add-preco').value.trim();
+    if(nome && preco) resultado.push({ nome, preco });
+  });
+  return resultado;
 }
 
 function editarProduto(id){
@@ -791,6 +851,8 @@ function editarProduto(id){
   document.getElementById('p-link-externo').value = p.link_externo || '';
   document.getElementById('p-18mais').checked = !!p.produto_18_mais;
   document.getElementById('p-disponivel-venda').checked = p.disponivel_venda !== false;
+  carregarVariacoesProduto(p.variacoes);
+  carregarAdicionaisProduto(p.adicionais);
   if(p.foto){
     const preview = document.getElementById('p-foto-preview');
     preview.src = p.foto;
@@ -858,6 +920,8 @@ async function salvarProduto(e){
     codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,
     link_externo: document.getElementById('p-link-externo').value.trim() || null,
     disponivel_venda: document.getElementById('p-disponivel-venda').checked,
+    variacoes: coletarVariacoesProduto(),
+    adicionais: coletarAdicionaisProduto(),
     produto_18_mais: document.getElementById('p-18mais').checked
   };
 
@@ -949,18 +1013,98 @@ function precoTextoParaNumeroV(precoTexto){
   return parseFloat(limpo) || 0;
 }
 
-function adicionarAoCarrinho(produtoId){
+// Decide se precisa abrir o modal de opções (variação/adicionais) antes de
+// adicionar, ou se pode adicionar direto (produto sem nenhuma opção)
+let _opcoesProdutoAtualId = null;
+
+function prepararAdicionarAoCarrinho(produtoId){
   const p = produtos.find(x => x.id === produtoId);
   if(!p) return;
 
-  const itemExistente = carrinhoV.find(i => i.produtoId === produtoId);
+  const temVariacoes = p.variacoes && p.variacoes.length > 0;
+  const temAdicionais = p.adicionais && p.adicionais.length > 0;
+
+  if(!temVariacoes && !temAdicionais){
+    adicionarAoCarrinho(produtoId);
+    return;
+  }
+
+  _opcoesProdutoAtualId = produtoId;
+  document.getElementById('opcoes-produto-nome').textContent = p.nome;
+
+  let html = '';
+  if(temVariacoes){
+    html += `<div style="font-weight:700; font-size:0.85rem; margin-bottom:8px;">Escolha uma opção:</div>`;
+    html += p.variacoes.map((v, i) => `
+      <label style="display:flex; align-items:center; gap:10px; padding:10px; border:1.5px solid #ddd; border-radius:10px; margin-bottom:8px; cursor:pointer;">
+        <input type="radio" name="opcao-variacao" value="${i}" ${i === 0 ? 'checked' : ''}>
+        <span style="flex:1;">${escapeHtmlV(v.nome)}</span>
+        <b>R$ ${escapeHtmlV(v.preco)}</b>
+      </label>
+    `).join('');
+  }
+  if(temAdicionais){
+    html += `<div style="font-weight:700; font-size:0.85rem; margin:14px 0 8px;">Adicionais (opcional):</div>`;
+    html += p.adicionais.map((a, i) => `
+      <label style="display:flex; align-items:center; gap:10px; padding:10px; border:1.5px solid #ddd; border-radius:10px; margin-bottom:8px; cursor:pointer;">
+        <input type="checkbox" class="opcao-adicional" value="${i}">
+        <span style="flex:1;">${escapeHtmlV(a.nome)}</span>
+        <b>+ R$ ${escapeHtmlV(a.preco)}</b>
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('opcoes-produto-conteudo').innerHTML = html;
+  document.getElementById('overlay-opcoes-produto').style.display = 'flex';
+}
+
+function fecharOpcoesProduto(){
+  document.getElementById('overlay-opcoes-produto').style.display = 'none';
+  _opcoesProdutoAtualId = null;
+}
+
+function confirmarAdicionarComOpcoes(){
+  if(!_opcoesProdutoAtualId) return;
+  const p = produtos.find(x => x.id === _opcoesProdutoAtualId);
+  if(!p) return;
+
+  const radioMarcado = document.querySelector('input[name="opcao-variacao"]:checked');
+  const varianteEscolhida = (p.variacoes && p.variacoes.length > 0 && radioMarcado) ? p.variacoes[parseInt(radioMarcado.value)] : null;
+
+  const checkboxesMarcados = document.querySelectorAll('.opcao-adicional:checked');
+  const adicionaisEscolhidos = Array.from(checkboxesMarcados).map(cb => p.adicionais[parseInt(cb.value)]);
+
+  adicionarAoCarrinho(_opcoesProdutoAtualId, varianteEscolhida, adicionaisEscolhidos);
+  fecharOpcoesProduto();
+}
+
+function adicionarAoCarrinho(produtoId, varianteEscolhida, adicionaisEscolhidos){
+  const p = produtos.find(x => x.id === produtoId);
+  if(!p) return;
+
+  adicionaisEscolhidos = adicionaisEscolhidos || [];
+
+  // Preço final = preço da variação escolhida (ou o preço padrão do produto)
+  // + soma dos adicionais escolhidos
+  const precoBase = varianteEscolhida ? varianteEscolhida.preco : p.preco;
+  const precoFinal = (precoTextoParaNumeroV(precoBase) + adicionaisEscolhidos.reduce((soma, a) => soma + precoTextoParaNumeroV(a.preco), 0)).toFixed(2).replace('.', ',');
+
+  // Nome exibido inclui a variação e os adicionais escolhidos, pra diferenciar no carrinho
+  const nomeExibido = p.nome + (varianteEscolhida ? ` (${varianteEscolhida.nome})` : '') + (adicionaisEscolhidos.length > 0 ? ' + ' + adicionaisEscolhidos.map(a => a.nome).join(' + ') : '');
+
+  // Chave única pra diferenciar itens do mesmo produto com opções diferentes
+  // (ex: X-Tudo sem adicional vs X-Tudo com bacon são itens separados no carrinho)
+  const chaveItem = produtoId + '::' + (varianteEscolhida ? varianteEscolhida.nome : '') + '::' + adicionaisEscolhidos.map(a => a.nome).sort().join(',');
+
+  const itemExistente = carrinhoV.find(i => i.chaveItem === chaveItem);
   if(itemExistente){
     itemExistente.quantidade++;
   } else {
     carrinhoV.push({
+      chaveItem,
       produtoId: p.id,
-      nome: p.nome,
-      preco: p.preco,
+      nome: nomeExibido,
+      preco: precoFinal,
       foto: p.foto || '',
       profissionalId: p.profissional_id,
       empresaNome: p.profissionais ? p.profissionais.name : 'Empresa',
@@ -977,18 +1121,18 @@ function adicionarAoCarrinho(produtoId){
   }
 }
 
-function removerDoCarrinho(produtoId){
-  carrinhoV = carrinhoV.filter(i => i.produtoId !== produtoId);
+function removerDoCarrinho(chaveItem){
+  carrinhoV = carrinhoV.filter(i => i.chaveItem !== chaveItem);
   salvarCarrinhoV();
   renderCarrinho();
 }
 
-function alterarQuantidadeCarrinho(produtoId, delta){
-  const item = carrinhoV.find(i => i.produtoId === produtoId);
+function alterarQuantidadeCarrinho(chaveItem, delta){
+  const item = carrinhoV.find(i => i.chaveItem === chaveItem);
   if(!item) return;
   item.quantidade += delta;
   if(item.quantidade <= 0){
-    removerDoCarrinho(produtoId);
+    removerDoCarrinho(chaveItem);
     return;
   }
   salvarCarrinhoV();
@@ -1041,9 +1185,9 @@ function renderCarrinho(){
           <div style="font-size:0.78rem; color:#888;">R$ ${escapeHtmlV(item.preco)} cada</div>
         </div>
         <div style="display:flex; align-items:center; gap:6px;">
-          <button type="button" onclick="alterarQuantidadeCarrinho('${item.produtoId}', -1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">−</button>
+          <button type="button" onclick="alterarQuantidadeCarrinho('${item.chaveItem}', -1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">−</button>
           <span style="min-width:18px; text-align:center; font-weight:700; font-size:0.85rem;">${item.quantidade}</span>
-          <button type="button" onclick="alterarQuantidadeCarrinho('${item.produtoId}', 1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">+</button>
+          <button type="button" onclick="alterarQuantidadeCarrinho('${item.chaveItem}', 1)" style="width:26px; height:26px; border-radius:50%; border:1px solid #ddd; background:white; cursor:pointer;">+</button>
         </div>
       </div>
     `).join('');
