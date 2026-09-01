@@ -66,6 +66,7 @@ exports.handler = async function (event) {
     const respUpload = await fetch(`${SUPABASE_URL}/storage/v1/object/fotos/${nomeArquivo}`, {
       method: 'POST',
       headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         'Content-Type': 'image/png'
       },
