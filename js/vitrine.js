@@ -83,6 +83,7 @@ async function initAuthV(){
       document.getElementById('v-ver-meus-btn').style.display = 'inline-block';
       document.getElementById('v-ia-cardapio-btn').style.display = 'inline-block';
       document.getElementById('v-massa-bot-btn').style.display = 'inline-block';
+      document.getElementById('v-comando-voz-btn').style.display = 'inline-block';
     }
   }
 }
@@ -1461,6 +1462,180 @@ async function aplicarAcaoEmMassaBot(incluir){
 
   msg.textContent = `✅ ${incluir ? 'Incluídos' : 'Removidos'} ${count ?? ''} produto(s) da categoria "${categoria}" no robô.`;
   setTimeout(() => { fecharAcaoEmMassaBot(); loadProdutos(); }, 1800);
+}
+
+// ---------- EDITAR CARDÁPIO POR VOZ/TEXTO ----------
+
+let _reconhecimentoVozCardapio = null;
+let _acoesPropostasCardapio = [];
+
+function abrirComandoCardapio(){
+  if(meusCadastros.length === 0){
+    alert('Você precisa ter uma empresa no Pacote Vendas pra usar isso.');
+    return;
+  }
+  document.getElementById('comando-cardapio-empresa').innerHTML = meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('');
+  document.getElementById('comando-cardapio-texto').value = '';
+  document.getElementById('comando-cardapio-resultado').innerHTML = '';
+  document.getElementById('overlay-comando-cardapio').style.display = 'flex';
+}
+
+function fecharComandoCardapio(){
+  if(_reconhecimentoVozCardapio){ _reconhecimentoVozCardapio.stop(); }
+  document.getElementById('overlay-comando-cardapio').style.display = 'none';
+}
+
+function toggleGravacaoComandoCardapio(){
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionAPI){
+    alert('Seu navegador não suporta reconhecimento de voz. Tenta digitar o comando, ou usa o Chrome no celular/computador.');
+    return;
+  }
+
+  const btnMic = document.getElementById('comando-cardapio-mic');
+
+  if(_reconhecimentoVozCardapio){
+    _reconhecimentoVozCardapio.stop();
+    _reconhecimentoVozCardapio = null;
+    btnMic.style.background = '#e91e63';
+    btnMic.textContent = '🎤';
+    return;
+  }
+
+  _reconhecimentoVozCardapio = new SpeechRecognitionAPI();
+  _reconhecimentoVozCardapio.lang = 'pt-BR';
+  _reconhecimentoVozCardapio.interimResults = false;
+  _reconhecimentoVozCardapio.maxAlternatives = 1;
+
+  btnMic.style.background = '#a4402f';
+  btnMic.textContent = '⏹️';
+
+  _reconhecimentoVozCardapio.onresult = (event) => {
+    const texto = event.results[0][0].transcript;
+    const campo = document.getElementById('comando-cardapio-texto');
+    campo.value = (campo.value ? campo.value + ' ' : '') + texto;
+  };
+
+  _reconhecimentoVozCardapio.onerror = (event) => {
+    console.error('erro no reconhecimento de voz', event.error);
+    if(event.error === 'not-allowed'){
+      alert('Permite o acesso ao microfone pra usar o comando de voz.');
+    }
+  };
+
+  _reconhecimentoVozCardapio.onend = () => {
+    btnMic.style.background = '#e91e63';
+    btnMic.textContent = '🎤';
+    _reconhecimentoVozCardapio = null;
+  };
+
+  _reconhecimentoVozCardapio.start();
+}
+
+async function enviarComandoCardapio(){
+  const profissionalId = document.getElementById('comando-cardapio-empresa').value;
+  const comando = document.getElementById('comando-cardapio-texto').value.trim();
+  const resultado = document.getElementById('comando-cardapio-resultado');
+
+  if(!comando){ resultado.innerHTML = '<p style="color:#a4402f; font-size:0.85rem;">Digite ou fala um comando primeiro.</p>'; return; }
+
+  resultado.innerHTML = `
+    <div style="text-align:center; padding:20px;">
+      <div style="font-size:1.8rem; margin-bottom:8px;">✨</div>
+      <div style="font-weight:700; color:#e91e63;">Interpretando o comando...</div>
+    </div>
+  `;
+
+  try{
+    const { data: produtosDaEmpresa } = await supabaseClientV.from('produtos').select('id, nome, preco, categoria').eq('profissional_id', profissionalId);
+
+    const resp = await fetch('/.netlify/functions/editar-cardapio-por-comando', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comando, produtosAtuais: produtosDaEmpresa || [] })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok || data.error){
+      resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">⚠️ ${escapeHtmlV(data.error || 'Erro ao interpretar')}</p>`;
+      return;
+    }
+
+    _acoesPropostasCardapio = (data.acoes || []).map(a => ({ ...a, selecionado: true, produtoNomeAtual: (produtosDaEmpresa || []).find(p => p.id === a.produto_id)?.nome }));
+
+    renderAcoesPropostasCardapio(data.resumo);
+  } catch(e){
+    console.error(e);
+    resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">⚠️ Erro ao processar o comando. Tenta de novo.</p>`;
+  }
+}
+
+function renderAcoesPropostasCardapio(resumo){
+  const resultado = document.getElementById('comando-cardapio-resultado');
+
+  if(_acoesPropostasCardapio.length === 0){
+    resultado.innerHTML = `<p style="text-align:center; font-size:0.85rem; color:#888; padding:14px;">${escapeHtmlV(resumo || 'Não consegui entender esse comando. Tenta reformular.')}</p>`;
+    return;
+  }
+
+  const iconePorTipo = { adicionar: '➕', editar: '✏️', remover: '🗑️' };
+  const corPorTipo = { adicionar: '#0f766e', editar: '#1565c0', remover: '#a4402f' };
+
+  resultado.innerHTML = `
+    <p style="font-size:0.85rem; font-weight:700; margin-bottom:10px;">${escapeHtmlV(resumo || 'Confere as alterações propostas:')}</p>
+    ${_acoesPropostasCardapio.map((a, i) => `
+      <label style="display:flex; align-items:flex-start; gap:8px; padding:10px; border:1.5px solid ${corPorTipo[a.tipo] || '#ddd'}; border-radius:10px; margin-bottom:8px; cursor:pointer;">
+        <input type="checkbox" ${a.selecionado ? 'checked' : ''} onchange="_acoesPropostasCardapio[${i}].selecionado = this.checked">
+        <div style="flex:1; font-size:0.82rem;">
+          <b>${iconePorTipo[a.tipo] || ''} ${a.tipo === 'adicionar' ? 'Adicionar' : a.tipo === 'remover' ? 'Remover' : 'Editar'}:</b>
+          ${a.tipo === 'remover' ? escapeHtmlV(a.produtoNomeAtual || 'produto') : escapeHtmlV(a.nome || a.produtoNomeAtual || '')}
+          ${a.preco ? ` — R$ ${escapeHtmlV(a.preco)}` : ''}
+          ${a.categoria ? ` (${escapeHtmlV(a.categoria)})` : ''}
+        </div>
+      </label>
+    `).join('')}
+    <button type="button" onclick="confirmarAcoesCardapio()" style="width:100%; margin-top:8px; padding:12px; border-radius:10px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Aplicar alterações selecionadas</button>
+    <span id="comando-cardapio-confirmar-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+  `;
+}
+
+async function confirmarAcoesCardapio(){
+  const profissionalId = document.getElementById('comando-cardapio-empresa').value;
+  const msg = document.getElementById('comando-cardapio-confirmar-msg');
+  const selecionadas = _acoesPropostasCardapio.filter(a => a.selecionado);
+
+  if(selecionadas.length === 0){ msg.textContent = 'Nenhuma alteração selecionada.'; return; }
+
+  msg.textContent = 'aplicando...';
+
+  for(const acao of selecionadas){
+    if(acao.tipo === 'adicionar'){
+      await supabaseClientV.from('produtos').insert({
+        profissional_id: profissionalId,
+        nome: acao.nome,
+        preco: acao.preco || null,
+        categoria: acao.categoria || null,
+        descricao: acao.descricao || null,
+        disponivel_venda: true,
+        no_cardapio_bot: true
+      });
+    } else if(acao.tipo === 'editar' && acao.produto_id){
+      const payload = {};
+      if(acao.nome) payload.nome = acao.nome;
+      if(acao.preco) payload.preco = acao.preco;
+      if(acao.categoria) payload.categoria = acao.categoria;
+      if(acao.descricao) payload.descricao = acao.descricao;
+      await supabaseClientV.from('produtos').update(payload).eq('id', acao.produto_id);
+    } else if(acao.tipo === 'remover' && acao.produto_id){
+      await supabaseClientV.from('produtos').delete().eq('id', acao.produto_id);
+    }
+  }
+
+  msg.textContent = `✅ ${selecionadas.length} alteração(ões) aplicada(s) com sucesso!`;
+  setTimeout(() => {
+    fecharComandoCardapio();
+    loadProdutos();
+  }, 1500);
 }
 
 // ---------- CADASTRO DE PRODUTOS POR FOTO (IA) ----------
