@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meus Pedidos (Compras) — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .pedidos-header { background: #0f766e; padding: 24px 15px; text-align: center; color: white; }
+  .pedidos-header h1 { font-size: 1.6rem; font-weight: 800; }
+  .pedidos-wrap { max-width: 500px; margin: 0 auto; padding: 15px 15px 40px; }
+  .voltar { display: block; margin-bottom: 14px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .abas-pedidos { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; }
+  .abas-pedidos button {
+    flex-shrink: 0; padding: 7px 14px; border-radius: 50px; border: 1px solid #ddd; background: white;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer; color: #666;
+  }
+  .abas-pedidos button.ativa { background: #0f766e; color: white; border-color: #0f766e; }
+  .card-pedido {
+    background: var(--cinza-card); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .card-pedido .topo-pedido { display: flex; justify-content: space-between; align-items: center; }
+  .card-pedido .status-pedido { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 50px; }
+  .status-aguardando_pagamento { background: #e0e7ff; color: #3730a3; }
+  .status-aguardando_confirmacao { background: #fff3cd; color: #7c4a03; }
+  .status-aceito, .status-preparando { background: #e0f2fe; color: #075985; }
+  .status-pronto, .status-saiu_entrega { background: #ede9fe; color: #6b46c1; }
+  .status-concluido { background: #e8f5e9; color: #1a7a3c; }
+  .status-recusado, .status-cancelado { background: #fdeaea; color: #a4402f; }
+  .card-pedido .itens-pedido { font-size: 0.85rem; color: #444; margin-top: 8px; line-height: 1.5; }
+  .card-pedido .total-pedido { font-size: 0.9rem; font-weight: 700; color: var(--verde-escuro); margin-top: 8px; }
+  .card-pedido .data-pedido { font-size: 0.72rem; color: #999; margin-top: 4px; }
+  .acoes-pedido { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .acoes-pedido a, .acoes-pedido button {
+    flex: 1; min-width: 100px; padding: 8px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.78rem;
+    cursor: pointer; text-align: center; text-decoration: none; display: block;
+  }
+  .btn-continuar-papo { background: #6b46c1; color: white; }
+  .vazio-pedidos { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header class="pedidos-header">
+  <h1>🛍️ Meus Pedidos</h1>
+</header>
+
+<div class="pedidos-wrap">
+  <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <div class="abas-pedidos">
+    <button type="button" class="ativa" data-status="" onclick="mudarAbaMeusPedidos('', this)">Todos</button>
+    <button type="button" data-status="aguardando_pagamento" onclick="mudarAbaMeusPedidos('aguardando_pagamento', this)">💳 Aguardando pagamento</button>
+    <button type="button" data-status="aguardando_confirmacao,aceito,preparando,pronto,saiu_entrega" onclick="mudarAbaMeusPedidos('aguardando_confirmacao,aceito,preparando,pronto,saiu_entrega', this)">🟡 Em andamento</button>
+    <button type="button" data-status="concluido" onclick="mudarAbaMeusPedidos('concluido', this)">✅ Concluídos</button>
+  </div>
+
+  <div id="lista-meus-pedidos">Carregando...</div>
+</div>
+
+<script src="js/modo-escuro.js"></script>
+<script src="config.js"></script>
+<script>
+const supabaseClientMeusPedidos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserMeusPedidos = null;
+let todosMeusPedidos = [];
+let abaStatusMeusPedidosAtual = '';
+
+function escapeHtmlMeusPedidos(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initMeusPedidos(){
+  const { data: { session } } = await supabaseClientMeusPedidos.auth.getSession();
+  if(!session){
+    document.getElementById('lista-meus-pedidos').innerHTML = '<div class="vazio-pedidos">🔒 Faça login na <a href="index.html">página inicial</a> pra ver seus pedidos.</div>';
+    return;
+  }
+  currentUserMeusPedidos = session.user;
+  await carregarMeusPedidos();
+}
+
+async function carregarMeusPedidos(){
+  const { data, error } = await supabaseClientMeusPedidos
+    .from('pedidos')
+    .select('*, profissionais(id, name)')
+    .eq('cliente_user_id', currentUserMeusPedidos.id)
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); document.getElementById('lista-meus-pedidos').innerHTML = '<div class="vazio-pedidos">Erro ao carregar pedidos.</div>'; return; }
+
+  todosMeusPedidos = data || [];
+  renderMeusPedidos();
+}
+
+function mudarAbaMeusPedidos(status, btn){
+  abaStatusMeusPedidosAtual = status;
+  document.querySelectorAll('.abas-pedidos button').forEach(b => b.classList.remove('ativa'));
+  btn.classList.add('ativa');
+  renderMeusPedidos();
+}
+
+function renderMeusPedidos(){
+  const container = document.getElementById('lista-meus-pedidos');
+  const statusFiltro = abaStatusMeusPedidosAtual ? abaStatusMeusPedidosAtual.split(',') : null;
+  const lista = statusFiltro ? todosMeusPedidos.filter(p => statusFiltro.includes(p.status)) : todosMeusPedidos;
+
+  if(lista.length === 0){
+    container.innerHTML = '<div class="vazio-pedidos">Nenhum pedido por aqui ainda. Que tal dar uma olhada na <a href="vitrine.html">Vitrine</a>?</div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(p => {
+    const itens = (p.itens || []).map(i => `${escapeHtmlMeusPedidos(i.nome)} — R$ ${escapeHtmlMeusPedidos(i.preco)}`).join('<br>');
+    const nomeEmpresa = p.profissionais ? p.profissionais.name : 'Empresa';
+    const dataFormatada = new Date(p.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+    return `
+      <div class="card-pedido">
+        <div class="topo-pedido">
+          <b style="font-size:0.85rem;">${escapeHtmlMeusPedidos(nomeEmpresa)}</b>
+          <span class="status-pedido status-${p.status}">${statusTextoMeusPedidos(p.status)}</span>
+        </div>
+        <div class="itens-pedido">${itens}</div>
+        <div class="total-pedido">Total: R$ ${Number(p.total).toFixed(2).replace('.', ',')}</div>
+        ${p.forma_pagamento ? `<div class="data-pedido">💳 ${escapeHtmlMeusPedidos(p.forma_pagamento)}</div>` : ''}
+        ${p.codigo_confirmacao && !['concluido', 'recusado', 'cancelado'].includes(p.status) ? `<div style="background:#fff3cd; color:#7c4a03; font-weight:800; padding:6px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem;">🔑 Código de confirmação: ${escapeHtmlMeusPedidos(p.codigo_confirmacao)}</div>` : ''}
+        <div class="data-pedido">${dataFormatada}</div>
+        <div class="acoes-pedido">
+          <a href="chat.html?empresa=${p.profissional_id}" class="btn-continuar-papo">💬 Ver conversa no Papo</a>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function statusTextoMeusPedidos(status){
+  const mapa = {
+    aguardando_pagamento: '💳 Aguardando pagamento',
+    aguardando_confirmacao: '🟡 Aguardando empresa',
+    aceito: '✅ Aceito',
+    preparando: '👨‍🍳 Preparando',
+    pronto: '📦 Pronto',
+    saiu_entrega: '🛵 Em entrega',
+    concluido: '✅ Concluído',
+    recusado: '❌ Recusado',
+    cancelado: '🚫 Cancelado'
+  };
+  return mapa[status] || status;
+}
+
+initMeusPedidos();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
+  });
+}
+</script>
+</body>
+</html>

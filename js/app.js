@@ -408,6 +408,11 @@ async function loadEntries(){
     const temEmpresaVendas = currentUser && entries.some(e => e.user_id === currentUser.id && e.plano === 'vendas');
     btnPedidos.style.display = temEmpresaVendas ? 'block' : 'none';
   }
+
+  const btnMinhasCompras = document.getElementById('btn-minhas-compras');
+  if(btnMinhasCompras){
+    btnMinhasCompras.style.display = currentUser ? 'block' : 'none';
+  }
 }
 
 function abrirCadastroSePendente(){

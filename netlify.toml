@@ -5,6 +5,9 @@
 [functions."verificar-pagamentos"]
   schedule = "0 * * * *"
 
+[functions."cancelar-pedidos-esquecidos"]
+  schedule = "0 * * * *"
+
 [functions."relatorio-semanal"]
   schedule = "0 9 * * 1"
 
