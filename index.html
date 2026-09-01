@@ -497,8 +497,13 @@
       <label>Adicionar motoboy pelo código GuiaZap dele</label>
       <div style="display:flex; gap:8px;">
         <input type="text" id="motoboy-codigo-input" placeholder="GZ12345678" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px;">
+      </div>
+      <label style="margin-top:8px; display:block;">Cidade onde ele atua</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="motoboy-cidade-input" placeholder="Ex: Mangueirinha" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px;">
         <button type="button" class="btn-salvar" style="padding:9px 14px;" onclick="adicionarMotoboy()">Adicionar</button>
       </div>
+      <p style="font-size:0.72rem; color:#8a8270; margin-top:4px;">Por padrão, só entregas dessa cidade avisam esse motoboy — evita chamar alguém de longe à toa.</p>
       <span class="form-msg" id="motoboy-add-msg"></span>
     </div>
     <div id="lista-motoboys" style="margin-top:14px;"></div>

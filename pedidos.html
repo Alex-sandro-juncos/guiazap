@@ -107,7 +107,7 @@ async function carregarPedidos(){
   const idsEmpresas = minhasEmpresasPedidos.map(e => e.id);
   const { data, error } = await supabaseClientPedidos
     .from('pedidos')
-    .select('*, profissionais(name)')
+    .select('*, profissionais(name, cidade)')
     .in('profissional_id', idsEmpresas)
     .order('created_at', { ascending: false });
 
@@ -157,6 +157,7 @@ function renderPedidos(){
       acoes = `<button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'pronto')">📦 Marcar como pronto</button>`;
     } else if(p.status === 'pronto'){
       acoes = `
+        ${p.taxa_entrega > 0 ? `<button type="button" class="btn-avancar" style="background:#a4402f;" onclick="avisarTodosMotoboys('${p.id}')">📢 Avisar todos os motoboys</button>` : ''}
         <button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'saiu_entrega')">🛵 Saiu pra entrega</button>
         <button type="button" class="btn-avancar" onclick="mudarStatusPedido('${p.id}', 'concluido')">✅ Concluir (retirada)</button>
       `;
@@ -256,25 +257,55 @@ async function mudarStatusPedido(pedidoId, novoStatus){
     await supabaseClientPedidos.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', pedido.conversa_id);
   }
 
-  // Se o pedido é de ENTREGA e acabou de ficar pronto, avisa todos os
-  // motoboys cadastrados dessa empresa que tem uma corrida disponível
+  // Se o pedido é de ENTREGA e acabou de ficar pronto, avisa os motoboys
+  // dessa empresa que tem uma corrida disponível — dá prioridade pros
+  // preferidos da mesma cidade da empresa; se não tiver nenhum, avisa
+  // todo mundo da mesma cidade. Pra chamar gente de outra cidade, a
+  // empresa usa o botão manual "Avisar todos" que aparece depois.
   if(novoStatus === 'pronto' && pedido && pedido.taxa_entrega > 0){
-    const { data: motoboysDaEmpresa } = await supabaseClientPedidos.from('motoboys').select('user_id').eq('profissional_id', pedido.profissional_id).eq('ativo', true);
-    if(motoboysDaEmpresa && motoboysDaEmpresa.length > 0){
-      fetch('/.netlify/functions/enviar-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: '🛵 Nova entrega disponível!',
-          mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
-          url: '/entregas.html',
-          userIds: motoboysDaEmpresa.map(m => m.user_id)
-        })
-      }).catch(e => console.error('erro ao notificar motoboys', e));
-    }
+    await notificarMotoboysDisponiveis(pedido, false);
   }
 
   await carregarPedidos();
+}
+
+async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
+  const { data: motoboysDaEmpresa } = await supabaseClientPedidos.from('motoboys').select('user_id, preferido, cidade').eq('profissional_id', pedido.profissional_id).eq('ativo', true);
+  if(!motoboysDaEmpresa || motoboysDaEmpresa.length === 0) return;
+
+  const cidadeEmpresa = pedido.profissionais ? pedido.profissionais.cidade : null;
+
+  let destinatarios;
+  if(todasAsCidades){
+    // Botão manual "avisar todos" — ignora região e preferência, chama todo mundo
+    destinatarios = motoboysDaEmpresa;
+  } else {
+    const daMesmaCidade = cidadeEmpresa ? motoboysDaEmpresa.filter(m => m.cidade === cidadeEmpresa) : motoboysDaEmpresa;
+    const preferidosDaCidade = daMesmaCidade.filter(m => m.preferido);
+    // Prioridade: preferidos da cidade > qualquer um da cidade > (se não tiver
+    // ninguém cadastrado na cidade) todo mundo, pra não deixar a entrega sem aviso nenhum
+    destinatarios = preferidosDaCidade.length > 0 ? preferidosDaCidade : (daMesmaCidade.length > 0 ? daMesmaCidade : motoboysDaEmpresa);
+  }
+
+  if(destinatarios.length === 0) return;
+
+  fetch('/.netlify/functions/enviar-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      titulo: '🛵 Nova entrega disponível!',
+      mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
+      url: '/entregas.html',
+      userIds: destinatarios.map(m => m.user_id)
+    })
+  }).catch(e => console.error('erro ao notificar motoboys', e));
+}
+
+async function avisarTodosMotoboys(pedidoId){
+  const pedido = todosPedidos.find(p => p.id === pedidoId);
+  if(!pedido) return;
+  await notificarMotoboysDisponiveis(pedido, true);
+  alert('📢 Aviso enviado pra todos os motoboys cadastrados, de qualquer cidade.');
 }
 
 initPedidos();

@@ -1818,7 +1818,7 @@ async function carregarListaMotoboys(profissionalId){
   const container = document.getElementById('lista-motoboys');
   container.innerHTML = 'Carregando...';
 
-  const { data, error } = await supabaseClient.from('motoboys').select('id, nome_exibicao, ativo').eq('profissional_id', profissionalId).order('created_at', { ascending: false });
+  const { data, error } = await supabaseClient.from('motoboys').select('id, nome_exibicao, ativo, preferido, cidade').eq('profissional_id', profissionalId).order('preferido', { ascending: false }).order('created_at', { ascending: false });
   if(error){ container.innerHTML = 'Erro ao carregar motoboys.'; return; }
 
   if(!data || data.length === 0){
@@ -1827,16 +1827,29 @@ async function carregarListaMotoboys(profissionalId){
   }
 
   container.innerHTML = data.map(m => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0;">
-      <span style="font-size:0.85rem;">${escapeHtml(m.nome_exibicao || 'Motoboy')} ${!m.ativo ? '<span style="color:#a4402f; font-size:0.72rem;">(inativo)</span>' : ''}</span>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; gap:8px;">
+      <div style="flex:1;">
+        <div style="font-size:0.85rem;">
+          ${m.preferido ? '⭐ ' : ''}${escapeHtml(m.nome_exibicao || 'Motoboy')} ${!m.ativo ? '<span style="color:#a4402f; font-size:0.72rem;">(inativo)</span>' : ''}
+        </div>
+        <div style="font-size:0.72rem; color:#888;">📍 ${escapeHtml(m.cidade || 'sem cidade cadastrada')}</div>
+      </div>
+      <button type="button" class="link-cancelar" style="color:${m.preferido ? '#a4402f' : 'var(--verde-escuro)'};" onclick="toggleMotoboyPreferido('${m.id}', ${!m.preferido}, '${profissionalId}')">${m.preferido ? 'Desmarcar ⭐' : 'Marcar ⭐'}</button>
       <button type="button" class="link-cancelar" onclick="removerMotoboy('${m.id}', '${profissionalId}')">Remover</button>
     </div>
   `).join('');
 }
 
+async function toggleMotoboyPreferido(motoboyId, novoValor, profissionalId){
+  const { error } = await supabaseClient.from('motoboys').update({ preferido: novoValor }).eq('id', motoboyId);
+  if(error){ alert('Erro ao atualizar.'); return; }
+  await carregarListaMotoboys(profissionalId);
+}
+
 async function adicionarMotoboy(){
   const profissionalId = document.getElementById('motoboys-profissional-id').value;
   const codigo = document.getElementById('motoboy-codigo-input').value.trim();
+  const cidade = document.getElementById('motoboy-cidade-input').value.trim();
   const msg = document.getElementById('motoboy-add-msg');
 
   if(!codigo){ msg.textContent = 'Digite o código GuiaZap do motoboy.'; return; }
@@ -1858,7 +1871,8 @@ async function adicionarMotoboy(){
     const { error } = await supabaseClient.from('motoboys').insert({
       profissional_id: profissionalId,
       user_id: data.userId,
-      nome_exibicao: data.nome
+      nome_exibicao: data.nome,
+      cidade: cidade || null
     });
 
     if(error){
@@ -1868,6 +1882,7 @@ async function adicionarMotoboy(){
 
     msg.textContent = '✓ Motoboy adicionado!';
     document.getElementById('motoboy-codigo-input').value = '';
+    document.getElementById('motoboy-cidade-input').value = '';
     await carregarListaMotoboys(profissionalId);
   } catch(e){
     console.error(e);
