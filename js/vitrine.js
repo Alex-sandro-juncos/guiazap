@@ -82,6 +82,7 @@ async function initAuthV(){
     } else {
       document.getElementById('v-ver-meus-btn').style.display = 'inline-block';
       document.getElementById('v-ia-cardapio-btn').style.display = 'inline-block';
+      document.getElementById('v-massa-bot-btn').style.display = 'inline-block';
     }
   }
 }
@@ -1411,6 +1412,55 @@ function avisarSaidaLinkExterno(url){
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+// ---------- AÇÃO EM MASSA: INCLUIR/REMOVER CATEGORIA DO ROBÔ ----------
+
+function abrirAcaoEmMassaBot(){
+  if(meusCadastros.length === 0){
+    alert('Você precisa ter uma empresa no Pacote Vendas pra usar isso.');
+    return;
+  }
+  document.getElementById('massa-bot-msg').textContent = '';
+  document.getElementById('massa-bot-empresa').innerHTML = meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('');
+  document.getElementById('overlay-massa-bot').style.display = 'flex';
+  carregarCategoriasParaMassa();
+}
+
+function fecharAcaoEmMassaBot(){
+  document.getElementById('overlay-massa-bot').style.display = 'none';
+}
+
+async function carregarCategoriasParaMassa(){
+  const profissionalId = document.getElementById('massa-bot-empresa').value;
+  const select = document.getElementById('massa-bot-categoria');
+  select.innerHTML = '<option value="">Carregando...</option>';
+
+  const { data, error } = await supabaseClientV.from('produtos').select('categoria').eq('profissional_id', profissionalId);
+  if(error){ select.innerHTML = '<option value="">Erro ao carregar</option>'; return; }
+
+  const categorias = [...new Set((data || []).map(p => p.categoria || 'Outros'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  select.innerHTML = categorias.map(c => `<option value="${escapeHtmlV(c)}">${escapeHtmlV(c)}</option>`).join('');
+}
+
+async function aplicarAcaoEmMassaBot(incluir){
+  const profissionalId = document.getElementById('massa-bot-empresa').value;
+  const categoria = document.getElementById('massa-bot-categoria').value;
+  const msg = document.getElementById('massa-bot-msg');
+
+  if(!categoria){ msg.textContent = 'Escolha uma categoria.'; return; }
+
+  msg.textContent = 'aplicando...';
+
+  // "Outros" na verdade representa produtos sem categoria (null) — trata os dois casos
+  let query = supabaseClientV.from('produtos').update({ no_cardapio_bot: incluir }).eq('profissional_id', profissionalId);
+  query = categoria === 'Outros' ? query.or('categoria.is.null,categoria.eq.Outros') : query.eq('categoria', categoria);
+
+  const { error, count } = await query.select('id', { count: 'exact' });
+  if(error){ console.error(error); msg.textContent = 'Erro ao aplicar: ' + error.message; return; }
+
+  msg.textContent = `✅ ${incluir ? 'Incluídos' : 'Removidos'} ${count ?? ''} produto(s) da categoria "${categoria}" no robô.`;
+  setTimeout(() => { fecharAcaoEmMassaBot(); loadProdutos(); }, 1800);
 }
 
 // ---------- CADASTRO DE PRODUTOS POR FOTO (IA) ----------

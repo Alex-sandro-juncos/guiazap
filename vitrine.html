@@ -277,7 +277,31 @@
   <div>
     <button type="button" class="btn-add-produto" id="v-ver-meus-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="verMeusProdutos()">🏢 Ver meus produtos</button>
     <button type="button" class="btn-add-produto" id="v-ia-cardapio-btn" style="display:none; background:#6b46c1; margin-right:6px;" onclick="abrirFormCardapioIA()">✨ Cadastrar por foto do cardápio</button>
+    <button type="button" class="btn-add-produto" id="v-massa-bot-btn" style="display:none; background:#1c1c1c; margin-right:6px;" onclick="abrirAcaoEmMassaBot()">🤖 Ajustar categorias no robô</button>
     <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+  </div>
+</div>
+
+<div id="overlay-massa-bot" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1300; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; width:100%; max-width:480px; border-radius:16px; padding:20px; max-height:85vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <b style="font-size:1rem;">🤖 Ajustar categorias no robô</b>
+      <button type="button" onclick="fecharAcaoEmMassaBot()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+    </div>
+    <p style="font-size:0.82rem; color:#555; margin-bottom:14px;">Escolha uma empresa e uma categoria pra incluir ou remover TODOS os produtos dela de uma vez no cardápio do atendimento automático (Papo) — sem precisar editar produto por produto.</p>
+    <div class="field">
+      <label>Empresa</label>
+      <select id="massa-bot-empresa" style="width:100%; padding:9px; border:1px solid #ddd; border-radius:8px;" onchange="carregarCategoriasParaMassa()"></select>
+    </div>
+    <div class="field">
+      <label>Categoria</label>
+      <select id="massa-bot-categoria" style="width:100%; padding:9px; border:1px solid #ddd; border-radius:8px;"></select>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button type="button" onclick="aplicarAcaoEmMassaBot(true)" style="flex:1; padding:11px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Incluir todos no robô</button>
+      <button type="button" onclick="aplicarAcaoEmMassaBot(false)" style="flex:1; padding:11px; border-radius:8px; border:none; background:#a4402f; color:white; font-weight:700; cursor:pointer;">🚫 Remover todos do robô</button>
+    </div>
+    <span id="massa-bot-msg" style="display:block; text-align:center; font-size:0.82rem; margin-top:10px;"></span>
   </div>
 </div>
 
