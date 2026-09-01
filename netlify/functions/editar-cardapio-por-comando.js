@@ -76,11 +76,18 @@ Regras importantes:
 
     let resultado;
     try {
-      const textoLimpo = textoResposta.replace(/```json|```/g, '').trim();
+      let textoLimpo = textoResposta.replace(/```json|```/g, '').trim();
+      // Se vier com algum texto explicativo antes/depois do JSON, pega só a
+      // parte entre a primeira { e a última } — mais tolerante a variações
+      const inicio = textoLimpo.indexOf('{');
+      const fim = textoLimpo.lastIndexOf('}');
+      if (inicio !== -1 && fim !== -1 && fim > inicio) {
+        textoLimpo = textoLimpo.slice(inicio, fim + 1);
+      }
       resultado = JSON.parse(textoLimpo);
     } catch (e) {
       console.error('erro ao interpretar resposta da IA:', textoResposta);
-      return { statusCode: 500, body: JSON.stringify({ error: 'a IA não devolveu um formato válido, tenta reformular o comando' }) };
+      return { statusCode: 500, body: JSON.stringify({ error: 'a IA não devolveu um formato válido, tenta reformular o comando. Resposta recebida: ' + textoResposta.slice(0, 200) }) };
     }
 
     return { statusCode: 200, body: JSON.stringify(resultado) };
