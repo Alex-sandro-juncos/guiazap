@@ -1431,6 +1431,28 @@ function fecharFormCardapioIA(){
 async function processarFotoCardapio(event){
   const file = event.target.files[0];
   if(!file) return;
+  await enviarArquivoCardapioParaIA(file);
+}
+
+function colarImagemCardapio(event){
+  const items = event.clipboardData ? event.clipboardData.items : null;
+  if(!items) return;
+
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      event.preventDefault();
+      const file = item.getAsFile();
+      enviarArquivoCardapioParaIA(file);
+      return;
+    }
+  }
+
+  const resultado = document.getElementById('cardapio-ia-resultado');
+  resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">O que você colou não é uma imagem. Copia a imagem do cardápio (não o arquivo/link) e tenta de novo.</p>`;
+}
+
+async function enviarArquivoCardapioParaIA(file){
+  if(!file) return;
 
   const resultado = document.getElementById('cardapio-ia-resultado');
   resultado.innerHTML = `
