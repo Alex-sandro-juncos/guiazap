@@ -75,7 +75,7 @@ exports.handler = async function (event) {
     if (!respUpload.ok) {
       const erroUpload = await respUpload.text();
       console.error('erro ao subir imagem pro Supabase:', erroUpload);
-      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao salvar a imagem gerada' }) };
+      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao salvar a imagem gerada: ' + erroUpload }) };
     }
 
     const urlPublica = `${SUPABASE_URL}/storage/v1/object/public/fotos/${nomeArquivo}`;
