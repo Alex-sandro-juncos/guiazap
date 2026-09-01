@@ -1512,6 +1512,7 @@ async function carregarListaConversas(){
     let resumoUltimaMsg = '';
     if(ultimaMsg){
       if(ultimaMsg.tipo === 'imagem') resumoUltimaMsg = '📷 Foto';
+      else if(ultimaMsg.tipo === 'menu_interativo') resumoUltimaMsg = '🛒 Cardápio interativo';
       else if(ultimaMsg.tipo === 'audio') resumoUltimaMsg = '🎤 Áudio';
       else if(ultimaMsg.tipo === 'arquivo') resumoUltimaMsg = '📄 ' + (ultimaMsg.arquivo_nome || 'Arquivo');
       else if(ultimaMsg.tipo === 'gif') resumoUltimaMsg = '🎞️ GIF';
@@ -2007,6 +2008,39 @@ function conteudoDaMensagem(m, minha){
       </div>
     `;
   }
+  if(m.tipo === 'menu_interativo'){
+    let itens = [];
+    try{ itens = JSON.parse(m.texto); } catch(e){ return escapeHtmlChat(m.texto); }
+    if(!Array.isArray(itens) || itens.length === 0) return escapeHtmlChat(m.texto);
+
+    let categoriaAtual = null;
+    const linhas = itens.map((item, i) => {
+      const numero = i + 1;
+      const categoria = item.categoria || 'Outros';
+      let cabecalho = '';
+      if(categoria !== categoriaAtual){
+        cabecalho = `<div style="font-weight:800; font-size:0.8rem; color:#e91e63; margin:8px 0 4px;">${escapeHtmlChat(categoria)}</div>`;
+        categoriaAtual = categoria;
+      }
+      return `
+        ${cabecalho}
+        <label style="display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer;">
+          <input type="checkbox" class="chk-menu-interativo" value="${numero}" data-msg="${m.id}">
+          ${item.foto ? `<img src="${escapeHtmlChat(item.foto)}" style="width:34px; height:34px; border-radius:6px; object-fit:cover; flex-shrink:0;">` : ''}
+          <span style="flex:1; font-size:0.85rem;">${escapeHtmlChat(item.nome || 'Produto')}</span>
+          <b style="font-size:0.82rem;">R$ ${escapeHtmlChat(item.preco || 'a combinar')}</b>
+        </label>
+      `;
+    }).join('');
+
+    return `
+      <div class="menu-interativo-chat" style="max-width:280px;">
+        <div style="font-weight:700; margin-bottom:6px; font-size:0.9rem;">🛒 Marque o que você quer:</div>
+        ${linhas}
+        <button type="button" onclick="enviarSelecaoMenuInterativo('${m.id}')" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">Enviar seleção</button>
+      </div>
+    `;
+  }
   if(m.tipo === 'chamada_perdida' || m.tipo === 'chamada_atendida'){
     const { ehVideo, duracao, atendida } = detalhesChamada(m);
     const icone = ehVideo ? '📹' : '📞';
@@ -2077,6 +2111,16 @@ async function enviarMensagemChat(){
   input.value = '';
   atualizarBotaoEnviarOuMic();
   await enviarQualquerMensagem({ tipo: 'texto', texto });
+}
+
+async function enviarSelecaoMenuInterativo(msgId){
+  const marcados = document.querySelectorAll(`.chk-menu-interativo[data-msg="${msgId}"]:checked`);
+  if(marcados.length === 0){
+    alert('Marca pelo menos um item antes de enviar.');
+    return;
+  }
+  const numeros = Array.from(marcados).map(c => c.value).join(',');
+  await enviarQualquerMensagem({ tipo: 'texto', texto: numeros });
 }
 
 async function enviarQualquerMensagem(payload){
