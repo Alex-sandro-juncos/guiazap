@@ -122,6 +122,25 @@ exports.handler = async function (event) {
     const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
     // 5. Cria o pedido já esperando pagamento
+    if (config && config.aceita_pagamento_entrega) {
+      // Empresa aceita pagamento na entrega — pergunta antes de criar o
+      // pedido/gerar link, guardando o endereço e o frete calculado pro
+      // próximo passo usar (seja pagamento online ou na entrega)
+      await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n💳 Como você prefere pagar?\n1️⃣ Pagar agora online (Pix, cartão)\n2️⃣ Pagar na entrega (dinheiro, cartão ou Pix na hora)`);
+
+      await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          estado: 'escolhendo_quando_pagar',
+          lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10 }]
+        })
+      });
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
+    }
+
+    // Empresa só aceita pagamento online — cria o pedido e já parte pro pagamento
     await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
       method: 'POST',
       headers,

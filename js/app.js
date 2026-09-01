@@ -1764,6 +1764,7 @@ async function abrirConfigAtendimento(profissionalId){
   document.getElementById('atendimento-pix').checked = config ? config.aceita_pix : true;
   document.getElementById('atendimento-dinheiro').checked = config ? config.aceita_dinheiro : true;
   document.getElementById('atendimento-cartao').checked = config ? config.aceita_cartao : true;
+  document.getElementById('atendimento-pagamento-entrega').checked = config ? config.aceita_pagamento_entrega : true;
   document.getElementById('atendimento-faz-entrega').checked = config ? config.faz_entrega : false;
   document.getElementById('atendimento-taxa-base').value = config ? config.taxa_base_entrega : 6.5;
   document.getElementById('atendimento-valor-km').value = config ? config.valor_por_km : 1.5;
@@ -1790,6 +1791,7 @@ async function salvarConfigAtendimento(e){
     aceita_pix: document.getElementById('atendimento-pix').checked,
     aceita_dinheiro: document.getElementById('atendimento-dinheiro').checked,
     aceita_cartao: document.getElementById('atendimento-cartao').checked,
+    aceita_pagamento_entrega: document.getElementById('atendimento-pagamento-entrega').checked,
     faz_entrega: document.getElementById('atendimento-faz-entrega').checked,
     taxa_base_entrega: parseFloat(document.getElementById('atendimento-taxa-base').value) || 0,
     valor_por_km: parseFloat(document.getElementById('atendimento-valor-km').value) || 0,
