@@ -1434,6 +1434,64 @@ async function processarFotoCardapio(event){
   await enviarArquivoCardapioParaIA(file);
 }
 
+// ---------- ESCOLHER ARQUIVO JÁ ENVIADO NO PAPO ----------
+
+async function abrirEscolherDoPapo(){
+  document.getElementById('overlay-escolher-papo').style.display = 'flex';
+  const container = document.getElementById('escolher-papo-conteudo');
+  container.innerHTML = 'Carregando...';
+
+  if(!currentUserV){
+    container.innerHTML = '<p style="color:#a4402f; font-size:0.85rem;">Faça login primeiro.</p>';
+    return;
+  }
+
+  const { data, error } = await supabaseClientV
+    .from('mensagens_chat')
+    .select('id, tipo, arquivo_url, arquivo_nome, created_at')
+    .eq('remetente_user_id', currentUserV.id)
+    .in('tipo', ['imagem', 'arquivo'])
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if(error){ container.innerHTML = '<p style="color:#a4402f; font-size:0.85rem;">Erro ao carregar.</p>'; return; }
+
+  if(!data || data.length === 0){
+    container.innerHTML = '<p style="font-size:0.85rem; color:#888; text-align:center; padding:20px;">Nenhuma foto ou arquivo encontrado nas suas conversas do Papo ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = data.map(m => `
+    <div onclick="escolherArquivoDoPapo('${escapeHtmlV(m.arquivo_url)}', '${m.tipo}')" style="display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #f0f0f0; cursor:pointer;">
+      ${m.tipo === 'imagem'
+        ? `<img src="${escapeHtmlV(m.arquivo_url)}" style="width:46px; height:46px; border-radius:8px; object-fit:cover; flex-shrink:0;">`
+        : `<div style="width:46px; height:46px; border-radius:8px; background:#f2f2f2; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;">📄</div>`}
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtmlV(m.arquivo_nome || (m.tipo === 'imagem' ? 'Foto' : 'Arquivo'))}</div>
+        <div style="font-size:0.72rem; color:#888;">${new Date(m.created_at).toLocaleDateString('pt-BR')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function fecharEscolherDoPapo(){
+  document.getElementById('overlay-escolher-papo').style.display = 'none';
+}
+
+async function escolherArquivoDoPapo(url, tipo){
+  fecharEscolherDoPapo();
+  try{
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const nomeArquivo = tipo === 'imagem' ? 'foto-papo.jpg' : 'arquivo-papo.pdf';
+    const file = new File([blob], nomeArquivo, { type: blob.type });
+    await enviarArquivoCardapioParaIA(file);
+  } catch(e){
+    console.error(e);
+    document.getElementById('cardapio-ia-resultado').innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">⚠️ Erro ao carregar esse arquivo. Tenta outra opção.</p>`;
+  }
+}
+
 function colarImagemCardapio(event){
   const items = event.clipboardData ? event.clipboardData.items : null;
   if(!items) return;

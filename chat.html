@@ -225,6 +225,12 @@
   body.dark-mode .vazio-chat-titulo { color: #ccc; }
 
   .bolha-msg img.midia-chat { max-width: 200px; border-radius: 10px; display: block; cursor: pointer; }
+  .imagem-chat-wrap { position: relative; display: inline-block; }
+  .btn-salvar-midia {
+    position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.55); color: white;
+    border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.85rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
   .bolha-msg .arquivo-chat { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
   .bolha-msg .arquivo-chat .icone-arquivo { font-size: 1.5rem; }
   .msg-chamada { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
@@ -533,7 +539,9 @@
       <div class="chat-input-pill">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
         <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
-        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
+        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-camera').click()" title="Tirar foto ou vídeo">📷</button>
+        <input type="file" id="chat-input-camera" accept="image/*,video/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
+        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/vídeo/arquivo">📎</button>
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
@@ -1978,7 +1986,12 @@ function resumoChamada(m){
 
 function conteudoDaMensagem(m, minha){
   if(m.tipo === 'imagem'){
-    return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat" onclick="window.open('${escapeHtmlChat(m.arquivo_url)}', '_blank')">`;
+    return `
+      <div class="imagem-chat-wrap">
+        <img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat" onclick="window.open('${escapeHtmlChat(m.arquivo_url)}', '_blank')">
+        <button type="button" class="btn-salvar-midia" title="Salvar no celular" onclick="event.stopPropagation(); baixarArquivoChat('${escapeHtmlChat(m.arquivo_url)}', '${escapeHtmlChat(m.arquivo_nome || 'foto-guiazap.jpg')}')">⬇️</button>
+      </div>
+    `;
   }
   if(m.tipo === 'audio'){
     return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>`;
@@ -1987,7 +2000,12 @@ function conteudoDaMensagem(m, minha){
     return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat">`;
   }
   if(m.tipo === 'arquivo'){
-    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">📄</span> ${escapeHtmlChat(m.arquivo_nome || 'Arquivo')}</a>`;
+    return `
+      <div style="display:flex; align-items:center; gap:6px;">
+        <a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat" style="flex:1;"><span class="icone-arquivo">📄</span> ${escapeHtmlChat(m.arquivo_nome || 'Arquivo')}</a>
+        <button type="button" onclick="baixarArquivoChat('${escapeHtmlChat(m.arquivo_url)}', '${escapeHtmlChat(m.arquivo_nome || 'arquivo')}')" title="Salvar no celular" style="background:none; border:none; font-size:1.1rem; padding:4px; cursor:pointer;">⬇️</button>
+      </div>
+    `;
   }
   if(m.tipo === 'chamada_perdida' || m.tipo === 'chamada_atendida'){
     const { ehVideo, duracao, atendida } = detalhesChamada(m);
@@ -2247,6 +2265,31 @@ async function enviarAudioGravado(blob){
 
   const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
   await enviarQualquerMensagem({ tipo: 'audio', arquivo_url: urlData.publicUrl });
+}
+
+// Baixa um arquivo/foto de verdade pro celular/computador — usar só o
+// atributo "download" não funciona de forma confiável com arquivos vindos
+// de outro domínio (como o do Supabase), então busca o arquivo primeiro e
+// gera um link temporário local antes de disparar o download.
+async function baixarArquivoChat(url, nomeArquivo){
+  try{
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const urlLocal = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = urlLocal;
+    link.download = nomeArquivo || 'arquivo-guiazap';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => URL.revokeObjectURL(urlLocal), 5000);
+  } catch(e){
+    console.error(e);
+    // Se der erro (raro), pelo menos abre o arquivo numa aba nova como alternativa
+    window.open(url, '_blank');
+  }
 }
 
 async function enviarArquivoChat(event){
