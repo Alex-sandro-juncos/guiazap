@@ -81,6 +81,7 @@ async function initAuthV(){
       document.getElementById('v-add-btn').style.display = 'none';
     } else {
       document.getElementById('v-ver-meus-btn').style.display = 'inline-block';
+      document.getElementById('v-ia-cardapio-btn').style.display = 'inline-block';
     }
   }
 }
@@ -1407,6 +1408,135 @@ function avisarSaidaLinkExterno(url){
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+// ---------- CADASTRO DE PRODUTOS POR FOTO (IA) ----------
+
+let _produtosExtraidosIA = [];
+
+function abrirFormCardapioIA(){
+  if(meusCadastros.length === 0){
+    alert('Você precisa ter uma empresa no Pacote Vendas pra usar isso.');
+    return;
+  }
+  document.getElementById('cardapio-ia-resultado').innerHTML = '';
+  document.getElementById('overlay-cardapio-ia').style.display = 'flex';
+}
+
+function fecharFormCardapioIA(){
+  document.getElementById('overlay-cardapio-ia').style.display = 'none';
+  _produtosExtraidosIA = [];
+}
+
+async function processarFotoCardapio(event){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const resultado = document.getElementById('cardapio-ia-resultado');
+  resultado.innerHTML = `
+    <div style="text-align:center; padding:24px;">
+      <div style="font-size:2rem; margin-bottom:8px;">✨</div>
+      <div style="font-weight:700; color:#6b46c1;">Lendo o cardápio, aguarde...</div>
+      <div style="font-size:0.78rem; color:#888; margin-top:4px;">Isso pode levar alguns segundos</div>
+    </div>
+  `;
+
+  try{
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const resp = await fetch('/.netlify/functions/analisar-cardapio-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg' })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok || data.error){
+      resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">⚠️ ${escapeHtmlV(data.error || 'Erro ao processar a imagem')}. Tenta com uma foto mais nítida.</p>`;
+      return;
+    }
+
+    _produtosExtraidosIA = (data.produtos || []).map(p => ({ ...p, selecionado: true }));
+
+    if(_produtosExtraidosIA.length === 0){
+      resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">Não consegui identificar nenhum produto nessa foto. Tenta outra imagem, com o cardápio bem legível.</p>`;
+      return;
+    }
+
+    renderProdutosExtraidosIA();
+  } catch(e){
+    console.error(e);
+    resultado.innerHTML = `<p style="color:#a4402f; text-align:center; font-size:0.85rem;">⚠️ Erro ao processar a foto. Tenta de novo.</p>`;
+  }
+}
+
+function renderProdutosExtraidosIA(){
+  const resultado = document.getElementById('cardapio-ia-resultado');
+  const selecionados = _produtosExtraidosIA.filter(p => p.selecionado).length;
+
+  resultado.innerHTML = `
+    <p style="font-size:0.85rem; font-weight:700; margin-bottom:10px;">✅ Encontrei ${_produtosExtraidosIA.length} produto${_produtosExtraidosIA.length !== 1 ? 's' : ''}. Confere e desmarca o que não quiser cadastrar:</p>
+    ${_produtosExtraidosIA.map((p, i) => `
+      <div style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #f0f0f0;">
+        <input type="checkbox" ${p.selecionado ? 'checked' : ''} onchange="toggleProdutoExtraidoIA(${i})" style="margin-top:4px;">
+        <div style="flex:1;">
+          <input type="text" value="${escapeHtmlV(p.nome)}" oninput="_produtosExtraidosIA[${i}].nome = this.value" style="width:100%; font-weight:700; font-size:0.85rem; border:none; border-bottom:1px solid #ddd; padding:2px 0;">
+          <div style="display:flex; gap:8px; margin-top:4px;">
+            <input type="text" value="${escapeHtmlV(p.preco || '')}" placeholder="Preço" oninput="_produtosExtraidosIA[${i}].preco = this.value" style="width:80px; font-size:0.8rem; border:1px solid #ddd; border-radius:6px; padding:4px;">
+            <input type="text" value="${escapeHtmlV(p.categoria || '')}" placeholder="Categoria" oninput="_produtosExtraidosIA[${i}].categoria = this.value" style="flex:1; font-size:0.8rem; border:1px solid #ddd; border-radius:6px; padding:4px;">
+          </div>
+          ${p.variacoes && p.variacoes.length > 0 ? `<div style="font-size:0.72rem; color:#888; margin-top:4px;">Variações: ${p.variacoes.map(v => `${v.nome} (R$${v.preco})`).join(', ')}</div>` : ''}
+        </div>
+      </div>
+    `).join('')}
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <select id="cardapio-ia-empresa" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+        ${meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('')}
+      </select>
+    </div>
+    <button type="button" onclick="salvarProdutosExtraidosIA()" style="width:100%; margin-top:10px; padding:13px; border-radius:10px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.9rem; cursor:pointer;">✅ Publicar ${selecionados} produto${selecionados !== 1 ? 's' : ''} selecionado${selecionados !== 1 ? 's' : ''}</button>
+    <span id="cardapio-ia-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+  `;
+}
+
+function toggleProdutoExtraidoIA(indice){
+  _produtosExtraidosIA[indice].selecionado = !_produtosExtraidosIA[indice].selecionado;
+  renderProdutosExtraidosIA();
+}
+
+async function salvarProdutosExtraidosIA(){
+  const profissionalId = document.getElementById('cardapio-ia-empresa').value;
+  const msg = document.getElementById('cardapio-ia-msg');
+  const selecionados = _produtosExtraidosIA.filter(p => p.selecionado);
+
+  if(selecionados.length === 0){ msg.textContent = 'Selecione pelo menos um produto.'; return; }
+
+  msg.textContent = 'publicando...';
+
+  const payloads = selecionados.map(p => ({
+    profissional_id: profissionalId,
+    nome: p.nome,
+    preco: p.preco || null,
+    categoria: p.categoria || null,
+    descricao: p.descricao || null,
+    variacoes: p.variacoes || [],
+    adicionais: [],
+    disponivel_venda: true
+  }));
+
+  const { error } = await supabaseClientV.from('produtos').insert(payloads);
+  if(error){ console.error(error); msg.textContent = 'Erro ao publicar: ' + error.message; return; }
+
+  msg.textContent = `✅ ${selecionados.length} produto(s) publicado(s) com sucesso!`;
+  setTimeout(() => {
+    fecharFormCardapioIA();
+    loadProdutos();
+  }, 1500);
 }
 
 atualizarBadgeCarrinho();

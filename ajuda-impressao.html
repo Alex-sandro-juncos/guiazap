@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Como configurar impressão automática de pedidos — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .ajuda-header { background: #1c1c1c; padding: 28px 15px; text-align: center; color: white; }
+  .ajuda-header h1 { font-size: 1.5rem; font-weight: 800; }
+  .ajuda-wrap { max-width: 640px; margin: 0 auto; padding: 20px 15px 50px; }
+  .voltar { display: block; margin-bottom: 16px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+  .aviso-opcional { background: #eafff9; border: 1.5px solid #0f766e; border-radius: 12px; padding: 14px; margin-bottom: 20px; font-size: 0.85rem; line-height: 1.5; }
+  .passo { background: var(--cinza-card); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .passo-numero { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: white; font-weight: 800; font-size: 0.85rem; margin-bottom: 8px; }
+  .passo-titulo { font-weight: 800; font-size: 0.95rem; margin-bottom: 6px; }
+  .passo-texto { font-size: 0.85rem; line-height: 1.6; color: #333; }
+  .codigo-box { background: #1c1c1c; color: #7ee787; font-family: 'Courier New', monospace; font-size: 0.8rem; padding: 12px; border-radius: 8px; margin: 8px 0; word-break: break-all; position: relative; }
+  .btn-copiar { background: #333; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; margin-top: 8px; }
+  .aviso-so-1x { background: #fff3cd; border-radius: 8px; padding: 10px; font-size: 0.78rem; color: #7c4a03; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header class="ajuda-header">
+  <h1>🖨️ Impressão Automática de Pedidos</h1>
+</header>
+
+<div class="ajuda-wrap">
+  <a href="pedidos.html" class="voltar">← Voltar pros Pedidos</a>
+
+  <div class="aviso-opcional">
+    💡 <b>Essa configuração é opcional.</b> Sem ela, quando um pedido novo chega, já abre uma janela de impressão pronta — só falta clicar "Imprimir". Se quiser que a impressão saia <b>sozinha, sem precisar clicar em nada</b>, siga os passos abaixo (uma vez só, no computador onde vai ficar a impressora).
+  </div>
+
+  <div class="passo">
+    <div class="passo-numero">1</div>
+    <div class="passo-titulo">Feche o Google Chrome completamente</div>
+    <div class="passo-texto">Se estiver aberto, feche todas as janelas do Chrome no computador que vai ficar ligado à impressora o dia todo.</div>
+  </div>
+
+  <div class="passo">
+    <div class="passo-numero">2</div>
+    <div class="passo-titulo">Crie um atalho especial na área de trabalho</div>
+    <div class="passo-texto">
+      Clica com o botão direito num espaço vazio da área de trabalho → <b>Novo</b> → <b>Atalho</b>. Quando pedir o "local do item", copia e cola isso:
+      <div class="codigo-box" id="codigo-atalho">"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing https://guiazap.shop/pedidos.html</div>
+      <button type="button" class="btn-copiar" onclick="copiarCodigo()">📋 Copiar</button>
+      <p style="font-size:0.78rem; color:#666; margin-top:8px;">Clica em "Avançar", dá um nome pro atalho (ex: "Pedidos GuiaZap") e finaliza.</p>
+    </div>
+  </div>
+
+  <div class="passo">
+    <div class="passo-numero">3</div>
+    <div class="passo-titulo">Sempre abra por esse atalho novo</div>
+    <div class="passo-texto">A partir de agora, use <b>sempre esse atalho</b> (não o ícone normal do Chrome) pra abrir a tela de pedidos no dia a dia. Ele abre o Chrome num "modo especial" que permite imprimir sem perguntar nada.</div>
+  </div>
+
+  <div class="passo">
+    <div class="passo-numero">4</div>
+    <div class="passo-titulo">Ative o interruptor na tela de Pedidos</div>
+    <div class="passo-texto">
+      Com a tela de <a href="pedidos.html">Pedidos</a> aberta por esse atalho, marca o interruptor <b>"🖨️ Imprimir cupom automaticamente"</b> no topo da tela.
+      <div class="aviso-so-1x">⚠️ Esse interruptor é salvo só nesse navegador/computador — se abrir em outro aparelho, precisa marcar de novo lá.</div>
+    </div>
+  </div>
+
+  <div class="passo" style="border: 1.5px solid #0f766e;">
+    <div class="passo-titulo">✅ Pronto!</div>
+    <div class="passo-texto">A partir de agora, sempre que um pedido novo (pago) chegar, o cupom já sai direto na impressora, sem precisar clicar em nada. Testa fazendo um pedido de teste pra confirmar que funcionou.</div>
+  </div>
+
+  <p style="font-size:0.78rem; color:#888; text-align:center; margin-top:20px;">Alguma dúvida ou dificuldade? <a href="contato.html">Fale com a gente</a>.</p>
+</div>
+
+<script>
+function copiarCodigo(){
+  const texto = document.getElementById('codigo-atalho').textContent;
+  navigator.clipboard.writeText(texto).then(() => {
+    alert('Copiado! Agora é só colar no campo "local do item" ao criar o atalho.');
+  }).catch(() => {
+    prompt('Copie o texto abaixo:', texto);
+  });
+}
+</script>
+</body>
+</html>

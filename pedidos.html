@@ -41,6 +41,22 @@
   .btn-recusar { background: #a4402f; color: white; }
   .btn-avancar { background: #0f766e; color: white; }
   .vazio-pedidos { text-align: center; padding: 50px 20px; color: #999; font-size: 0.85rem; }
+
+  #cupom-impressao { display: none; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #cupom-impressao, #cupom-impressao * { visibility: visible; }
+    #cupom-impressao {
+      display: block; position: absolute; top: 0; left: 0; width: 100%;
+      font-family: 'Courier New', monospace; font-size: 13px; padding: 10px;
+    }
+    .cupom-titulo { font-size: 16px; font-weight: 800; text-align: center; margin-bottom: 6px; }
+    .cupom-linha { margin: 2px 0; }
+    .cupom-item { margin: 3px 0; }
+    .cupom-total { font-size: 15px; font-weight: 800; margin: 6px 0; }
+    hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+  }
 </style>
 </head>
 <body>
@@ -50,6 +66,12 @@
 
 <div class="pedidos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+
+  <label style="display:flex; align-items:center; gap:8px; background:var(--cinza-card); padding:10px; border-radius:10px; margin-bottom:6px; font-size:0.85rem; cursor:pointer;">
+    <input type="checkbox" id="chk-impressao-automatica" onchange="localStorage.setItem('impressao_automatica_pedidos', this.checked ? '1' : '0')">
+    🖨️ Imprimir cupom automaticamente quando chegar pedido novo (nesse dispositivo)
+  </label>
+  <a href="ajuda-impressao.html" style="display:block; font-size:0.75rem; color:var(--verde-escuro); margin-bottom:12px;">❓ Quero que a impressão saia sem precisar clicar em nada — como configurar?</a>
 
   <select id="filtro-empresa-pedidos" onchange="renderPedidos()" style="width:100%; margin-bottom:12px; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
     <option value="">Todas as minhas empresas</option>
@@ -65,6 +87,8 @@
 
   <div id="lista-pedidos">Carregando...</div>
 </div>
+
+<div id="cupom-impressao"></div>
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>
@@ -100,7 +124,29 @@ async function initPedidos(){
   document.getElementById('filtro-empresa-pedidos').innerHTML = '<option value="">Todas as minhas empresas</option>' +
     minhasEmpresasPedidos.map(e => `<option value="${e.id}">${escapeHtmlPedidos(e.name)}</option>`).join('');
 
+  document.getElementById('chk-impressao-automatica').checked = localStorage.getItem('impressao_automatica_pedidos') === '1';
+
   await carregarPedidos();
+
+  // Escuta pedidos novos em tempo real — quando um pedido é CONFIRMADO
+  // (pago, esperando a empresa aceitar), imprime o cupom automaticamente
+  // se a impressão automática estiver ligada nesse dispositivo
+  const idsEmpresas = minhasEmpresasPedidos.map(e => e.id);
+  supabaseClientPedidos
+    .channel('pedidos-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, (payload) => {
+      if(idsEmpresas.includes(payload.new.profissional_id) && payload.new.status === 'aguardando_confirmacao'){
+        carregarPedidos().then(() => {
+          if(localStorage.getItem('impressao_automatica_pedidos') === '1'){
+            imprimirCupomPedido(payload.new.id);
+          }
+        });
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, (payload) => {
+      if(idsEmpresas.includes(payload.new.profissional_id)) carregarPedidos();
+    })
+    .subscribe();
 }
 
 async function carregarPedidos(){
@@ -176,7 +222,10 @@ function renderPedidos(){
         ${p.forma_pagamento ? `<div class="data-pedido">💳 ${escapeHtmlPedidos(p.forma_pagamento)}</div>` : ''}
         ${p.codigo_confirmacao && !['concluido', 'recusado', 'cancelado'].includes(p.status) ? `<div style="background:#fff3cd; color:#7c4a03; font-weight:800; padding:6px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem;">🔑 Código de confirmação: ${escapeHtmlPedidos(p.codigo_confirmacao)}</div>` : ''}
         <div class="data-pedido">${dataFormatada}</div>
-        ${acoes ? `<div class="acoes-pedido">${acoes}</div>` : ''}
+        <div class="acoes-pedido">
+          ${acoes}
+          <button type="button" class="btn-avancar" style="background:#555;" onclick="imprimirCupomPedido('${p.id}')">🖨️ Imprimir</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -306,6 +355,36 @@ async function avisarTodosMotoboys(pedidoId){
   if(!pedido) return;
   await notificarMotoboysDisponiveis(pedido, true);
   alert('📢 Aviso enviado pra todos os motoboys cadastrados, de qualquer cidade.');
+}
+
+// ---------- IMPRESSÃO DO CUPOM ----------
+
+function imprimirCupomPedido(pedidoId){
+  const p = todosPedidos.find(x => x.id === pedidoId);
+  if(!p){
+    alert('Pedido não encontrado pra imprimir. Tenta atualizar a página.');
+    return;
+  }
+
+  const nomeEmpresa = p.profissionais ? p.profissionais.name : '';
+  const dataFormatada = new Date(p.created_at).toLocaleString('pt-BR');
+  const itensHtml = (p.itens || []).map(i => `<div class="cupom-item">${escapeHtmlPedidos(i.quantidade ? i.quantidade + 'x ' : '')}${escapeHtmlPedidos(i.nome)} — R$ ${escapeHtmlPedidos(i.preco)}</div>`).join('');
+
+  document.getElementById('cupom-impressao').innerHTML = `
+    <div class="cupom-titulo">${escapeHtmlPedidos(nomeEmpresa)}</div>
+    <div class="cupom-linha">Pedido #${p.id.slice(0, 8).toUpperCase()}</div>
+    <div class="cupom-linha">${dataFormatada}</div>
+    <hr>
+    ${itensHtml}
+    <hr>
+    ${p.taxa_entrega > 0 ? `<div class="cupom-linha">Taxa de entrega: R$ ${Number(p.taxa_entrega).toFixed(2).replace('.', ',')}</div>` : ''}
+    <div class="cupom-total">TOTAL: R$ ${Number(p.total).toFixed(2).replace('.', ',')}</div>
+    ${p.forma_pagamento ? `<div class="cupom-linha">Pagamento: ${escapeHtmlPedidos(p.forma_pagamento)}</div>` : ''}
+    ${p.endereco_entrega ? `<hr><div class="cupom-linha"><b>ENTREGAR EM:</b></div><div class="cupom-linha">${escapeHtmlPedidos(p.endereco_entrega)}</div>` : '<hr><div class="cupom-linha"><b>RETIRADA NO LOCAL</b></div>'}
+    ${p.codigo_confirmacao ? `<hr><div class="cupom-linha"><b>Código de confirmação: ${escapeHtmlPedidos(p.codigo_confirmacao)}</b></div>` : ''}
+  `;
+
+  setTimeout(() => window.print(), 100);
 }
 
 initPedidos();
