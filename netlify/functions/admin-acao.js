@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'plano_vendas', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'plano_vendas', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post', 'dispensar_analise_denuncias'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -84,6 +84,23 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 
+    // Admin analisou as denúncias e decidiu que não tem problema — remove
+    // o alerta "em análise" sem suspender nem excluir nada
+    if (acao === 'dispensar_analise_denuncias' && tabela === 'profissionais') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ em_analise_por_denuncias: false })
+      });
+      if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao dispensar alerta' }) };
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    }
+
     // suspender/ativar = só faz sentido pra "profissionais" (produtos não têm status_pagamento próprio)
     if ((acao === 'suspender' || acao === 'ativar') && tabela === 'profissionais') {
       const novoStatus = acao === 'ativar' ? 'ativo' : 'pendente';
@@ -94,7 +111,7 @@ exports.handler = async function (event) {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
         },
-        body: JSON.stringify({ status_pagamento: novoStatus })
+        body: JSON.stringify({ status_pagamento: novoStatus, em_analise_por_denuncias: false })
       });
       if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao atualizar status' }) };
 

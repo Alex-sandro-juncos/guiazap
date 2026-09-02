@@ -6,6 +6,7 @@
 <title>Admin — GuiaZap</title>
 <meta name="robots" content="noindex, nofollow">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <style>
@@ -77,6 +78,12 @@
 <script src="config.js"></script>
 <script>
 const supabaseClientAdmin = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+function escapeHtmlAdmin(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
 let dadosAdmin = null;
 let abaAtual = 'feedback';
 
@@ -233,9 +240,9 @@ function renderBlogAdmin(busca){
 
   lista.innerHTML = pendentes.map(p => `
     <div class="admin-item">
-      <div class="tipo">📝 ${p.titulo}</div>
-      <div class="meta">Por ${p.autor_nome}${p.autor_email ? ' (' + p.autor_email + ')' : ''}</div>
-      <div class="meta" style="max-height:120px; overflow-y:auto; margin-top:6px;">${p.conteudo}</div>
+      <div class="tipo">📝 ${escapeHtmlAdmin(p.titulo)}</div>
+      <div class="meta">Por ${escapeHtmlAdmin(p.autor_nome)}${p.autor_email ? ' (' + escapeHtmlAdmin(p.autor_email) + ')' : ''}</div>
+      <div class="meta" style="max-height:120px; overflow-y:auto; margin-top:6px;">${DOMPurify.sanitize(p.conteudo || '')}</div>
       <div class="admin-acoes" style="margin-top:8px;">
         <button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_post', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">✅ Aprovar</button>
         <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'blog_posts', '${p.id}', '${p.titulo.replace(/'/g,"\\'")}')">Excluir</button>
@@ -258,8 +265,8 @@ function renderDepoimentosAdmin(busca){
 
   lista.innerHTML = pendentes.map(d => `
     <div class="admin-item">
-      <div class="tipo">${d.tipo === 'empresa' ? '🏢' : '🔍'} ${d.nome}</div>
-      <div class="meta">"${d.mensagem}"</div>
+      <div class="tipo">${d.tipo === 'empresa' ? '🏢' : '🔍'} ${escapeHtmlAdmin(d.nome)}</div>
+      <div class="meta">"${escapeHtmlAdmin(d.mensagem)}"</div>
       <div class="admin-acoes" style="margin-top:8px;">
         <button class="admin-btn-ativar" onclick="executarAcaoAdmin('aprovar_depoimento', 'depoimentos', '${d.id}', '${d.nome.replace(/'/g,"\\'")}')">✅ Aprovar</button>
         <button class="admin-btn-suspender" onclick="executarAcaoAdmin('excluir', 'depoimentos', '${d.id}', '${d.nome.replace(/'/g,"\\'")}')">Excluir</button>
@@ -334,11 +341,12 @@ function renderDenunciasAgrupadas(busca){
     const nome = empresa ? empresa.name : '(empresa não encontrada)';
     const ativo = empresa && empresa.status_pagamento === 'ativo';
 
-    return `<div class="admin-item">
+    return `<div class="admin-item" style="${empresa && empresa.em_analise_por_denuncias ? 'border-left: 4px solid #a4402f;' : ''}">
       <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Empresa · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
+      ${empresa && empresa.em_analise_por_denuncias ? '<div style="background:#fdeaea; color:#a4402f; font-size:0.75rem; font-weight:700; padding:4px 8px; border-radius:6px; display:inline-block; margin-top:4px;">⚠️ Marcada como "em análise" — atingiu o limite, precisa da sua decisão</div>' : ''}
       ${denunciasDoAlvo.map(d => `
         <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
-          <b>${d.motivo}</b>${d.descricao ? ' — ' + d.descricao : ''}
+          <b>${escapeHtmlAdmin(d.motivo)}</b>${d.descricao ? ' — ' + escapeHtmlAdmin(d.descricao) : ''}
           <div class="meta">${d.denunciante_email || 'anônimo'} · ${formatarData(d.created_at)}</div>
         </div>
       `).join('')}
@@ -347,6 +355,7 @@ function renderDenunciasAgrupadas(busca){
           ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Suspender empresa</button>`
           : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Reativar empresa</button>`}
         <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">Excluir empresa</button>
+        ${empresa.em_analise_por_denuncias ? `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('dispensar_analise_denuncias', 'profissionais', '${profissionalId}', '${nome.replace(/'/g,"\\'")}')">✓ Dispensar alerta (sem problema)</button>` : ''}
       </div>` : ''}
     </div>`;
   });
@@ -360,7 +369,7 @@ function renderDenunciasAgrupadas(busca){
       <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Produto · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
       ${denunciasDoAlvo.map(d => `
         <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
-          <b>${d.motivo}</b>${d.descricao ? ' — ' + d.descricao : ''}
+          <b>${escapeHtmlAdmin(d.motivo)}</b>${d.descricao ? ' — ' + escapeHtmlAdmin(d.descricao) : ''}
           <div class="meta">${d.denunciante_email || 'anônimo'} · ${formatarData(d.created_at)}</div>
         </div>
       `).join('')}
@@ -419,7 +428,7 @@ function renderAdmin(){
     if(abaAtual === 'feedback' || abaAtual === 'mensagens'){
       return `<div class="admin-item">
         <div class="tipo ${item.tipo === 'reclamacao' ? 'reclamacao' : ''}">${item.tipo === 'reclamacao' ? '⚠️ Reclamação' : '💡 Sugestão'}</div>
-        <div class="mensagem">${item.mensagem}</div>
+        <div class="mensagem">${escapeHtmlAdmin(item.mensagem)}</div>
         <div class="meta">${item.remetente_email || 'anônimo'} · ${formatarData(item.created_at)}</div>
       </div>`;
     }
@@ -451,8 +460,8 @@ function renderAdmin(){
     }
     if(abaAtual === 'produtos'){
       return `<div class="admin-item">
-        <div class="tipo">${item.nome}</div>
-        <div class="meta">${item.marca || ''} ${item.categoria ? '· ' + item.categoria : ''} ${item.preco ? '· R$ ' + item.preco : ''}</div>
+        <div class="tipo">${escapeHtmlAdmin(item.nome)}</div>
+        <div class="meta">${escapeHtmlAdmin(item.marca || '')} ${item.categoria ? '· ' + escapeHtmlAdmin(item.categoria) : ''} ${item.preco ? '· R$ ' + escapeHtmlAdmin(item.preco) : ''}</div>
         <div class="admin-acoes">
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'produtos', '${item.id}', '${item.nome.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
