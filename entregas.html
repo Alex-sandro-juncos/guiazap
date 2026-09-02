@@ -39,9 +39,19 @@
 <div class="entregas-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
+  <div id="chave-pix-motoboy" style="display:none; background:var(--cinza-card); border-radius:10px; padding:12px; margin-bottom:12px; font-size:0.85rem;">
+    <label style="font-weight:700; display:block; margin-bottom:6px;">💳 Sua chave Pix (pra receber os repasses)</label>
+    <div style="display:flex; gap:6px;">
+      <input type="text" id="input-chave-pix" placeholder="CPF, e-mail, telefone ou chave aleatória" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.85rem;">
+      <button type="button" onclick="salvarChavePix()" style="padding:8px 14px; border-radius:6px; border:none; background:#0f766e; color:white; font-weight:700; cursor:pointer;">Salvar</button>
+    </div>
+    <span id="chave-pix-msg" style="font-size:0.75rem; color:var(--verde-escuro);"></span>
+  </div>
+
   <div class="abas-entregas">
     <button type="button" class="ativa" data-aba="disponiveis" onclick="mudarAbaEntregas('disponiveis', this)">📦 Disponíveis</button>
     <button type="button" data-aba="minhas" onclick="mudarAbaEntregas('minhas', this)">🛵 Minhas corridas</button>
+    <button type="button" data-aba="repasses" onclick="mudarAbaEntregas('repasses', this)">💰 A receber</button>
   </div>
 
   <div id="lista-entregas">Carregando...</div>
@@ -54,6 +64,7 @@ const supabaseClientEntregas = window.supabase.createClient(SUPABASE_URL, SUPABA
 let currentUserEntregas = null;
 let entregasDisponiveis = [];
 let minhasEntregas = [];
+let meusRepasses = [];
 let abaEntregasAtual = 'disponiveis';
 
 function escapeHtmlEntregas(str){
@@ -70,11 +81,14 @@ async function initEntregas(){
   }
   currentUserEntregas = session.user;
 
-  const { data: cadastros } = await supabaseClientEntregas.from('motoboys').select('id').eq('user_id', currentUserEntregas.id).eq('ativo', true);
+  const { data: cadastros } = await supabaseClientEntregas.from('motoboys').select('id, chave_pix').eq('user_id', currentUserEntregas.id).eq('ativo', true);
   if(!cadastros || cadastros.length === 0){
     document.getElementById('lista-entregas').innerHTML = '<div class="vazio-entregas">Você ainda não está cadastrado como motoboy de nenhuma empresa. Peça pro dono da empresa te adicionar (usando seu código GuiaZap).</div>';
     return;
   }
+
+  document.getElementById('chave-pix-motoboy').style.display = 'block';
+  document.getElementById('input-chave-pix').value = cadastros[0].chave_pix || '';
 
   await carregarEntregas();
 
@@ -83,6 +97,15 @@ async function initEntregas(){
     .channel('entregas-realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { carregarEntregas(); })
     .subscribe();
+}
+
+async function salvarChavePix(){
+  const chave = document.getElementById('input-chave-pix').value.trim();
+  const msg = document.getElementById('chave-pix-msg');
+  if(!chave){ msg.textContent = 'Digite uma chave Pix.'; return; }
+
+  const { error } = await supabaseClientEntregas.from('motoboys').update({ chave_pix: chave }).eq('user_id', currentUserEntregas.id);
+  msg.textContent = error ? 'Erro ao salvar.' : '✓ Chave Pix salva!';
 }
 
 async function carregarEntregas(){
@@ -103,6 +126,13 @@ async function carregarEntregas(){
     .order('created_at', { ascending: true });
   minhasEntregas = minhas || [];
 
+  const { data: repasses } = await supabaseClientEntregas
+    .from('repasses_motoboy')
+    .select('*, profissionais(name)')
+    .eq('motoboy_user_id', currentUserEntregas.id)
+    .order('created_at', { ascending: false });
+  meusRepasses = repasses || [];
+
   renderEntregas();
 }
 
@@ -115,6 +145,12 @@ function mudarAbaEntregas(aba, btn){
 
 function renderEntregas(){
   const container = document.getElementById('lista-entregas');
+
+  if(abaEntregasAtual === 'repasses'){
+    renderMeusRepasses(container);
+    return;
+  }
+
   const lista = abaEntregasAtual === 'disponiveis' ? entregasDisponiveis : minhasEntregas;
 
   if(lista.length === 0){
@@ -149,6 +185,31 @@ function renderEntregas(){
       </div>
     `;
   }).join('');
+}
+
+function renderMeusRepasses(container){
+  if(meusRepasses.length === 0){
+    container.innerHTML = '<div class="vazio-entregas">Nenhum repasse registrado ainda. Aparece aqui depois que você concluir uma entrega.</div>';
+    return;
+  }
+
+  const totalPendente = meusRepasses.filter(r => r.status === 'pendente').reduce((soma, r) => soma + Number(r.valor), 0);
+
+  container.innerHTML = `
+    <div style="background:#fff3cd; color:#7c4a03; padding:12px; border-radius:10px; margin-bottom:12px; text-align:center; font-weight:800;">
+      💰 Total pendente: R$ ${totalPendente.toFixed(2).replace('.', ',')}
+    </div>
+    ${meusRepasses.map(r => `
+      <div class="card-entrega">
+        <div class="empresa-entrega">🏪 ${escapeHtmlEntregas(r.profissionais ? r.profissionais.name : 'Empresa')}</div>
+        <div class="total-entrega">R$ ${Number(r.valor).toFixed(2).replace('.', ',')}</div>
+        <div style="font-size:0.78rem; color:#888; margin-top:4px;">${new Date(r.created_at).toLocaleDateString('pt-BR')}</div>
+        <span style="display:inline-block; margin-top:6px; padding:3px 10px; border-radius:50px; font-size:0.75rem; font-weight:700; background:${r.status === 'pago' ? '#e8f5e9' : '#fff3cd'}; color:${r.status === 'pago' ? '#1a7a3c' : '#7c4a03'};">
+          ${r.status === 'pago' ? '✅ Pago' : '⏳ Aguardando pagamento da empresa'}
+        </span>
+      </div>
+    `).join('')}
+  `;
 }
 
 async function aceitarEntrega(pedidoId){
@@ -192,7 +253,19 @@ async function concluirEntrega(pedidoId){
   const { error } = await supabaseClientEntregas.from('pedidos').update({ status: 'concluido' }).eq('id', pedidoId).eq('motoboy_user_id', currentUserEntregas.id);
   if(error){ alert('Erro ao concluir. Tente de novo.'); return; }
 
-  alert('🎉 Entrega concluída!');
+  // Gera o registro de "valor a receber" — a política de segurança do banco
+  // só deixa isso acontecer se o pedido realmente foi concluído por você e
+  // o valor bate certinho com a taxa de entrega
+  const { error: erroRepasse } = await supabaseClientEntregas.from('repasses_motoboy').insert({
+    motoboy_user_id: currentUserEntregas.id,
+    pedido_id: pedidoId,
+    profissional_id: pedido.profissional_id,
+    valor: pedido.taxa_entrega,
+    status: 'pendente'
+  });
+  if(erroRepasse) console.error('erro ao gerar repasse', erroRepasse);
+
+  alert('🎉 Entrega concluída! O valor de R$ ' + Number(pedido.taxa_entrega).toFixed(2).replace('.', ',') + ' foi registrado como "a receber".');
   await carregarEntregas();
 }
 

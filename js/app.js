@@ -369,6 +369,18 @@ async function loadEntries(){
   document.getElementById('loading').style.display = 'none';
   populateEstados();
 
+  // Carrega o status de conexão do Mercado Pago só pras empresas do
+  // próprio usuário (é uma tabela separada e protegida por segurança)
+  if(currentUser){
+    const { data: conexoes } = await supabaseClient.from('mp_conexoes').select('profissional_id, conectado');
+    if(conexoes){
+      conexoes.forEach(c => {
+        const entry = entries.find(e => e.id === c.profissional_id);
+        if(entry) entry.mpConectado = c.conectado;
+      });
+    }
+  }
+
   // As avaliações (estrelinhas) e produtos em destaque são só um "acabamento"
   // visual — não precisam travar a lista principal aparecendo. Rodam em
   // paralelo, e a tela atualiza sozinha assim que cada uma terminar.
@@ -377,6 +389,15 @@ async function loadEntries(){
 
   const params = new URLSearchParams(window.location.search);
   cadastroCompartilhadoId = params.get('p');
+
+  const mpConectadoStatus = params.get('mp_conectado');
+  if(mpConectadoStatus === 'sucesso'){
+    alert('✅ Mercado Pago conectado com sucesso! Os pagamentos dos pedidos dessa empresa agora vão direto pra sua conta.');
+    window.history.replaceState({}, '', window.location.pathname);
+  } else if(mpConectadoStatus === 'erro'){
+    alert('⚠️ Não foi possível conectar sua conta do Mercado Pago. Tenta de novo, ou fala com a gente se continuar dando erro.');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
 
   // Salva quem indicou (se veio de um link de indicação), pra usar quando a
   // pessoa cadastrar uma empresa nova. Nunca sobrescreve um "ref" já salvo
@@ -1869,6 +1890,10 @@ function fecharConfigAtendimento(){
 
 // ---------- GERENCIAR MOTOBOYS ----------
 
+function conectarMercadoPago(profissionalId){
+  window.location.href = `/.netlify/functions/mp-oauth-conectar?profissionalId=${profissionalId}`;
+}
+
 async function abrirGerenciarMotoboys(profissionalId){
   document.getElementById('motoboys-profissional-id').value = profissionalId;
   document.getElementById('motoboy-codigo-input').value = '';
@@ -1876,6 +1901,7 @@ async function abrirGerenciarMotoboys(profissionalId){
   document.getElementById('motoboys-form').style.display = 'block';
   document.getElementById('motoboys-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
   await carregarListaMotoboys(profissionalId);
+  await carregarRepassesPendentes(profissionalId);
 }
 
 function fecharGerenciarMotoboys(){
@@ -1963,6 +1989,59 @@ async function removerMotoboy(motoboyId, profissionalId){
   const { error } = await supabaseClient.from('motoboys').delete().eq('id', motoboyId);
   if(error){ alert('Erro ao remover.'); return; }
   await carregarListaMotoboys(profissionalId);
+}
+
+async function carregarRepassesPendentes(profissionalId){
+  const container = document.getElementById('lista-repasses');
+  container.innerHTML = 'Carregando...';
+
+  const { data, error } = await supabaseClient
+    .from('repasses_motoboy')
+    .select('id, valor, status, created_at, motoboy_user_id')
+    .eq('profissional_id', profissionalId)
+    .order('created_at', { ascending: false });
+
+  if(error){ container.innerHTML = 'Erro ao carregar repasses.'; return; }
+
+  if(!data || data.length === 0){
+    container.innerHTML = '<p style="font-size:0.82rem; color:#888;">Nenhum repasse registrado ainda.</p>';
+    return;
+  }
+
+  // Busca nome e chave Pix de cada motoboy envolvido, pra facilitar o pagamento
+  const { data: motoboysDaEmpresa } = await supabaseClient.from('motoboys').select('user_id, nome_exibicao, chave_pix').eq('profissional_id', profissionalId);
+  const mapaMotoboys = {};
+  (motoboysDaEmpresa || []).forEach(m => { mapaMotoboys[m.user_id] = m; });
+
+  const pendentes = data.filter(r => r.status === 'pendente');
+  const totalPendente = pendentes.reduce((soma, r) => soma + Number(r.valor), 0);
+
+  container.innerHTML = `
+    ${pendentes.length > 0 ? `<div style="background:#fff3cd; color:#7c4a03; padding:10px; border-radius:8px; margin-bottom:10px; font-weight:700; text-align:center;">Total pendente: R$ ${totalPendente.toFixed(2).replace('.', ',')}</div>` : ''}
+    ${data.map(r => {
+      const motoboy = mapaMotoboys[r.motoboy_user_id];
+      const nome = motoboy ? (motoboy.nome_exibicao || 'Motoboy') : 'Motoboy';
+      const pix = motoboy ? motoboy.chave_pix : null;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0;">
+          <div>
+            <div style="font-size:0.85rem; font-weight:700;">${escapeHtml(nome)} — R$ ${Number(r.valor).toFixed(2).replace('.', ',')}</div>
+            <div style="font-size:0.72rem; color:#888;">${new Date(r.created_at).toLocaleDateString('pt-BR')} ${pix ? '· Pix: ' + escapeHtml(pix) : '· sem chave Pix cadastrada'}</div>
+          </div>
+          ${r.status === 'pago'
+            ? '<span style="font-size:0.75rem; font-weight:700; color:#1a7a3c;">✅ Pago</span>'
+            : `<button type="button" class="link-cancelar" style="color:#0f766e;" onclick="marcarRepasseComoPago('${r.id}', '${profissionalId}')">Marcar como pago</button>`}
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function marcarRepasseComoPago(repasseId, profissionalId){
+  if(!confirm('Confirma que você já pagou esse valor pro motoboy por fora (Pix, dinheiro, etc)?')) return;
+  const { error } = await supabaseClient.from('repasses_motoboy').update({ status: 'pago', pago_em: new Date().toISOString() }).eq('id', repasseId);
+  if(error){ alert('Erro ao atualizar.'); return; }
+  await carregarRepassesPendentes(profissionalId);
 }
 
 async function salvarConfigAtendimento(e){
@@ -3110,6 +3189,7 @@ function render(){
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#1c1c1c; border:none; cursor:pointer;" onclick="abrirGerenciarMotoboys('${e.id}')">🛵 Gerenciar motoboys</button>` : ''}
+          ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" id="btn-mp-conectar-${e.id}" style="background:${e.mpConectado ? '#1a7a3c' : '#0f766e'}; border:none; cursor:pointer;" onclick="conectarMercadoPago('${e.id}')">${e.mpConectado ? '✅ Mercado Pago conectado' : '💳 Conectar Mercado Pago (receber direto)'}</button>` : ''}
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
           ${isOwner && ehPremiumOuVendas(e.plano) ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>

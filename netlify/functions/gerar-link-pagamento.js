@@ -97,17 +97,67 @@ exports.handler = async function (event) {
       });
     }
 
-    // 4. Cria a preferência de pagamento no Mercado Pago
+    // 4. Confere se a empresa tem a PRÓPRIA conta do Mercado Pago conectada
+    // — se tiver, o dinheiro vai direto pra ela; senão, usa a conta padrão
+    // do GuiaZap (comportamento de antes, pra quem ainda não conectou)
+    let tokenParaUsar = MP_ACCESS_TOKEN;
+
+    const conexaoResp = await fetch(`${SUPABASE_URL}/rest/v1/mp_conexoes?profissional_id=eq.${profissionalId}&select=mp_access_token,mp_refresh_token,mp_token_expira_em,conectado`, { headers });
+    const conexaoData = await conexaoResp.json();
+    const conexao = conexaoData[0];
+
+    if (conexao && conexao.conectado && conexao.mp_access_token) {
+      const expirado = conexao.mp_token_expira_em && new Date(conexao.mp_token_expira_em) < new Date();
+
+      if (!expirado) {
+        tokenParaUsar = conexao.mp_access_token;
+      } else {
+        // Token venceu — usa o refresh_token pra pegar um novo, sem precisar
+        // que a empresa autorize tudo de novo
+        try {
+          const respRefresh = await fetch('https://api.mercadopago.com/oauth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: process.env.MP_CLIENT_ID,
+              client_secret: process.env.MP_CLIENT_SECRET,
+              grant_type: 'refresh_token',
+              refresh_token: conexao.mp_refresh_token
+            })
+          });
+          const dadosRefresh = await respRefresh.json();
+
+          if (respRefresh.ok && dadosRefresh.access_token) {
+            tokenParaUsar = dadosRefresh.access_token;
+            const novaExpiracao = new Date(Date.now() + (dadosRefresh.expires_in || 15552000) * 1000).toISOString();
+            await fetch(`${SUPABASE_URL}/rest/v1/mp_conexoes?profissional_id=eq.${profissionalId}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({
+                mp_access_token: dadosRefresh.access_token,
+                mp_refresh_token: dadosRefresh.refresh_token,
+                mp_token_expira_em: novaExpiracao,
+                updated_at: new Date().toISOString()
+              })
+            });
+          }
+        } catch (e) {
+          console.error('erro ao renovar token da empresa, usando conta padrão', e);
+        }
+      }
+    }
+
+    // 5. Cria a preferência de pagamento no Mercado Pago
     const prefResp = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${tokenParaUsar}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         items: itensMp,
         external_reference: pedido.id,
-        notification_url: `${SITE_URL}/.netlify/functions/mp-webhook-pedido`,
+        notification_url: `${SITE_URL}/.netlify/functions/mp-webhook-pedido?profissionalId=${profissionalId}`,
         back_urls: {
           success: `${SITE_URL}/chat.html?empresa=${profissionalId}`,
           failure: `${SITE_URL}/chat.html?empresa=${profissionalId}`,

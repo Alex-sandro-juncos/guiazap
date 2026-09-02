@@ -11,6 +11,7 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
     }
 
+    const { profissionalId } = event.queryStringParameters || {};
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -20,10 +21,23 @@ exports.handler = async function (event) {
       'Content-Type': 'application/json'
     };
 
+    // Se a URL de notificação veio com o profissionalId (pedidos gerados
+    // depois do Marketplace), confere se essa empresa tem conta própria
+    // conectada — se tiver, precisa usar O TOKEN DELA pra conseguir ver
+    // esse pagamento (ele pertence à conta dela, não à do GuiaZap)
+    let tokenParaConsultar = MP_ACCESS_TOKEN;
+    if (profissionalId) {
+      const conexaoResp = await fetch(`${SUPABASE_URL}/rest/v1/mp_conexoes?profissional_id=eq.${profissionalId}&select=mp_access_token,conectado`, { headers });
+      const conexaoData = await conexaoResp.json();
+      if (conexaoData[0] && conexaoData[0].conectado && conexaoData[0].mp_access_token) {
+        tokenParaConsultar = conexaoData[0].mp_access_token;
+      }
+    }
+
     // 1. Consulta o pagamento de verdade na API do Mercado Pago (nunca confia
     // cegamente no conteúdo do webhook — alguém poderia forjar essa chamada)
     const pagamentoResp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
+      headers: { Authorization: `Bearer ${tokenParaConsultar}` }
     });
     const pagamento = await pagamentoResp.json();
 
