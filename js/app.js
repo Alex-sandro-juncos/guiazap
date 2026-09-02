@@ -357,7 +357,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, localizacao_confirmada_manualmente')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -736,6 +736,9 @@ async function openForm(entry){
   document.getElementById('edit-id').value = entry ? entry.id : '';
   document.getElementById('f-name').value = entry ? entry.name : '';
   document.getElementById('f-documento').value = '';
+  document.getElementById('f-latitude-manual').value = (entry && entry.localizacao_confirmada_manualmente) ? entry.latitude : '';
+  document.getElementById('f-longitude-manual').value = (entry && entry.localizacao_confirmada_manualmente) ? entry.longitude : '';
+  document.getElementById('localizacao-confirmada-msg').textContent = (entry && entry.localizacao_confirmada_manualmente) ? '✓ Localização já marcada anteriormente' : '';
   if(entry){
     // O documento não vem mais junto do cadastro por segurança — busca separado, só o dono consegue
     const { data: doc } = await supabaseClient.rpc('obter_meu_documento', { pid: entry.id });
@@ -912,6 +915,61 @@ async function geocodificarCadastro(profissionalId, cidade, bairro, estado){
   }
 }
 
+// ---------- MAPA DE LOCALIZAÇÃO EXATA (cadastro de empresa) ----------
+
+let _mapaLocalizacaoCadastro = null;
+let _marcadorLocalizacaoCadastro = null;
+
+function abrirMapaLocalizacao(){
+  document.getElementById('overlay-mapa-localizacao').style.display = 'flex';
+
+  // Ponto de partida: usa a lat/lng já marcada antes (se estiver editando),
+  // senão tenta pela cidade digitada, senão cai num centro genérico do Brasil
+  const latAtual = parseFloat(document.getElementById('f-latitude-manual').value) || -14.235;
+  const lngAtual = parseFloat(document.getElementById('f-longitude-manual').value) || -51.9253;
+  const zoomInicial = document.getElementById('f-latitude-manual').value ? 17 : 4;
+
+  setTimeout(() => {
+    if(!_mapaLocalizacaoCadastro){
+      _mapaLocalizacaoCadastro = L.map('mapa-localizacao-area').setView([latAtual, lngAtual], zoomInicial);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(_mapaLocalizacaoCadastro);
+
+      _marcadorLocalizacaoCadastro = L.marker([latAtual, lngAtual], { draggable: true }).addTo(_mapaLocalizacaoCadastro);
+
+      _mapaLocalizacaoCadastro.on('click', (e) => {
+        _marcadorLocalizacaoCadastro.setLatLng(e.latlng);
+      });
+    } else {
+      _mapaLocalizacaoCadastro.invalidateSize();
+      _mapaLocalizacaoCadastro.setView([latAtual, lngAtual], zoomInicial);
+      _marcadorLocalizacaoCadastro.setLatLng([latAtual, lngAtual]);
+    }
+  }, 100);
+}
+
+function fecharMapaLocalizacao(){
+  document.getElementById('overlay-mapa-localizacao').style.display = 'none';
+}
+
+function usarMinhaLocalizacaoAtual(){
+  if(!navigator.geolocation){ alert('Seu navegador não suporta GPS.'); return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
+    _mapaLocalizacaoCadastro.setView(latlng, 18);
+    _marcadorLocalizacaoCadastro.setLatLng(latlng);
+  }, () => {
+    alert('Não consegui pegar sua localização. Permite o acesso ao GPS, ou marca manualmente no mapa.');
+  });
+}
+
+function confirmarLocalizacaoMapa(){
+  const pos = _marcadorLocalizacaoCadastro.getLatLng();
+  document.getElementById('f-latitude-manual').value = pos.lat;
+  document.getElementById('f-longitude-manual').value = pos.lng;
+  document.getElementById('localizacao-confirmada-msg').textContent = `✓ Localização marcada (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+  fecharMapaLocalizacao();
+}
+
 async function saveEntry(e){
   e.preventDefault();
   if(!currentUser){ alert('Você precisa entrar na sua conta para cadastrar.'); return false; }
@@ -958,6 +1016,15 @@ async function saveEntry(e){
     veiculo_modelo: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-modelo').value.trim() : null,
     veiculo_placa: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null
   };
+  // Se a empresa marcou a localização exata no mapa, usa esses valores em
+  // vez de deixar a geocodificação automática (por cidade/bairro) sobrescrever
+  const latManual = document.getElementById('f-latitude-manual').value;
+  const lngManual = document.getElementById('f-longitude-manual').value;
+  if(latManual && lngManual){
+    payload.latitude = parseFloat(latManual);
+    payload.longitude = parseFloat(lngManual);
+    payload.localizacao_confirmada_manualmente = true;
+  }
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
   if(planoAtualDoCadastro === 'entregador' && (!payload.veiculo_modelo || !payload.veiculo_placa)){
     document.getElementById('form-msg').textContent = 'Preencha o modelo da moto e a placa — obrigatório pro Pacote Entregador (segurança pra quem vai te contratar).';
@@ -1008,9 +1075,10 @@ async function saveEntry(e){
   populateBairrosFiltro();
 
   // Estima a localização (latitude/longitude) a partir da cidade/bairro, em segundo
-  // plano — não trava a tela esperando isso, já que não é essencial pro cadastro salvar
+  // plano — não trava a tela esperando isso, já que não é essencial pro cadastro salvar.
+  // Pula essa etapa se a empresa já marcou a localização exata no mapa.
   const idParaGeocodificar = id || novoCadastroId;
-  if(idParaGeocodificar){
+  if(idParaGeocodificar && !payload.localizacao_confirmada_manualmente){
     geocodificarCadastro(idParaGeocodificar, payload.cidade, payload.bairro, payload.estado);
   }
 

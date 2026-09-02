@@ -1513,6 +1513,7 @@ async function carregarListaConversas(){
     if(ultimaMsg){
       if(ultimaMsg.tipo === 'imagem') resumoUltimaMsg = '📷 Foto';
       else if(ultimaMsg.tipo === 'menu_interativo') resumoUltimaMsg = '🛒 Cardápio interativo';
+      else if(ultimaMsg.tipo === 'formulario_endereco') resumoUltimaMsg = '📍 Formulário de endereço';
       else if(ultimaMsg.tipo === 'audio') resumoUltimaMsg = '🎤 Áudio';
       else if(ultimaMsg.tipo === 'arquivo') resumoUltimaMsg = '📄 ' + (ultimaMsg.arquivo_nome || 'Arquivo');
       else if(ultimaMsg.tipo === 'gif') resumoUltimaMsg = '🎞️ GIF';
@@ -2041,6 +2042,26 @@ function conteudoDaMensagem(m, minha){
       </div>
     `;
   }
+  if(m.tipo === 'formulario_endereco'){
+    return `
+      <div class="form-endereco-chat" style="max-width:280px;">
+        <div style="font-weight:700; margin-bottom:8px; font-size:0.9rem;">📍 Endereço de entrega</div>
+        <input type="text" id="fe-cep-${m.id}" placeholder="CEP" maxlength="9" oninput="mascaraCepChat(event)" onblur="buscarCepChat('${m.id}')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin-bottom:6px;">
+        <span id="fe-cep-msg-${m.id}" style="font-size:0.7rem; color:#888;"></span>
+        <input type="text" id="fe-rua-${m.id}" placeholder="Rua" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="fe-numero-${m.id}" placeholder="Número" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <input type="text" id="fe-complemento-${m.id}" placeholder="Complemento" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+        </div>
+        <input type="text" id="fe-bairro-${m.id}" placeholder="Bairro" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="fe-cidade-${m.id}" placeholder="Cidade" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <input type="text" id="fe-estado-${m.id}" placeholder="UF" maxlength="2" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; text-transform:uppercase;">
+        </div>
+        <button type="button" onclick="enviarFormularioEndereco('${m.id}')" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">Confirmar endereço</button>
+      </div>
+    `;
+  }
   if(m.tipo === 'chamada_perdida' || m.tipo === 'chamada_atendida'){
     const { ehVideo, duracao, atendida } = detalhesChamada(m);
     const icone = ehVideo ? '📹' : '📞';
@@ -2121,6 +2142,51 @@ async function enviarSelecaoMenuInterativo(msgId){
   }
   const numeros = Array.from(marcados).map(c => c.value).join(',');
   await enviarQualquerMensagem({ tipo: 'texto', texto: numeros });
+}
+
+function mascaraCepChat(event){
+  let v = event.target.value.replace(/\D/g, '').slice(0, 8);
+  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  event.target.value = v;
+}
+
+async function buscarCepChat(msgId){
+  const cep = document.getElementById(`fe-cep-${msgId}`).value.replace(/\D/g, '');
+  const msg = document.getElementById(`fe-cep-msg-${msgId}`);
+  if(cep.length !== 8){ msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : ''; return; }
+
+  msg.textContent = 'buscando...';
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro){ msg.textContent = 'CEP não encontrado — preencha manualmente'; return; }
+
+    document.getElementById(`fe-rua-${msgId}`).value = data.logradouro || '';
+    document.getElementById(`fe-bairro-${msgId}`).value = data.bairro || '';
+    document.getElementById(`fe-cidade-${msgId}`).value = data.localidade || '';
+    document.getElementById(`fe-estado-${msgId}`).value = data.uf || '';
+    msg.textContent = '✓ Endereço encontrado';
+    document.getElementById(`fe-numero-${msgId}`).focus();
+  } catch(e){
+    msg.textContent = 'erro ao buscar CEP, preencha manualmente';
+  }
+}
+
+async function enviarFormularioEndereco(msgId){
+  const rua = document.getElementById(`fe-rua-${msgId}`).value.trim();
+  const numero = document.getElementById(`fe-numero-${msgId}`).value.trim();
+  const complemento = document.getElementById(`fe-complemento-${msgId}`).value.trim();
+  const bairro = document.getElementById(`fe-bairro-${msgId}`).value.trim();
+  const cidade = document.getElementById(`fe-cidade-${msgId}`).value.trim();
+  const estado = document.getElementById(`fe-estado-${msgId}`).value.trim();
+
+  if(!rua || !numero || !bairro || !cidade || !estado){
+    alert('Preenche pelo menos rua, número, bairro, cidade e estado.');
+    return;
+  }
+
+  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}`;
+  await enviarQualquerMensagem({ tipo: 'texto', texto: enderecoCompleto });
 }
 
 async function enviarQualquerMensagem(payload){

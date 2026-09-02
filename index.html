@@ -25,6 +25,8 @@
 <meta name="twitter:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
 <meta name="twitter:image" content="https://guiazap.shop/favicon-512.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -269,6 +271,14 @@
       </div>
     </div>
     <div class="field">
+      <label>📍 Localização exata (opcional, mas recomendado)</label>
+      <label class="foto-ou">Ajuda muito na entrega — especialmente no interior, sítios, ou endereços sem número. Arraste o marcador até a porta do seu estabelecimento.</label>
+      <button type="button" onclick="abrirMapaLocalizacao()" style="width:100%; padding:10px; border-radius:8px; border:1.5px solid var(--verde-escuro); background:white; color:var(--verde-escuro); font-weight:700; cursor:pointer; margin-top:6px;">📍 Marcar localização no mapa</button>
+      <span id="localizacao-confirmada-msg" style="display:block; font-size:0.78rem; color:var(--verde-escuro); margin-top:6px;"></span>
+      <input type="hidden" id="f-latitude-manual">
+      <input type="hidden" id="f-longitude-manual">
+    </div>
+    <div class="field">
       <label>WhatsApp (com DDD, só números)</label>
       <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
     </div>
@@ -330,6 +340,21 @@
       <span class="form-msg" id="form-msg"></span>
     </div>
   </form>
+
+  <div id="overlay-mapa-localizacao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1400; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:white; width:100%; max-width:560px; border-radius:16px; overflow:hidden; display:flex; flex-direction:column;">
+      <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+        <b style="font-size:0.95rem;">📍 Arraste o marcador até o local exato</b>
+        <button type="button" onclick="fecharMapaLocalizacao()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+      </div>
+      <div id="mapa-localizacao-area" style="height:350px; width:100%;"></div>
+      <div style="padding:14px 16px;">
+        <p style="font-size:0.78rem; color:#666; margin-bottom:10px;">Toque no mapa ou arraste o marcador pra ajustar. Pode dar zoom pra ficar mais preciso.</p>
+        <button type="button" onclick="usarMinhaLocalizacaoAtual()" style="width:100%; padding:9px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">📡 Usar minha localização atual (GPS)</button>
+        <button type="button" onclick="confirmarLocalizacaoMapa()" style="width:100%; padding:11px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Confirmar esse local</button>
+      </div>
+    </div>
+  </div>
 
   <form id="story-form" onsubmit="return salvarStory(event)" style="display:none;">
     <input type="hidden" id="story-profissional-id">
