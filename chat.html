@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GuiaPapo">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
   html, body {
@@ -403,6 +405,19 @@
 </style>
 </head>
 <body>
+<div id="overlay-mapa-endereco-chat" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2000; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; width:100%; max-width:520px; border-radius:16px; overflow:hidden; display:flex; flex-direction:column;">
+    <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <b style="font-size:0.95rem;">📍 Marque onde é a entrega</b>
+      <button type="button" onclick="fecharMapaEnderecoChat()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+    </div>
+    <div id="mapa-endereco-chat-area" style="height:320px; width:100%;"></div>
+    <div style="padding:14px 16px;">
+      <button type="button" onclick="usarMinhaLocalizacaoChat()" style="width:100%; padding:9px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">📡 Usar minha localização atual (GPS)</button>
+      <button type="button" onclick="confirmarLocalizacaoChat()" style="width:100%; padding:11px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Confirmar esse local</button>
+    </div>
+  </div>
+</div>
 <div class="chat-wrap">
   <div id="chat-topo-lista">
     <div class="papo-header-app">
@@ -2058,6 +2073,9 @@ function conteudoDaMensagem(m, minha){
           <input type="text" id="fe-cidade-${m.id}" placeholder="Cidade" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
           <input type="text" id="fe-estado-${m.id}" placeholder="UF" maxlength="2" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; text-transform:uppercase;">
         </div>
+        <input type="text" id="fe-referencia-${m.id}" placeholder="Ponto de referência (opcional)" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
+        <button type="button" onclick="abrirMapaEnderecoChat('${m.id}')" style="width:100%; padding:8px; border-radius:6px; border:1.5px solid var(--verde-escuro); background:white; color:var(--verde-escuro); font-weight:700; font-size:0.8rem; cursor:pointer;">📍 Marcar localização exata (opcional)</button>
+        <span id="fe-loc-msg-${m.id}" style="font-size:0.7rem; color:var(--verde-escuro); display:block; margin-top:4px;"></span>
         <button type="button" onclick="enviarFormularioEndereco('${m.id}')" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">Confirmar endereço</button>
       </div>
     `;
@@ -2172,6 +2190,9 @@ async function buscarCepChat(msgId){
   }
 }
 
+let _ultimaLocalizacaoManualChat = null;
+let _latLngEnderecoChat = {};
+
 async function enviarFormularioEndereco(msgId){
   const rua = document.getElementById(`fe-rua-${msgId}`).value.trim();
   const numero = document.getElementById(`fe-numero-${msgId}`).value.trim();
@@ -2179,14 +2200,71 @@ async function enviarFormularioEndereco(msgId){
   const bairro = document.getElementById(`fe-bairro-${msgId}`).value.trim();
   const cidade = document.getElementById(`fe-cidade-${msgId}`).value.trim();
   const estado = document.getElementById(`fe-estado-${msgId}`).value.trim();
+  const referencia = document.getElementById(`fe-referencia-${msgId}`).value.trim();
 
   if(!rua || !numero || !bairro || !cidade || !estado){
     alert('Preenche pelo menos rua, número, bairro, cidade e estado.');
     return;
   }
 
-  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}`;
+  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}${referencia ? ' (Referência: ' + referencia + ')' : ''}`;
+
+  // Guarda a localização marcada no mapa (se houver) — o cálculo de frete
+  // que roda logo em seguida vai usar isso, pra não precisar geocodificar
+  // o texto de novo
+  _ultimaLocalizacaoManualChat = _latLngEnderecoChat[msgId] ? { latitude: _latLngEnderecoChat[msgId][0], longitude: _latLngEnderecoChat[msgId][1] } : null;
+
   await enviarQualquerMensagem({ tipo: 'texto', texto: enderecoCompleto });
+}
+
+// ---------- MAPA DE LOCALIZAÇÃO EXATA (formulário de endereço do robô) ----------
+
+let _mapaEnderecoChat = null;
+let _marcadorEnderecoChat = null;
+let _msgIdMapaAtual = null;
+
+function abrirMapaEnderecoChat(msgId){
+  _msgIdMapaAtual = msgId;
+  document.getElementById('overlay-mapa-endereco-chat').style.display = 'flex';
+  const salvo = _latLngEnderecoChat[msgId];
+  const latInicial = salvo ? salvo[0] : -14.235;
+  const lngInicial = salvo ? salvo[1] : -51.9253;
+  const zoomInicial = salvo ? 17 : 4;
+
+  setTimeout(() => {
+    if(!_mapaEnderecoChat){
+      _mapaEnderecoChat = L.map('mapa-endereco-chat-area').setView([latInicial, lngInicial], zoomInicial);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(_mapaEnderecoChat);
+      _marcadorEnderecoChat = L.marker([latInicial, lngInicial], { draggable: true }).addTo(_mapaEnderecoChat);
+      _mapaEnderecoChat.on('click', (e) => { _marcadorEnderecoChat.setLatLng(e.latlng); });
+    } else {
+      _mapaEnderecoChat.invalidateSize();
+      _mapaEnderecoChat.setView([latInicial, lngInicial], zoomInicial);
+      _marcadorEnderecoChat.setLatLng([latInicial, lngInicial]);
+    }
+  }, 100);
+}
+
+function fecharMapaEnderecoChat(){
+  document.getElementById('overlay-mapa-endereco-chat').style.display = 'none';
+}
+
+function usarMinhaLocalizacaoChat(){
+  if(!navigator.geolocation){ alert('Seu navegador não suporta GPS.'); return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
+    _mapaEnderecoChat.setView(latlng, 18);
+    _marcadorEnderecoChat.setLatLng(latlng);
+  }, () => {
+    alert('Não consegui pegar sua localização. Permite o acesso ao GPS, ou marca manualmente no mapa.');
+  });
+}
+
+function confirmarLocalizacaoChat(){
+  const pos = _marcadorEnderecoChat.getLatLng();
+  _latLngEnderecoChat[_msgIdMapaAtual] = [pos.lat, pos.lng];
+  document.getElementById(`fe-loc-msg-${_msgIdMapaAtual}`).textContent = `✓ Localização marcada (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+  fecharMapaEnderecoChat();
 }
 
 async function enviarQualquerMensagem(payload){
@@ -2228,8 +2306,15 @@ async function enviarQualquerMensagem(payload){
         fetch('/.netlify/functions/calcular-frete-entrega', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversaId: conversaAtual, profissionalId: outroLadoProfissionalIdAtual, endereco: payload.texto })
+          body: JSON.stringify({
+            conversaId: conversaAtual,
+            profissionalId: outroLadoProfissionalIdAtual,
+            endereco: payload.texto,
+            latitude: _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.latitude : null,
+            longitude: _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.longitude : null
+          })
         }).catch(e => console.error('erro ao calcular frete', e));
+        _ultimaLocalizacaoManualChat = null;
       }
       if(estadoAtual && estadoAtual.estado === 'gerando_pagamento'){
         fetch('/.netlify/functions/gerar-link-pagamento', {

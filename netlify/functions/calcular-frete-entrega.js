@@ -10,7 +10,7 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { conversaId, profissionalId, endereco } = JSON.parse(event.body || '{}');
+    const { conversaId, profissionalId, endereco, latitude, longitude } = JSON.parse(event.body || '{}');
     if (!conversaId || !profissionalId || !endereco) {
       return { statusCode: 400, body: JSON.stringify({ error: 'conversaId, profissionalId e endereco são obrigatórios' }) };
     }
@@ -66,21 +66,29 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
     }
 
-    // 2. Geocodifica o endereço digitado pelo cliente
-    const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco + ', Brasil')}`;
-    const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
-    const dadosGeo = respGeo.ok ? await respGeo.json() : [];
+    // 2. Geocodifica o endereço digitado pelo cliente (pula se já veio com
+    // coordenadas marcadas manualmente no mapa — mais preciso)
+    let latCliente, lngCliente;
 
-    if (!dadosGeo || dadosGeo.length === 0) {
-      await responderNoChat('⚠️ Não consegui localizar esse endereço. Pode tentar de novo com mais detalhes (rua, número, bairro e cidade)?');
-      await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
-        method: 'PATCH', headers, body: JSON.stringify({ estado: 'aguardando_endereco_entrega' })
-      });
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    if (latitude != null && longitude != null) {
+      latCliente = latitude;
+      lngCliente = longitude;
+    } else {
+      const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco + ', Brasil')}`;
+      const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
+      const dadosGeo = respGeo.ok ? await respGeo.json() : [];
+
+      if (!dadosGeo || dadosGeo.length === 0) {
+        await responderNoChat('⚠️ Não consegui localizar esse endereço. Pode tentar de novo com mais detalhes (rua, número, bairro e cidade)?');
+        await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
+          method: 'PATCH', headers, body: JSON.stringify({ estado: 'aguardando_endereco_entrega' })
+        });
+        return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+      }
+
+      latCliente = parseFloat(dadosGeo[0].lat);
+      lngCliente = parseFloat(dadosGeo[0].lon);
     }
-
-    const latCliente = parseFloat(dadosGeo[0].lat);
-    const lngCliente = parseFloat(dadosGeo[0].lon);
 
     // 3. Calcula a distância de ROTA real via OSRM (não linha reta)
     const urlRota = `https://router.project-osrm.org/route/v1/driving/${empresa.longitude},${empresa.latitude};${lngCliente},${latCliente}?overview=false`;
@@ -133,7 +141,7 @@ exports.handler = async function (event) {
         headers,
         body: JSON.stringify({
           estado: 'escolhendo_quando_pagar',
-          lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10 }]
+          lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10, latitude: latCliente, longitude: lngCliente }]
         })
       });
 
@@ -154,7 +162,9 @@ exports.handler = async function (event) {
         total,
         status: 'aguardando_pagamento',
         codigo_confirmacao: codigoConfirmacao,
-        endereco_entrega: endereco
+        endereco_entrega: endereco,
+        latitude_entrega: latCliente,
+        longitude_entrega: lngCliente
       })
     });
 

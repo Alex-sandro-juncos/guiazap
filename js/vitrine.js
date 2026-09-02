@@ -1260,15 +1260,65 @@ function resolverEscolhaEntrega(quer){
 }
 
 let _resolverEnderecoCallback = null;
+let _latLngEntregaManual = null;
 function abrirModalEndereco(){
-  ['end-cep','end-rua','end-numero','end-complemento','end-bairro','end-cidade','end-estado'].forEach(id => { document.getElementById(id).value = ''; });
+  ['end-cep','end-rua','end-numero','end-complemento','end-bairro','end-cidade','end-estado','end-referencia'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('end-cep-msg').textContent = '';
+  document.getElementById('end-localizacao-msg').textContent = '';
+  _latLngEntregaManual = null;
   document.getElementById('overlay-endereco-entrega').style.display = 'flex';
   return new Promise(resolve => { _resolverEnderecoCallback = resolve; });
 }
-function resolverEndereco(enderecoTexto){
+function resolverEndereco(resultado){
   document.getElementById('overlay-endereco-entrega').style.display = 'none';
-  if(_resolverEnderecoCallback) _resolverEnderecoCallback(enderecoTexto);
+  if(_resolverEnderecoCallback) _resolverEnderecoCallback(resultado);
+}
+
+// ---------- MAPA DE LOCALIZAÇÃO EXATA (endereço de entrega) ----------
+
+let _mapaEntrega = null;
+let _marcadorEntrega = null;
+
+function abrirMapaLocalizacaoEntrega(){
+  document.getElementById('overlay-mapa-entrega').style.display = 'flex';
+  const latInicial = _latLngEntregaManual ? _latLngEntregaManual[0] : -14.235;
+  const lngInicial = _latLngEntregaManual ? _latLngEntregaManual[1] : -51.9253;
+  const zoomInicial = _latLngEntregaManual ? 17 : 4;
+
+  setTimeout(() => {
+    if(!_mapaEntrega){
+      _mapaEntrega = L.map('mapa-entrega-area').setView([latInicial, lngInicial], zoomInicial);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(_mapaEntrega);
+      _marcadorEntrega = L.marker([latInicial, lngInicial], { draggable: true }).addTo(_mapaEntrega);
+      _mapaEntrega.on('click', (e) => { _marcadorEntrega.setLatLng(e.latlng); });
+    } else {
+      _mapaEntrega.invalidateSize();
+      _mapaEntrega.setView([latInicial, lngInicial], zoomInicial);
+      _marcadorEntrega.setLatLng([latInicial, lngInicial]);
+    }
+  }, 100);
+}
+
+function fecharMapaLocalizacaoEntrega(){
+  document.getElementById('overlay-mapa-entrega').style.display = 'none';
+}
+
+function usarMinhaLocalizacaoEntrega(){
+  if(!navigator.geolocation){ alert('Seu navegador não suporta GPS.'); return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
+    _mapaEntrega.setView(latlng, 18);
+    _marcadorEntrega.setLatLng(latlng);
+  }, () => {
+    alert('Não consegui pegar sua localização. Permite o acesso ao GPS, ou marca manualmente no mapa.');
+  });
+}
+
+function confirmarLocalizacaoEntrega(){
+  const pos = _marcadorEntrega.getLatLng();
+  _latLngEntregaManual = [pos.lat, pos.lng];
+  document.getElementById('end-localizacao-msg').textContent = `✓ Localização marcada (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+  fecharMapaLocalizacaoEntrega();
 }
 
 function mascaraCepEndereco(event){
@@ -1306,14 +1356,20 @@ function confirmarEnderecoEntrega(){
   const bairro = document.getElementById('end-bairro').value.trim();
   const cidade = document.getElementById('end-cidade').value.trim();
   const estado = document.getElementById('end-estado').value.trim();
+  const referencia = document.getElementById('end-referencia').value.trim();
 
   if(!rua || !numero || !bairro || !cidade || !estado){
     alert('Preenche pelo menos rua, número, bairro, cidade e estado.');
     return;
   }
 
-  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}`;
-  resolverEndereco(enderecoCompleto);
+  const enderecoCompleto = `${rua}, ${numero}${complemento ? ' - ' + complemento : ''}, ${bairro}, ${cidade} - ${estado}${referencia ? ' (Referência: ' + referencia + ')' : ''}`;
+  resolverEndereco({
+    texto: enderecoCompleto,
+    referencia: referencia || null,
+    latitude: _latLngEntregaManual ? _latLngEntregaManual[0] : null,
+    longitude: _latLngEntregaManual ? _latLngEntregaManual[1] : null
+  });
 }
 
 async function finalizarPedidoCarrinho(profissionalId){
@@ -1335,12 +1391,15 @@ async function finalizarPedidoCarrinho(profissionalId){
 
   let taxaEntrega = 0;
   let enderecoEntrega = null;
+  let latitudeEntrega = null;
+  let longitudeEntrega = null;
 
   if(config && config.faz_entrega){
     const quer = await abrirModalEscolhaEntrega();
     if(quer){
-      const endereco = await abrirModalEndereco();
-      if(!endereco) return;
+      const resultadoEndereco = await abrirModalEndereco();
+      if(!resultadoEndereco) return;
+      const endereco = resultadoEndereco.texto;
 
       document.getElementById('overlay-calculando-frete').style.display = 'flex';
 
@@ -1348,7 +1407,7 @@ async function finalizarPedidoCarrinho(profissionalId){
         const respFrete = await fetch('/.netlify/functions/calcular-frete-carrinho', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profissionalId, endereco })
+          body: JSON.stringify({ profissionalId, endereco, latitude: resultadoEndereco.latitude, longitude: resultadoEndereco.longitude })
         });
         const dadosFrete = await respFrete.json();
         document.getElementById('overlay-calculando-frete').style.display = 'none';
@@ -1358,6 +1417,8 @@ async function finalizarPedidoCarrinho(profissionalId){
         } else {
           taxaEntrega = dadosFrete.valorFrete;
           enderecoEntrega = endereco;
+          latitudeEntrega = dadosFrete.latitudeCliente;
+          longitudeEntrega = dadosFrete.longitudeCliente;
           alert(`📏 Distância: ${dadosFrete.distanciaKm} km\n🛵 Frete: R$ ${taxaEntrega.toFixed(2).replace('.', ',')}`);
         }
       } catch(e){
@@ -1391,7 +1452,9 @@ async function finalizarPedidoCarrinho(profissionalId){
     total,
     status: 'aguardando_pagamento',
     codigo_confirmacao: codigoConfirmacao,
-    endereco_entrega: enderecoEntrega
+    endereco_entrega: enderecoEntrega,
+    latitude_entrega: latitudeEntrega,
+    longitude_entrega: longitudeEntrega
   });
   if(erroPedido){ console.error(erroPedido); alert('Erro ao enviar o pedido: ' + (erroPedido.message || JSON.stringify(erroPedido))); return; }
 

@@ -8,7 +8,7 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { profissionalId, endereco } = JSON.parse(event.body || '{}');
+    const { profissionalId, endereco, latitude, longitude } = JSON.parse(event.body || '{}');
     if (!profissionalId || !endereco) {
       return { statusCode: 400, body: JSON.stringify({ error: 'profissionalId e endereco são obrigatórios' }) };
     }
@@ -36,16 +36,26 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ encontrado: false, motivo: 'empresa sem localização cadastrada' }) };
     }
 
-    const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco + ', Brasil')}`;
-    const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
-    const dadosGeo = respGeo.ok ? await respGeo.json() : [];
+    let latCliente, lngCliente;
 
-    if (!dadosGeo || dadosGeo.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ encontrado: false, motivo: 'endereço não localizado' }) };
+    if (latitude != null && longitude != null) {
+      // Cliente marcou a localização exata no mapa — usa direto, sem
+      // precisar geocodificar o texto (mais preciso, principalmente em
+      // endereço sem número ou zona rural)
+      latCliente = latitude;
+      lngCliente = longitude;
+    } else {
+      const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco + ', Brasil')}`;
+      const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
+      const dadosGeo = respGeo.ok ? await respGeo.json() : [];
+
+      if (!dadosGeo || dadosGeo.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ encontrado: false, motivo: 'endereço não localizado' }) };
+      }
+
+      latCliente = parseFloat(dadosGeo[0].lat);
+      lngCliente = parseFloat(dadosGeo[0].lon);
     }
-
-    const latCliente = parseFloat(dadosGeo[0].lat);
-    const lngCliente = parseFloat(dadosGeo[0].lon);
 
     const urlRota = `https://router.project-osrm.org/route/v1/driving/${empresa.longitude},${empresa.latitude};${lngCliente},${latCliente}?overview=false`;
     const respRota = await fetch(urlRota);
@@ -68,7 +78,7 @@ exports.handler = async function (event) {
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ encontrado: true, distanciaKm: Math.round(distanciaKm * 10) / 10, valorFrete })
+      body: JSON.stringify({ encontrado: true, distanciaKm: Math.round(distanciaKm * 10) / 10, valorFrete, latitudeCliente: latCliente, longitudeCliente: lngCliente })
     };
   } catch (err) {
     console.error(err);
