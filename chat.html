@@ -2338,11 +2338,13 @@ async function enviarQualquerMensagem(payload){
       }
 
       if(estadoAtual && estadoAtual.estado === 'gerando_pagamento'){
-        fetch('/.netlify/functions/gerar-link-pagamento', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversaId: conversaNoMomentoDoEnvio, profissionalId: outroLadoProfissionalIdAtual })
-        }).catch(e => console.error('erro ao gerar link de pagamento', e));
+        supabaseClientChat.auth.getSession().then(({ data: { session } }) => {
+          fetch('/.netlify/functions/gerar-link-pagamento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ conversaId: conversaNoMomentoDoEnvio, profissionalId: outroLadoProfissionalIdAtual })
+          }).catch(e => console.error('erro ao gerar link de pagamento', e));
+        });
         return;
       }
 

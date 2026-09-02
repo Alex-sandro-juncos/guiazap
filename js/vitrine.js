@@ -1478,9 +1478,10 @@ async function finalizarPedidoCarrinho(profissionalId){
 
   // Gera o link de pagamento de verdade (mesma função usada pelo atendimento
   // automático) e manda pro Papo, onde o link vai chegar como mensagem
+  const { data: { session: sessaoAtual } } = await supabaseClientV.auth.getSession();
   fetch('/.netlify/functions/gerar-link-pagamento', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoAtual.access_token}` },
     body: JSON.stringify({ conversaId, profissionalId })
   }).catch(e => console.error('erro ao gerar link de pagamento', e));
 

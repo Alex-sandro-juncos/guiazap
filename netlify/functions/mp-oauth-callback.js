@@ -1,11 +1,16 @@
 // O Mercado Pago manda o usuário de volta pra cá depois que ele autoriza a
 // conexão. Troca o "code" recebido pelos tokens de acesso reais, e guarda
 // na tabela mp_conexoes (isolada, protegida) associada à empresa certa.
+//
+// ⚠️ SEGURANÇA: o "state" recebido aqui NUNCA é usado como profissionalId
+// direto — é só um código opaco, validado contra a tabela mp_oauth_states
+// (criada pela mp-oauth-iniciar.js só depois de confirmar que quem pediu a
+// conexão é dono de verdade da empresa). Isso impede que alguém force uma
+// conexão pra uma empresa que não é dela.
 
 exports.handler = async function (event) {
   try {
     const { code, state, error: erroAutorizacao } = event.queryStringParameters || {};
-    const profissionalId = state;
 
     if (erroAutorizacao) {
       return {
@@ -14,9 +19,48 @@ exports.handler = async function (event) {
       };
     }
 
-    if (!code || !profissionalId) {
-      return { statusCode: 400, body: 'code e state (profissionalId) são obrigatórios' };
+    if (!code || !state) {
+      return { statusCode: 400, body: 'code e state são obrigatórios' };
     }
+
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const headers = {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates'
+    };
+
+    // 1. Valida o state contra o que foi salvo antes — precisa existir,
+    // não pode já ter sido usado, e não pode ter mais de 10 minutos
+    const stateResp = await fetch(`${SUPABASE_URL}/rest/v1/mp_oauth_states?state=eq.${state}&select=*`, { headers });
+    const stateData = await stateResp.json();
+    const registroState = stateData[0];
+
+    if (!registroState || registroState.usado) {
+      return {
+        statusCode: 302,
+        headers: { Location: `https://guiazap.shop/index.html?mp_conectado=erro` }
+      };
+    }
+
+    const idadeMinutos = (Date.now() - new Date(registroState.created_at).getTime()) / 60000;
+    if (idadeMinutos > 10) {
+      return {
+        statusCode: 302,
+        headers: { Location: `https://guiazap.shop/index.html?mp_conectado=erro` }
+      };
+    }
+
+    const profissionalId = registroState.profissional_id;
+
+    // Marca o state como usado imediatamente, pra não poder ser reutilizado
+    await fetch(`${SUPABASE_URL}/rest/v1/mp_oauth_states?state=eq.${state}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ usado: true })
+    });
 
     const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
     const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
@@ -44,15 +88,6 @@ exports.handler = async function (event) {
         headers: { Location: `https://guiazap.shop/index.html?mp_conectado=erro` }
       };
     }
-
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const headers = {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates'
-    };
 
     const expiraEm = new Date(Date.now() + (dadosToken.expires_in || 15552000) * 1000).toISOString();
 

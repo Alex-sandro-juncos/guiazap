@@ -1895,8 +1895,26 @@ function fecharConfigAtendimento(){
 
 // ---------- GERENCIAR MOTOBOYS ----------
 
-function conectarMercadoPago(profissionalId){
-  window.location.href = `/.netlify/functions/mp-oauth-conectar?profissionalId=${profissionalId}`;
+async function conectarMercadoPago(profissionalId){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const resp = await fetch('/.netlify/functions/mp-oauth-iniciar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok || !data.url){
+      alert('Erro ao conectar: ' + (data.error || 'tenta de novo'));
+      return;
+    }
+
+    window.location.href = data.url;
+  } catch(e){
+    console.error(e);
+    alert('Erro ao conectar com o Mercado Pago. Tenta de novo.');
+  }
 }
 
 async function abrirGerenciarMotoboys(profissionalId){

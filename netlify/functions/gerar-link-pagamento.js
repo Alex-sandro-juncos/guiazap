@@ -1,6 +1,11 @@
 // Gera um link de pagamento (Checkout Pro) do Mercado Pago com o valor EXATO
 // de um pedido específico — diferente das assinaturas fixas, aqui cada
 // pedido tem seu próprio link com o total certo (produtos + frete).
+//
+// ⚠️ SEGURANÇA: essa função cria cobranças de verdade — exige que quem
+// chama esteja LOGADO e seja o cliente DAQUELA conversa específica, e
+// confere que o pedido encontrado realmente pertence à mesma empresa e
+// conversa informadas (nunca confia só nos IDs que vêm do navegador).
 
 exports.handler = async function (event) {
   try {
@@ -14,6 +19,7 @@ exports.handler = async function (event) {
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
     const SITE_URL = process.env.URL || 'https://guiazap.shop';
@@ -23,6 +29,35 @@ exports.handler = async function (event) {
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json'
     };
+
+    // 1. Confere se quem está chamando está LOGADO de verdade
+    const tokenUsuario = (event.headers.authorization || event.headers.Authorization || '').replace('Bearer ', '');
+    if (!tokenUsuario) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'não autenticado' }) };
+    }
+    const usuarioResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${tokenUsuario}` }
+    });
+    if (!usuarioResp.ok) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
+    }
+    const usuario = await usuarioResp.json();
+
+    // 2. Confere se a conversa existe, é DESSA empresa, e o usuário logado
+    // é de fato o cliente dessa conversa — evita que alguém gere link de
+    // pagamento numa conversa/empresa que não é dele
+    const conversaResp = await fetch(`${SUPABASE_URL}/rest/v1/conversas?id=eq.${conversaId}&select=id,profissional_id,visitante_user_id,usuario2_id`, { headers });
+    const conversaData = await conversaResp.json();
+    const conversa = conversaData[0];
+
+    if (!conversa || conversa.profissional_id !== profissionalId) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'conversa não pertence a essa empresa' }) };
+    }
+
+    const clienteDaConversa = conversa.visitante_user_id || conversa.usuario2_id;
+    if (clienteDaConversa !== usuario.id) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'essa conversa não é sua' }) };
+    }
 
     async function responderNoChat(texto, donoUserId) {
       await fetch(`${SUPABASE_URL}/rest/v1/mensagens_chat`, {
@@ -44,14 +79,16 @@ exports.handler = async function (event) {
       });
     }
 
-    // 1. Acha o dono da empresa (pra mandar a mensagem como se fosse ela)
+    // 3. Acha o dono da empresa (pra mandar a mensagem como se fosse ela)
     const donoResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=user_id`, { headers });
     const donoData = await donoResp.json();
     const donoUserId = donoData[0] ? donoData[0].user_id : null;
 
-    // 2. Acha o pedido mais recente dessa conversa que está esperando pagamento
+    // 4. Acha o pedido mais recente dessa conversa que está esperando
+    // pagamento — confere TAMBÉM que o profissional_id do pedido bate com
+    // a empresa informada, não só o conversa_id
     const pedidoResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/pedidos?conversa_id=eq.${conversaId}&status=eq.aguardando_pagamento&select=*&order=created_at.desc&limit=1`,
+      `${SUPABASE_URL}/rest/v1/pedidos?conversa_id=eq.${conversaId}&profissional_id=eq.${profissionalId}&status=eq.aguardando_pagamento&select=*&order=created_at.desc&limit=1`,
       { headers }
     );
     const pedidoData = await pedidoResp.json();
@@ -62,7 +99,7 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
     }
 
-    // 3. Monta os itens pra preferência do Mercado Pago, ignorando qualquer
+    // 5. Monta os itens pra preferência do Mercado Pago, ignorando qualquer
     // item com preço inválido/zero (o Mercado Pago rejeita unit_price <= 0)
     const itensSemPreco = [];
     const itensMp = (pedido.itens || [])
