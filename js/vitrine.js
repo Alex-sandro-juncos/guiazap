@@ -331,12 +331,13 @@ function renderProdutos(){
           </div>
         </div>
       ` : ''}
-      <div class="foto-produto-area">
+      <div class="foto-produto-area" onclick="abrirGaleriaProduto('${p.id}')" style="cursor:pointer; position:relative;">
         <img src="${p.foto ? escapeHtmlV(p.foto) : 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome)}" alt="${escapeHtmlV(p.nome)}" loading="lazy">
+        ${p.midias_extra && p.midias_extra.length > 0 ? `<span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.6); color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:50px;">📷 +${p.midias_extra.length}</span>` : ''}
         <button class="icon-btn-favorito" title="Favoritar" onclick="toggleFavoritoProduto('${p.id}', event)">${favoritosProdutos.has(p.id) ? '❤️' : '🤍'}</button>
         ${isDono ? `<span class="owner-actions">
-          <button class="icon-btn" title="Editar" onclick="editarProduto('${p.id}')">✎</button>
-          <button class="icon-btn" title="Excluir" onclick="excluirProduto('${p.id}')">✕</button>
+          <button class="icon-btn" title="Editar" onclick="event.stopPropagation(); editarProduto('${p.id}')">✎</button>
+          <button class="icon-btn" title="Excluir" onclick="event.stopPropagation(); excluirProduto('${p.id}')">✕</button>
         </span>` : ''}
       </div>
       <div class="info">
@@ -368,7 +369,7 @@ function renderProdutos(){
             ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
             : p.link_externo
               ? `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="avisarSaidaLinkExterno('${escapeHtmlV(p.link_externo)}')">🔗 Comprar direto no site do vendedor</button>`
-              : `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="prepararAdicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>`}
+              : renderBotaoCarrinhoProduto(p)}
           ${p.profissionais && p.profissionais.whatsapp ? `<a class="btn-zap-mini" href="https://wa.me/55${(p.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi o produto "' + p.nome + '" na Vitrine do GuiaZap e tenho interesse.')}" target="_blank">Chamar no WhatsApp</a>` : ''}
           <button type="button" class="link-compartilhar-produto" onclick="toggleMenuCompartilhar('${p.id}')">📤 Compartilhar</button>
           <button type="button" class="link-compartilhar-produto" style="background:#6b46c1;" onclick="compartilharProdutoNoChat('${p.id}', '${escapeHtmlV(p.nome).replace(/'/g, "\\'")}')">💬 Enviar no chat</button>
@@ -783,6 +784,8 @@ function fecharFormProduto(){
   document.getElementById('variacoes-produto-list').innerHTML = '';
   document.getElementById('adicionais-produto-list').innerHTML = '';
   document.getElementById('produto-categorias-extra-list').innerHTML = '';
+  _midiasExtraProduto = [];
+  document.getElementById('produto-midias-extra-preview').innerHTML = '';
 }
 
 // ---------- VARIAÇÕES E ADICIONAIS (linhas dinâmicas no formulário) ----------
@@ -893,6 +896,8 @@ function editarProduto(id){
   carregarVariacoesProduto(p.variacoes);
   carregarAdicionaisProduto(p.adicionais);
   carregarCategoriasExtraProduto(p.categorias_extra);
+  _midiasExtraProduto = p.midias_extra ? [...p.midias_extra] : [];
+  renderMidiasExtraPreview();
   if(p.foto){
     const preview = document.getElementById('p-foto-preview');
     preview.src = p.foto;
@@ -930,6 +935,134 @@ async function enviarFotoProduto(event){
   preview.style.display = 'block';
   msg.textContent = 'foto enviada!';
 }
+
+// ---------- FOTOS E VÍDEOS EXTRAS DO PRODUTO ----------
+
+let _midiasExtraProduto = [];
+
+function renderMidiasExtraPreview(){
+  const container = document.getElementById('produto-midias-extra-preview');
+  container.innerHTML = _midiasExtraProduto.map((m, i) => `
+    <div style="position:relative; width:64px; height:64px;">
+      ${m.tipo === 'video'
+        ? `<video src="${escapeHtmlV(m.url)}" style="width:64px; height:64px; object-fit:cover; border-radius:8px; background:#000;"></video><span style="position:absolute; top:2px; left:2px; font-size:0.7rem;">🎥</span>`
+        : `<img src="${escapeHtmlV(m.url)}" style="width:64px; height:64px; object-fit:cover; border-radius:8px;">`}
+      <button type="button" onclick="_midiasExtraProduto.splice(${i},1); renderMidiasExtraPreview();" style="position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#a4402f; color:white; border:none; font-size:0.7rem; cursor:pointer;">✕</button>
+    </div>
+  `).join('');
+}
+
+async function enviarMidiaExtraProduto(event, tipo){
+  const files = Array.from(event.target.files || []);
+  const msg = document.getElementById('p-midia-extra-msg');
+  if(files.length === 0 || !currentUserV) return;
+
+  msg.textContent = `enviando ${files.length > 1 ? 'arquivos' : 'arquivo'}...`;
+
+  for(const file of files){
+    const extensao = tipo === 'video' ? 'mp4' : 'jpg';
+    const nomeArquivo = `produtos/${currentUserV.id}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${extensao}`;
+
+    const { error } = await supabaseClientV.storage.from('fotos').upload(nomeArquivo, file);
+    if(error){
+      console.error(error);
+      msg.textContent = 'erro ao enviar: ' + error.message;
+      continue;
+    }
+
+    const { data } = supabaseClientV.storage.from('fotos').getPublicUrl(nomeArquivo);
+    _midiasExtraProduto.push({ tipo, url: data.publicUrl });
+  }
+
+  msg.textContent = '✓ enviado!';
+  renderMidiasExtraPreview();
+  event.target.value = '';
+}
+
+// ---------- GALERIA DO PRODUTO EM TELA CHEIA ----------
+
+let _galeriaMidias = [];
+let _galeriaIndiceAtual = 0;
+
+function abrirGaleriaProduto(produtoId){
+  const p = produtos.find(x => x.id === produtoId);
+  if(!p) return;
+
+  _galeriaMidias = [];
+  if(p.foto) _galeriaMidias.push({ tipo: 'foto', url: p.foto });
+  (p.midias_extra || []).forEach(m => _galeriaMidias.push(m));
+
+  if(_galeriaMidias.length === 0){
+    _galeriaMidias.push({ tipo: 'foto', url: 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(p.nome) });
+  }
+
+  _galeriaIndiceAtual = 0;
+  document.getElementById('overlay-galeria-produto').style.display = 'flex';
+  renderGaleriaMiniaturas();
+  mostrarMidiaGaleriaAtual();
+}
+
+function fecharGaleriaProduto(){
+  document.getElementById('galeria-video').pause();
+  document.getElementById('overlay-galeria-produto').style.display = 'none';
+}
+
+function navegarGaleriaProduto(direcao){
+  _galeriaIndiceAtual = (_galeriaIndiceAtual + direcao + _galeriaMidias.length) % _galeriaMidias.length;
+  mostrarMidiaGaleriaAtual();
+}
+
+function irParaMidiaGaleria(indice){
+  _galeriaIndiceAtual = indice;
+  mostrarMidiaGaleriaAtual();
+}
+
+function mostrarMidiaGaleriaAtual(){
+  const midia = _galeriaMidias[_galeriaIndiceAtual];
+  const imgEl = document.getElementById('galeria-imagem');
+  const videoEl = document.getElementById('galeria-video');
+
+  videoEl.pause();
+
+  if(midia.tipo === 'video'){
+    videoEl.src = midia.url;
+    videoEl.style.display = 'block';
+    imgEl.style.display = 'none';
+  } else {
+    imgEl.src = midia.url;
+    imgEl.style.display = 'block';
+    videoEl.style.display = 'none';
+  }
+
+  document.getElementById('galeria-contador').textContent = `${_galeriaIndiceAtual + 1} / ${_galeriaMidias.length}`;
+
+  document.querySelectorAll('#galeria-miniaturas .miniatura-galeria').forEach((el, i) => {
+    el.style.opacity = i === _galeriaIndiceAtual ? '1' : '0.4';
+    el.style.border = i === _galeriaIndiceAtual ? '2px solid white' : '2px solid transparent';
+  });
+}
+
+function renderGaleriaMiniaturas(){
+  const container = document.getElementById('galeria-miniaturas');
+  if(_galeriaMidias.length <= 1){ container.innerHTML = ''; return; }
+
+  container.innerHTML = _galeriaMidias.map((m, i) => `
+    <div class="miniatura-galeria" onclick="irParaMidiaGaleria(${i})" style="width:48px; height:48px; flex-shrink:0; border-radius:6px; overflow:hidden; cursor:pointer; opacity:0.4;">
+      ${m.tipo === 'video'
+        ? `<video src="${escapeHtmlV(m.url)}" style="width:100%; height:100%; object-fit:cover;"></video>`
+        : `<img src="${escapeHtmlV(m.url)}" style="width:100%; height:100%; object-fit:cover;">`}
+    </div>
+  `).join('');
+}
+
+// Navegação por teclado (setas do teclado) quando a galeria está aberta
+document.addEventListener('keydown', (e) => {
+  const galeriaAberta = document.getElementById('overlay-galeria-produto') && document.getElementById('overlay-galeria-produto').style.display === 'flex';
+  if(!galeriaAberta) return;
+  if(e.key === 'ArrowLeft') navegarGaleriaProduto(-1);
+  if(e.key === 'ArrowRight') navegarGaleriaProduto(1);
+  if(e.key === 'Escape') fecharGaleriaProduto();
+});
 
 function onFotoProdutoLinkChange(){
   const url = document.getElementById('p-foto').value.trim();
@@ -1001,6 +1134,7 @@ async function salvarProduto(e){
     variacoes: coletarVariacoesProduto(),
     adicionais: coletarAdicionaisProduto(),
     categorias_extra: coletarCategoriasExtraProduto(),
+    midias_extra: _midiasExtraProduto,
     produto_18_mais: document.getElementById('p-18mais').checked
   };
 
@@ -1095,6 +1229,62 @@ function precoTextoParaNumeroV(precoTexto){
 // Decide se precisa abrir o modal de opções (variação/adicionais) antes de
 // adicionar, ou se pode adicionar direto (produto sem nenhuma opção)
 let _opcoesProdutoAtualId = null;
+
+// Soma a quantidade de todas as combinações desse produto no carrinho
+// (produtos com variação/adicional podem ter vários "chaveItem" diferentes
+// pro mesmo produtoId — aqui soma tudo, só pra mostrar o total no card)
+function quantidadeTotalNoCarrinho(produtoId){
+  return carrinhoV.filter(i => i.produtoId === produtoId).reduce((soma, i) => soma + i.quantidade, 0);
+}
+
+function renderBotaoCarrinhoProduto(p){
+  const temOpcoes = (p.variacoes && p.variacoes.length > 0) || (p.adicionais && p.adicionais.length > 0);
+  const quantidade = quantidadeTotalNoCarrinho(p.id);
+
+  // Produto com variação/adicional sempre abre a telinha de escolha (não dá
+  // pra usar um +/- simples, já que cada combinação é um item diferente) —
+  // mas mostra quantos já tem no carrinho, pra não precisar abrir pra checar
+  if(temOpcoes){
+    return `
+      <button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="prepararAdicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>
+      ${quantidade > 0 ? `<div style="text-align:center; font-size:0.75rem; color:var(--verde-escuro); font-weight:700; margin-top:4px;">${quantidade} no carrinho</div>` : ''}
+    `;
+  }
+
+  // Produto simples: assim que tiver pelo menos 1 no carrinho, troca o
+  // botão por um contador direto no card — evita precisar abrir o carrinho
+  // só pra ver/ajustar a quantidade
+  if(quantidade === 0){
+    return `<button type="button" class="btn-comprar-externo" style="background:#0f766e; border:none; cursor:pointer; width:100%;" onclick="prepararAdicionarAoCarrinho('${p.id}')">🛒 Adicionar ao carrinho</button>`;
+  }
+
+  return `
+    <div style="display:flex; align-items:center; justify-content:center; gap:10px; background:#0f766e; border-radius:8px; padding:6px;">
+      <button type="button" onclick="ajustarQuantidadeCardProduto('${p.id}', -1)" style="width:28px; height:28px; border-radius:50%; border:none; background:white; color:#0f766e; font-weight:800; font-size:1rem; cursor:pointer;">−</button>
+      <span style="color:white; font-weight:800; min-width:20px; text-align:center;">${quantidade}</span>
+      <button type="button" onclick="ajustarQuantidadeCardProduto('${p.id}', 1)" style="width:28px; height:28px; border-radius:50%; border:none; background:white; color:#0f766e; font-weight:800; font-size:1rem; cursor:pointer;">+</button>
+    </div>
+  `;
+}
+
+function ajustarQuantidadeCardProduto(produtoId, delta){
+  const item = carrinhoV.find(i => i.produtoId === produtoId);
+  if(delta > 0){
+    if(item){
+      item.quantidade++;
+    } else {
+      adicionarAoCarrinho(produtoId);
+      return; // adicionarAoCarrinho já salva e re-renderiza sozinho
+    }
+  } else if(item){
+    item.quantidade--;
+    if(item.quantidade <= 0){
+      carrinhoV = carrinhoV.filter(i => i.chaveItem !== item.chaveItem);
+    }
+  }
+  salvarCarrinhoV();
+  renderProdutos();
+}
 
 function prepararAdicionarAoCarrinho(produtoId){
   const p = produtos.find(x => x.id === produtoId);
@@ -1191,6 +1381,7 @@ function adicionarAoCarrinho(produtoId, varianteEscolhida, adicionaisEscolhidos)
     });
   }
   salvarCarrinhoV();
+  renderProdutos();
 
   // Pequeno feedback visual de confirmação
   const badge = document.getElementById('badge-carrinho');

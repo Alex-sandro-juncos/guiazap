@@ -311,6 +311,21 @@
   </div>
 </div>
 
+<div id="overlay-galeria-produto" style="display:none; position:fixed; inset:0; background:#000; z-index:1500; align-items:center; justify-content:center;">
+  <button type="button" onclick="fecharGaleriaProduto()" style="position:absolute; top:16px; right:16px; z-index:10; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.3rem; cursor:pointer;">✕</button>
+  <div id="galeria-contador" style="position:absolute; top:22px; left:16px; z-index:10; color:white; font-size:0.85rem; font-weight:700; background:rgba(0,0,0,0.4); padding:4px 12px; border-radius:50px;"></div>
+
+  <button type="button" onclick="navegarGaleriaProduto(-1)" style="position:absolute; left:8px; z-index:10; background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.5rem; cursor:pointer;">‹</button>
+  <button type="button" onclick="navegarGaleriaProduto(1)" style="position:absolute; right:8px; z-index:10; background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.5rem; cursor:pointer;">›</button>
+
+  <div id="galeria-midia-container" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; padding:40px 16px;">
+    <img id="galeria-imagem" style="display:none; max-width:100%; max-height:100%; object-fit:contain;">
+    <video id="galeria-video" style="display:none; max-width:100%; max-height:100%;" controls playsinline></video>
+  </div>
+
+  <div id="galeria-miniaturas" style="position:absolute; bottom:16px; left:0; right:0; display:flex; gap:6px; justify-content:center; overflow-x:auto; padding:0 16px;"></div>
+</div>
+
 <div id="overlay-comando-cardapio" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1300; align-items:center; justify-content:center; padding:16px;">
   <div style="background:white; width:100%; max-width:520px; border-radius:16px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
     <div style="padding:16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#e91e63;">
@@ -485,6 +500,26 @@ Content-Type: application/json
     <input id="p-foto" placeholder="https://..." oninput="onFotoProdutoLinkChange()">
     <button type="button" onclick="gerarFotoProdutoComIA()" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:1.5px solid #6b46c1; background:white; color:#6b46c1; font-weight:700; font-size:0.82rem; cursor:pointer;">🎨 Gerar foto com IA (baseado no nome do produto)</button>
     <span class="foto-msg" id="p-foto-ia-msg"></span>
+  </div>
+  <div class="field">
+    <label>Mais fotos e vídeos (opcional)</label>
+    <label class="foto-ou">Útil pra produtos que precisam mostrar vários ângulos ou detalhes (imóveis, carros, móveis). Aparecem numa galeria em tela cheia quando alguém tocar no produto.</label>
+    <div id="produto-midias-extra-preview" style="display:flex; flex-wrap:wrap; gap:8px; margin:8px 0;"></div>
+    <div class="foto-opcoes">
+      <label class="btn-foto-opcao">
+        📷 Tirar foto
+        <input type="file" accept="image/*" capture="environment" onchange="enviarMidiaExtraProduto(event, 'foto')" style="display:none;">
+      </label>
+      <label class="btn-foto-opcao">
+        🖼️ Escolher fotos
+        <input type="file" accept="image/*" multiple onchange="enviarMidiaExtraProduto(event, 'foto')" style="display:none;">
+      </label>
+      <label class="btn-foto-opcao">
+        🎥 Adicionar vídeo
+        <input type="file" accept="video/*" onchange="enviarMidiaExtraProduto(event, 'video')" style="display:none;">
+      </label>
+    </div>
+    <span class="foto-msg" id="p-midia-extra-msg"></span>
   </div>
   <div class="field">
     <label>Link externo de compra (opcional)</label>
