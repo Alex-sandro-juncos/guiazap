@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -281,6 +282,8 @@
     <button type="button" class="btn-add-produto" id="v-ia-cardapio-btn" style="display:none; background:#6b46c1; margin-right:6px;" onclick="abrirFormCardapioIA()">✨ Cadastrar por foto do cardápio</button>
     <button type="button" class="btn-add-produto" id="v-massa-bot-btn" style="display:none; background:#1c1c1c; margin-right:6px;" onclick="abrirAcaoEmMassaBot()">🤖 Ajustar categorias no robô</button>
     <button type="button" class="btn-add-produto" id="v-comando-voz-btn" style="display:none; background:#e91e63; margin-right:6px;" onclick="abrirComandoCardapio()">🎙️ Editar cardápio por voz/texto</button>
+    <button type="button" class="btn-add-produto" id="v-importar-planilha-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="abrirImportarPlanilha()">📊 Importar planilha de produtos</button>
+    <button type="button" class="btn-add-produto" id="v-sync-api-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="abrirSincronizacaoAPI()">🔗 Sincronização automática (API)</button>
     <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
   </div>
 </div>
@@ -326,6 +329,72 @@
       </div>
       <button type="button" onclick="enviarComandoCardapio()" style="width:100%; margin-top:12px; padding:12px; border-radius:10px; border:none; background:#1c1c1c; color:white; font-weight:700; cursor:pointer;">✨ Interpretar comando</button>
       <div id="comando-cardapio-resultado" style="margin-top:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-importar-planilha" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1300; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; width:100%; max-width:560px; border-radius:16px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div style="padding:16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#0a4a6b;">
+      <b style="font-size:1rem; color:white;">📊 Importar planilha de produtos</b>
+      <button type="button" onclick="fecharImportarPlanilha()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:white;">✕</button>
+    </div>
+    <div style="padding:16px; overflow-y:auto; flex:1;">
+      <div class="field">
+        <label>Empresa</label>
+        <select id="planilha-empresa" style="width:100%; padding:9px; border:1px solid #ddd; border-radius:8px;"></select>
+      </div>
+      <p style="font-size:0.85rem; color:#555; margin:10px 0;">Exporta uma planilha do seu sistema (ou preenche a nossa), com colunas: <b>Nome, Preço, Categoria, Descrição, Código Externo (opcional)</b>. Sobe o arquivo abaixo — os produtos aparecem pra você conferir antes de publicar.</p>
+      <a href="modelo-produtos-guiazap.xlsx" download style="display:inline-block; margin-bottom:12px; font-size:0.82rem; font-weight:700; color:#0a4a6b;">⬇️ Baixar planilha modelo</a>
+      <label style="display:block; text-align:center; background:#f2f2f2; border:2px dashed #ccc; border-radius:12px; padding:24px 16px; cursor:pointer;">
+        <div style="font-size:1.8rem; margin-bottom:8px;">📊</div>
+        <div style="font-weight:700; color:#0a4a6b;">Toque pra escolher a planilha (.xlsx ou .csv)</div>
+        <input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="processarPlanilhaProdutos(event)">
+      </label>
+      <div id="planilha-resultado" style="margin-top:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-sincronizacao-api" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1300; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; width:100%; max-width:560px; border-radius:16px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div style="padding:16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#0a4a6b;">
+      <b style="font-size:1rem; color:white;">🔗 Sincronização automática (API)</b>
+      <button type="button" onclick="fecharSincronizacaoAPI()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:white;">✕</button>
+    </div>
+    <div style="padding:16px; overflow-y:auto; flex:1;">
+      <div class="field">
+        <label>Empresa</label>
+        <select id="sync-empresa" onchange="carregarChaveSincronizacao()" style="width:100%; padding:9px; border:1px solid #ddd; border-radius:8px;"></select>
+      </div>
+      <p style="font-size:0.85rem; color:#555; margin:10px 0;">Se sua empresa tem um sistema próprio (PDV, ERP), o pessoal técnico de lá pode usar essa chave pra manter os produtos sempre atualizados aqui automaticamente, sem precisar cadastrar de novo toda vez.</p>
+      <div class="field">
+        <label>Sua chave de integração</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="sync-chave" readonly style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px; font-family:monospace; font-size:0.8rem; background:#f7f7f7;">
+          <button type="button" onclick="copiarChaveSincronizacao()" style="padding:9px 14px; border-radius:8px; border:none; background:#0a4a6b; color:white; font-weight:700; cursor:pointer;">Copiar</button>
+        </div>
+        <button type="button" onclick="gerarNovaChaveSincronizacao()" style="margin-top:8px; background:none; border:none; color:#a4402f; font-size:0.78rem; cursor:pointer; text-decoration:underline;">Gerar nova chave (invalida a anterior)</button>
+      </div>
+      <div style="background:#f7f7f7; border-radius:10px; padding:12px; margin-top:14px;">
+        <b style="font-size:0.82rem;">Como o sistema deles deve chamar:</b>
+        <pre style="font-size:0.72rem; overflow-x:auto; white-space:pre-wrap; margin-top:6px; background:#1c1c1c; color:#7ee787; padding:10px; border-radius:8px;">POST https://guiazap.shop/.netlify/functions/sincronizar-produtos-api
+Content-Type: application/json
+
+{
+  "chave": "SUA_CHAVE_AQUI",
+  "produtos": [
+    {
+      "codigo_externo": "PROD001",
+      "nome": "X-Burguer",
+      "preco": "18,00",
+      "categoria": "Lanches",
+      "descricao": "Pão, hambúrguer, queijo"
+    }
+  ]
+}</pre>
+        <p style="font-size:0.72rem; color:#888; margin-top:8px;">Cada produto com o mesmo "codigo_externo" que já existe é ATUALIZADO, não duplicado. Produtos novos são criados automaticamente.</p>
+      </div>
     </div>
   </div>
 </div>

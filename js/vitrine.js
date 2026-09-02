@@ -84,6 +84,8 @@ async function initAuthV(){
       document.getElementById('v-ia-cardapio-btn').style.display = 'inline-block';
       document.getElementById('v-massa-bot-btn').style.display = 'inline-block';
       document.getElementById('v-comando-voz-btn').style.display = 'inline-block';
+      document.getElementById('v-importar-planilha-btn').style.display = 'inline-block';
+      document.getElementById('v-sync-api-btn').style.display = 'inline-block';
     }
   }
 }
@@ -1561,6 +1563,248 @@ async function aplicarAcaoEmMassaBot(incluir){
 
   msg.textContent = `✅ ${incluir ? 'Incluídos' : 'Removidos'} ${count ?? ''} produto(s) da categoria "${categoria}" no robô.`;
   setTimeout(() => { fecharAcaoEmMassaBot(); loadProdutos(); }, 1800);
+}
+
+// ---------- IMPORTAR PLANILHA DE PRODUTOS ----------
+
+let _produtosDaPlanilha = [];
+
+function abrirImportarPlanilha(){
+  if(meusCadastros.length === 0){
+    alert('Você precisa ter uma empresa no Pacote Vendas pra usar isso.');
+    return;
+  }
+  document.getElementById('planilha-empresa').innerHTML = meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('');
+  document.getElementById('planilha-resultado').innerHTML = '';
+  document.getElementById('overlay-importar-planilha').style.display = 'flex';
+}
+
+function fecharImportarPlanilha(){
+  document.getElementById('overlay-importar-planilha').style.display = 'none';
+  _produtosDaPlanilha = [];
+}
+
+function processarPlanilhaProdutos(event){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const resultado = document.getElementById('planilha-resultado');
+  resultado.innerHTML = '<p style="text-align:center; padding:16px; color:#888;">Lendo a planilha...</p>';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const dados = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(dados, { type: 'array' });
+      const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+      const linhas = XLSX.utils.sheet_to_json(primeiraAba, { defval: '' });
+
+      if(linhas.length === 0){
+        resultado.innerHTML = '<p style="color:#a4402f; text-align:center;">A planilha está vazia.</p>';
+        return;
+      }
+
+      // Aceita variações comuns de nome de coluna (com/sem acento, maiúscula/minúscula)
+      const acharColuna = (linha, opcoes) => {
+        const chaves = Object.keys(linha);
+        for(const opcao of opcoes){
+          const achada = chaves.find(k => k.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === opcao);
+          if(achada) return linha[achada];
+        }
+        return '';
+      };
+
+      _produtosDaPlanilha = linhas.map(linha => ({
+        nome: String(acharColuna(linha, ['nome', 'produto']) || '').trim(),
+        preco: String(acharColuna(linha, ['preco', 'valor']) || '').trim(),
+        categoria: String(acharColuna(linha, ['categoria']) || '').trim(),
+        descricao: String(acharColuna(linha, ['descricao', 'descrição']) || '').trim(),
+        foto: String(acharColuna(linha, ['foto (link, opcional)', 'foto', 'imagem', 'link foto']) || '').trim(),
+        codigo_externo: String(acharColuna(linha, ['codigo externo (opcional)', 'codigo externo', 'codigo', 'sku']) || '').trim(),
+        selecionado: true
+      })).filter(p => p.nome);
+
+      if(_produtosDaPlanilha.length === 0){
+        resultado.innerHTML = '<p style="color:#a4402f; text-align:center;">Não encontrei nenhum produto com nome preenchido. Confere se a coluna "Nome" está certa.</p>';
+        return;
+      }
+
+      renderProdutosDaPlanilha();
+    } catch(err){
+      console.error(err);
+      resultado.innerHTML = '<p style="color:#a4402f; text-align:center;">Erro ao ler a planilha. Confere se é um arquivo .xlsx ou .csv válido.</p>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderProdutosDaPlanilha(){
+  const resultado = document.getElementById('planilha-resultado');
+  const selecionados = _produtosDaPlanilha.filter(p => p.selecionado).length;
+  const semCategoria = _produtosDaPlanilha.filter(p => p.selecionado && !p.categoria).length;
+  const semFoto = _produtosDaPlanilha.filter(p => p.selecionado && !p.foto).length;
+
+  resultado.innerHTML = `
+    <p style="font-size:0.85rem; font-weight:700; margin-bottom:10px;">Encontrei ${_produtosDaPlanilha.length} produto${_produtosDaPlanilha.length !== 1 ? 's' : ''}:</p>
+    ${semCategoria > 0 || semFoto > 0 ? `
+      <div style="background:#f3f0ff; border-radius:10px; padding:12px; margin-bottom:12px;">
+        <b style="font-size:0.8rem;">✨ Completar com IA (opcional)</b>
+        ${semCategoria > 0 ? `<button type="button" onclick="completarCategoriasComIA()" style="display:block; width:100%; margin-top:8px; padding:9px; border-radius:8px; border:1.5px solid #6b46c1; background:white; color:#6b46c1; font-weight:700; font-size:0.8rem; cursor:pointer;">🏷️ Sugerir categoria pros ${semCategoria} item(ns) sem categoria (rápido, barato)</button>` : ''}
+        ${semFoto > 0 ? `<button type="button" onclick="gerarFotosPlanilhaComIA()" style="display:block; width:100%; margin-top:8px; padding:9px; border-radius:8px; border:1.5px solid #6b46c1; background:white; color:#6b46c1; font-weight:700; font-size:0.8rem; cursor:pointer;">🎨 Gerar foto pros ${semFoto} item(ns) sem foto</button>` : ''}
+        ${semFoto > 50 ? `<p style="font-size:0.72rem; color:#a4402f; margin-top:6px;">⚠️ ${semFoto} fotos é bastante — cada uma tem um custo (na conta da OpenAI) e demora alguns segundos. Pra catálogos muito grandes, recomendo usar fotos reais (coluna "Foto" na planilha) em vez de gerar tudo por IA.</p>` : ''}
+      </div>
+    ` : ''}
+    <div style="max-height:280px; overflow-y:auto;">
+      ${_produtosDaPlanilha.map((p, i) => `
+        <label style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f0f0; cursor:pointer;">
+          <input type="checkbox" ${p.selecionado ? 'checked' : ''} onchange="_produtosDaPlanilha[${i}].selecionado = this.checked; renderProdutosDaPlanilha();">
+          ${p.foto ? `<img src="${escapeHtmlV(p.foto)}" style="width:28px; height:28px; border-radius:5px; object-fit:cover; flex-shrink:0;">` : ''}
+          <span style="flex:1; font-size:0.85rem;">${escapeHtmlV(p.nome)}${p.categoria ? ' — ' + escapeHtmlV(p.categoria) : ' — <i style="color:#a4402f;">sem categoria</i>'}</span>
+          <b style="font-size:0.82rem;">R$ ${escapeHtmlV(p.preco || 'a combinar')}</b>
+        </label>
+      `).join('')}
+    </div>
+    <button type="button" onclick="salvarProdutosDaPlanilha()" style="width:100%; margin-top:12px; padding:12px; border-radius:10px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Publicar ${selecionados} produto${selecionados !== 1 ? 's' : ''}</button>
+    <span id="planilha-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+  `;
+}
+
+async function completarCategoriasComIA(){
+  const resultado = document.getElementById('planilha-resultado');
+  const indicesSemCategoria = _produtosDaPlanilha.map((p, i) => ({ p, i })).filter(x => x.p.selecionado && !x.p.categoria);
+  if(indicesSemCategoria.length === 0) return;
+
+  const msgAntiga = resultado.innerHTML;
+  resultado.innerHTML = `<p style="text-align:center; padding:16px; color:#6b46c1;">✨ Sugerindo categorias pra ${indicesSemCategoria.length} produto(s)...</p>`;
+
+  try{
+    const resp = await fetch('/.netlify/functions/sugerir-categorias-produtos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ produtos: indicesSemCategoria.map(x => ({ nome: x.p.nome, descricao: x.p.descricao })) })
+    });
+    const data = await resp.json();
+
+    if(resp.ok && Array.isArray(data.categorias)){
+      indicesSemCategoria.forEach((x, idx) => {
+        if(data.categorias[idx]) _produtosDaPlanilha[x.i].categoria = data.categorias[idx];
+      });
+    }
+  } catch(e){
+    console.error(e);
+  }
+
+  renderProdutosDaPlanilha();
+}
+
+async function gerarFotosPlanilhaComIA(){
+  const indicesSemFoto = _produtosDaPlanilha.map((p, i) => ({ p, i })).filter(x => x.p.selecionado && !x.p.foto);
+  if(indicesSemFoto.length === 0) return;
+
+  if(indicesSemFoto.length > 30 && !confirm(`Isso vai gerar ${indicesSemFoto.length} fotos por IA, uma por vez — pode demorar vários minutos e tem custo por imagem na sua conta da OpenAI. Quer continuar mesmo assim?`)) return;
+
+  const resultado = document.getElementById('planilha-resultado');
+
+  for(let idx = 0; idx < indicesSemFoto.length; idx++){
+    const x = indicesSemFoto[idx];
+    resultado.innerHTML = `<p style="text-align:center; padding:16px; color:#6b46c1;">🎨 Gerando foto ${idx+1} de ${indicesSemFoto.length}: ${escapeHtmlV(x.p.nome)}...</p>`;
+
+    try{
+      const resp = await fetch('/.netlify/functions/gerar-foto-produto-ia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nomeProduto: x.p.nome, descricaoProduto: x.p.descricao, categoria: x.p.categoria })
+      });
+      const data = await resp.json();
+      if(resp.ok && data.fotoUrl) _produtosDaPlanilha[x.i].foto = data.fotoUrl;
+    } catch(e){
+      console.error('erro ao gerar foto pra ' + x.p.nome, e);
+    }
+  }
+
+  renderProdutosDaPlanilha();
+}
+
+async function salvarProdutosDaPlanilha(){
+  const profissionalId = document.getElementById('planilha-empresa').value;
+  const msg = document.getElementById('planilha-msg');
+  const selecionados = _produtosDaPlanilha.filter(p => p.selecionado);
+
+  if(selecionados.length === 0){ msg.textContent = 'Selecione pelo menos um produto.'; return; }
+
+  msg.textContent = 'publicando...';
+
+  const payloads = selecionados.map(p => ({
+    profissional_id: profissionalId,
+    nome: p.nome,
+    preco: p.preco || null,
+    categoria: p.categoria || null,
+    descricao: p.descricao || null,
+    foto: p.foto || null,
+    codigo_externo: p.codigo_externo || null,
+    disponivel_venda: true,
+    no_cardapio_bot: true
+  }));
+
+  const { error } = await supabaseClientV.from('produtos').insert(payloads);
+  if(error){ console.error(error); msg.textContent = 'Erro ao publicar: ' + error.message; return; }
+
+  msg.textContent = `✅ ${selecionados.length} produto(s) publicado(s) com sucesso!`;
+  setTimeout(() => {
+    fecharImportarPlanilha();
+    loadProdutos();
+  }, 1500);
+}
+
+// ---------- SINCRONIZAÇÃO AUTOMÁTICA POR API ----------
+
+function abrirSincronizacaoAPI(){
+  if(meusCadastros.length === 0){
+    alert('Você precisa ter uma empresa no Pacote Vendas pra usar isso.');
+    return;
+  }
+  document.getElementById('sync-empresa').innerHTML = meusCadastros.map(c => `<option value="${c.id}">${escapeHtmlV(c.name)}</option>`).join('');
+  document.getElementById('overlay-sincronizacao-api').style.display = 'flex';
+  carregarChaveSincronizacao();
+}
+
+function fecharSincronizacaoAPI(){
+  document.getElementById('overlay-sincronizacao-api').style.display = 'none';
+}
+
+async function carregarChaveSincronizacao(){
+  const profissionalId = document.getElementById('sync-empresa').value;
+  const campo = document.getElementById('sync-chave');
+  campo.value = 'carregando...';
+
+  const { data } = await supabaseClientV.from('integracoes_produtos').select('chave').eq('profissional_id', profissionalId).maybeSingle();
+
+  if(data && data.chave){
+    campo.value = data.chave;
+  } else {
+    campo.value = '(nenhuma chave gerada ainda)';
+  }
+}
+
+function gerarChaveAleatoria(){
+  return 'gz_' + Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function gerarNovaChaveSincronizacao(){
+  const profissionalId = document.getElementById('sync-empresa').value;
+  if(!confirm('Gerar uma chave nova? A chave antiga vai parar de funcionar imediatamente.')) return;
+
+  const novaChave = gerarChaveAleatoria();
+  const { error } = await supabaseClientV.from('integracoes_produtos').upsert({ profissional_id: profissionalId, chave: novaChave, updated_at: new Date().toISOString() }, { onConflict: 'profissional_id' });
+
+  if(error){ alert('Erro ao gerar chave: ' + error.message); return; }
+  document.getElementById('sync-chave').value = novaChave;
+}
+
+function copiarChaveSincronizacao(){
+  const campo = document.getElementById('sync-chave');
+  if(!campo.value || campo.value.includes('nenhuma chave')){ alert('Gera uma chave primeiro.'); return; }
+  navigator.clipboard.writeText(campo.value).then(() => alert('Chave copiada!')).catch(() => {});
 }
 
 // ---------- EDITAR CARDÁPIO POR VOZ/TEXTO ----------

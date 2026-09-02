@@ -2495,12 +2495,23 @@ async function renderPainelVerificacao(profissionalId){
   const digitos = (documento || '').replace(/\D/g, '');
   let statusDocumento = '⚠️ Não foi possível conferir';
   if(digitos.length === 11) statusDocumento = validarCPF(digitos) ? '✓ CPF válido' : '⚠️ CPF inválido';
-  if(digitos.length === 14) statusDocumento = validarCNPJ(digitos) ? '✓ CNPJ válido' : '⚠️ CNPJ inválido';
+  if(digitos.length === 14){
+    statusDocumento = validarCNPJ(digitos) ? '✓ CNPJ válido (conferindo na Receita...)' : '⚠️ CNPJ inválido';
+    if(validarCNPJ(digitos)){
+      fetch(`/.netlify/functions/verificar-cnpj-real?cnpj=${digitos}`).then(r => r.json()).then(data => {
+        const el = document.querySelector(`#painel-verificacao-${profissionalId} .status-documento-real`);
+        if(!el) return;
+        if(data.encontrado === false) el.textContent = ' — ⚠️ não encontrado na Receita Federal';
+        else if(data.encontrado === true) el.textContent = data.ativo ? ` — ✓ ativo na Receita (${data.razaoSocial || ''})` : ` — ⚠️ situação "${data.situacao}" na Receita`;
+        else el.textContent = '';
+      }).catch(() => {});
+    }
+  }
 
   container.innerHTML = `
     <div class="painel-verificacao">
       <div class="painel-verificacao-titulo">🔵 Verificação em andamento</div>
-      <div class="verificacao-item">📋 Documento (CPF/CNPJ): ${statusDocumento}</div>
+      <div class="verificacao-item">📋 Documento (CPF/CNPJ): ${statusDocumento}<span class="status-documento-real"></span></div>
       <div class="verificacao-item">
         📄 Foto do documento:
         ${cadastro.verificacao_documento_url
@@ -3341,6 +3352,59 @@ function mascaraDocumento(event){
          .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
   }
   event.target.value = v;
+}
+
+async function conferirDocumentoAoSair(){
+  const digitos = document.getElementById('f-documento').value.replace(/\D/g, '');
+  const msg = document.getElementById('f-documento-msg');
+  if(!digitos) { msg.textContent = ''; return; }
+
+  if(digitos.length === 11){
+    msg.textContent = validarCPF(digitos) ? '✓ CPF válido' : '⚠️ Esse CPF não é válido';
+    msg.style.color = validarCPF(digitos) ? 'var(--verde-escuro)' : '#a4402f';
+    return;
+  }
+
+  if(digitos.length === 14){
+    if(!validarCNPJ(digitos)){
+      msg.textContent = '⚠️ Esse CNPJ não é válido';
+      msg.style.color = '#a4402f';
+      return;
+    }
+
+    // Válido matematicamente — confere agora se existe DE VERDADE na
+    // Receita Federal (consulta gratuita e pública)
+    msg.textContent = '🔍 Conferindo na Receita Federal...';
+    msg.style.color = '#888';
+    try{
+      const resp = await fetch(`/.netlify/functions/verificar-cnpj-real?cnpj=${digitos}`);
+      const data = await resp.json();
+
+      if(data.encontrado === false){
+        msg.textContent = '⚠️ Esse CNPJ não foi encontrado na Receita Federal — confira se digitou certo';
+        msg.style.color = '#a4402f';
+      } else if(data.encontrado === true){
+        if(data.ativo){
+          msg.textContent = `✓ CNPJ ativo na Receita Federal — ${data.razaoSocial || ''}`;
+          msg.style.color = 'var(--verde-escuro)';
+        } else {
+          msg.textContent = `⚠️ CNPJ encontrado, mas está com situação "${data.situacao}" (não ativo)`;
+          msg.style.color = '#a4402f';
+        }
+      } else {
+        // Consulta indisponível no momento — não bloqueia o cadastro, só avisa
+        msg.textContent = '✓ CNPJ válido (não foi possível confirmar na Receita agora, mas o cadastro pode continuar)';
+        msg.style.color = 'var(--verde-escuro)';
+      }
+    } catch(e){
+      msg.textContent = '✓ CNPJ válido';
+      msg.style.color = 'var(--verde-escuro)';
+    }
+    return;
+  }
+
+  msg.textContent = '⚠️ Digite um CPF (11 números) ou CNPJ (14 números)';
+  msg.style.color = '#a4402f';
 }
 
 function normalizarTexto(str){
