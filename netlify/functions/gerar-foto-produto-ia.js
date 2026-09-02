@@ -2,6 +2,12 @@
 // produto não tem foto cadastrada. A imagem gerada é salva no Storage do
 // Supabase (mesmo bucket "fotos" usado pro resto do site), e a URL pública
 // é devolvida pra ser salva no produto.
+//
+// ⚠️ SEGURANÇA: exige login, dono da empresa, e respeita limite diário de
+// uso — essa é a função de IA MAIS CARA (gera imagem), então o limite é
+// mais apertado que as outras.
+
+const { verificarAutenticacaoEUsoIA } = require('./ia-seguranca-helper');
 
 exports.handler = async function (event) {
   try {
@@ -9,9 +15,14 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { nomeProduto, descricaoProduto, categoria } = JSON.parse(event.body || '{}');
+    const { nomeProduto, descricaoProduto, categoria, profissionalId } = JSON.parse(event.body || '{}');
     if (!nomeProduto) {
       return { statusCode: 400, body: JSON.stringify({ error: 'nomeProduto é obrigatório' }) };
+    }
+
+    const seguranca = await verificarAutenticacaoEUsoIA(event, profissionalId, 'foto', 15);
+    if (!seguranca.ok) {
+      return { statusCode: seguranca.statusCode, body: JSON.stringify({ error: seguranca.error }) };
     }
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;

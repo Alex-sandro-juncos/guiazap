@@ -2,6 +2,11 @@
 // navegador) junto com o cardápio atual da empresa, e usa o Claude pra
 // interpretar o que a pessoa quer fazer: adicionar, editar ou remover
 // produtos. A IA NUNCA aplica nada direto — só propõe, e o dono confirma.
+//
+// ⚠️ SEGURANÇA: exige login, dono da empresa, e respeita limite diário de
+// uso — evita que alguém automatize chamadas e gere custo alto na conta.
+
+const { verificarAutenticacaoEUsoIA } = require('./ia-seguranca-helper');
 
 exports.handler = async function (event) {
   try {
@@ -9,9 +14,14 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { comando, produtosAtuais } = JSON.parse(event.body || '{}');
+    const { comando, produtosAtuais, profissionalId } = JSON.parse(event.body || '{}');
     if (!comando) {
       return { statusCode: 400, body: JSON.stringify({ error: 'comando é obrigatório' }) };
+    }
+
+    const seguranca = await verificarAutenticacaoEUsoIA(event, profissionalId, 'comando', 40);
+    if (!seguranca.ok) {
+      return { statusCode: seguranca.statusCode, body: JSON.stringify({ error: seguranca.error }) };
     }
 
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;

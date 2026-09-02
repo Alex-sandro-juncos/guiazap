@@ -80,6 +80,22 @@ const supabaseClientAdmin = window.supabase.createClient(SUPABASE_URL, SUPABASE_
 let dadosAdmin = null;
 let abaAtual = 'feedback';
 
+async function verDocumentoVerificacao(profissionalId){
+  const { data: { session } } = await supabaseClientAdmin.auth.getSession();
+  if(!session){ alert('Sessão expirada, entra de novo.'); return; }
+
+  try{
+    const resp = await fetch(`/.netlify/functions/gerar-link-documento-verificacao?profissionalId=${profissionalId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.url){ alert('Erro ao abrir o documento: ' + (data.error || 'tenta de novo')); return; }
+    window.open(data.url, '_blank');
+  } catch(e){
+    alert('Erro ao abrir o documento.');
+  }
+}
+
 async function loginAdmin(){
   const email = document.getElementById('admin-email').value.trim();
   const senha = document.getElementById('admin-senha').value;
@@ -270,7 +286,7 @@ function renderVerificacoesAdmin(busca){
       <div class="meta">Documento (CPF/CNPJ): ${p.documento || 'não informado'}</div>
       <div class="meta">
         📄 Foto do documento:
-        ${p.verificacao_documento_url ? `<a href="${p.verificacao_documento_url}" target="_blank">Ver foto enviada</a>` : 'não enviada ainda'}
+        ${p.verificacao_documento_caminho ? `<a href="#" onclick="verDocumentoVerificacao('${p.id}'); return false;">Ver foto enviada</a>` : (p.verificacao_documento_url ? `<a href="${p.verificacao_documento_url}" target="_blank">Ver foto enviada (link antigo)</a>` : 'não enviada ainda')}
       </div>
       <div class="meta">📧 E-mail confirmado: ${p.verificacao_email_confirmado ? '✓ Sim' : '✗ Não'}</div>
       <div class="meta">

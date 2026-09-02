@@ -357,7 +357,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_url, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, localizacao_confirmada_manualmente')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, localizacao_confirmada_manualmente, rua, numero')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -2558,16 +2558,18 @@ async function enviarDocumentoVerificacao(event, profissionalId){
   const file = event.target.files[0];
   if(!file) return;
 
-  const nomeArquivo = `verificacao/${currentUser.id}/${Date.now()}.jpg`;
-  const { error: erroUpload } = await supabaseClient.storage.from('fotos').upload(nomeArquivo, file);
+  const nomeArquivo = `${currentUser.id}/${Date.now()}.jpg`;
+  const { error: erroUpload } = await supabaseClient.storage.from('documentos-verificacao').upload(nomeArquivo, file);
   if(erroUpload){ alert('Erro ao enviar o documento. Tente de novo.'); console.error(erroUpload); return; }
 
-  const { data: urlData } = supabaseClient.storage.from('fotos').getPublicUrl(nomeArquivo);
-  const { error } = await supabaseClient.from('profissionais').update({ verificacao_documento_url: urlData.publicUrl }).eq('id', profissionalId);
+  // Guarda só o CAMINHO do arquivo — nunca uma URL pública. O link de
+  // verdade é gerado na hora, temporário, só quando alguém autorizado pedir
+  const { error } = await supabaseClient.from('profissionais').update({ verificacao_documento_caminho: nomeArquivo }).eq('id', profissionalId);
   if(error){ alert('Erro ao salvar. Tente de novo.'); console.error(error); return; }
 
   const cadastro = entries.find(e => e.id === profissionalId);
-  if(cadastro) cadastro.verificacao_documento_url = urlData.publicUrl;
+  if(cadastro) cadastro.verificacao_documento_caminho = nomeArquivo;
+  alert('✓ Documento enviado! Fica guardado com segurança, só você e o GuiaZap conseguem ver.');
   renderPainelVerificacao(profissionalId);
 }
 

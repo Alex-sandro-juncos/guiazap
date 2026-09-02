@@ -1,6 +1,11 @@
 // Sugere uma categoria pra cada produto sem categoria, em LOTE numa única
 // chamada (bem mais barato e rápido que gerar imagem) — útil pra catálogos
 // grandes importados de planilha/sistema externo.
+//
+// ⚠️ SEGURANÇA: exige login, dono da empresa, e respeita limite diário de
+// uso — evita que alguém automatize chamadas e gere custo alto na conta.
+
+const { verificarAutenticacaoEUsoIA } = require('./ia-seguranca-helper');
 
 exports.handler = async function (event) {
   try {
@@ -8,9 +13,14 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { produtos } = JSON.parse(event.body || '{}');
+    const { produtos, profissionalId } = JSON.parse(event.body || '{}');
     if (!Array.isArray(produtos) || produtos.length === 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'produtos (lista) é obrigatório' }) };
+    }
+
+    const seguranca = await verificarAutenticacaoEUsoIA(event, profissionalId, 'categorias', 20);
+    if (!seguranca.ok) {
+      return { statusCode: seguranca.statusCode, body: JSON.stringify({ error: seguranca.error }) };
     }
 
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;

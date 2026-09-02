@@ -2,6 +2,11 @@
 // extrair os produtos automaticamente: nome, preço, descrição, categoria.
 // A IA nunca grava nada direto no banco — só devolve os dados extraídos,
 // e o dono confirma manualmente antes de qualquer coisa ser salva.
+//
+// ⚠️ SEGURANÇA: exige login, dono da empresa, e respeita limite diário de
+// uso — evita que alguém automatize chamadas e gere custo alto na conta.
+
+const { verificarAutenticacaoEUsoIA } = require('./ia-seguranca-helper');
 
 exports.handler = async function (event) {
   try {
@@ -9,9 +14,14 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { imagemBase64, mediaType } = JSON.parse(event.body || '{}');
+    const { imagemBase64, mediaType, profissionalId } = JSON.parse(event.body || '{}');
     if (!imagemBase64) {
       return { statusCode: 400, body: JSON.stringify({ error: 'imagemBase64 é obrigatório' }) };
+    }
+
+    const seguranca = await verificarAutenticacaoEUsoIA(event, profissionalId, 'cardapio', 15);
+    if (!seguranca.ok) {
+      return { statusCode: seguranca.statusCode, body: JSON.stringify({ error: seguranca.error }) };
     }
 
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;

@@ -921,10 +921,11 @@ async function gerarFotoProdutoComIA(){
   msg.style.color = '#6b46c1';
 
   try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
     const resp = await fetch('/.netlify/functions/gerar-foto-produto-ia', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nomeProduto: nome, descricaoProduto: descricao, categoria })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ nomeProduto: nome, descricaoProduto: descricao, categoria, profissionalId: document.getElementById('p-profissional').value })
     });
     const data = await resp.json();
 
@@ -1679,10 +1680,11 @@ async function completarCategoriasComIA(){
   resultado.innerHTML = `<p style="text-align:center; padding:16px; color:#6b46c1;">✨ Sugerindo categorias pra ${indicesSemCategoria.length} produto(s)...</p>`;
 
   try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
     const resp = await fetch('/.netlify/functions/sugerir-categorias-produtos', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ produtos: indicesSemCategoria.map(x => ({ nome: x.p.nome, descricao: x.p.descricao })) })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ produtos: indicesSemCategoria.map(x => ({ nome: x.p.nome, descricao: x.p.descricao })), profissionalId: document.getElementById('planilha-empresa').value })
     });
     const data = await resp.json();
 
@@ -1705,6 +1707,8 @@ async function gerarFotosPlanilhaComIA(){
   if(indicesSemFoto.length > 30 && !confirm(`Isso vai gerar ${indicesSemFoto.length} fotos por IA, uma por vez — pode demorar vários minutos e tem custo por imagem na sua conta da OpenAI. Quer continuar mesmo assim?`)) return;
 
   const resultado = document.getElementById('planilha-resultado');
+  const { data: { session } } = await supabaseClientV.auth.getSession();
+  const profissionalIdPlanilha = document.getElementById('planilha-empresa').value;
 
   for(let idx = 0; idx < indicesSemFoto.length; idx++){
     const x = indicesSemFoto[idx];
@@ -1713,11 +1717,15 @@ async function gerarFotosPlanilhaComIA(){
     try{
       const resp = await fetch('/.netlify/functions/gerar-foto-produto-ia', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nomeProduto: x.p.nome, descricaoProduto: x.p.descricao, categoria: x.p.categoria })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ nomeProduto: x.p.nome, descricaoProduto: x.p.descricao, categoria: x.p.categoria, profissionalId: profissionalIdPlanilha })
       });
       const data = await resp.json();
       if(resp.ok && data.fotoUrl) _produtosDaPlanilha[x.i].foto = data.fotoUrl;
+      if(!resp.ok && resp.status === 429){
+        alert(data.error);
+        break; // atingiu o limite diário, para o loop pra não continuar falhando
+      }
     } catch(e){
       console.error('erro ao gerar foto pra ' + x.p.nome, e);
     }
@@ -1892,11 +1900,12 @@ async function enviarComandoCardapio(){
 
   try{
     const { data: produtosDaEmpresa } = await supabaseClientV.from('produtos').select('id, nome, preco, categoria').eq('profissional_id', profissionalId);
+    const { data: { session } } = await supabaseClientV.auth.getSession();
 
     const resp = await fetch('/.netlify/functions/editar-cardapio-por-comando', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comando, produtosAtuais: produtosDaEmpresa || [] })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ comando, produtosAtuais: produtosDaEmpresa || [], profissionalId })
     });
     const data = await resp.json();
 
@@ -2101,10 +2110,11 @@ async function enviarArquivoCardapioParaIA(file){
       reader.readAsDataURL(file);
     });
 
+    const { data: { session } } = await supabaseClientV.auth.getSession();
     const resp = await fetch('/.netlify/functions/analisar-cardapio-ia', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg' })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', profissionalId: meusCadastros[0] ? meusCadastros[0].id : null })
     });
     const data = await resp.json();
 
