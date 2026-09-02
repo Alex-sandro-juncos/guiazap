@@ -219,6 +219,8 @@ function renderPedidos(){
         </div>
         <div class="itens-pedido">${itens}</div>
         <div class="total-pedido">Total: R$ ${Number(p.total).toFixed(2).replace('.', ',')}</div>
+        ${p.endereco_entrega ? `<div class="data-pedido">📍 ${escapeHtmlPedidos(p.endereco_entrega)}</div>` : ''}
+        ${p.latitude_entrega != null && p.longitude_entrega != null ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${p.latitude_entrega},${p.longitude_entrega}" target="_blank" style="display:inline-block; font-size:0.78rem; font-weight:700; color:#1565c0; text-decoration:none;">🗺️ Ver no mapa</a>` : ''}
         ${p.forma_pagamento ? `<div class="data-pedido">💳 ${escapeHtmlPedidos(p.forma_pagamento)}</div>` : ''}
         ${p.codigo_confirmacao && !['concluido', 'recusado', 'cancelado'].includes(p.status) ? `<div style="background:#fff3cd; color:#7c4a03; font-weight:800; padding:6px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem;">🔑 Código de confirmação: ${escapeHtmlPedidos(p.codigo_confirmacao)}</div>` : ''}
         <div class="data-pedido">${dataFormatada}</div>

@@ -138,6 +138,11 @@ function renderEntregas(){
       <div class="card-entrega">
         <div class="empresa-entrega">🏪 ${escapeHtmlEntregas(nomeEmpresa)}</div>
         <div class="endereco-entrega">📍 ${escapeHtmlEntregas(p.endereco_entrega || 'Endereço não informado')}</div>
+        ${p.latitude_entrega != null && p.longitude_entrega != null
+          ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${p.latitude_entrega},${p.longitude_entrega}" target="_blank" style="display:inline-block; margin-top:6px; font-size:0.82rem; font-weight:700; color:#1565c0; text-decoration:none;">🗺️ Como chegar (localização exata)</a>`
+          : p.endereco_entrega
+            ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.endereco_entrega)}" target="_blank" style="display:inline-block; margin-top:6px; font-size:0.82rem; font-weight:700; color:#1565c0; text-decoration:none;">🗺️ Como chegar</a>`
+            : ''}
         <div class="itens-entrega">${itens}</div>
         <div class="total-entrega">🛵 Taxa de entrega: R$ ${Number(p.taxa_entrega).toFixed(2).replace('.', ',')}</div>
         ${acao}
