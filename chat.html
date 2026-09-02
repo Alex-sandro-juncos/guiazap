@@ -2055,7 +2055,8 @@ function conteudoDaMensagem(m, minha){
     }).join('');
 
     return `
-      <div class="menu-interativo-chat" style="max-width:280px;">
+      <div class="menu-interativo-chat" style="max-width:280px; box-sizing:border-box;">
+        <style>.menu-interativo-chat * { box-sizing: border-box; }</style>
         <div style="font-weight:700; margin-bottom:6px; font-size:0.9rem;">🛒 Marque o que você quer:</div>
         ${linhas}
         <button type="button" onclick="enviarSelecaoMenuInterativo('${m.id}')" style="width:100%; margin-top:8px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">Enviar seleção</button>
@@ -2064,7 +2065,8 @@ function conteudoDaMensagem(m, minha){
   }
   if(m.tipo === 'formulario_endereco'){
     return `
-      <div class="form-endereco-chat" style="max-width:280px;">
+      <div class="form-endereco-chat" style="max-width:280px; box-sizing:border-box;">
+        <style>.form-endereco-chat * { box-sizing: border-box; }</style>
         <div style="font-weight:700; margin-bottom:8px; font-size:0.9rem;">📍 Endereço de entrega</div>
         <input type="text" id="fe-cep-${m.id}" placeholder="CEP" maxlength="9" oninput="mascaraCepChat(event)" onblur="buscarCepChat('${m.id}')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin-bottom:6px;">
         <span id="fe-cep-msg-${m.id}" style="font-size:0.7rem; color:#888;"></span>
@@ -2303,32 +2305,56 @@ async function enviarQualquerMensagem(payload){
 
   // Se a mensagem que acabei de mandar era o endereço que o robô de
   // atendimento automático estava esperando, chama a função que calcula o
-  // frete por rota real (o banco de dados sozinho não consegue fazer isso)
+  // frete por rota real (o banco de dados sozinho não consegue fazer isso).
+  // Tenta verificar algumas vezes seguidas, porque pode levar um instante
+  // pro gatilho do banco processar e atualizar o estado.
   if(payload.tipo === 'texto' && !souEuAEmpresaNaConversaAtual && outroLadoProfissionalIdAtual){
-    setTimeout(async () => {
-      const { data: estadoAtual } = await supabaseClientChat.from('atendimento_estado').select('estado').eq('conversa_id', conversaAtual).maybeSingle();
+    const conversaNoMomentoDoEnvio = conversaAtual;
+    const latitudeCapturada = _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.latitude : null;
+    const longitudeCapturada = _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.longitude : null;
+    _ultimaLocalizacaoManualChat = null;
+
+    let tentativas = 0;
+    const verificarEstado = async () => {
+      tentativas++;
+      if(conversaAtual !== conversaNoMomentoDoEnvio) return; // saiu da conversa, não faz nada
+
+      const { data: estadoAtual } = await supabaseClientChat.from('atendimento_estado').select('estado').eq('conversa_id', conversaNoMomentoDoEnvio).maybeSingle();
+
       if(estadoAtual && estadoAtual.estado === 'calculando_frete'){
         fetch('/.netlify/functions/calcular-frete-entrega', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            conversaId: conversaAtual,
+            conversaId: conversaNoMomentoDoEnvio,
             profissionalId: outroLadoProfissionalIdAtual,
             endereco: payload.texto,
-            latitude: _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.latitude : null,
-            longitude: _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.longitude : null
+            latitude: latitudeCapturada,
+            longitude: longitudeCapturada
           })
         }).catch(e => console.error('erro ao calcular frete', e));
-        _ultimaLocalizacaoManualChat = null;
+        return;
       }
+
       if(estadoAtual && estadoAtual.estado === 'gerando_pagamento'){
         fetch('/.netlify/functions/gerar-link-pagamento', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversaId: conversaAtual, profissionalId: outroLadoProfissionalIdAtual })
+          body: JSON.stringify({ conversaId: conversaNoMomentoDoEnvio, profissionalId: outroLadoProfissionalIdAtual })
         }).catch(e => console.error('erro ao gerar link de pagamento', e));
+        return;
       }
-    }, 600);
+
+      // Ainda não mudou de estado — tenta de novo, até 5 vezes (uns 3
+      // segundos no total), caso o gatilho do banco ainda esteja processando
+      if(tentativas < 5){
+        setTimeout(verificarEstado, 600);
+      } else {
+        console.error('Não consegui detectar mudança de estado do atendimento automático depois de várias tentativas. Estado atual:', estadoAtual);
+      }
+    };
+
+    setTimeout(verificarEstado, 600);
   }
 }
 
