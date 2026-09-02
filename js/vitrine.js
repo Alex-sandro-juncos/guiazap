@@ -755,6 +755,7 @@ async function toggleDenunciasProdutoRecebidas(produtoId){
 function abrirFormProduto(){
   document.getElementById('produto-form').classList.add('open');
   document.getElementById('p-msg').textContent = '';
+  document.getElementById('produto-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function fecharFormProduto(){
