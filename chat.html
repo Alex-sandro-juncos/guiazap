@@ -380,7 +380,7 @@
   .chamada-info .status-chamada { font-size: 0.9rem; color: #ccc; margin-top: 6px; }
   .overlay-chamada { overflow-y: auto; }
   .videos-chamada { position: relative; width: 100%; max-width: 500px; max-height: 50vh; aspect-ratio: 3/4; background: #222; border-radius: 14px; overflow: hidden; margin-bottom: 20px; flex-shrink: 1; }
-  .videos-chamada.somente-audio { display: none; }
+  .videos-chamada.somente-audio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; margin: 0; }
   .avatar-chamada-audio { width: 110px; height: 110px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 20px; }
   #video-remoto { width: 100%; height: 100%; object-fit: cover; }
   #video-local { position: absolute; bottom: 10px; right: 10px; width: 90px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid white; }
@@ -554,8 +554,13 @@
       <div class="chat-input-pill">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
         <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
-        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-camera').click()" title="Tirar foto ou vídeo">📷</button>
-        <input type="file" id="chat-input-camera" accept="image/*,video/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
+        <button type="button" class="btn-ferramenta-chat" id="btn-camera-chat" onclick="toggleMenuCameraChat()" title="Tirar foto ou vídeo" style="position:relative;">📷</button>
+        <div id="menu-camera-chat" style="display:none; position:absolute; bottom:52px; background:white; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,0.2); overflow:hidden; z-index:50;">
+          <button type="button" onclick="document.getElementById('chat-input-foto').click(); toggleMenuCameraChat()" style="display:block; width:100%; padding:12px 18px; border:none; background:white; text-align:left; font-size:0.85rem; cursor:pointer;">📷 Tirar foto</button>
+          <button type="button" onclick="document.getElementById('chat-input-video').click(); toggleMenuCameraChat()" style="display:block; width:100%; padding:12px 18px; border:none; background:white; text-align:left; font-size:0.85rem; cursor:pointer; border-top:1px solid #eee;">🎥 Gravar vídeo</button>
+        </div>
+        <input type="file" id="chat-input-foto" accept="image/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
+        <input type="file" id="chat-input-video" accept="video/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
         <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/vídeo/arquivo">📎</button>
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
@@ -2331,6 +2336,11 @@ async function enviarQualquerMensagem(payload){
 
 const LISTA_EMOJIS = ['😀','😂','😍','😘','😉','😊','🙂','😎','🤔','😢','😭','😡','😱','🥳','👍','👎','🙏','👏','💪','🤝','❤️','💚','💙','💜','🔥','⭐','✅','❌','🎉','🎁','📞','💬','😴','🤗','😅','🥰','😇','🙄','😬','🤩','💰','🛒','📦','🚀','⏰','📍','🏠','🚗','☕','🍕'];
 
+function toggleMenuCameraChat(){
+  const menu = document.getElementById('menu-camera-chat');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
 function togglePainel(id){
   document.querySelectorAll('.painel-flutuante').forEach(p => {
     if(p.id !== id) p.classList.remove('aberto');
@@ -2693,7 +2703,11 @@ async function aceitarChamada(){
   chamadaComVideoAtual = !!window._comVideoChamadaRecebida;
   euTenhoVideoAtivo = !!window._comVideoChamadaRecebida;
   pc.ontrack = (event) => {
-    document.getElementById('video-remoto').srcObject = event.streams[0];
+    const videoRemoto = document.getElementById('video-remoto');
+    videoRemoto.srcObject = event.streams[0];
+    // Alguns navegadores bloqueiam o autoplay de mídia com áudio mesmo com
+    // o atributo "autoplay" — força o play() explicitamente pra garantir
+    videoRemoto.play().catch(e => console.error('erro ao iniciar áudio/vídeo remoto', e));
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
     chamadaFoiAtendida = true;
     momentoConexaoChamada = Date.now();
@@ -2819,7 +2833,9 @@ async function iniciarChamadaInterna(comVideo){
   chamadaComVideoAtual = comVideo;
   euTenhoVideoAtivo = comVideo;
   pc.ontrack = (event) => {
-    document.getElementById('video-remoto').srcObject = event.streams[0];
+    const videoRemoto = document.getElementById('video-remoto');
+    videoRemoto.srcObject = event.streams[0];
+    videoRemoto.play().catch(e => console.error('erro ao iniciar áudio/vídeo remoto', e));
     document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
     chamadaFoiAtendida = true;
     momentoConexaoChamada = Date.now();

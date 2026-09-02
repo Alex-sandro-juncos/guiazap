@@ -3190,6 +3190,7 @@ function render(){
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#1c1c1c; border:none; cursor:pointer;" onclick="abrirGerenciarMotoboys('${e.id}')">🛵 Gerenciar motoboys</button>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" id="btn-mp-conectar-${e.id}" style="background:${e.mpConectado ? '#1a7a3c' : '#0f766e'}; border:none; cursor:pointer;" onclick="conectarMercadoPago('${e.id}')">${e.mpConectado ? '✅ Mercado Pago conectado' : '💳 Conectar Mercado Pago (receber direto)'}</button>` : ''}
+          ${isOwner && e.plano === 'vendas' && !e.mpConectado ? `<a href="ajuda-mercadopago.html" class="link-ver-produtos" style="background:none; color:#0f766e; border:1px solid #0f766e; text-decoration:none; display:inline-block;">❓ Como funciona?</a>` : ''}
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="videos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none;">🎬 Ver seção de Vídeos</a>` : ''}
           ${isOwner && ehPremiumOuVendas(e.plano) ? `<a href="relatorio.html" class="link-ver-produtos" style="background:#0a4a6b;">📊 Ver relatório visual</a>` : ''}
         </div>
