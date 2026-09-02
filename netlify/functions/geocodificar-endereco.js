@@ -1,39 +1,50 @@
-// Converte cidade/bairro/estado numa coordenada aproximada (latitude/longitude),
-// usando o Nominatim (serviço gratuito do OpenStreetMap). Não é um endereço
-// exato — é só uma estimativa, suficiente pra ordenar por "mais próximos".
+// Estima a latitude/longitude de um endereço usando o Nominatim (motor de
+// geocodificação gratuito do OpenStreetMap). Usa o endereço mais completo
+// possível (rua + número, se disponíveis) — mais preciso que só cidade e
+// bairro, que dava só uma localização aproximada do bairro inteiro.
 
 exports.handler = async function (event) {
   try {
-    const cidade = event.queryStringParameters && event.queryStringParameters.cidade;
-    const bairro = event.queryStringParameters && event.queryStringParameters.bairro;
-    const estado = event.queryStringParameters && event.queryStringParameters.estado;
-
+    const { cidade, bairro, estado, rua, numero } = event.queryStringParameters || {};
     if (!cidade || !estado) {
       return { statusCode: 400, body: JSON.stringify({ error: 'cidade e estado são obrigatórios' }) };
     }
 
-    const endereco = [bairro, cidade, estado, 'Brasil'].filter(Boolean).join(', ');
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco)}`;
+    // Monta o endereço mais completo possível — se tiver rua/número, usa
+    // eles (muito mais preciso); senão, cai pra cidade/bairro só mesmo
+    const partesEndereco = [];
+    if (rua) partesEndereco.push(numero ? `${rua}, ${numero}` : rua);
+    if (bairro) partesEndereco.push(bairro);
+    partesEndereco.push(cidade, estado, 'Brasil');
 
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' }
-    });
+    const enderecoCompleto = partesEndereco.join(', ');
 
-    if (!resp.ok) {
-      return { statusCode: 200, body: JSON.stringify({ encontrado: false }) };
+    const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(enderecoCompleto)}`;
+    const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
+    let dadosGeo = respGeo.ok ? await respGeo.json() : [];
+
+    // Se não achou nada com o endereço completo (rua/número podem ter erro
+    // de digitação, ou não estar no mapa), tenta de novo só com cidade/bairro
+    if ((!dadosGeo || dadosGeo.length === 0) && rua) {
+      const urlGeoSimples = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent([bairro, cidade, estado, 'Brasil'].filter(Boolean).join(', '))}`;
+      const respGeoSimples = await fetch(urlGeoSimples, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
+      dadosGeo = respGeoSimples.ok ? await respGeoSimples.json() : [];
     }
 
-    const data = await resp.json();
-    if (!data || data.length === 0) {
+    if (!dadosGeo || dadosGeo.length === 0) {
       return { statusCode: 200, body: JSON.stringify({ encontrado: false }) };
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ encontrado: true, latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) })
+      body: JSON.stringify({
+        encontrado: true,
+        latitude: parseFloat(dadosGeo[0].lat),
+        longitude: parseFloat(dadosGeo[0].lon)
+      })
     };
   } catch (err) {
     console.error(err);
-    return { statusCode: 200, body: JSON.stringify({ encontrado: false }) };
+    return { statusCode: 500, body: JSON.stringify({ error: 'erro ao geocodificar endereço' }) };
   }
 };

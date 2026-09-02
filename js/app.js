@@ -770,6 +770,8 @@ async function openForm(entry){
   if(entry && entry.estado) buscarCidadesIBGE(entry.estado, document.getElementById('cidades-cadastro-list'));
   document.getElementById('f-cidade').value = entry ? entry.cidade : '';
   document.getElementById('f-bairro').value = entry ? entry.bairro : '';
+  document.getElementById('f-rua').value = entry ? (entry.rua || '') : '';
+  document.getElementById('f-numero').value = entry ? (entry.numero || '') : '';
   document.getElementById('f-whatsapp').value = entry ? entry.whatsapp : '';
   const planoDoFormulario = entry ? entry.plano : planoEscolhido;
   document.getElementById('campo-veiculo-entregador').style.display = planoDoFormulario === 'entregador' ? 'block' : 'none';
@@ -910,6 +912,7 @@ async function buscarCep(){
     document.getElementById('f-estado').value = data.uf || '';
     document.getElementById('f-cidade').value = data.localidade || '';
     document.getElementById('f-bairro').value = data.bairro || '';
+    document.getElementById('f-rua').value = data.logradouro || '';
     msg.textContent = 'endereço preenchido';
   } catch(e){
     msg.textContent = 'erro ao buscar CEP, preencha manualmente';
@@ -921,9 +924,9 @@ function closeForm(){
   if(currentUser) document.getElementById('add-btn').style.display = 'block';
 }
 
-async function geocodificarCadastro(profissionalId, cidade, bairro, estado){
+async function geocodificarCadastro(profissionalId, cidade, bairro, estado, rua, numero){
   try{
-    const resp = await fetch(`/.netlify/functions/geocodificar-endereco?cidade=${encodeURIComponent(cidade)}&bairro=${encodeURIComponent(bairro)}&estado=${encodeURIComponent(estado)}`);
+    const resp = await fetch(`/.netlify/functions/geocodificar-endereco?cidade=${encodeURIComponent(cidade)}&bairro=${encodeURIComponent(bairro)}&estado=${encodeURIComponent(estado)}&rua=${encodeURIComponent(rua || '')}&numero=${encodeURIComponent(numero || '')}`);
     const data = await resp.json();
     if(!data.encontrado) return;
 
@@ -1027,6 +1030,8 @@ async function saveEntry(e){
     estado: document.getElementById('f-estado').value.trim().toUpperCase(),
     cidade: document.getElementById('f-cidade').value.trim(),
     bairro: document.getElementById('f-bairro').value.trim(),
+    rua: document.getElementById('f-rua').value.trim(),
+    numero: document.getElementById('f-numero').value.trim(),
     whatsapp: document.getElementById('f-whatsapp').value.replace(/\D/g,''),
     foto: document.getElementById('f-foto').value.trim(),
     contatos_extra: coletarContatosExtra(),
@@ -1100,7 +1105,7 @@ async function saveEntry(e){
   // Pula essa etapa se a empresa já marcou a localização exata no mapa.
   const idParaGeocodificar = id || novoCadastroId;
   if(idParaGeocodificar && !payload.localizacao_confirmada_manualmente){
-    geocodificarCadastro(idParaGeocodificar, payload.cidade, payload.bairro, payload.estado);
+    geocodificarCadastro(idParaGeocodificar, payload.cidade, payload.bairro, payload.estado, payload.rua, payload.numero);
   }
 
   if(!id){
