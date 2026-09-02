@@ -220,7 +220,8 @@ function contarVisualizacaoProduto(id, isDono){
 }
 
 function popularFiltrosProduto(){
-  const categorias = [...new Set(produtos.map(p => p.categoria).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  const todasCategorias = produtos.flatMap(p => [p.categoria, ...(p.categorias_extra ? p.categorias_extra.split('\n') : [])]).filter(Boolean);
+  const categorias = [...new Set(todasCategorias)].sort((a,b) => a.localeCompare(b, 'pt-BR'));
 
   const filtroSel = document.getElementById('v-filter-categoria');
   const prevValor = filtroSel.value;
@@ -257,7 +258,7 @@ function renderProdutos(){
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => !modoGerenciarVitrineAtivo || (p.profissionais && p.profissionais.user_id === currentUserV.id))
     .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
-    .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro)
+    .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro || (p.categorias_extra && p.categorias_extra.split('\n').includes(categoriaFiltro)))
     .filter(p => {
       if(!precoFiltro) return true;
       const precoNumerico = parseFloat((p.preco || '').replace(/[^\d,]/g, '').replace(',', '.'));
@@ -270,6 +271,8 @@ function renderProdutos(){
       normalizarTextoV(p.marca).includes(query) ||
       normalizarTextoV(p.descricao).includes(query) ||
       normalizarTextoV(p.codigo_barras).includes(query) ||
+      normalizarTextoV(p.categoria).includes(query) ||
+      normalizarTextoV(p.categorias_extra).includes(query) ||
       (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query))
     );
 
@@ -779,9 +782,37 @@ function fecharFormProduto(){
   document.getElementById('p-foto-msg').textContent = '';
   document.getElementById('variacoes-produto-list').innerHTML = '';
   document.getElementById('adicionais-produto-list').innerHTML = '';
+  document.getElementById('produto-categorias-extra-list').innerHTML = '';
 }
 
 // ---------- VARIAÇÕES E ADICIONAIS (linhas dinâmicas no formulário) ----------
+
+function adicionarLinhaCategoriaProduto(nome){
+  const container = document.getElementById('produto-categorias-extra-list');
+  const linha = document.createElement('div');
+  linha.className = 'contato-extra-linha';
+  linha.innerHTML = `
+    <input type="text" class="cat-produto-extra-nome" placeholder="Ex: Perfume Masculino" value="${nome ? escapeHtmlV(nome) : ''}">
+    <button type="button" class="ce-remover" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(linha);
+}
+
+function carregarCategoriasExtraProduto(texto){
+  document.getElementById('produto-categorias-extra-list').innerHTML = '';
+  if(!texto) return;
+  texto.split('\n').map(l => l.trim()).filter(Boolean).forEach(nome => adicionarLinhaCategoriaProduto(nome));
+}
+
+function coletarCategoriasExtraProduto(){
+  const linhas = document.querySelectorAll('#produto-categorias-extra-list .contato-extra-linha');
+  const partes = [];
+  linhas.forEach(linha => {
+    const nome = linha.querySelector('.cat-produto-extra-nome').value.trim();
+    if(nome) partes.push(nome);
+  });
+  return partes.join('\n');
+}
 
 function adicionarLinhaVariacao(nome, preco){
   const container = document.getElementById('variacoes-produto-list');
@@ -861,6 +892,7 @@ function editarProduto(id){
   document.getElementById('p-cardapio-bot').checked = !!p.no_cardapio_bot;
   carregarVariacoesProduto(p.variacoes);
   carregarAdicionaisProduto(p.adicionais);
+  carregarCategoriasExtraProduto(p.categorias_extra);
   if(p.foto){
     const preview = document.getElementById('p-foto-preview');
     preview.src = p.foto;
@@ -968,6 +1000,7 @@ async function salvarProduto(e){
     no_cardapio_bot: document.getElementById('p-cardapio-bot').checked,
     variacoes: coletarVariacoesProduto(),
     adicionais: coletarAdicionaisProduto(),
+    categorias_extra: coletarCategoriasExtraProduto(),
     produto_18_mais: document.getElementById('p-18mais').checked
   };
 

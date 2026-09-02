@@ -438,6 +438,13 @@ Content-Type: application/json
     <label>Categoria (opcional)</label>
     <input id="p-categoria" list="categorias-produto-list" placeholder="Ex: Bebidas, Alimentos, Peças...">
     <datalist id="categorias-produto-list"></datalist>
+    <label class="foto-ou">Essa é a categoria principal, usada pra organizar o cardápio do robô.</label>
+  </div>
+  <div class="field">
+    <label>Outras categorias (opcional)</label>
+    <label class="foto-ou">Se esse produto também se encaixa em outras categorias (ex: "Perfume Masculino" e "Perfume Importado"), adiciona aqui. Ajuda na busca da Vitrine.</label>
+    <div id="produto-categorias-extra-list"></div>
+    <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="adicionarLinhaCategoriaProduto()">+ Adicionar categoria</button>
   </div>
   <div class="row2">
     <div class="field">

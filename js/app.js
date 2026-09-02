@@ -1,5 +1,6 @@
 let supabaseClient;
 let entries = [];
+let produtosParaBuscaPrincipal = [];
 let loaded = false;
 let currentUser = null;
 let avaliacoesMap = {};
@@ -368,6 +369,13 @@ async function loadEntries(){
   loaded = true;
   document.getElementById('loading').style.display = 'none';
   populateEstados();
+
+  // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
+  // pra permitir encontrar uma empresa pela marca/categoria dos produtos
+  // dela, mesmo sem abrir a Vitrine
+  supabaseClient.from('produtos').select('profissional_id, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
+    produtosParaBuscaPrincipal = produtosLeves || [];
+  });
 
   // Carrega o status de conexão do Mercado Pago só pras empresas do
   // próprio usuário (é uma tabela separada e protegida por segurança)
@@ -3026,7 +3034,22 @@ function render(){
     .filter(e => !mostrandoSoSeguindo || seguindoEmpresas.has(e.id))
     .filter(e => !filtroPremiumRapidoAtivo || ehPremiumOuVendas(e.plano))
     .filter(e => !filtroAbertoAgoraAtivo || estaAbertoAgora(e))
-    .filter(e => normalizarTexto(e.name).includes(query) || normalizarTexto(e.cat).includes(query) || normalizarTexto(e.categorias_extra).includes(query))
+    .filter(e => {
+      if(!query) return true;
+      if(normalizarTexto(e.name).includes(query)) return true;
+      if(normalizarTexto(e.cat).includes(query)) return true;
+      if(normalizarTexto(e.categorias_extra).includes(query)) return true;
+      if(normalizarTexto(e.whatsapp).includes(query)) return true;
+      if(normalizarTexto(e.contatos_extra).includes(query)) return true;
+      // Também acha a empresa pela marca/categoria de algum produto dela
+      return produtosParaBuscaPrincipal.some(p =>
+        p.profissional_id === e.id && (
+          normalizarTexto(p.marca).includes(query) ||
+          normalizarTexto(p.categoria).includes(query) ||
+          normalizarTexto(p.categorias_extra).includes(query)
+        )
+      );
+    })
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
     .filter(e => !bairro || e.bairro === bairro)
