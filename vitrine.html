@@ -261,6 +261,7 @@
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
     <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
+    <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
   </div>
   <div class="vitrine-filtros">
     <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>
@@ -320,6 +321,17 @@
       <button type="button" onclick="aplicarAcaoEmMassaBot(false)" style="flex:1; padding:11px; border-radius:8px; border:none; background:#a4402f; color:white; font-weight:700; cursor:pointer;">🚫 Remover todos do robô</button>
     </div>
     <span id="massa-bot-msg" style="display:block; text-align:center; font-size:0.82rem; margin-top:10px;"></span>
+  </div>
+</div>
+
+<div id="painel-modo-voz-vitrine" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div id="voz-vitrine-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+    <div style="flex:1; min-width:0;">
+      <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-vitrine-status">🎙️ Modo voz ativado — pode falar</div>
+      <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-vitrine-transcricao"></div>
+    </div>
+    <button type="button" onclick="toggleModoVozVitrine()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
   </div>
 </div>
 

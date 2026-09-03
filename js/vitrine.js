@@ -2485,6 +2485,204 @@ async function salvarProdutosExtraidosIA(){
   }, 1500);
 }
 
+// ---------- MODO VOZ (MÃOS LIVRES) NA VITRINE ----------
+// Fluxo: usuário toca no botão (isso conta como "gesto do usuário", exigido
+// pelo navegador pra liberar o microfone) -> escuta contínua ativa ->
+// comandos simples são resolvidos na hora (local, sem IA); comandos mais
+// complexos (tipo "adiciona dois X-Tudo") vão pro Claude interpretar e
+// devolver uma ação, que o próprio navegador executa chamando as funções
+// REAIS do carrinho — a IA nunca mexe direto no carrinho ou finaliza pedido
+// sozinha, só decide QUAL ação chamar.
+
+let _vozVitrineReconhecimento = null;
+let _vozVitrineAtiva = false;
+let _vozVitrineFalando = false;
+const _vozVitrineSynth = window.speechSynthesis;
+
+function toggleModoVozVitrine(){
+  if(_vozVitrineAtiva){
+    pararModoVozVitrine();
+  } else {
+    iniciarModoVozVitrine();
+  }
+}
+
+function iniciarModoVozVitrine(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
+    return;
+  }
+  if(!currentUserV){
+    alert('Você precisa estar logado pra usar o modo voz.');
+    return;
+  }
+
+  _vozVitrineAtiva = true;
+  document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
+
+  _vozVitrineReconhecimento = new SpeechRecognitionApi();
+  _vozVitrineReconhecimento.lang = 'pt-BR';
+  _vozVitrineReconhecimento.continuous = true;
+  _vozVitrineReconhecimento.interimResults = false;
+
+  _vozVitrineReconhecimento.onresult = (event) => {
+    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarComandoVozVitrine(transcricao);
+  };
+
+  _vozVitrineReconhecimento.onend = () => {
+    // Reinicia sozinho pra manter a escuta contínua — só não reinicia se
+    // o usuário desligou de propósito, ou se estamos no meio de uma fala
+    // (nesse caso, quem reinicia é o próprio callback de "terminei de falar")
+    if(_vozVitrineAtiva && !_vozVitrineFalando){
+      try{ _vozVitrineReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozVitrineReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      pararModoVozVitrine();
+    }
+    // outros erros (ex: "no-speech") são normais e o onend() já reinicia sozinho
+  };
+
+  try{ _vozVitrineReconhecimento.start(); } catch(e){}
+  falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+}
+
+function pararModoVozVitrine(){
+  _vozVitrineAtiva = false;
+  if(_vozVitrineReconhecimento){
+    try{ _vozVitrineReconhecimento.stop(); } catch(e){}
+  }
+  _vozVitrineSynth.cancel();
+  document.getElementById('btn-modo-voz-vitrine').style.background = '#6b46c1';
+  document.getElementById('painel-modo-voz-vitrine').style.display = 'none';
+}
+
+function falarVozVitrine(texto){
+  // Pausa a escuta enquanto fala — sem isso, o microfone "ouviria" a
+  // própria voz do site e ficaria confuso (efeito eco)
+  _vozVitrineFalando = true;
+  if(_vozVitrineReconhecimento){ try{ _vozVitrineReconhecimento.stop(); } catch(e){} }
+  _vozVitrineSynth.cancel();
+
+  document.getElementById('voz-vitrine-status').textContent = '🔊 ' + texto;
+  document.getElementById('voz-vitrine-indicador').style.background = '#4fc3a1';
+
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+
+  fala.onend = () => {
+    document.getElementById('voz-vitrine-indicador').style.background = '#6b46c1';
+    document.getElementById('voz-vitrine-status').textContent = '🎙️ Pode falar';
+    _vozVitrineFalando = false;
+    if(_vozVitrineAtiva){
+      try{ _vozVitrineReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozVitrineSynth.speak(fala);
+}
+
+async function processarComandoVozVitrine(transcricao){
+  const textoNormalizado = normalizarTextoV(transcricao);
+
+  // Comandos locais instantâneos — resolvidos na hora, sem esperar a IA
+  if(textoNormalizado.includes('meu carrinho') || textoNormalizado.includes('ver carrinho') || (textoNormalizado.includes('carrinho') && textoNormalizado.length < 20)){
+    lerCarrinhoEmVozAlta();
+    return;
+  }
+  if(textoNormalizado.includes('finalizar') || textoNormalizado.includes('fechar pedido') || textoNormalizado.includes('fechar a conta')){
+    dispararFinalizarPorVoz();
+    return;
+  }
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar')){
+    falarVozVitrine('Modo voz desativado.');
+    setTimeout(pararModoVozVitrine, 1500);
+    return;
+  }
+
+  // Comando mais complexo — manda pro Claude interpretar
+  document.getElementById('voz-vitrine-status').textContent = '🤔 Pensando...';
+  document.getElementById('voz-vitrine-indicador').style.background = '#e91e63';
+
+  try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
+    const produtosVisiveis = produtos.slice(0, 40).map(p => ({
+      id: p.id, nome: p.nome, marca: p.marca, preco: p.preco,
+      temOpcoes: (p.variacoes && p.variacoes.length > 0) || (p.adicionais && p.adicionais.length > 0)
+    }));
+    const carrinhoResumo = carrinhoV.map(i => ({ nome: i.nome, quantidade: i.quantidade, precoUnitario: i.preco }));
+
+    const resp = await fetch('/.netlify/functions/interpretar-comando-voz-vitrine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ texto: transcricao, produtosVisiveis, carrinhoAtual: carrinhoResumo })
+    });
+    const resultado = await resp.json();
+
+    if(!resp.ok){
+      falarVozVitrine(resultado.error || 'Tive um problema ao entender. Pode repetir?');
+      return;
+    }
+
+    executarAcaoVozVitrine(resultado);
+  } catch(e){
+    console.error(e);
+    falarVozVitrine('Não consegui processar agora. Pode repetir?');
+  }
+}
+
+function executarAcaoVozVitrine(resultado){
+  const { action, params, voice_response } = resultado;
+
+  if(action === 'BUSCAR' && params && params.termo){
+    document.getElementById('v-search').value = params.termo;
+    renderProdutos();
+  } else if(action === 'ADICIONAR_CARRINHO' && params && params.produto_id){
+    const qtd = params.quantidade || 1;
+    for(let i = 0; i < qtd; i++) adicionarAoCarrinho(params.produto_id);
+    renderProdutos();
+  } else if(action === 'VER_CARRINHO'){
+    lerCarrinhoEmVozAlta();
+    return; // lerCarrinhoEmVozAlta já fala sozinha
+  } else if(action === 'REMOVER_ITEM' && params && params.nome_aproximado){
+    const alvo = carrinhoV.find(i => normalizarTextoV(i.nome).includes(normalizarTextoV(params.nome_aproximado)));
+    if(alvo) removerDoCarrinho(alvo.chaveItem);
+  } else if(action === 'FINALIZAR_PEDIDO'){
+    falarVozVitrine(voice_response || 'Ok, vamos finalizar.');
+    setTimeout(dispararFinalizarPorVoz, 1800);
+    return;
+  }
+
+  falarVozVitrine(voice_response || 'Feito.');
+}
+
+function lerCarrinhoEmVozAlta(){
+  if(carrinhoV.length === 0){
+    falarVozVitrine('Seu carrinho está vazio.');
+    return;
+  }
+  const total = carrinhoV.reduce((soma, i) => soma + (parseFloat(String(i.preco).replace(',', '.')) || 0) * i.quantidade, 0);
+  const itensFalados = carrinhoV.map(i => `${i.quantidade} ${i.nome}`).join(', ');
+  falarVozVitrine(`No seu carrinho: ${itensFalados}. Total de ${total.toFixed(2).replace('.', ',')} reais. Quer finalizar o pedido?`);
+}
+
+function dispararFinalizarPorVoz(){
+  if(carrinhoV.length === 0){
+    falarVozVitrine('Seu carrinho está vazio, não tem o que finalizar.');
+    return;
+  }
+  abrirCarrinho();
+  falarVozVitrine('Abri seu carrinho na tela. Confirma os itens e toca em finalizar pedido pra continuar — por segurança, essa última parte precisa ser confirmada na tela.');
+}
+
 atualizarBadgeCarrinho();
 
 if(initSupabaseV()){
