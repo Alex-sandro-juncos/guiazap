@@ -608,6 +608,7 @@
     </div>
     <div class="chamada-controles">
       <button class="btn-controle-chamada" id="btn-mudo" onclick="alternarMudo()">🎤</button>
+      <button class="btn-controle-chamada" id="btn-viva-voz" onclick="toggleVivaVoz()" title="Viva-voz com volume mais alto (acessibilidade)">🔊</button>
       <button class="btn-controle-chamada" id="btn-camera" onclick="onCliqueBotaoCamera()">📹</button>
       <button class="btn-controle-chamada desligar" onclick="encerrarChamada(true)">📵</button>
     </div>
@@ -2007,6 +2008,9 @@ function resumoChamada(m){
 }
 
 function conteudoDaMensagem(m, minha){
+  if(m.tipo === 'apagada'){
+    return '<i style="color:#999;">🚫 Mensagem apagada</i>';
+  }
   if(m.tipo === 'imagem'){
     return `
       <div class="imagem-chat-wrap">
@@ -2120,12 +2124,63 @@ function adicionarBolhaMensagem(m){
   const minha = m.remetente_user_id === currentUserChat.id;
   const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const ehInterativa = m.tipo === 'menu_interativo' || m.tipo === 'formulario_endereco';
+  const podeOuvir = m.tipo === 'texto';
+  const temAlgumaOpcao = podeOuvir || (minha && m.tipo !== 'apagada');
   container.insertAdjacentHTML('beforeend', `
-    <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}" style="${ehInterativa ? 'max-width:92%;' : ''}">
+    <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}" style="${ehInterativa ? 'max-width:92%;' : ''} position:relative;">
+      ${temAlgumaOpcao ? `<button type="button" onclick="toggleMenuMensagem('${m.id}')" style="position:absolute; top:2px; ${minha ? 'left:-26px;' : 'right:-26px;'} background:none; border:none; color:#999; font-size:1rem; cursor:pointer; padding:4px;">⋮</button>` : ''}
+      <div class="menu-msg-opcoes" id="menu-msg-${m.id}" style="display:none; position:absolute; top:22px; ${minha ? 'left:-26px;' : 'right:-26px;'} background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.25); z-index:20; overflow:hidden; min-width:150px;">
+        ${podeOuvir ? `<button type="button" onclick="ouvirMensagemEmVoz('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer;">🔊 Ouvir mensagem</button>` : ''}
+        ${minha && m.tipo !== 'apagada' ? `<button type="button" onclick="apagarMensagem('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer; color:#a4402f; border-top:${podeOuvir ? '1px solid #eee' : 'none'};">🗑️ Apagar mensagem</button>` : ''}
+      </div>
       ${conteudoDaMensagem(m, minha)}
       <span class="hora-msg">${hora}${minha ? ` <span class="check-lida${m.lida ? ' lida' : ''}">${m.lida ? '✓✓' : '✓'}</span>` : ''}</span>
     </div>
   `);
+}
+
+function toggleMenuMensagem(msgId){
+  document.querySelectorAll('.menu-msg-opcoes').forEach(el => { if(el.id !== `menu-msg-${msgId}`) el.style.display = 'none'; });
+  const menu = document.getElementById(`menu-msg-${msgId}`);
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.menu-msg-opcoes') && !e.target.matches('[onclick^="toggleMenuMensagem"]')){
+    document.querySelectorAll('.menu-msg-opcoes').forEach(el => { el.style.display = 'none'; });
+  }
+});
+
+function ouvirMensagemEmVoz(msgId){
+  const bolha = document.querySelector(`[data-msg-id="${msgId}"]`);
+  if(!bolha) return;
+  const texto = bolha.querySelector('div:not(.menu-msg-opcoes)')?.textContent || bolha.textContent;
+
+  if(!('speechSynthesis' in window)){
+    alert('Seu navegador não suporta leitura de texto em voz. Tenta pelo Chrome.');
+    return;
+  }
+
+  speechSynthesis.cancel(); // para qualquer leitura anterior antes de começar uma nova
+  const fala = new SpeechSynthesisUtterance(texto.trim());
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+  speechSynthesis.speak(fala);
+
+  document.querySelectorAll('.menu-msg-opcoes').forEach(el => { el.style.display = 'none'; });
+}
+
+async function apagarMensagem(msgId){
+  if(!confirm('Apagar essa mensagem? Ela some pros dois lados, e não tem como desfazer.')) return;
+
+  const { error } = await supabaseClientChat.from('mensagens_chat').update({ texto: null, tipo: 'apagada', arquivo_url: null }).eq('id', msgId).eq('remetente_user_id', currentUserChat.id);
+  if(error){ console.error(error); alert('Erro ao apagar a mensagem.'); return; }
+
+  const bolha = document.querySelector(`[data-msg-id="${msgId}"]`);
+  if(bolha){
+    const conteudo = bolha.querySelector('div:not(.menu-msg-opcoes)');
+    if(conteudo) conteudo.innerHTML = '<i style="color:#999;">🚫 Mensagem apagada</i>';
+  }
 }
 
 function atualizarCheckLida(mensagemId, lida){
@@ -2950,6 +3005,62 @@ async function iniciarChamadaInterna(comVideo){
   }).catch(e => console.error('erro ao notificar chamada', e));
 }
 
+// ---------- VIVA-VOZ COM VOLUME AMPLIADO (acessibilidade) ----------
+
+let _audioContextVivaVoz = null;
+let _gainNodeVivaVoz = null;
+let _vivaVozAtivo = false;
+
+function toggleVivaVoz(){
+  const videoRemoto = document.getElementById('video-remoto');
+  if(!videoRemoto || !videoRemoto.srcObject){
+    alert('A chamada precisa estar conectada primeiro.');
+    return;
+  }
+
+  _vivaVozAtivo = !_vivaVozAtivo;
+  document.getElementById('btn-viva-voz').classList.toggle('ativo-off', !_vivaVozAtivo);
+
+  if(_vivaVozAtivo){
+    try{
+      // Cria um "amplificador" de áudio (Web Audio API) e passa o som da
+      // chamada por ele antes de tocar — assim consegue aumentar o volume
+      // além do máximo normal do aparelho, útil pra quem tem dificuldade
+      // de audição
+      _audioContextVivaVoz = new (window.AudioContext || window.webkitAudioContext)();
+      const source = _audioContextVivaVoz.createMediaStreamSource(videoRemoto.srcObject);
+      _gainNodeVivaVoz = _audioContextVivaVoz.createGain();
+      _gainNodeVivaVoz.gain.value = 2.5; // volume ampliado (2,5x o normal)
+      source.connect(_gainNodeVivaVoz);
+      _gainNodeVivaVoz.connect(_audioContextVivaVoz.destination);
+
+      // Muda o elemento de vídeo original, pra não tocar duas vezes o
+      // mesmo áudio (uma vez normal + uma vez amplificado)
+      videoRemoto.muted = true;
+    } catch(e){
+      console.error('erro ao ativar viva-voz amplificado', e);
+      alert('Não consegui ativar o viva-voz amplificado nesse navegador.');
+      _vivaVozAtivo = false;
+      document.getElementById('btn-viva-voz').classList.remove('ativo-off');
+    }
+  } else {
+    desligarVivaVoz();
+  }
+}
+
+function desligarVivaVoz(){
+  if(_audioContextVivaVoz){
+    _audioContextVivaVoz.close().catch(() => {});
+    _audioContextVivaVoz = null;
+    _gainNodeVivaVoz = null;
+  }
+  const videoRemoto = document.getElementById('video-remoto');
+  if(videoRemoto) videoRemoto.muted = false;
+  _vivaVozAtivo = false;
+  const btn = document.getElementById('btn-viva-voz');
+  if(btn) btn.classList.remove('ativo-off');
+}
+
 function alternarMudo(){
   if(!streamLocalAtual) return;
   microfoneMudo = !microfoneMudo;
@@ -3052,6 +3163,7 @@ function alternarCamera(){
 
 async function encerrarChamada(avisarOutraPonta){
   clearInterval(intervaloChecagemRecusa);
+  desligarVivaVoz();
   if(avisarOutraPonta && canalEnvioAtual){
     canalEnvioAtual.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
   }
