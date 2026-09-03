@@ -4,13 +4,18 @@
 // Ao final, grava o pedido, atualiza o estado do atendimento automático e
 // manda a mensagem de confirmação pro cliente no Papo.
 
+function normalizarEnderecoChaveFrete(rua, numero, cidade, estado){
+  const partes = [rua, numero, cidade, estado].map(p => (p || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' '));
+  return partes.filter(Boolean).join('|');
+}
+
 exports.handler = async function (event) {
   try {
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { conversaId, profissionalId, endereco, latitude, longitude } = JSON.parse(event.body || '{}');
+    const { conversaId, profissionalId, endereco, latitude, longitude, enderecoEstruturado } = JSON.parse(event.body || '{}');
     if (!conversaId || !profissionalId || !endereco) {
       return { statusCode: 400, body: JSON.stringify({ error: 'conversaId, profissionalId e endereco são obrigatórios' }) };
     }
@@ -74,6 +79,22 @@ exports.handler = async function (event) {
       latCliente = latitude;
       lngCliente = longitude;
     } else {
+      // 2a. Confere primeiro se alguém já confirmou EXATAMENTE esse mesmo
+      // endereço no mapa antes (rede compartilhada de localizações
+      // verificadas) — evita depender só do Nominatim, que costuma ser
+      // impreciso em bairros/zona rural
+      let achouNaRede = false;
+      if (enderecoEstruturado && enderecoEstruturado.rua) {
+        const chave = normalizarEnderecoChaveFrete(enderecoEstruturado.rua, enderecoEstruturado.numero, enderecoEstruturado.cidade, enderecoEstruturado.estado);
+        const dadosRede = await buscar('enderecos_confirmados_mapa', `endereco_normalizado=eq.${encodeURIComponent(chave)}&select=latitude,longitude`);
+        if (dadosRede && dadosRede.length > 0) {
+          latCliente = dadosRede[0].latitude;
+          lngCliente = dadosRede[0].longitude;
+          achouNaRede = true;
+        }
+      }
+
+      if (!achouNaRede) {
       const urlGeo = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco + ', Brasil')}`;
       const respGeo = await fetch(urlGeo, { headers: { 'User-Agent': 'GuiaZap/1.0 (contato@guiazap.shop)' } });
       const dadosGeo = respGeo.ok ? await respGeo.json() : [];
@@ -88,6 +109,7 @@ exports.handler = async function (event) {
 
       latCliente = parseFloat(dadosGeo[0].lat);
       lngCliente = parseFloat(dadosGeo[0].lon);
+      }
     }
 
     // 3. Calcula a distância de ROTA real via OSRM (não linha reta)

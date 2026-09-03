@@ -994,11 +994,45 @@ function usarMinhaLocalizacaoAtual(){
   });
 }
 
+function normalizarEnderecoChaveApp(rua, numero, cidade, estado){
+  const partes = [rua, numero, cidade, estado].map(p => (p || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' '));
+  return partes.filter(Boolean).join('|');
+}
+
+async function salvarEnderecoNaRedeConfirmadosApp(rua, numero, cidade, estado, latitude, longitude){
+  try{
+    const chave = normalizarEnderecoChaveApp(rua, numero, cidade, estado);
+    if(!chave) return;
+
+    const enderecoOriginal = [rua, numero, cidade, estado].filter(Boolean).join(', ');
+
+    await supabaseClient.from('enderecos_confirmados_mapa').upsert({
+      endereco_normalizado: chave,
+      endereco_original: enderecoOriginal,
+      latitude,
+      longitude,
+      cidade: cidade || null,
+      estado: estado || null,
+      atualizado_em: new Date().toISOString()
+    }, { onConflict: 'endereco_normalizado' });
+  } catch(e){
+    console.error('erro ao salvar endereço na rede compartilhada', e);
+  }
+}
+
 function confirmarLocalizacaoMapa(){
   const pos = _marcadorLocalizacaoCadastro.getLatLng();
   document.getElementById('f-latitude-manual').value = pos.lat;
   document.getElementById('f-longitude-manual').value = pos.lng;
   document.getElementById('localizacao-confirmada-msg').textContent = `✓ Localização marcada (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+
+  // Guarda esse endereço na rede compartilhada de localizações confirmadas
+  const rua = document.getElementById('f-rua').value.trim();
+  const numero = document.getElementById('f-numero').value.trim();
+  const cidade = document.getElementById('f-cidade').value.trim();
+  const estado = document.getElementById('f-estado').value.trim();
+  salvarEnderecoNaRedeConfirmadosApp(rua, numero, cidade, estado, pos.lat, pos.lng);
+
   fecharMapaLocalizacao();
 }
 

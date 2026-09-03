@@ -2076,13 +2076,13 @@ function conteudoDaMensagem(m, minha){
         <span id="fe-cep-msg-${m.id}" style="font-size:0.7rem; color:#888;"></span>
         <input type="text" id="fe-rua-${m.id}" placeholder="Rua" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
         <div style="display:flex; gap:6px;">
-          <input type="text" id="fe-numero-${m.id}" placeholder="Número" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
-          <input type="text" id="fe-complemento-${m.id}" placeholder="Complemento" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <input type="text" id="fe-numero-${m.id}" placeholder="Número" style="flex:1; min-width:0; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <input type="text" id="fe-complemento-${m.id}" placeholder="Complemento" style="flex:1; min-width:0; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
         </div>
         <input type="text" id="fe-bairro-${m.id}" placeholder="Bairro" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
         <div style="display:flex; gap:6px;">
-          <input type="text" id="fe-cidade-${m.id}" placeholder="Cidade" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
-          <input type="text" id="fe-estado-${m.id}" placeholder="UF" maxlength="2" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; text-transform:uppercase;">
+          <input type="text" id="fe-cidade-${m.id}" placeholder="Cidade" style="flex:2; min-width:0; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <input type="text" id="fe-estado-${m.id}" placeholder="UF" maxlength="2" style="flex:1; min-width:0; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; text-transform:uppercase;">
         </div>
         <input type="text" id="fe-referencia-${m.id}" placeholder="Ponto de referência (opcional)" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; margin:6px 0;">
         <button type="button" onclick="abrirMapaEnderecoChat('${m.id}')" style="width:100%; padding:8px; border-radius:6px; border:1.5px solid var(--verde-escuro); background:white; color:var(--verde-escuro); font-weight:700; font-size:0.8rem; cursor:pointer;">📍 Marcar localização exata (opcional)</button>
@@ -2254,6 +2254,7 @@ async function buscarCepChat(msgId){
 }
 
 let _ultimaLocalizacaoManualChat = null;
+let _ultimoEnderecoEstruturadoChat = null;
 let _latLngEnderecoChat = {};
 
 async function enviarFormularioEndereco(msgId){
@@ -2276,6 +2277,7 @@ async function enviarFormularioEndereco(msgId){
   // que roda logo em seguida vai usar isso, pra não precisar geocodificar
   // o texto de novo
   _ultimaLocalizacaoManualChat = _latLngEnderecoChat[msgId] ? { latitude: _latLngEnderecoChat[msgId][0], longitude: _latLngEnderecoChat[msgId][1] } : null;
+  _ultimoEnderecoEstruturadoChat = { rua, numero, cidade, estado };
 
   await enviarQualquerMensagem({ tipo: 'texto', texto: enderecoCompleto });
 }
@@ -2323,10 +2325,46 @@ function usarMinhaLocalizacaoChat(){
   });
 }
 
+function normalizarEnderecoChave(rua, numero, cidade, estado){
+  const partes = [rua, numero, cidade, estado].map(p => (p || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' '));
+  return partes.filter(Boolean).join('|');
+}
+
+async function salvarEnderecoNaRedeConfirmados(rua, numero, cidade, estado, latitude, longitude){
+  try{
+    const chave = normalizarEnderecoChave(rua, numero, cidade, estado);
+    if(!chave) return;
+
+    const enderecoOriginal = [rua, numero, cidade, estado].filter(Boolean).join(', ');
+
+    await supabaseClientChat.from('enderecos_confirmados_mapa').upsert({
+      endereco_normalizado: chave,
+      endereco_original: enderecoOriginal,
+      latitude,
+      longitude,
+      cidade: cidade || null,
+      estado: estado || null,
+      atualizado_em: new Date().toISOString()
+    }, { onConflict: 'endereco_normalizado' });
+  } catch(e){
+    console.error('erro ao salvar endereço na rede compartilhada', e);
+  }
+}
+
 function confirmarLocalizacaoChat(){
   const pos = _marcadorEnderecoChat.getLatLng();
   _latLngEnderecoChat[_msgIdMapaAtual] = [pos.lat, pos.lng];
   document.getElementById(`fe-loc-msg-${_msgIdMapaAtual}`).textContent = `✓ Localização marcada (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+
+  // Guarda esse endereço na rede compartilhada, pra ajudar a achar o mesmo
+  // lugar mais rápido e certo da próxima vez (empresa ou outro cliente)
+  const msgId = _msgIdMapaAtual;
+  const rua = document.getElementById(`fe-rua-${msgId}`).value.trim();
+  const numero = document.getElementById(`fe-numero-${msgId}`).value.trim();
+  const cidade = document.getElementById(`fe-cidade-${msgId}`).value.trim();
+  const estado = document.getElementById(`fe-estado-${msgId}`).value.trim();
+  salvarEnderecoNaRedeConfirmados(rua, numero, cidade, estado, pos.lat, pos.lng);
+
   fecharMapaEnderecoChat();
 }
 
@@ -2369,6 +2407,8 @@ async function enviarQualquerMensagem(payload){
     const latitudeCapturada = _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.latitude : null;
     const longitudeCapturada = _ultimaLocalizacaoManualChat ? _ultimaLocalizacaoManualChat.longitude : null;
     _ultimaLocalizacaoManualChat = null;
+    const enderecoEstruturadoCapturado = _ultimoEnderecoEstruturadoChat;
+    _ultimoEnderecoEstruturadoChat = null;
 
     let tentativas = 0;
     const verificarEstado = async () => {
@@ -2386,7 +2426,8 @@ async function enviarQualquerMensagem(payload){
             profissionalId: outroLadoProfissionalIdAtual,
             endereco: payload.texto,
             latitude: latitudeCapturada,
-            longitude: longitudeCapturada
+            longitude: longitudeCapturada,
+            enderecoEstruturado: enderecoEstruturadoCapturado
           })
         }).catch(e => console.error('erro ao calcular frete', e));
         return;
