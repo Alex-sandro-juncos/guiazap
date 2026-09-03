@@ -86,6 +86,8 @@ async function initAuthV(){
       document.getElementById('v-comando-voz-btn').style.display = 'inline-block';
       document.getElementById('v-importar-planilha-btn').style.display = 'inline-block';
       document.getElementById('v-sync-api-btn').style.display = 'inline-block';
+      document.getElementById('v-ferramentas-ia-grupo').style.display = 'block';
+      document.getElementById('v-ferramentas-integracao-grupo').style.display = 'block';
     }
   }
 }

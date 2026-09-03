@@ -275,16 +275,28 @@
   <button type="button" id="btn-favoritos-produtos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritosProdutos()">❤️ Ver só favoritos</button>
 </div>
 
-<div class="vitrine-toolbar">
+<div class="vitrine-toolbar" style="display:block;">
   <span class="count" id="v-count"></span>
-  <div>
-    <button type="button" class="btn-add-produto" id="v-ver-meus-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="verMeusProdutos()">🏢 Ver meus produtos</button>
-    <button type="button" class="btn-add-produto" id="v-ia-cardapio-btn" style="display:none; background:#6b46c1; margin-right:6px;" onclick="abrirFormCardapioIA()">✨ Cadastrar por foto do cardápio</button>
-    <button type="button" class="btn-add-produto" id="v-massa-bot-btn" style="display:none; background:#1c1c1c; margin-right:6px;" onclick="abrirAcaoEmMassaBot()">🤖 Ajustar categorias no robô</button>
-    <button type="button" class="btn-add-produto" id="v-comando-voz-btn" style="display:none; background:#e91e63; margin-right:6px;" onclick="abrirComandoCardapio()">🎙️ Editar cardápio por voz/texto</button>
-    <button type="button" class="btn-add-produto" id="v-importar-planilha-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="abrirImportarPlanilha()">📊 Importar planilha de produtos</button>
-    <button type="button" class="btn-add-produto" id="v-sync-api-btn" style="display:none; background:#0a4a6b; margin-right:6px;" onclick="abrirSincronizacaoAPI()">🔗 Sincronização automática (API)</button>
+  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
     <button type="button" class="btn-add-produto" id="v-add-btn" style="display:none;" onclick="abrirFormProduto()">+ Anunciar produto</button>
+    <button type="button" class="btn-add-produto" id="v-ver-meus-btn" style="display:none; background:#0a4a6b;" onclick="verMeusProdutos()">🏢 Ver meus produtos</button>
+  </div>
+
+  <div id="v-ferramentas-ia-grupo" style="display:none; margin-top:12px;">
+    <div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">✨ Ferramentas de IA</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      <button type="button" class="btn-add-produto" id="v-ia-cardapio-btn" style="display:none; background:#6b46c1;" onclick="abrirFormCardapioIA()">✨ Cadastrar por foto do cardápio</button>
+      <button type="button" class="btn-add-produto" id="v-comando-voz-btn" style="display:none; background:#e91e63;" onclick="abrirComandoCardapio()">🎙️ Editar cardápio por voz/texto</button>
+      <button type="button" class="btn-add-produto" id="v-massa-bot-btn" style="display:none; background:#1c1c1c;" onclick="abrirAcaoEmMassaBot()">🤖 Ajustar categorias no robô</button>
+    </div>
+  </div>
+
+  <div id="v-ferramentas-integracao-grupo" style="display:none; margin-top:12px;">
+    <div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">🔗 Catálogo em massa</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      <button type="button" class="btn-add-produto" id="v-importar-planilha-btn" style="display:none; background:#0a4a6b;" onclick="abrirImportarPlanilha()">📊 Importar planilha de produtos</button>
+      <button type="button" class="btn-add-produto" id="v-sync-api-btn" style="display:none; background:#0a4a6b;" onclick="abrirSincronizacaoAPI()">🔗 Sincronização automática (API)</button>
+    </div>
   </div>
 </div>
 
