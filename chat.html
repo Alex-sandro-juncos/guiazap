@@ -2439,6 +2439,19 @@ async function enviarQualquerMensagem(payload){
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
             body: JSON.stringify({ conversaId: conversaNoMomentoDoEnvio, profissionalId: outroLadoProfissionalIdAtual })
+          }).then(async (resp) => {
+            if(!resp.ok){
+              const dadosErro = await resp.json().catch(() => ({}));
+              console.error('erro ao gerar link de pagamento:', resp.status, dadosErro);
+              adicionarBolhaMensagem({
+                id: 'erro-local-' + Date.now(),
+                tipo: 'texto',
+                texto: `⚠️ Não consegui gerar o link de pagamento (erro: ${dadosErro.error || resp.status}). Digite *menu* e tenta de novo, ou fala com a empresa.`,
+                remetente_user_id: null,
+                created_at: new Date().toISOString()
+              });
+              document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
+            }
           }).catch(e => console.error('erro ao gerar link de pagamento', e));
         });
         return;
