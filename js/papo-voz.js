@@ -14,6 +14,16 @@ function toggleModoVozPapo(){
 }
 
 function iniciarModoVozPapo(){
+  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
+    cadastrarVozPrimeiroAcesso().then(ok => {
+      if(ok && typeof iniciarMonitorVozDono === 'function'){
+        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+      }
+    });
+  } else if(typeof iniciarMonitorVozDono === 'function'){
+    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+  }
+
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Api){
     alert('Use o Chrome para o modo voz.');
@@ -49,6 +59,10 @@ function iniciarModoVozPapo(){
     if(event.error === 'not-allowed'){
       alert('Permita o microfone para o modo voz.');
       pararModoVozPapo();
+      return;
+    }
+    if(_vozPapoAtiva && (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network')){
+      setTimeout(() => { try{ _vozPapoReconhecimento.start(); } catch(e){} }, 400);
     }
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
@@ -93,6 +107,12 @@ function falarVozPapo(texto){
   };
   fala.onerror = () => { _vozPapoFalando = false; };
   _vozPapoSynth.speak(fala);
+  setTimeout(() => {
+    _vozPapoFalando = false;
+    if(_vozPapoAtiva && _vozPapoReconhecimento){
+      try{ _vozPapoReconhecimento.start(); } catch(e){}
+    }
+  }, 6000);
 }
 
 function listarConversasEmVoz(){
@@ -115,7 +135,8 @@ function acharConversaPorNome(fala){
 }
 
 async function processarComandoVozPapo(transcricao){
-  if(_vozPapoFalando) return;
+  if(_vozPapoSynth) try{ _vozPapoSynth.cancel(); } catch(e){}
+  _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
 
   if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz'){
