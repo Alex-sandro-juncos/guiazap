@@ -443,7 +443,7 @@ async function loadEntries(){
   // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
   // pra permitir encontrar uma empresa pela marca/categoria dos produtos
   // dela, mesmo sem abrir a Vitrine
-  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
+  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra, preco').then(({ data: produtosLeves }) => {
     produtosParaBuscaPrincipal = produtosLeves || [];
     render();
   });
@@ -3824,6 +3824,7 @@ let _aguardandoPinParaDestravarIndex = false;
 // ---------- CADASTRO DE EMPRESA POR VOZ ----------
 
 let _estadoCadastroVoz = null;
+let _estadoCompraVoz = null;
 // formato: { etapa: 'nome' | 'documento' | 'categoria' | 'cep' | 'estado' | 'cidade' | 'bairro' | 'whatsapp' | 'confirmar' }
 
 function iniciarCadastroPorVoz(){
@@ -4234,6 +4235,33 @@ async function processarComandoVozIndex(transcricao){
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
   try {
+  if(_estadoCompraVoz && _estadoCompraVoz.opcoes){
+    const tt = normalizarTexto(transcricao);
+    const nums = (transcricao.match(/\d+(?:[.,]\d+)?/g) || []).map(n => n.replace(',', '.'));
+    let escolhido = null;
+    if(nums.length){
+      escolhido = _estadoCompraVoz.opcoes.find(o => {
+        const pr = String(o.preco||'').replace(',', '.');
+        return nums.some(n => pr === n || pr.startsWith(n) || pr.includes(n));
+      });
+    }
+    if(!escolhido){
+      escolhido = _estadoCompraVoz.opcoes.find(o => tt.includes(normalizarTexto(o.empresa)) || normalizarTexto(o.empresa).includes(tt));
+    }
+    if(!escolhido && (tt === 'primeiro' || tt === 'um' || tt === '1')) escolhido = _estadoCompraVoz.opcoes[0];
+    if(!escolhido){
+      falarVozIndex('Não achei essa opção. Fala o nome da empresa ou o valor, tipo dez reais.');
+      return;
+    }
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    localStorage.setItem('guiazap_busca_vitrine', escolhido.nome);
+    localStorage.setItem('guiazap_comprar_agora', '1');
+    localStorage.setItem('guiazap_empresa_compra', escolhido.empresaId);
+    _estadoCompraVoz = null;
+    falarVozIndex('Comprando ' + escolhido.nome + ' na ' + escolhido.empresa + ', ' + (escolhido.preco || '') + ' reais.');
+    setTimeout(() => { window.location.href = 'vitrine.html?empresa=' + encodeURIComponent(escolhido.empresaId); }, 900);
+    return;
+  }
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
@@ -4517,11 +4545,31 @@ async function processarComandoVozIndex(transcricao){
       const termoLimpoVitrine = normalizarTexto(transcricao)
         .replace(/\b(quero|queria|comprar|compra|adicionar|colocar|pedir|um|uma|de|do|da|pra|para|o|a)\b/g, ' ')
         .replace(/\s+/g, ' ').trim() || termoBuscaLocal;
+      const palavras = termoLimpoVitrine.split(/\s+/).filter(w => w.length > 2);
+      const opcoes = (produtosParaBuscaPrincipal || []).filter(pr => {
+        const nome = normalizarTexto(pr.nome);
+        return palavras.length ? palavras.every(w => nome.includes(w)) : nome.includes(termoLimpoVitrine);
+      }).map(pr => {
+        const emp = (entries || []).find(e => e.id === pr.profissional_id);
+        return {
+          nome: pr.nome,
+          preco: pr.preco,
+          empresaId: pr.profissional_id,
+          empresa: emp ? emp.name : 'empresa'
+        };
+      });
+      if(querComprar && opcoes.length > 1){
+        _estadoCompraVoz = { opcoes };
+        const fala = opcoes.slice(0, 6).map(o => o.nome + ' na ' + o.empresa + (o.preco ? (', ' + o.preco + ' reais') : '')).join('; ');
+        falarVozIndex('Achei ' + opcoes.length + ' opções: ' + fala + '. Fala a empresa ou o valor, tipo dez reais.');
+        return;
+      }
       localStorage.setItem('retomarModoVozAoCarregar', '1');
       localStorage.setItem('guiazap_busca_vitrine', termoLimpoVitrine);
       if(querComprar) localStorage.setItem('guiazap_comprar_agora', '1');
+      if(opcoes.length === 1) localStorage.setItem('guiazap_empresa_compra', opcoes[0].empresaId);
       falarVozIndex(querComprar ? ('Indo comprar ' + termoLimpoVitrine + '.') : ('Abrindo a vitrine em ' + termoLimpoVitrine + '.'));
-      setTimeout(() => { window.location.href = 'vitrine.html'; }, 900);
+      setTimeout(() => { window.location.href = 'vitrine.html' + (opcoes.length===1 && opcoes[0].empresaId ? ('?empresa='+opcoes[0].empresaId) : ''); }, 900);
       return;
     }
     cadastroCompartilhadoId = null;
