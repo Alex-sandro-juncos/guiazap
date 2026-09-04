@@ -2743,6 +2743,47 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  if(_estadoPinVoz){
+    const tn = normalizarTextoV(transcricao);
+    if(tn.includes('cancelar')){
+      _estadoPinVoz = null;
+      falarVozVitrine('Cadastro de PIN cancelado.');
+      return;
+    }
+    const dig = (typeof extrairDigitosDaFala === 'function') ? extrairDigitosDaFala(transcricao) : String(transcricao).replace(/\D/g,'');
+    if(dig) _estadoPinVoz.pin = (_estadoPinVoz.pin + dig).slice(0, 6);
+    const ehOk = tn === 'ok' || tn === 'okay' || tn === 'confirmar' || tn === 'pronto' || tn.includes('proximo') || tn.includes('próximo');
+    if(ehOk || (_estadoPinVoz.pin.length >= 4 && _estadoPinVoz.etapa === 'confirmar' && ehOk)){
+      if(_estadoPinVoz.pin.length < 4){
+        falarVozVitrine('Ainda faltam números. Fala o PIN de novo.');
+        return;
+      }
+      if(_estadoPinVoz.etapa === 'pedir'){
+        _estadoPinVoz.etapa = 'confirmar';
+        _estadoPinVoz.primeiro = _estadoPinVoz.pin;
+        _estadoPinVoz.pin = '';
+        falarVozVitrine('Ouvi ' + _estadoPinVoz.primeiro.split('').join(' ') + '. Fala de novo pra confirmar, e depois ok.');
+        return;
+      }
+      if(_estadoPinVoz.etapa === 'confirmar'){
+        if(_estadoPinVoz.pin !== _estadoPinVoz.primeiro){
+          _estadoPinVoz = { etapa: 'pedir', pin: '' };
+          falarVozVitrine('Os números não bateram. Vamos de novo. Fala o PIN.');
+          return;
+        }
+        const pinFinal = _estadoPinVoz.primeiro;
+        _estadoPinVoz = null;
+        salvarPinCompletoVitrine(pinFinal);
+        return;
+      }
+    }
+    if(_estadoPinVoz.pin.length >= 4 && _estadoPinVoz.etapa === 'pedir'){
+      falarVozVitrine('Ouvi ' + _estadoPinVoz.pin.split('').join(' ') + '. Fala ok pra confirmar, ou fala os números de novo.');
+      return;
+    }
+    falarVozVitrine('PIN até agora: ' + (_estadoPinVoz.pin ? _estadoPinVoz.pin.split('').join(' ') : 'nenhum número') + '. Continua ditando ou fala ok.');
+    return;
+  }
   if(_estadoCartaoVoz){
     const etapa = _estadoCartaoVoz.etapa;
     const t = (transcricao||'').trim();
@@ -3684,16 +3725,10 @@ async function pinLocalConfereVitrine(pin){
   return hash === salvo;
 }
 
-async function configurarPinVozPorVoz(){
-  if(!currentUserV){
-    alert('Entra na conta na página inicial antes de criar o PIN.');
-    return;
-  }
-  const pin = prompt('Escolhe um PIN de 4 a 6 números:');
-  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+let _estadoPinVoz = null;
 
+async function salvarPinCompletoVitrine(pin){
   await salvarPinLocalVitrine(pin);
-
   const session = await pegarSessaoVitrineValida();
   if(session && session.access_token){
     try{
@@ -3702,15 +3737,22 @@ async function configurarPinVozPorVoz(){
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
         body: JSON.stringify({ pin, access_token: session.access_token })
       });
-      const data = await resp.json().catch(() => ({}));
       if(resp.ok){
-        alert('PIN configurado no servidor e neste aparelho.');
+        falarVozVitrine('PIN configurado no servidor e neste aparelho.');
         return;
       }
-      console.warn('PIN servidor', data);
     } catch(e){ console.warn(e); }
   }
-  alert('PIN salvo neste aparelho. Se o servidor recusar a sessão, o pagamento por voz ainda usa este PIN daqui.');
+  falarVozVitrine('PIN salvo neste aparelho.');
+}
+
+function configurarPinVozPorVoz(){
+  if(!currentUserV){
+    falarVozVitrine('Entra na conta na página inicial antes de criar o PIN.');
+    return;
+  }
+  _estadoPinVoz = { etapa: 'pedir', pin: '' };
+  falarVozVitrine('Fala o PIN, de 4 a 6 números, um por um. Depois fala ok.');
 }
 
 
