@@ -35,6 +35,7 @@ function toggleVerSenha(inputId, botao){
   const escondida = campo.type === 'password';
   campo.type = escondida ? 'text' : 'password';
   botao.textContent = escondida ? '🙈' : '👁️';
+  botao.setAttribute('aria-label', escondida ? 'Ocultar senha' : 'Mostrar senha');
 }
 
 function toggleAuthForm(){
@@ -44,13 +45,13 @@ function toggleAuthForm(){
     box.innerHTML = `
       <form autocomplete="on" onsubmit="return false;">
         <div class="auth-row">
-          <input id="auth-nome" type="text" placeholder="Seu nome (só pra criar conta nova)" autocomplete="name">
+          <input id="auth-nome" type="text" placeholder="Seu nome (só pra criar conta nova)" aria-label="Seu nome, só pra criar conta nova" autocomplete="name">
         </div>
         <div class="auth-row">
-          <input id="auth-email" type="email" placeholder="Seu e-mail" autocomplete="email">
+          <input id="auth-email" type="email" placeholder="Seu e-mail" aria-label="Seu e-mail" autocomplete="email">
           <div class="campo-com-olho">
-            <input id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
-            <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('auth-password', this)">👁️</button>
+            <input id="auth-password" type="password" placeholder="Senha" aria-label="Senha" autocomplete="current-password">
+            <button type="button" class="btn-ver-senha" aria-label="Mostrar senha" onclick="toggleVerSenha('auth-password', this)">👁️</button>
           </div>
         </div>
         <label class="termos-check">
@@ -3748,6 +3749,14 @@ function pararModoVozIndex(){
   document.getElementById('btn-modo-voz-index').style.background = '#6b46c1';
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Ativar modo voz, buscar empresas sem tocar na tela');
   document.getElementById('painel-modo-voz-index').style.display = 'none';
+
+  // Segurança: solta o bloqueio de toque sozinho se a escuta parar, pra
+  // nunca deixar a pessoa travada sem toque E sem voz funcionando
+  if(_modoSomenteVozAtivoIndex){
+    _modoSomenteVozAtivoIndex = false;
+    _aguardandoPinParaDestravarIndex = false;
+    document.getElementById('overlay-modo-somente-voz-index').style.display = 'none';
+  }
 }
 
 function falarVozIndex(texto){
@@ -3774,8 +3783,87 @@ function falarVozIndex(texto){
   _vozIndexSynth.speak(fala);
 }
 
+let _modoSomenteVozAtivoIndex = false;
+let _aguardandoPinParaDestravarIndex = false;
+
+function ativarModoSomenteVozIndex(){
+  if(!currentUser){
+    alert('Você precisa estar logado (e ter configurado um PIN de voz na Vitrine) pra usar o modo somente voz — sem isso, não teria como destravar depois.');
+    return;
+  }
+  _modoSomenteVozAtivoIndex = true;
+  document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
+  falarVozIndex('Modo somente voz ativado. Pra desativar, fala "desativar modo somente voz" e depois o seu PIN.');
+}
+
+async function processarComandoDesativarSomenteVozIndex(transcricao){
+  if(!_aguardandoPinParaDestravarIndex){
+    falarVozIndex('Pra desativar o bloqueio, fala seu PIN de voz.');
+    _aguardandoPinParaDestravarIndex = true;
+    return;
+  }
+
+  const pinFalado = extrairDigitosDaFalaIndex(transcricao);
+  if(!pinFalado || pinFalado.length < 4){
+    falarVozIndex('Não entendi o PIN. Fala os números de novo.');
+    return;
+  }
+
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pin: pinFalado })
+    });
+    const data = await resp.json();
+
+    if(!data.valido){
+      falarVozIndex('PIN incorreto. Fala de novo.');
+      return;
+    }
+
+    _modoSomenteVozAtivoIndex = false;
+    _aguardandoPinParaDestravarIndex = false;
+    document.getElementById('overlay-modo-somente-voz-index').style.display = 'none';
+    falarVozIndex('Modo somente voz desativado.');
+  } catch(e){
+    console.error(e);
+    falarVozIndex('Erro ao conferir o PIN. Tenta de novo.');
+  }
+}
+
+function extrairDigitosDaFalaIndex(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTexto(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
+}
+
 async function processarComandoVozIndex(transcricao){
+  // Prioridade máxima: PIN de destravar
+  if(_aguardandoPinParaDestravarIndex){
+    await processarComandoDesativarSomenteVozIndex(transcricao);
+    return;
+  }
+
+  const textoNormalizadoDestravar = normalizarTexto(transcricao);
+  if(_modoSomenteVozAtivoIndex && (textoNormalizadoDestravar.includes('desativar modo somente voz') || textoNormalizadoDestravar.includes('destravar'))){
+    await processarComandoDesativarSomenteVozIndex(transcricao);
+    return;
+  }
+
   const textoNormalizado = normalizarTexto(transcricao);
+
+  if(textoNormalizado.includes('modo somente voz') || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
+    ativarModoSomenteVozIndex();
+    return;
+  }
 
   // Comandos locais instantâneos
   if(textoNormalizado.includes('limpar busca') || textoNormalizado.includes('nova busca')){

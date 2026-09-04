@@ -2626,6 +2626,15 @@ function pararModoVozVitrine(){
   document.getElementById('btn-modo-voz-vitrine').style.background = '#6b46c1';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Ativar modo voz, comprar sem tocar na tela');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'none';
+
+  // Segurança: se o modo somente voz estava ativo e a escuta parou (por
+  // qualquer motivo), solta o bloqueio de toque sozinho — ficar travado
+  // sem toque E sem voz funcionando seria pior do que soltar por segurança
+  if(_modoSomenteVozAtivoVitrine){
+    _modoSomenteVozAtivoVitrine = false;
+    _aguardandoPinParaDestravarVitrine = false;
+    document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'none';
+  }
 }
 
 function falarVozVitrine(texto){
@@ -2655,6 +2664,19 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
+  // somente voz, essa fala é sobre isso — nada mais é processado
+  if(_aguardandoPinParaDestravarVitrine){
+    await processarComandoDesativarSomenteVoz(transcricao);
+    return;
+  }
+
+  const textoNormalizadoDestravar = normalizarTextoV(transcricao);
+  if(_modoSomenteVozAtivoVitrine && (textoNormalizadoDestravar.includes('desativar modo somente voz') || textoNormalizadoDestravar.includes('destravar'))){
+    await processarComandoDesativarSomenteVoz(transcricao);
+    return;
+  }
+
   // Se estamos no meio do fluxo de finalizar pedido (retirada/entrega,
   // endereço, PIN ou CVV), essa fala pertence a essa etapa — não passa
   // pelos comandos normais nem pela IA
@@ -2664,6 +2686,11 @@ async function processarComandoVozVitrine(transcricao){
   }
 
   const textoNormalizado = normalizarTextoV(transcricao);
+
+  if(textoNormalizado.includes('modo somente voz') || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
+    ativarModoSomenteVozVitrine();
+    return;
+  }
 
   // Comandos locais instantâneos — resolvidos na hora, sem esperar a IA
   if(textoNormalizado.includes('meu carrinho') || textoNormalizado.includes('ver carrinho') || (textoNormalizado.includes('carrinho') && textoNormalizado.length < 20)){
@@ -2764,6 +2791,54 @@ function extrairDigitosDaFala(texto){
     else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
   });
   return digitos;
+}
+
+// ---------- MODO SOMENTE VOZ (bloqueia toque na tela) ----------
+
+let _modoSomenteVozAtivoVitrine = false;
+let _aguardandoPinParaDestravarVitrine = false;
+
+function ativarModoSomenteVozVitrine(){
+  _modoSomenteVozAtivoVitrine = true;
+  document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'block';
+  falarVozVitrine('Modo somente voz ativado. Agora só comandos de voz funcionam. Pra desativar, fala "desativar modo somente voz" e depois o seu PIN.');
+}
+
+async function processarComandoDesativarSomenteVoz(transcricao){
+  if(!_aguardandoPinParaDestravarVitrine){
+    falarVozVitrine('Pra desativar o bloqueio, fala seu PIN de voz.');
+    _aguardandoPinParaDestravarVitrine = true;
+    return;
+  }
+
+  const pinFalado = extrairDigitosDaFala(transcricao);
+  if(!pinFalado || pinFalado.length < 4){
+    falarVozVitrine('Não entendi o PIN. Fala os números de novo.');
+    return;
+  }
+
+  try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
+    const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pin: pinFalado })
+    });
+    const data = await resp.json();
+
+    if(!data.valido){
+      falarVozVitrine('PIN incorreto. Fala de novo.');
+      return;
+    }
+
+    _modoSomenteVozAtivoVitrine = false;
+    _aguardandoPinParaDestravarVitrine = false;
+    document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'none';
+    falarVozVitrine('Modo somente voz desativado. Você já pode tocar na tela de novo.');
+  } catch(e){
+    console.error(e);
+    falarVozVitrine('Erro ao conferir o PIN. Tenta de novo.');
+  }
 }
 
 let _estadoFinalizacaoVoz = null;
