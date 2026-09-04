@@ -4239,24 +4239,94 @@ async function processarComandoVozIndex(transcricao){
     return;
   }
 
-  if(textoNormalizado.includes('ir para vitrine') || textoNormalizado.includes('ver vitrine') || textoNormalizado.includes('ir pra vitrine')){
+  // Navegação — aceita forma curta ("vitrine") e completa ("ir pra vitrine")
+  const irPara = (url, fala) => {
     localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozIndex('Indo pra Vitrine...');
-    setTimeout(() => { window.location.href = 'vitrine.html'; }, 1200);
+    falarVozIndex(fala);
+    setTimeout(() => { window.location.href = url; }, 1200);
+  };
+
+  if(
+    textoNormalizado === 'vitrine' ||
+    textoNormalizado.includes('ir para vitrine') ||
+    textoNormalizado.includes('ir pra vitrine') ||
+    textoNormalizado.includes('ver vitrine') ||
+    textoNormalizado.includes('abrir vitrine') ||
+    textoNormalizado.includes('vai pra vitrine') ||
+    textoNormalizado.includes('vai para vitrine')
+  ){
+    irPara('vitrine.html', 'Indo pra Vitrine...');
     return;
   }
 
-  if(textoNormalizado.includes('ir para pedidos') || textoNormalizado.includes('meus pedidos')){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozIndex('Indo pra tela de pedidos...');
-    setTimeout(() => { window.location.href = 'pedidos.html'; }, 1200);
+  if(
+    textoNormalizado === 'pedidos' ||
+    textoNormalizado.includes('ir para pedidos') ||
+    textoNormalizado.includes('ir pra pedidos') ||
+    textoNormalizado.includes('meus pedidos') ||
+    textoNormalizado.includes('abrir pedidos') ||
+    textoNormalizado.includes('ver pedidos')
+  ){
+    irPara('pedidos.html', 'Indo pra tela de pedidos...');
     return;
   }
 
-  if(textoNormalizado.includes('ir para curriculo') || textoNormalizado.includes('meu curriculo') || textoNormalizado.includes('fazer curriculo')){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozIndex('Indo pra tela de currículo...');
-    setTimeout(() => { window.location.href = 'curriculo.html'; }, 1200);
+  if(
+    textoNormalizado === 'curriculo' ||
+    textoNormalizado === 'currículo' ||
+    textoNormalizado.includes('ir para curriculo') ||
+    textoNormalizado.includes('ir pra curriculo') ||
+    textoNormalizado.includes('meu curriculo') ||
+    textoNormalizado.includes('fazer curriculo') ||
+    textoNormalizado.includes('abrir curriculo')
+  ){
+    irPara('curriculo.html', 'Indo pra tela de currículo...');
+    return;
+  }
+
+  if(
+    textoNormalizado === 'vagas' ||
+    textoNormalizado.includes('ir para vagas') ||
+    textoNormalizado.includes('ir pra vagas') ||
+    textoNormalizado.includes('ver vagas') ||
+    textoNormalizado.includes('abrir vagas') ||
+    textoNormalizado.includes('contrata se') ||
+    textoNormalizado.includes('contrata-se')
+  ){
+    irPara('vagas.html', 'Indo pra tela de vagas...');
+    return;
+  }
+
+  if(
+    textoNormalizado === 'blog' ||
+    textoNormalizado.includes('ir para o blog') ||
+    textoNormalizado.includes('ir pro blog') ||
+    textoNormalizado.includes('abrir blog') ||
+    textoNormalizado.includes('ver blog')
+  ){
+    irPara('blog.html', 'Indo pro blog...');
+    return;
+  }
+
+  if(
+    textoNormalizado === 'papo' ||
+    textoNormalizado === 'chat' ||
+    textoNormalizado.includes('abrir papo') ||
+    textoNormalizado.includes('abrir chat') ||
+    textoNormalizado.includes('ir pro papo') ||
+    textoNormalizado.includes('ir para o papo')
+  ){
+    irPara('chat.html', 'Abrindo o Papo...');
+    return;
+  }
+
+  if(
+    textoNormalizado === 'agenda' ||
+    textoNormalizado.includes('abrir agenda') ||
+    textoNormalizado.includes('ver agenda') ||
+    textoNormalizado.includes('ir pra agenda')
+  ){
+    irPara('agenda.html', 'Indo pra agenda...');
     return;
   }
 
@@ -4280,21 +4350,35 @@ async function processarComandoVozIndex(transcricao){
     return;
   }
 
-  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são')){
+  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são') || textoNormalizado === 'resultados'){
     falarVozIndex(lerResultadosBuscaIndex());
     return;
   }
 
   // Comandos locais instantâneos
-  if(textoNormalizado.includes('limpar busca') || textoNormalizado.includes('nova busca')){
+  if(textoNormalizado.includes('limpar busca') || textoNormalizado.includes('nova busca') || textoNormalizado === 'limpar'){
     document.getElementById('search').value = '';
     render();
     falarVozIndex('Busca limpa.');
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar')){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
     falarVozIndex('Modo voz desativado.');
     setTimeout(pararModoVozIndex, 1500);
+    return;
+  }
+
+  // Busca local primeiro: frases simples tipo "dentista", "eletricista",
+  // "pizza" não precisam de IA — evita "não entendi" quando a API falha.
+  const palavrasComandoComplexo = ['chamar', 'ligar', 'whatsapp', 'conversar', 'falar com', 'manda mensagem', 'filtrar cidade', 'na cidade'];
+  const pareceComandoComplexo = palavrasComandoComplexo.some(p => textoNormalizado.includes(p));
+  const termoBuscaLocal = transcricao.trim();
+
+  if(!pareceComandoComplexo && termoBuscaLocal.length >= 2 && termoBuscaLocal.length <= 60){
+    document.getElementById('search').value = termoBuscaLocal;
+    render();
+    const resumo = lerResultadosBuscaIndex();
+    falarVozIndex(resumo);
     return;
   }
 
@@ -4314,14 +4398,28 @@ async function processarComandoVozIndex(transcricao){
     const resultado = await resp.json();
 
     if(!resp.ok){
-      falarVozIndex(resultado.error || 'Tive um problema ao entender. Pode repetir?');
+      // Fallback: se a IA falhar, tenta buscar o que a pessoa falou
+      document.getElementById('search').value = termoBuscaLocal;
+      render();
+      falarVozIndex(lerResultadosBuscaIndex());
+      return;
+    }
+
+    // Se a IA disse que não entendeu, ainda assim tenta buscar o termo falado
+    if(resultado.action === 'NENHUMA' && termoBuscaLocal.length >= 2){
+      document.getElementById('search').value = termoBuscaLocal;
+      render();
+      falarVozIndex(lerResultadosBuscaIndex());
       return;
     }
 
     executarAcaoVozIndex(resultado);
   } catch(e){
     console.error(e);
-    falarVozIndex('Não consegui processar agora. Pode repetir?');
+    // Fallback offline: busca o que foi falado
+    document.getElementById('search').value = termoBuscaLocal;
+    render();
+    falarVozIndex(lerResultadosBuscaIndex());
   }
 }
 

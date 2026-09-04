@@ -2727,7 +2727,7 @@ async function processarComandoVozVitrine(transcricao){
   }
 
   // Comandos locais instantâneos — resolvidos na hora, sem esperar a IA
-  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são')){
+  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são') || textoNormalizado === 'resultados'){
     falarVozVitrine(lerResultadosBuscaVitrine());
     return;
   }
@@ -2744,13 +2744,79 @@ async function processarComandoVozVitrine(transcricao){
     dispararFinalizarPorVoz();
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar')){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
     falarVozVitrine('Modo voz desativado.');
     setTimeout(pararModoVozVitrine, 1500);
     return;
   }
 
-  // Comando mais complexo — manda pro Claude interpretar
+  // Navegação curta
+  if(textoNormalizado === 'pedidos' || textoNormalizado.includes('ir pra pedidos') || textoNormalizado.includes('ir para pedidos')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozVitrine('Indo pra tela de pedidos...');
+    setTimeout(() => { window.location.href = 'pedidos.html'; }, 1200);
+    return;
+  }
+  if(textoNormalizado.includes('pagina inicial') || textoNormalizado.includes('página inicial') || textoNormalizado === 'inicio' || textoNormalizado === 'início' || textoNormalizado.includes('voltar pro guiazap')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozVitrine('Voltando pra página inicial...');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    return;
+  }
+
+  // Busca / adicionar produto LOCAL — "dog duplo de frango", "adicionar dog doritos"
+  // não depende da IA (que costuma falhar e responder "não entendi")
+  const querAdicionar = textoNormalizado.startsWith('adicionar ') || textoNormalizado.startsWith('coloca ') ||
+    textoNormalizado.startsWith('colocar ') || textoNormalizado.startsWith('poe ') || textoNormalizado.startsWith('põe ') ||
+    textoNormalizado.includes('adicionar ao carrinho') || textoNormalizado.includes('pro carrinho');
+
+  let termoProduto = textoNormalizado;
+  if(querAdicionar){
+    termoProduto = textoNormalizado
+      .replace(/^adicionar( ao carrinho)?\s*/, '')
+      .replace(/^coloca(r)?\s*/, '')
+      .replace(/^p[oô]e\s*/, '')
+      .replace(/\s*pro carrinho\s*/, '')
+      .replace(/\s*no carrinho\s*/, '')
+      .trim();
+  }
+
+  // Remove palavras miúdas que atrapalham o match ("de", "do", "da")
+  const termoLimpo = termoProduto.replace(/\b(de|do|da|dos|das|um|uma|o|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if(termoLimpo.length >= 2){
+    const candidatos = (produtos || []).filter(p => {
+      const nome = normalizarTextoV(p.nome);
+      const marca = normalizarTextoV(p.marca);
+      return nome.includes(termoLimpo) || termoLimpo.includes(nome) ||
+        nome.includes(termoProduto) || termoProduto.includes(nome) ||
+        (marca && (marca.includes(termoLimpo) || termoLimpo.includes(marca)));
+    });
+
+    // Match mais frouxo: todas as palavras do termo aparecem no nome
+    const palavras = termoLimpo.split(' ').filter(w => w.length > 1);
+    const candidatosFrouxos = candidatos.length > 0 ? candidatos : (produtos || []).filter(p => {
+      const nome = normalizarTextoV(p.nome);
+      return palavras.length > 0 && palavras.every(w => nome.includes(w));
+    });
+
+    if(candidatosFrouxos.length > 0){
+      if(querAdicionar){
+        const produto = candidatosFrouxos[0];
+        adicionarAoCarrinho(produto.id);
+        renderProdutos();
+        falarVozVitrine(`${produto.nome} adicionado ao carrinho.`);
+        return;
+      }
+      // Só busca/filtra e lê o que achou
+      document.getElementById('v-search').value = transcricao.trim();
+      renderProdutos();
+      falarVozVitrine(lerResultadosBuscaVitrine());
+      return;
+    }
+  }
+
+  // Comando mais complexo — tenta a IA; se falhar, busca o que foi falado
   document.getElementById('voz-vitrine-status').textContent = '🤔 Pensando...';
   document.getElementById('voz-vitrine-indicador').style.background = '#e91e63';
 
@@ -2764,20 +2830,32 @@ async function processarComandoVozVitrine(transcricao){
 
     const resp = await fetch('/.netlify/functions/interpretar-comando-voz-vitrine', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session && session.access_token ? session.access_token : ''}` },
       body: JSON.stringify({ texto: transcricao, produtosVisiveis, carrinhoAtual: carrinhoResumo })
     });
     const resultado = await resp.json();
 
     if(!resp.ok){
-      falarVozVitrine(resultado.error || 'Tive um problema ao entender. Pode repetir?');
+      // Fallback: busca o termo falado
+      document.getElementById('v-search').value = transcricao.trim();
+      renderProdutos();
+      falarVozVitrine(lerResultadosBuscaVitrine());
+      return;
+    }
+
+    if(resultado.action === 'NENHUMA'){
+      document.getElementById('v-search').value = transcricao.trim();
+      renderProdutos();
+      falarVozVitrine(lerResultadosBuscaVitrine());
       return;
     }
 
     executarAcaoVozVitrine(resultado);
   } catch(e){
     console.error(e);
-    falarVozVitrine('Não consegui processar agora. Pode repetir?');
+    document.getElementById('v-search').value = transcricao.trim();
+    renderProdutos();
+    falarVozVitrine(lerResultadosBuscaVitrine());
   }
 }
 

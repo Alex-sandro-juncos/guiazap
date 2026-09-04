@@ -518,6 +518,7 @@
           <div class="config-chat-secao" id="config-salvar-contato-area"></div>
           <button type="button" class="config-chat-item" id="btn-bloquear-config" onclick="toggleBloquearContatoAtual()">🚫 Bloquear contato</button>
           <button type="button" class="config-chat-item" id="btn-silenciar-config" onclick="toggleSilenciarConversa()">🔔 Silenciar conversa</button>
+          <button type="button" class="config-chat-item" id="btn-ler-auto-papo" onclick="toggleLerAutomaticoPapo()">🔊 Ler mensagens novas em voz alta</button>
           <div class="config-chat-secao">
             <label class="config-chat-label" for="volume-chat">🔊 Volume da notificação</label>
             <input type="range" id="volume-chat" min="0" max="100" value="50" style="width:100%;" onchange="localStorage.setItem('volume_chat', this.value)">
@@ -1688,7 +1689,10 @@ async function abrirConversa(conversaId){
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
       adicionarBolhaMensagem(payload.new);
       document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
-      if(payload.new.remetente_user_id !== currentUserChat.id) tocarSomNotificacao();
+      if(payload.new.remetente_user_id !== currentUserChat.id){
+        tocarSomNotificacao();
+        lerMensagemRecebidaSeAtivo(payload.new);
+      }
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
       atualizarCheckLida(payload.new.id, payload.new.lida);
@@ -2021,7 +2025,9 @@ function conteudoDaMensagem(m, minha){
     `;
   }
   if(m.tipo === 'audio'){
-    return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>`;
+    const legenda = (m.texto || '').trim();
+    return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>` +
+      (legenda ? `<div class="transcricao-audio-chat" style="margin-top:6px; font-size:0.82rem; line-height:1.35;">📝 ${escapeHtmlChat(legenda)}</div>` : `<div class="transcricao-audio-chat" style="margin-top:6px; font-size:0.75rem; color:#888;">🎤 Áudio (sem texto). Peça pra pessoa usar o botão 🗣️ pra virar texto.</div>`);
   }
   if(m.tipo === 'gif' || m.tipo === 'sticker'){
     return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat">`;
@@ -2125,7 +2131,7 @@ function adicionarBolhaMensagem(m){
   const minha = m.remetente_user_id === currentUserChat.id;
   const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const ehInterativa = m.tipo === 'menu_interativo' || m.tipo === 'formulario_endereco';
-  const podeOuvir = m.tipo === 'texto';
+  const podeOuvir = m.tipo === 'texto' || (m.tipo === 'audio' && (m.texto || '').trim());
   const temAlgumaOpcao = podeOuvir || (minha && m.tipo !== 'apagada');
   container.insertAdjacentHTML('beforeend', `
     <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}" style="${ehInterativa ? 'max-width:92%;' : ''} position:relative;">
@@ -2155,20 +2161,74 @@ document.addEventListener('click', (e) => {
 function ouvirMensagemEmVoz(msgId){
   const bolha = document.querySelector(`[data-msg-id="${msgId}"]`);
   if(!bolha) return;
-  const texto = bolha.querySelector('div:not(.menu-msg-opcoes)')?.textContent || bolha.textContent;
+  const legenda = bolha.querySelector('.transcricao-audio-chat');
+  let texto = '';
+  if(legenda) texto = legenda.textContent.replace(/^📝\s*/, '').trim();
+  if(!texto){
+    const bloco = bolha.querySelector('div:not(.menu-msg-opcoes)');
+    texto = bloco ? bloco.textContent : bolha.textContent;
+  }
 
   if(!('speechSynthesis' in window)){
     alert('Seu navegador não suporta leitura de texto em voz. Tenta pelo Chrome.');
     return;
   }
 
-  speechSynthesis.cancel(); // para qualquer leitura anterior antes de começar uma nova
-  const fala = new SpeechSynthesisUtterance(texto.trim());
+  speechSynthesis.cancel();
+  const fala = new SpeechSynthesisUtterance((texto || '').replace(/^🎤.*/,'Áudio sem texto.').trim());
   fala.lang = 'pt-BR';
   fala.rate = 1;
   speechSynthesis.speak(fala);
 
   document.querySelectorAll('.menu-msg-opcoes').forEach(el => { el.style.display = 'none'; });
+}
+
+function lerAutomaticoPapoAtivo(){
+  return localStorage.getItem('papo_ler_automatico') !== '0';
+}
+
+function toggleLerAutomaticoPapo(){
+  const novo = lerAutomaticoPapoAtivo() ? '0' : '1';
+  localStorage.setItem('papo_ler_automatico', novo);
+  atualizarBotaoLerAutomaticoPapo();
+  if('speechSynthesis' in window){
+    speechSynthesis.cancel();
+    const fala = new SpeechSynthesisUtterance(novo === '1' ? 'Leitura automática ligada. Mensagens novas serão lidas em voz alta.' : 'Leitura automática desligada.');
+    fala.lang = 'pt-BR';
+    speechSynthesis.speak(fala);
+  }
+}
+
+function atualizarBotaoLerAutomaticoPapo(){
+  const btn = document.getElementById('btn-ler-auto-papo');
+  if(!btn) return;
+  btn.textContent = lerAutomaticoPapoAtivo()
+    ? '🔊 Ler mensagens novas: LIGADO'
+    : '🔇 Ler mensagens novas: DESLIGADO';
+}
+
+function lerMensagemRecebidaSeAtivo(m){
+  if(!lerAutomaticoPapoAtivo()) return;
+  if(!('speechSynthesis' in window)) return;
+  if(!m || m.tipo === 'apagada') return;
+
+  let texto = '';
+  if(m.tipo === 'texto' && m.texto) texto = m.texto;
+  else if(m.tipo === 'audio' && (m.texto || '').trim()) texto = 'Áudio: ' + m.texto;
+  else if(m.tipo === 'audio') texto = 'Chegou um áudio. Peça pra pessoa usar o botão de falar texto.';
+  else if(m.tipo === 'imagem') texto = 'Chegou uma foto.';
+  else if(m.tipo === 'arquivo') texto = 'Chegou um arquivo.';
+  else if(m.tipo === 'gif') texto = 'Chegou um GIF.';
+  else if(m.tipo === 'sticker') texto = 'Chegou uma figurinha.';
+  else if(m.tipo === 'chamada_perdida') texto = 'Chamada não atendida.';
+  else if(m.tipo === 'chamada_atendida') texto = 'Chamada no histórico.';
+  if(!texto) return;
+
+  speechSynthesis.cancel();
+  const fala = new SpeechSynthesisUtterance((outroLadoNomeAtual || 'Contato') + ' disse: ' + texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+  speechSynthesis.speak(fala);
 }
 
 async function apagarMensagem(msgId){
@@ -2450,10 +2510,12 @@ async function enviarQualquerMensagem(payload){
   await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
 
   const resumoParaNotificacao = payload.tipo === 'texto' ? payload.texto
+    : payload.tipo === 'audio' ? ((payload.texto || '').trim() ? ('🎤 ' + payload.texto) : '🎤 Áudio')
     : payload.tipo === 'imagem' ? '📷 Foto'
     : payload.tipo === 'arquivo' ? '📄 Arquivo: ' + (payload.arquivo_nome || '')
     : payload.tipo === 'gif' ? '🎞️ GIF'
-    : '🏷️ Figurinha';
+    : payload.tipo === 'sticker' ? '🏷️ Figurinha'
+    : 'Nova mensagem';
 
   fetch('/.netlify/functions/notificar-nova-mensagem', {
     method: 'POST',
@@ -2597,6 +2659,43 @@ let chunksAudioAtual = [];
 let gravandoAudio = false;
 let timerGravacao = null;
 let segundosGravacao = 0;
+let _transcricaoAudioParalela = '';
+let _reconhecimentoAudioParalelo = null;
+
+function iniciarTranscricaoParalelaDoAudio(){
+  _transcricaoAudioParalela = '';
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi) return;
+  try{
+    _reconhecimentoAudioParalelo = new SpeechRecognitionApi();
+    _reconhecimentoAudioParalelo.lang = 'pt-BR';
+    _reconhecimentoAudioParalelo.continuous = true;
+    _reconhecimentoAudioParalelo.interimResults = false;
+    _reconhecimentoAudioParalelo.onresult = (event) => {
+      for(let i = event.resultIndex; i < event.results.length; i++){
+        if(event.results[i].isFinal){
+          const parte = (event.results[i][0].transcript || '').trim();
+          if(parte) _transcricaoAudioParalela = (_transcricaoAudioParalela + ' ' + parte).trim();
+        }
+      }
+    };
+    _reconhecimentoAudioParalelo.onend = () => {
+      if(gravandoAudio && _reconhecimentoAudioParalelo){
+        try{ _reconhecimentoAudioParalelo.start(); } catch(e){}
+      }
+    };
+    _reconhecimentoAudioParalelo.start();
+  } catch(e){
+    _reconhecimentoAudioParalelo = null;
+  }
+}
+
+function pararTranscricaoParalelaDoAudio(){
+  if(_reconhecimentoAudioParalelo){
+    try{ _reconhecimentoAudioParalelo.stop(); } catch(e){}
+    _reconhecimentoAudioParalelo = null;
+  }
+}
 
 async function alternarGravacaoAudio(){
   if(gravandoAudio) return;
@@ -2612,16 +2711,18 @@ async function alternarGravacaoAudio(){
 
     mediaRecorderAtual.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
+      pararTranscricaoParalelaDoAudio();
       if(mediaRecorderAtual._cancelado){ resetarUiGravacao(); return; }
       if(chunksAudioAtual.length === 0){ resetarUiGravacao(); return; }
       const blob = new Blob(chunksAudioAtual, { type: 'audio/webm' });
-      await enviarAudioGravado(blob);
+      await enviarAudioGravado(blob, _transcricaoAudioParalela);
       resetarUiGravacao();
     };
 
     mediaRecorderAtual.start();
     gravandoAudio = true;
     segundosGravacao = 0;
+    iniciarTranscricaoParalelaDoAudio();
 
     document.getElementById('chat-input-row-normal').style.display = 'none';
     document.getElementById('gravacao-audio-box').style.display = 'flex';
@@ -2663,7 +2764,7 @@ function resetarUiGravacao(){
   segundosGravacao = 0;
 }
 
-async function enviarAudioGravado(blob){
+async function enviarAudioGravado(blob, transcricao){
   const nomeArquivo = `chat/${currentUserChat.id}/${Date.now()}-audio.webm`;
   const arquivo = new File([blob], 'audio.webm', { type: 'audio/webm' });
 
@@ -2671,7 +2772,11 @@ async function enviarAudioGravado(blob){
   if(error){ console.error('erro ao enviar áudio:', JSON.stringify(error)); alert('Erro ao enviar o áudio: ' + (error.message || 'desconhecido')); return; }
 
   const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
-  await enviarQualquerMensagem({ tipo: 'audio', arquivo_url: urlData.publicUrl });
+  await enviarQualquerMensagem({
+    tipo: 'audio',
+    arquivo_url: urlData.publicUrl,
+    texto: (transcricao || '').trim()
+  });
 }
 
 // Baixa um arquivo/foto de verdade pro celular/computador — usar só o
