@@ -3522,7 +3522,7 @@ window.addEventListener('appinstalled', () => {
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   if(typeof prepararAcessoVozCego === 'function'){
-    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPapo === 'function') iniciarModoVozPapo(); });
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPapo === 'function') iniciarModoVozPapo(true); });
   }
 });
 </script>

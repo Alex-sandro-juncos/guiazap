@@ -13,7 +13,9 @@ function toggleModoVozPapo(){
   else iniciarModoVozPapo();
 }
 
-function iniciarModoVozPapo(){
+let _aguardandoAtivacaoPapo = false;
+
+function iniciarModoVozPapo(retomandoAutomaticamente){
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Api){
     alert('Use o Chrome para o modo voz.');
@@ -22,6 +24,7 @@ function iniciarModoVozPapo(){
   _vozPapoAtiva = true;
   window._vozPapoAtiva = true;
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
+  _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
   const painel = document.getElementById('painel-modo-voz-papo');
   if(painel) painel.style.display = 'block';
   const btn = document.getElementById('btn-modo-voz-papo');
@@ -38,6 +41,16 @@ function iniciarModoVozPapo(){
     if(!texto) return;
     const trans = document.getElementById('voz-papo-transcricao');
     if(trans) trans.textContent = '"' + texto + '"';
+
+    if(_aguardandoAtivacaoPapo){
+      const t = normalizarVozPapo(texto);
+      if(t.includes('ativar') || t.includes('guiazap')){
+        _aguardandoAtivacaoPapo = false;
+        falarVozPapo('Modo voz ativado.');
+      }
+      return;
+    }
+
     processarComandoVozPapo(texto);
   };
   _vozPapoReconhecimento.onend = () => {
@@ -57,7 +70,9 @@ function iniciarModoVozPapo(){
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
 
-  if(conversaAtual){
+  if(_aguardandoAtivacaoPapo){
+    falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
+  } else if(conversaAtual){
     falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga falar para mandar mensagem, ouvir para ler, ligar, ou voltar.');
   } else {
     const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
@@ -129,7 +144,7 @@ async function processarComandoVozPapo(transcricao){
   _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
 
-  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz'){
+  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;

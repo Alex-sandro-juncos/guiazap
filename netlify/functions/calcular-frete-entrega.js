@@ -211,6 +211,54 @@ exports.handler = async function (event) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
   } catch (err) {
     console.error(err);
+
+    // Rede de segurança: mesmo num erro inesperado, avisa o cliente e
+    // destrava o atendimento — sem isso, a pessoa ficava presa em
+    // "calculando o frete..." pra sempre, até o pedido cancelar sozinho.
+    try {
+      const bodyRecebido = JSON.parse(event.body || '{}');
+      const conversaIdSeguro = bodyRecebido.conversaId;
+      const profissionalIdSeguro = bodyRecebido.profissionalId;
+
+      if (conversaIdSeguro) {
+        const SUPABASE_URL_SEGURO = process.env.SUPABASE_URL;
+        const SUPABASE_SERVICE_ROLE_KEY_SEGURO = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const headersSeguro = {
+          apikey: SUPABASE_SERVICE_ROLE_KEY_SEGURO,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY_SEGURO}`,
+          'Content-Type': 'application/json'
+        };
+
+        let donoUserIdSeguro = null;
+        if (profissionalIdSeguro) {
+          const donoRespSeguro = await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/profissionais?id=eq.${profissionalIdSeguro}&select=user_id`, { headers: headersSeguro });
+          const donoDataSeguro = await donoRespSeguro.json();
+          donoUserIdSeguro = donoDataSeguro[0] ? donoDataSeguro[0].user_id : null;
+        }
+
+        await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/mensagens_chat`, {
+          method: 'POST',
+          headers: headersSeguro,
+          body: JSON.stringify({
+            conversa_id: conversaIdSeguro,
+            remetente_user_id: donoUserIdSeguro,
+            tipo: 'texto',
+            texto: '⚠️ Tivemos um problema técnico pra calcular o frete. Digite *menu* pra tentar de novo, ou fale com a empresa.',
+            lida: false,
+            enviado_por_bot: true
+          })
+        });
+
+        await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/atendimento_estado?conversa_id=eq.${conversaIdSeguro}`, {
+          method: 'PATCH',
+          headers: headersSeguro,
+          body: JSON.stringify({ estado: 'menu_principal', carrinho: [], lista_atual: [] })
+        });
+      }
+    } catch (errSeguro) {
+      console.error('Erro até na rede de segurança de calcular-frete-entrega:', errSeguro);
+    }
+
     return { statusCode: 500, body: JSON.stringify({ error: 'erro ao calcular frete' }) };
   }
 };

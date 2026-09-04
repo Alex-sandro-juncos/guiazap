@@ -234,7 +234,9 @@ function toggleModoVozVagas(){
   else iniciarModoVozVagas();
 }
 
-function iniciarModoVozVagas(){
+let _aguardandoAtivacaoVagas = false;
+
+function iniciarModoVozVagas(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta reconhecimento de voz. Tenta pelo Chrome no celular ou computador.');
@@ -250,14 +252,21 @@ function iniciarModoVozVagas(){
   }
 
   _vozVagasAtiva = true;
-  _estadoVozVagas = { etapa: 'titulo', rascunho: '', dados: {} };
   document.getElementById('btn-modo-voz-vagas').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vagas').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vagas').style.display = 'block';
-  document.getElementById('voz-vagas-status').textContent = '🎙️ Modo voz ativado';
   document.getElementById('voz-vagas-transcricao').textContent = '';
+  _aguardandoAtivacaoVagas = !!retomandoAutomaticamente;
 
-  abrirFormVaga();
+  if(_aguardandoAtivacaoVagas){
+    // Não abre o formulário nem começa a perguntar nada até ouvir a
+    // palavra de ativação — só entra no fluxo de publicar vaga de propósito
+    document.getElementById('voz-vagas-status').textContent = '🎙️ Modo voz em espera';
+  } else {
+    _estadoVozVagas = { etapa: 'titulo', rascunho: '', dados: {} };
+    document.getElementById('voz-vagas-status').textContent = '🎙️ Modo voz ativado';
+    abrirFormVaga();
+  }
 
   _vozVagasReconhecimento = new SpeechRecognitionApi();
   _vozVagasReconhecimento.lang = 'pt-BR';
@@ -270,6 +279,18 @@ function iniciarModoVozVagas(){
     const transcricao = (ultimo[0] && ultimo[0].transcript || '').trim();
     if(!transcricao) return;
     document.getElementById('voz-vagas-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoVagas){
+      const t = normalizarTextoVagas(transcricao);
+      if(t.includes('ativar') || t.includes('guiazap')){
+        _aguardandoAtivacaoVagas = false;
+        _estadoVozVagas = { etapa: 'titulo', rascunho: '', dados: {} };
+        abrirFormVaga();
+        falarVozVagas('Modo voz ativado. Vamos publicar uma vaga. Qual o cargo?');
+      }
+      return;
+    }
+
     processarComandoVozVagas(transcricao);
   };
 
@@ -287,7 +308,11 @@ function iniciarModoVozVagas(){
   };
 
   try{ _vozVagasReconhecimento.start(); } catch(e){}
-  falarVozVagas('Modo voz ativado. Vamos publicar uma vaga juntos. Qual o cargo ou título da vaga?');
+  if(_aguardandoAtivacaoVagas){
+    falarVozVagas('Modo voz em espera. Fala "ativar" pra publicar uma vaga.');
+  } else {
+    falarVozVagas('Modo voz ativado. Vamos publicar uma vaga juntos. Qual o cargo ou título da vaga?');
+  }
 }
 
 function pararModoVozVagas(){
@@ -348,7 +373,7 @@ async function processarComandoVozVagas(transcricao){
   const t = normalizarVozVagas(transcricao);
   const estado = _estadoVozVagas;
 
-  if(t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar'){
+  if(t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozVagas('Modo voz desligado.');
     setTimeout(pararModoVozVagas, 1500);
     return;

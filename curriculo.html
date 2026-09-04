@@ -563,7 +563,9 @@ function toggleModoVozCv(){
   else iniciarModoVozCv();
 }
 
-function iniciarModoVozCv(){
+let _aguardandoAtivacaoCv = false;
+
+function iniciarModoVozCv(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -573,6 +575,7 @@ function iniciarModoVozCv(){
   _vozCvAtiva = true;
   document.getElementById('btn-modo-voz-cv').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-cv').style.display = 'block';
+  _aguardandoAtivacaoCv = !!retomandoAutomaticamente;
 
   _vozCvReconhecimento = new SpeechRecognitionApi();
   _vozCvReconhecimento.lang = 'pt-BR';
@@ -582,6 +585,17 @@ function iniciarModoVozCv(){
   _vozCvReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-cv-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoCv){
+      const t = normalizarTextoCv(transcricao);
+      if(t.includes('ativar') || t.includes('guiazap')){
+        _aguardandoAtivacaoCv = false;
+        _estadoPreenchimentoCv = { etapa: 'nome' };
+        falarVozCv('Modo voz ativado. Vamos preencher seu currículo. Qual seu nome completo?');
+      }
+      return;
+    }
+
     processarEtapaPreenchimentoCv(transcricao);
   };
 
@@ -598,8 +612,12 @@ function iniciarModoVozCv(){
 
   try{ _vozCvReconhecimento.start(); } catch(e){}
 
-  _estadoPreenchimentoCv = { etapa: 'nome' };
-  falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
+  if(_aguardandoAtivacaoCv){
+    falarVozCv('Modo voz em espera. Fala "ativar" pra preencher o currículo.');
+  } else {
+    _estadoPreenchimentoCv = { etapa: 'nome' };
+    falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
+  }
 }
 
 function pararModoVozCv(){
@@ -647,6 +665,12 @@ async function processarEtapaPreenchimentoCv(transcricao){
   if(!estado) return;
   const textoNorm = normalizarTextoCv(transcricao);
   const pulou = textoNorm.includes('pular') || textoNorm.includes('pula');
+
+  if(textoNorm.includes('parar') || textoNorm.includes('desligar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
+    falarVozCv('Modo voz desligado.');
+    setTimeout(pararModoVozCv, 1200);
+    return;
+  }
 
   if(estado.etapa === 'nome'){
     document.getElementById('cv-input-nome').value = transcricao.trim();
@@ -748,7 +772,7 @@ if(supabaseClientCv) initAuthCv();
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   if(typeof prepararAcessoVozCego === 'function'){
-    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozCv === 'function') iniciarModoVozCv(); });
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozCv === 'function') iniciarModoVozCv(true); });
   }
 });
 </script>

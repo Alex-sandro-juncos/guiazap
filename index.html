@@ -597,7 +597,7 @@
 <script src="js/app.js"></script>
 <script src="js/voz-biometria.js"></script>
 <script src="js/voz-acesso-cego.js"></script>
-<script>document.addEventListener("DOMContentLoaded", function(){ if(typeof prepararAcessoVozCego==="function") prepararAcessoVozCego(function(){ if(typeof iniciarModoVozIndex==="function") iniciarModoVozIndex(); }); });</script>
+<script>document.addEventListener("DOMContentLoaded", function(){ if(typeof prepararAcessoVozCego==="function") prepararAcessoVozCego(function(){ if(typeof iniciarModoVozIndex==="function") iniciarModoVozIndex(true); }); });</script>
 <script>
   if(localStorage.getItem('pin_login_configurado_neste_aparelho')){
     const btn = document.getElementById('btn-welcome-entrar-pin');

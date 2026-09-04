@@ -228,6 +228,55 @@ exports.handler = async function (event) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, link: prefData.init_point }) };
   } catch (err) {
     console.error('Erro geral ao gerar link de pagamento:', err);
+
+    // Rede de segurança: mesmo num erro totalmente inesperado (fora dos
+    // casos já tratados acima), tenta avisar o cliente e destravar o
+    // atendimento — sem isso, a pessoa ficava presa em silêncio até o
+    // pedido cancelar sozinho em 24h.
+    try {
+      const bodyRecebido = JSON.parse(event.body || '{}');
+      const conversaIdSeguro = bodyRecebido.conversaId;
+      const profissionalIdSeguro = bodyRecebido.profissionalId;
+
+      if (conversaIdSeguro) {
+        const SUPABASE_URL_SEGURO = process.env.SUPABASE_URL;
+        const SUPABASE_SERVICE_ROLE_KEY_SEGURO = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const headersSeguro = {
+          apikey: SUPABASE_SERVICE_ROLE_KEY_SEGURO,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY_SEGURO}`,
+          'Content-Type': 'application/json'
+        };
+
+        let donoUserIdSeguro = null;
+        if (profissionalIdSeguro) {
+          const donoRespSeguro = await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/profissionais?id=eq.${profissionalIdSeguro}&select=user_id`, { headers: headersSeguro });
+          const donoDataSeguro = await donoRespSeguro.json();
+          donoUserIdSeguro = donoDataSeguro[0] ? donoDataSeguro[0].user_id : null;
+        }
+
+        await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/mensagens_chat`, {
+          method: 'POST',
+          headers: headersSeguro,
+          body: JSON.stringify({
+            conversa_id: conversaIdSeguro,
+            remetente_user_id: donoUserIdSeguro,
+            tipo: 'texto',
+            texto: '⚠️ Tivemos um problema técnico pra gerar o link de pagamento. Digite *menu* pra tentar de novo, ou fale com a empresa.',
+            lida: false,
+            enviado_por_bot: true
+          })
+        });
+
+        await fetch(`${SUPABASE_URL_SEGURO}/rest/v1/atendimento_estado?conversa_id=eq.${conversaIdSeguro}`, {
+          method: 'PATCH',
+          headers: headersSeguro,
+          body: JSON.stringify({ estado: 'menu_principal', carrinho: [], lista_atual: [] })
+        });
+      }
+    } catch (errSeguro) {
+      console.error('Erro até na rede de segurança de gerar-link-pagamento:', errSeguro);
+    }
+
     return { statusCode: 500, body: JSON.stringify({ error: 'erro ao gerar link de pagamento' }) };
   }
 };

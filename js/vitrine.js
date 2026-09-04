@@ -2600,7 +2600,9 @@ function toggleModoVozVitrine(){
   }
 }
 
-function iniciarModoVozVitrine(){
+let _aguardandoAtivacaoVitrine = false;
+
+function iniciarModoVozVitrine(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -2615,6 +2617,7 @@ function iniciarModoVozVitrine(){
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
+  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente;
 
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
   _vozVitrineReconhecimento.lang = 'pt-BR';
@@ -2624,6 +2627,16 @@ function iniciarModoVozVitrine(){
   _vozVitrineReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoVitrine){
+      const textoNorm = normalizarTextoV(transcricao);
+      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
+        _aguardandoAtivacaoVitrine = false;
+        falarVozVitrine('Modo voz ativado.');
+      }
+      return;
+    }
+
     processarComandoVozVitrine(transcricao);
   };
 
@@ -2645,7 +2658,12 @@ function iniciarModoVozVitrine(){
   };
 
   try{ _vozVitrineReconhecimento.start(); } catch(e){}
-  falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+
+  if(_aguardandoAtivacaoVitrine){
+    falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+  }
 }
 
 function pararModoVozVitrine(){
@@ -2782,7 +2800,7 @@ async function processarComandoVozVitrine(transcricao){
     dispararFinalizarPorVoz();
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
     falarVozVitrine('Modo voz desativado.');
     setTimeout(pararModoVozVitrine, 1500);
     return;
@@ -3618,5 +3636,5 @@ if(initSupabaseV()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(iniciarModoVozVitrine, 800);
+  setTimeout(() => iniciarModoVozVitrine(true), 800);
 }

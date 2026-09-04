@@ -3594,7 +3594,7 @@ if(initSupabase()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(iniciarModoVozIndex, 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
+  setTimeout(() => iniciarModoVozIndex(true), 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
@@ -3724,7 +3724,7 @@ function toggleModoVozIndex(){
   }
 }
 
-function iniciarModoVozIndex(){
+function iniciarModoVozIndex(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -3737,6 +3737,11 @@ function iniciarModoVozIndex(){
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
 
+  // Se o microfone está voltando SOZINHO (ao trocar de página, por
+  // exemplo), começa em "modo de espera" — só reage à palavra de ativação,
+  // pra não confundir qualquer fala do ambiente com um comando de verdade
+  _aguardandoAtivacaoIndex = !!retomandoAutomaticamente;
+
   _vozIndexReconhecimento = new SpeechRecognitionApi();
   _vozIndexReconhecimento.lang = 'pt-BR';
   _vozIndexReconhecimento.continuous = true;
@@ -3745,6 +3750,16 @@ function iniciarModoVozIndex(){
   _vozIndexReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoIndex){
+      const textoNorm = normalizarTexto(transcricao);
+      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
+        _aguardandoAtivacaoIndex = false;
+        falarVozIndex('Modo voz ativado. Fala o que você procura.');
+      }
+      return; // ignora qualquer outra fala enquanto está em espera
+    }
+
     processarComandoVozIndex(transcricao);
   };
 
@@ -3766,8 +3781,15 @@ function iniciarModoVozIndex(){
   };
 
   try{ _vozIndexReconhecimento.start(); } catch(e){}
-  falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+
+  if(_aguardandoAtivacaoIndex){
+    falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+  }
 }
+
+let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
@@ -4385,7 +4407,7 @@ async function processarComandoVozIndex(transcricao){
     falarVozIndex('Busca limpa.');
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
     falarVozIndex('Modo voz desativado.');
     setTimeout(pararModoVozIndex, 1500);
     return;

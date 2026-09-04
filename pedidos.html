@@ -441,7 +441,9 @@ function toggleModoVozPedidos(){
   else iniciarModoVozPedidos();
 }
 
-function iniciarModoVozPedidos(){
+let _aguardandoAtivacaoPedidos = false;
+
+function iniciarModoVozPedidos(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -451,6 +453,7 @@ function iniciarModoVozPedidos(){
   _vozPedidosAtiva = true;
   document.getElementById('btn-modo-voz-pedidos').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-pedidos').style.display = 'block';
+  _aguardandoAtivacaoPedidos = !!retomandoAutomaticamente;
 
   _vozPedidosReconhecimento = new SpeechRecognitionApi();
   _vozPedidosReconhecimento.lang = 'pt-BR';
@@ -460,6 +463,16 @@ function iniciarModoVozPedidos(){
   _vozPedidosReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-pedidos-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoPedidos){
+      const t = normalizarTextoPedidos(transcricao);
+      if(t.includes('ativar') || t.includes('guiazap')){
+        _aguardandoAtivacaoPedidos = false;
+        falarVozPedidos('Modo voz ativado.');
+      }
+      return;
+    }
+
     processarComandoVozPedidos(transcricao);
   };
 
@@ -477,7 +490,12 @@ function iniciarModoVozPedidos(){
   };
 
   try{ _vozPedidosReconhecimento.start(); } catch(e){}
-  falarVozPedidos('Modo voz ativado pra gerenciar pedidos. Fala "pedidos novos" pra ouvir o que está esperando.');
+
+  if(_aguardandoAtivacaoPedidos){
+    falarVozPedidos('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozPedidos('Modo voz ativado pra gerenciar pedidos. Fala "pedidos novos" pra ouvir o que está esperando.');
+  }
 }
 
 function pararModoVozPedidos(){
@@ -560,7 +578,7 @@ async function processarComandoVozPedidos(transcricao){
     lerPedidosNovosEmVoz();
     return;
   }
-  if(textoNorm.includes('parar') || textoNorm.includes('desativar modo voz')){
+  if(textoNorm.includes('parar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
     falarVozPedidos('Modo voz desativado.');
     setTimeout(pararModoVozPedidos, 1500);
     return;
@@ -708,7 +726,7 @@ initPedidos();
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(iniciarModoVozPedidos, 800);
+  setTimeout(() => iniciarModoVozPedidos(true), 800);
 }
 </script>
 
@@ -716,7 +734,7 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   if(typeof prepararAcessoVozCego === 'function'){
-    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPedidos === 'function') iniciarModoVozPedidos(); });
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPedidos === 'function') iniciarModoVozPedidos(true); });
   }
 });
 </script>
