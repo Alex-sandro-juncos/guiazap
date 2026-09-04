@@ -67,6 +67,19 @@
 <div class="pedidos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
+  <button type="button" id="btn-modo-voz-pedidos" onclick="toggleModoVozPedidos()" aria-label="Ativar modo voz, gerenciar pedidos sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Modo voz — gerenciar pedidos sem tocar</button>
+
+  <div id="painel-modo-voz-pedidos" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div id="voz-pedidos-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+      <div style="flex:1; min-width:0;">
+        <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-pedidos-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
+        <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-pedidos-transcricao"></div>
+      </div>
+      <button type="button" onclick="toggleModoVozPedidos()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
+    </div>
+  </div>
+
   <label style="display:flex; align-items:center; gap:8px; background:var(--cinza-card); padding:10px; border-radius:10px; margin-bottom:6px; font-size:0.85rem; cursor:pointer;">
     <input type="checkbox" id="chk-impressao-automatica" onchange="localStorage.setItem('impressao_automatica_pedidos', this.checked ? '1' : '0')">
     🖨️ Imprimir cupom automaticamente quando chegar pedido novo (nesse dispositivo)
@@ -139,6 +152,10 @@ async function initPedidos(){
         carregarPedidos().then(() => {
           if(localStorage.getItem('impressao_automatica_pedidos') === '1'){
             imprimirCupomPedido(payload.new.id);
+          }
+          if(_vozPedidosAtiva){
+            const itens = (payload.new.itens || []).map(i => i.nome).join(', ');
+            falarVozPedidos(`Pedido novo! Total de ${Number(payload.new.total).toFixed(2).replace('.', ',')} reais. Itens: ${itens}. Fala "aceitar" ou "recusar".`);
           }
         });
       }
@@ -248,6 +265,24 @@ function statusTextoPedidos(status){
   return mapa[status] || status;
 }
 
+async function recusarPedidoNucleo(pedidoId){
+  try{
+    const { data: { session } } = await supabaseClientPedidos.auth.getSession();
+    const resp = await fetch('/.netlify/functions/estornar-pagamento-pedido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pedidoId })
+    });
+    const data = await resp.json();
+    await carregarPedidos();
+    if(!resp.ok) return { ok: false, error: data.error || 'tente novamente' };
+    return { ok: true, estornado: data.estornado };
+  } catch(e){
+    console.error(e);
+    return { ok: false, error: 'erro ao recusar o pedido' };
+  }
+}
+
 async function recusarPedido(pedidoId){
   const pedido = todosPedidos.find(p => p.id === pedidoId);
   if(!pedido) return;
@@ -258,44 +293,23 @@ async function recusarPedido(pedidoId){
     : 'Recusar esse pedido?');
   if(!confirmou) return;
 
-  try{
-    const { data: { session } } = await supabaseClientPedidos.auth.getSession();
-    const resp = await fetch('/.netlify/functions/estornar-pagamento-pedido', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ pedidoId })
-    });
-    const data = await resp.json();
-    if(!resp.ok){
-      alert('Erro ao recusar/estornar o pedido: ' + (data.error || 'tente novamente'));
-      return;
-    }
-    alert(data.estornado ? 'Pedido recusado e valor estornado ao cliente.' : 'Pedido recusado.');
-  } catch(e){
-    console.error(e);
-    alert('Erro ao recusar o pedido. Tente novamente.');
-    return;
-  }
-
-  await carregarPedidos();
+  const resultado = await recusarPedidoNucleo(pedidoId);
+  if(!resultado.ok){ alert('Erro ao recusar/estornar o pedido: ' + resultado.error); return; }
+  alert(resultado.estornado ? 'Pedido recusado e valor estornado ao cliente.' : 'Pedido recusado.');
 }
 
-async function mudarStatusPedido(pedidoId, novoStatus){
+// Versão pro modo voz — sem confirm() nem alert(), que travariam esperando
+// clique. Aqui, o próprio "fala recusar" já É a confirmação da pessoa.
+async function recusarPedidoPorVoz(pedidoId){
+  const resultado = await recusarPedidoNucleo(pedidoId);
+  return resultado;
+}
+
+async function mudarStatusPedidoNucleo(pedidoId, novoStatus){
   const pedido = todosPedidos.find(p => p.id === pedidoId);
 
-  // Antes de marcar como concluído (entregue/retirado), confere o código
-  // de confirmação — garante que é realmente a pessoa certa recebendo
-  if(novoStatus === 'concluido' && pedido && pedido.codigo_confirmacao){
-    const digitado = prompt(`Peça pro cliente informar o código de confirmação dele, e digite aqui:`);
-    if(digitado === null) return; // cancelou
-    if(digitado.trim() !== pedido.codigo_confirmacao){
-      alert('❌ Código incorreto! Confira com o cliente antes de confirmar a entrega.');
-      return;
-    }
-  }
-
   const { error } = await supabaseClientPedidos.from('pedidos').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', pedidoId);
-  if(error){ console.error(error); alert('Erro ao atualizar pedido.'); return; }
+  if(error){ console.error(error); return { ok: false, error: 'Erro ao atualizar pedido.' }; }
 
   // Avisa o cliente no Papo sobre a mudança de status
   if(pedido && pedido.conversa_id){
@@ -319,6 +333,31 @@ async function mudarStatusPedido(pedidoId, novoStatus){
   }
 
   await carregarPedidos();
+  return { ok: true };
+}
+
+async function mudarStatusPedido(pedidoId, novoStatus){
+  const pedido = todosPedidos.find(p => p.id === pedidoId);
+
+  // Antes de marcar como concluído (entregue/retirado), confere o código
+  // de confirmação — garante que é realmente a pessoa certa recebendo
+  if(novoStatus === 'concluido' && pedido && pedido.codigo_confirmacao){
+    const digitado = prompt(`Peça pro cliente informar o código de confirmação dele, e digite aqui:`);
+    if(digitado === null) return; // cancelou
+    if(digitado.trim() !== pedido.codigo_confirmacao){
+      alert('❌ Código incorreto! Confira com o cliente antes de confirmar a entrega.');
+      return;
+    }
+  }
+
+  const resultado = await mudarStatusPedidoNucleo(pedidoId, novoStatus);
+  if(!resultado.ok) alert(resultado.error);
+}
+
+// Versão pro modo voz — sem prompt(). O código já vem conferido de fora
+// (a pessoa falou o código, e o comparamos ANTES de chamar essa função).
+async function mudarStatusPedidoPorVoz(pedidoId, novoStatus){
+  return await mudarStatusPedidoNucleo(pedidoId, novoStatus);
 }
 
 async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
@@ -388,6 +427,261 @@ function imprimirCupomPedido(pedidoId){
   `;
 
   setTimeout(() => window.print(), 100);
+}
+
+// ---------- MODO VOZ NA TELA DE PEDIDOS ----------
+
+let _vozPedidosReconhecimento = null;
+let _vozPedidosAtiva = false;
+let _vozPedidosFalando = false;
+const _vozPedidosSynth = window.speechSynthesis;
+
+function toggleModoVozPedidos(){
+  if(_vozPedidosAtiva) pararModoVozPedidos();
+  else iniciarModoVozPedidos();
+}
+
+function iniciarModoVozPedidos(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
+    return;
+  }
+
+  _vozPedidosAtiva = true;
+  document.getElementById('btn-modo-voz-pedidos').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-pedidos').style.display = 'block';
+
+  _vozPedidosReconhecimento = new SpeechRecognitionApi();
+  _vozPedidosReconhecimento.lang = 'pt-BR';
+  _vozPedidosReconhecimento.continuous = true;
+  _vozPedidosReconhecimento.interimResults = false;
+
+  _vozPedidosReconhecimento.onresult = (event) => {
+    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-pedidos-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarComandoVozPedidos(transcricao);
+  };
+
+  _vozPedidosReconhecimento.onend = () => {
+    if(_vozPedidosAtiva && !_vozPedidosFalando){
+      try{ _vozPedidosReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozPedidosReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone.');
+      pararModoVozPedidos();
+    }
+  };
+
+  try{ _vozPedidosReconhecimento.start(); } catch(e){}
+  falarVozPedidos('Modo voz ativado pra gerenciar pedidos. Fala "pedidos novos" pra ouvir o que está esperando.');
+}
+
+function pararModoVozPedidos(){
+  _vozPedidosAtiva = false;
+  if(_vozPedidosReconhecimento){ try{ _vozPedidosReconhecimento.stop(); } catch(e){} }
+  _vozPedidosSynth.cancel();
+  document.getElementById('btn-modo-voz-pedidos').style.background = '#6b46c1';
+  document.getElementById('painel-modo-voz-pedidos').style.display = 'none';
+}
+
+function falarVozPedidos(texto){
+  _vozPedidosFalando = true;
+  if(_vozPedidosReconhecimento){ try{ _vozPedidosReconhecimento.stop(); } catch(e){} }
+  _vozPedidosSynth.cancel();
+
+  document.getElementById('voz-pedidos-status').textContent = '🔊 ' + texto;
+  document.getElementById('voz-pedidos-indicador').style.background = '#4fc3a1';
+
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+
+  fala.onend = () => {
+    document.getElementById('voz-pedidos-indicador').style.background = '#6b46c1';
+    document.getElementById('voz-pedidos-status').textContent = '🎙️ Pode falar';
+    _vozPedidosFalando = false;
+    if(_vozPedidosAtiva){ try{ _vozPedidosReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozPedidosSynth.speak(fala);
+}
+
+function lerPedidosNovosEmVoz(){
+  const pendentes = todosPedidos.filter(p => p.status === 'aguardando_confirmacao');
+  if(pendentes.length === 0) return falarVozPedidos('Nenhum pedido novo esperando confirmação.');
+
+  if(pendentes.length === 1){
+    const p = pendentes[0];
+    const itens = (p.itens || []).map(i => i.nome).join(', ');
+    falarVozPedidos(`1 pedido esperando: ${itens}. Total de ${Number(p.total).toFixed(2).replace('.', ',')} reais. Fala "aceitar" ou "recusar".`);
+    return;
+  }
+
+  const resumo = pendentes.map((p, i) => `Pedido ${i + 1}: R$ ${Number(p.total).toFixed(2).replace('.', ',')}`).join('. ');
+  falarVozPedidos(`${pendentes.length} pedidos esperando. ${resumo}. Fala "aceitar pedido 1", por exemplo.`);
+}
+
+async function processarComandoVozPedidos(transcricao){
+  // Prioridade máxima: se estamos esperando o código de confirmação de
+  // entrega, essa fala é o código — nada mais é processado
+  if(_aguardandoCodigoConfirmacaoVoz){
+    await processarCodigoConfirmacaoVoz(transcricao);
+    return;
+  }
+
+  const textoNorm = normalizarTextoPedidos(transcricao);
+
+  // Comandos locais instantâneos
+  if(textoNorm.includes('pedidos novos') || textoNorm.includes('pedido novo') || textoNorm.includes('o que tem')){
+    lerPedidosNovosEmVoz();
+    return;
+  }
+  if(textoNorm.includes('parar') || textoNorm.includes('desativar modo voz')){
+    falarVozPedidos('Modo voz desativado.');
+    setTimeout(pararModoVozPedidos, 1500);
+    return;
+  }
+
+  // Atalho rápido: se só tem 1 pedido pendente e a pessoa disse só "aceitar"/"recusar" (sem número), age direto
+  const pendentes = todosPedidos.filter(p => p.status === 'aguardando_confirmacao');
+  if(pendentes.length === 1){
+    if((textoNorm.includes('aceitar') || textoNorm === 'aceita') && !textoNorm.match(/\d/)){
+      falarVozPedidos('Aceitando o pedido...');
+      await mudarStatusPedido(pendentes[0].id, 'aceito');
+      falarVozPedidos('Pedido aceito!');
+      return;
+    }
+    if((textoNorm.includes('recusar') || textoNorm === 'recusa') && !textoNorm.match(/\d/)){
+      falarVozPedidos('Recusando o pedido, o pagamento vai ser estornado...');
+      const resultado = await recusarPedidoPorVoz(pendentes[0].id);
+      falarVozPedidos(resultado.ok ? 'Pedido recusado e estornado.' : `Erro: ${resultado.error}`);
+      return;
+    }
+  }
+
+  // Comando mais complexo — manda pro Claude interpretar
+  document.getElementById('voz-pedidos-status').textContent = '🤔 Pensando...';
+  document.getElementById('voz-pedidos-indicador').style.background = '#e91e63';
+
+  try{
+    const { data: { session } } = await supabaseClientPedidos.auth.getSession();
+    const pedidosVisiveis = todosPedidos.filter(p => !['concluido', 'recusado', 'cancelado'].includes(p.status)).map(p => ({
+      id: p.id, status: p.status, total: p.total, itensResumo: (p.itens || []).map(i => i.nome).join(', ')
+    }));
+
+    const resp = await fetch('/.netlify/functions/interpretar-comando-voz-pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ texto: transcricao, pedidosVisiveis })
+    });
+    const resultado = await resp.json();
+
+    if(!resp.ok){
+      falarVozPedidos(resultado.error || 'Tive um problema ao entender. Pode repetir?');
+      return;
+    }
+
+    await executarAcaoVozPedidos(resultado);
+  } catch(e){
+    console.error(e);
+    falarVozPedidos('Não consegui processar agora. Pode repetir?');
+  }
+}
+
+async function executarAcaoVozPedidos(resultado){
+  const { action, params, voice_response } = resultado;
+
+  if(action === 'LER_PEDIDOS_NOVOS'){
+    lerPedidosNovosEmVoz();
+    return;
+  }
+
+  if(action === 'ACEITAR' && params && params.id){
+    await mudarStatusPedido(params.id, 'aceito');
+    falarVozPedidos(voice_response || 'Pedido aceito!');
+    return;
+  }
+
+  if(action === 'RECUSAR' && params && params.id){
+    const resultado = await recusarPedidoPorVoz(params.id);
+    falarVozPedidos(resultado.ok ? (voice_response || 'Pedido recusado e estornado.') : `Erro ao recusar: ${resultado.error}`);
+    return;
+  }
+
+  if(action === 'AVANCAR_STATUS' && params && params.id){
+    const pedido = todosPedidos.find(p => p.id === params.id);
+    if(pedido){
+      // "pronto" pode ir pra "saiu_entrega" (se faz entrega) OU direto pra
+      // "concluido" (se é retirada no local, sem entrega)
+      const proximoStatus = {
+        aceito: 'preparando',
+        preparando: 'pronto',
+        pronto: pedido.taxa_entrega > 0 ? 'saiu_entrega' : 'concluido',
+        saiu_entrega: 'concluido'
+      }[pedido.status];
+
+      if(proximoStatus === 'concluido' && pedido.codigo_confirmacao){
+        // Não conclui direto — pede o código de confirmação por voz primeiro
+        _aguardandoCodigoConfirmacaoVoz = { pedidoId: params.id, codigoEsperado: pedido.codigo_confirmacao };
+        falarVozPedidos('Pede pro cliente falar o código de confirmação dele, e repete os números pra mim.');
+        return;
+      }
+
+      if(proximoStatus){
+        await mudarStatusPedidoPorVoz(params.id, proximoStatus);
+        falarVozPedidos(voice_response || 'Status atualizado!');
+        return;
+      }
+    }
+  }
+
+  falarVozPedidos(voice_response || 'Feito.');
+}
+
+let _aguardandoCodigoConfirmacaoVoz = null;
+
+async function processarCodigoConfirmacaoVoz(transcricao){
+  const digitosFalados = extrairDigitosDaFalaPedidos(transcricao);
+  const dados = _aguardandoCodigoConfirmacaoVoz;
+
+  if(!digitosFalados){
+    falarVozPedidos('Não entendi os números. Fala de novo, um por um.');
+    return;
+  }
+
+  if(digitosFalados !== dados.codigoEsperado){
+    falarVozPedidos('Código incorreto. Confere com o cliente e fala de novo — ou fala "cancelar" pra desistir.');
+    if(normalizarTextoPedidos(transcricao).includes('cancelar')){
+      _aguardandoCodigoConfirmacaoVoz = null;
+      falarVozPedidos('Cancelado.');
+    }
+    return;
+  }
+
+  const pedidoId = dados.pedidoId;
+  _aguardandoCodigoConfirmacaoVoz = null;
+  await mudarStatusPedidoPorVoz(pedidoId, 'concluido');
+  falarVozPedidos('Código certo! Pedido concluído.');
+}
+
+function extrairDigitosDaFalaPedidos(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTextoPedidos(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
+}
+
+function normalizarTextoPedidos(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 initPedidos();

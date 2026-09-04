@@ -2685,7 +2685,17 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
+  if(_estadoCadastroProdutoVoz){
+    await processarEtapaCadastroProdutoVoz(transcricao);
+    return;
+  }
+
   const textoNormalizado = normalizarTextoV(transcricao);
+
+  if(textoNormalizado.includes('cadastrar produto') || textoNormalizado.includes('novo produto') || textoNormalizado.includes('adicionar produto')){
+    iniciarCadastroProdutoPorVoz();
+    return;
+  }
 
   if(textoNormalizado.includes('modo somente voz') || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
     ativarModoSomenteVozVitrine();
@@ -2865,6 +2875,115 @@ async function processarComandoDesativarSomenteVoz(transcricao){
   } catch(e){
     console.error(e);
     falarVozVitrine('Erro ao conferir o PIN. Tenta de novo.');
+  }
+}
+
+// ---------- CADASTRO DE PRODUTO POR VOZ ----------
+
+let _estadoCadastroProdutoVoz = null;
+// formato: { etapa: 'empresa' | 'nome' | 'preco' | 'categoria' | 'confirmar' }
+
+function extrairValorMonetarioDaFala(texto){
+  // O Chrome geralmente já transcreve número falado como dígito (ex: "vinte
+  // e cinco reais" vira "25 reais" no texto reconhecido) — procura primeiro
+  // um número com casas decimais, depois um número inteiro
+  const comDecimal = texto.match(/(\d+)[.,](\d{1,2})/);
+  if(comDecimal) return parseFloat(`${comDecimal[1]}.${comDecimal[2]}`);
+
+  const inteiro = texto.match(/\d+/);
+  if(inteiro) return parseFloat(inteiro[0]);
+
+  return null;
+}
+
+function iniciarCadastroProdutoPorVoz(){
+  if(!currentUserV){ falarVozVitrine('Você precisa estar logado.'); return; }
+
+  fecharFormProduto(); // garante um formulário limpo, sem dados de edição anterior
+  const selectEmpresa = document.getElementById('p-profissional');
+  abrirFormProduto();
+
+  if(selectEmpresa.options.length === 1){
+    _estadoCadastroProdutoVoz = { etapa: 'nome' };
+    falarVozVitrine(`Vamos cadastrar um produto pra ${selectEmpresa.options[0].text}. Qual o nome do produto?`);
+  } else if(selectEmpresa.options.length > 1){
+    _estadoCadastroProdutoVoz = { etapa: 'empresa' };
+    const nomes = Array.from(selectEmpresa.options).map(o => o.text).join(', ');
+    falarVozVitrine(`Você tem mais de uma empresa: ${nomes}. Pra qual delas é o produto?`);
+  } else {
+    falarVozVitrine('Você ainda não tem uma empresa com Pacote Vendas cadastrada.');
+  }
+}
+
+async function processarEtapaCadastroProdutoVoz(transcricao){
+  const estado = _estadoCadastroProdutoVoz;
+  const selectEmpresa = document.getElementById('p-profissional');
+
+  if(estado.etapa === 'empresa'){
+    const opcaoEncontrada = Array.from(selectEmpresa.options).find(o => normalizarTextoV(o.text).includes(normalizarTextoV(transcricao)) || normalizarTextoV(transcricao).includes(normalizarTextoV(o.text)));
+    if(!opcaoEncontrada){
+      falarVozVitrine('Não achei essa empresa na sua lista. Fala o nome de novo.');
+      return;
+    }
+    selectEmpresa.value = opcaoEncontrada.value;
+    estado.etapa = 'nome';
+    falarVozVitrine('Certo. Qual o nome do produto?');
+    return;
+  }
+
+  if(estado.etapa === 'nome'){
+    document.getElementById('p-nome').value = transcricao.trim();
+    estado.etapa = 'preco';
+    falarVozVitrine('Qual o valor? Fala tipo "vinte e cinco reais".');
+    return;
+  }
+
+  if(estado.etapa === 'preco'){
+    const textoNorm = normalizarTextoV(transcricao);
+    if(textoNorm.includes('sem preco') || textoNorm.includes('nao tem preco') || textoNorm.includes('pular')){
+      estado.etapa = 'categoria';
+      falarVozVitrine('Sem problema. Qual a categoria? Tipo bebidas, alimentos... ou fala "pular".');
+      return;
+    }
+
+    const valor = extrairValorMonetarioDaFala(transcricao);
+    if(valor === null){
+      falarVozVitrine('Não entendi o valor. Fala de novo, tipo "vinte e cinco reais", ou "sem preço" pra pular.');
+      return;
+    }
+
+    document.getElementById('p-preco').value = valor.toFixed(2).replace('.', ',');
+    estado.etapa = 'categoria';
+    falarVozVitrine(`Valor de ${valor.toFixed(2).replace('.', ',')} reais. Qual a categoria? Tipo bebidas, alimentos... ou fala "pular".`);
+    return;
+  }
+
+  if(estado.etapa === 'categoria'){
+    const textoNorm = normalizarTextoV(transcricao);
+    if(!textoNorm.includes('pular')){
+      document.getElementById('p-categoria').value = transcricao.trim();
+    }
+
+    estado.etapa = 'confirmar';
+    const nome = document.getElementById('p-nome').value;
+    const preco = document.getElementById('p-preco').value;
+    const resumo = `Produto: ${nome}.${preco ? ' Valor: ' + preco + ' reais.' : ' Sem valor definido.'} Tá certo? Fala "sim" pra salvar, ou "não" pra cancelar.`;
+    falarVozVitrine(resumo);
+    return;
+  }
+
+  if(estado.etapa === 'confirmar'){
+    const textoNorm = normalizarTextoV(transcricao);
+    if(textoNorm.includes('sim') || textoNorm.includes('confirma') || textoNorm.includes('salvar')){
+      _estadoCadastroProdutoVoz = null;
+      falarVozVitrine('Salvando produto...');
+      document.getElementById('produto-form').requestSubmit();
+    } else {
+      _estadoCadastroProdutoVoz = null;
+      falarVozVitrine('Cadastro cancelado.');
+      fecharFormProduto();
+    }
+    return;
   }
 }
 
