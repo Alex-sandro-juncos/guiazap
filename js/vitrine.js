@@ -2593,16 +2593,6 @@ function toggleModoVozVitrine(){
 }
 
 function iniciarModoVozVitrine(){
-  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
-    cadastrarVozPrimeiroAcesso().then(ok => {
-      if(ok && typeof iniciarMonitorVozDono === 'function'){
-        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-      }
-    });
-  } else if(typeof iniciarMonitorVozDono === 'function'){
-    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-  }
-
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -2674,7 +2664,6 @@ function falarVozVitrine(texto){
   // Pausa a escuta enquanto fala — sem isso, o microfone "ouviria" a
   // própria voz do site e ficaria confuso (efeito eco)
   _vozVitrineFalando = true;
-  if(_vozVitrineReconhecimento){ try{ _vozVitrineReconhecimento.stop(); } catch(e){} }
   _vozVitrineSynth.cancel();
 
   document.getElementById('voz-vitrine-status').textContent = '🔊 ' + texto;
@@ -2705,7 +2694,6 @@ function falarVozVitrine(texto){
 async function processarComandoVozVitrine(transcricao){
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
-  if(typeof autorizarComandoPorVoz === "function" && !autorizarComandoPorVoz()) return;
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
   // somente voz, essa fala é sobre isso — nada mais é processado
   if(_aguardandoPinParaDestravarVitrine){

@@ -14,16 +14,6 @@ function toggleModoVozPapo(){
 }
 
 function iniciarModoVozPapo(){
-  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
-    cadastrarVozPrimeiroAcesso().then(ok => {
-      if(ok && typeof iniciarMonitorVozDono === 'function'){
-        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-      }
-    });
-  } else if(typeof iniciarMonitorVozDono === 'function'){
-    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-  }
-
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Api){
     alert('Use o Chrome para o modo voz.');

@@ -3731,16 +3731,6 @@ function toggleModoVozIndex(){
 }
 
 function iniciarModoVozIndex(){
-  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
-    cadastrarVozPrimeiroAcesso().then(ok => {
-      if(ok && typeof iniciarMonitorVozDono === 'function'){
-        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-      }
-    });
-  } else if(typeof iniciarMonitorVozDono === 'function'){
-    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
-  }
-
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -3765,8 +3755,8 @@ function iniciarModoVozIndex(){
   };
 
   _vozIndexReconhecimento.onend = () => {
-    if(_vozIndexAtiva && !_vozIndexFalando){
-      try{ _vozIndexReconhecimento.start(); } catch(e){}
+    if(_vozIndexAtiva){
+      setTimeout(() => { try{ _vozIndexReconhecimento.start(); } catch(e){} }, 250);
     }
   };
 
@@ -3774,6 +3764,10 @@ function iniciarModoVozIndex(){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
       pararModoVozIndex();
+      return;
+    }
+    if(_vozIndexAtiva){
+      setTimeout(() => { try{ _vozIndexReconhecimento.start(); } catch(e){} }, 300);
     }
   };
 
@@ -3802,7 +3796,6 @@ function pararModoVozIndex(){
 
 function falarVozIndex(texto){
   _vozIndexFalando = true;
-  if(_vozIndexReconhecimento){ try{ _vozIndexReconhecimento.stop(); } catch(e){} }
   _vozIndexSynth.cancel();
 
   document.getElementById('voz-index-status').textContent = '🔊 ' + texto;
@@ -4233,7 +4226,6 @@ function extrairDigitosDaFalaIndex(texto){
 async function processarComandoVozIndex(transcricao){
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
-  if(typeof autorizarComandoPorVoz === "function" && !autorizarComandoPorVoz()) return;
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
