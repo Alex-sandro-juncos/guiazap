@@ -98,7 +98,7 @@ let produtoFiltroId = null;
 async function loadProdutos(){
   const { data, error } = await supabaseClientV
     .from('produtos')
-    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id, plano)')
+    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id, plano, cidade, bairro, estado, cat))'
     .order('created_at', { ascending: false });
 
   if(error){ console.error(error); return; }
@@ -275,7 +275,11 @@ function renderProdutos(){
       normalizarTextoV(p.codigo_barras).includes(query) ||
       normalizarTextoV(p.categoria).includes(query) ||
       normalizarTextoV(p.categorias_extra).includes(query) ||
-      (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query))
+      (p.profissionais && normalizarTextoV(p.profissionais.name).includes(query)) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.cidade).includes(query)) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.bairro).includes(query)) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.estado).includes(query)) ||
+      (p.profissionais && normalizarTextoV(p.profissionais.cat).includes(query))
     );
 
   // Separa em grupos de prioridade, embaralha CADA grupo de forma independente
@@ -2919,17 +2923,24 @@ async function processarComandoVozVitrine(transcricao){
       .sort((a, b) => b.pts - a.pts);
 
     if(ranqueados.length > 0){
-      const melhor = ranqueados[0].p;
-      const empresaDoMelhor = melhor.profissionais ? { id: melhor.profissionais.id || melhor.profissional_id, name: melhor.profissionais.name } : null;
-      if(empresaDoMelhor && empresaDoMelhor.id){
-        abrirMenuEmpresaVoz(empresaDoMelhor, melhor);
-      } else {
-        produtoFiltroId = melhor.id;
-        document.getElementById('v-search').value = melhor.nome || termoLimpo;
-        renderProdutos();
+      produtoFiltroId = null;
+      empresaFiltroId = null;
+      try{ history.replaceState({}, '', 'vitrine.html'); } catch(e){}
+      const h1 = document.querySelector('.vitrine-header h1');
+      if(h1) h1.textContent = 'GuiaZap Vitrine';
+      document.getElementById('v-search').value = termoLimpo;
+      renderProdutos();
+      const lista = ranqueados.slice(0, 8).map(x => descreverProdutoVoz(x.p));
+      const extra = ranqueados.length - lista.length;
+      let fala = 'Encontrei ' + ranqueados.length + ' opções: ' + lista.join('; ');
+      if(extra > 0) fala += ', e mais ' + extra;
+      if(querAdicionar && ranqueados.length === 1){
+        adicionarAoCarrinho(ranqueados[0].p.id);
+        fala += '. Coloquei no carrinho.';
+      } else if(querAdicionar){
+        fala += '. Tem mais de um. Fala o nome da empresa pra eu escolher.';
       }
-      if(querAdicionar) adicionarAoCarrinho(melhor.id);
-      falarVozVitrine(descreverProdutoVoz(melhor) + (querAdicionar ? '. Coloquei no carrinho.' : '. Abri o cardápio dessa empresa.'));
+      falarVozVitrine(fala);
       return;
     }
   }
