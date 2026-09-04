@@ -630,6 +630,10 @@ function falarVozCv(texto){
   };
 
   _vozCvSynth.speak(fala);
+  setTimeout(function(){
+    _vozCvFalando = false;
+    if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.start(); } catch(e){} }
+  }, 6000);
 }
 
 function normalizarTextoCv(str){
@@ -637,6 +641,8 @@ function normalizarTextoCv(str){
 }
 
 async function processarEtapaPreenchimentoCv(transcricao){
+  if(_vozCvSynth) try{ _vozCvSynth.cancel(); } catch(e){}
+  _vozCvFalando = false;
   const estado = _estadoPreenchimentoCv;
   if(!estado) return;
   const textoNorm = normalizarTextoCv(transcricao);

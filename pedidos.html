@@ -508,6 +508,10 @@ function falarVozPedidos(texto){
   };
 
   _vozPedidosSynth.speak(fala);
+  setTimeout(function(){
+    _vozPedidosFalando = false;
+    if(_vozPedidosReconhecimento){ try{ _vozPedidosReconhecimento.start(); } catch(e){} }
+  }, 6000);
 }
 
 function lerPedidosNovosEmVoz(){
@@ -526,6 +530,8 @@ function lerPedidosNovosEmVoz(){
 }
 
 async function processarComandoVozPedidos(transcricao){
+  if(_vozPedidosSynth) try{ _vozPedidosSynth.cancel(); } catch(e){}
+  _vozPedidosFalando = false;
   // Prioridade máxima: se estamos esperando o código de confirmação de
   // entrega, essa fala é o código — nada mais é processado
   if(_aguardandoCodigoConfirmacaoVoz){

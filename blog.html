@@ -283,9 +283,15 @@ function falarVozBlog(texto){
     if(ind) ind.style.background = '#22c55e';
   };
   _vozBlogSynth.speak(fala);
+  setTimeout(function(){
+    _vozBlogFalando = false;
+    if(_vozBlogReconhecimento){ try{ _vozBlogReconhecimento.start(); } catch(e){} }
+  }, 6000);
 }
 
 async function processarComandoVozBlog(transcricao){
+  if(_vozBlogSynth) try{ _vozBlogSynth.cancel(); } catch(e){}
+  _vozBlogFalando = false;
   if(!_estadoRedacaoBlog || _vozBlogFalando) return;
 
   const textoNorm = normalizarTextoBlog(transcricao);
