@@ -40,20 +40,34 @@
   <div class="enviar-form">
     <h2>✍️ Escreva um artigo</h2>
     <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Tem uma dica boa sobre um serviço, um bairro ou um assunto local? Envie seu artigo — ele passa por uma revisão antes de ser publicado.</p>
+
+    <button type="button" id="btn-modo-voz-blog" onclick="toggleModoVozBlog()" aria-label="Redigir artigo por voz, sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Redigir artigo por voz</button>
+
+    <div id="painel-modo-voz-blog" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div id="voz-blog-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+        <div style="flex:1; min-width:0;">
+          <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-blog-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
+          <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-blog-transcricao"></div>
+        </div>
+        <button type="button" onclick="toggleModoVozBlog()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;" aria-label="Fechar modo voz">✕</button>
+      </div>
+    </div>
+
     <div class="field">
-      <label>Seu nome</label>
+      <label for="blog-autor">Seu nome</label>
       <input id="blog-autor" placeholder="Como quer aparecer">
     </div>
     <div class="field">
-      <label>Seu e-mail (não aparece publicado)</label>
+      <label for="blog-email">Seu e-mail (não aparece publicado)</label>
       <input id="blog-email" type="email" placeholder="seuemail@gmail.com">
     </div>
     <div class="field">
-      <label>Título do artigo</label>
+      <label for="blog-titulo">Título do artigo</label>
       <input id="blog-titulo" placeholder="Ex: Como escolher um eletricista de confiança">
     </div>
     <div class="field">
-      <label>Conteúdo</label>
+      <label for="blog-conteudo">Conteúdo</label>
       <textarea id="blog-conteudo" rows="8" placeholder="Escreva seu artigo aqui..."></textarea>
     </div>
     <button type="button" class="btn-salvar" onclick="enviarArtigo()">Enviar pra revisão</button>
@@ -161,6 +175,276 @@ function renderArtigos(){
 }
 
 loadArtigos();
+
+// ---------- MODO VOZ: REDIGIR ARTIGO POR VOZ (fluxo guiado, acessibilidade) ----------
+let _vozBlogReconhecimento = null;
+let _vozBlogAtiva = false;
+let _vozBlogFalando = false;
+const _vozBlogSynth = window.speechSynthesis;
+let _estadoRedacaoBlog = null;
+// etapas: nome | confirmar_nome | email | confirmar_email | titulo | confirmar_titulo | conteudo | confirmar_envio
+
+function normalizarTextoBlog(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function toggleModoVozBlog(){
+  if(_vozBlogAtiva) pararModoVozBlog();
+  else iniciarModoVozBlog();
+}
+
+function iniciarModoVozBlog(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta reconhecimento de voz. Tenta pelo Chrome no celular ou computador.');
+    return;
+  }
+
+  _vozBlogAtiva = true;
+  _estadoRedacaoBlog = { etapa: 'nome', rascunho: '' };
+  document.getElementById('btn-modo-voz-blog').style.background = '#a4402f';
+  document.getElementById('btn-modo-voz-blog').setAttribute('aria-label', 'Desativar modo voz');
+  document.getElementById('painel-modo-voz-blog').style.display = 'block';
+  document.getElementById('voz-blog-status').textContent = '🎙️ Modo voz ativado';
+  document.getElementById('voz-blog-transcricao').textContent = '';
+
+  _vozBlogReconhecimento = new SpeechRecognitionApi();
+  _vozBlogReconhecimento.lang = 'pt-BR';
+  _vozBlogReconhecimento.continuous = true;
+  _vozBlogReconhecimento.interimResults = false;
+
+  _vozBlogReconhecimento.onresult = (event) => {
+    const ultimo = event.results[event.results.length - 1];
+    if(!ultimo || !ultimo.isFinal) return;
+    const transcricao = (ultimo[0] && ultimo[0].transcript || '').trim();
+    if(!transcricao) return;
+    document.getElementById('voz-blog-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarComandoVozBlog(transcricao);
+  };
+
+  _vozBlogReconhecimento.onend = () => {
+    if(_vozBlogAtiva && !_vozBlogFalando){
+      try{ _vozBlogReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozBlogReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      pararModoVozBlog();
+    }
+  };
+
+  try{ _vozBlogReconhecimento.start(); } catch(e){}
+  falarVozBlog('Modo voz ativado. Vamos escrever seu artigo juntos. Qual o seu nome de autor?');
+}
+
+function pararModoVozBlog(){
+  _vozBlogAtiva = false;
+  _estadoRedacaoBlog = null;
+  if(_vozBlogReconhecimento){
+    try{ _vozBlogReconhecimento.stop(); } catch(e){}
+    _vozBlogReconhecimento = null;
+  }
+  if(_vozBlogSynth) _vozBlogSynth.cancel();
+  const btn = document.getElementById('btn-modo-voz-blog');
+  if(btn){
+    btn.style.background = '#6b46c1';
+    btn.setAttribute('aria-label', 'Redigir artigo por voz, sem tocar na tela');
+  }
+  const painel = document.getElementById('painel-modo-voz-blog');
+  if(painel) painel.style.display = 'none';
+  const ind = document.getElementById('voz-blog-indicador');
+  if(ind) ind.style.background = '#6b46c1';
+}
+
+function falarVozBlog(texto){
+  if(!_vozBlogSynth) return;
+  _vozBlogFalando = true;
+  const ind = document.getElementById('voz-blog-indicador');
+  if(ind) ind.style.background = '#e05d5d';
+  const status = document.getElementById('voz-blog-status');
+  if(status) status.textContent = '🔊 ' + texto;
+
+  _vozBlogSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1.0;
+  fala.onend = () => {
+    _vozBlogFalando = false;
+    if(ind) ind.style.background = '#22c55e';
+    if(status) status.textContent = '🎙️ Pode falar...';
+    if(_vozBlogAtiva && _vozBlogReconhecimento){
+      try{ _vozBlogReconhecimento.start(); } catch(e){}
+    }
+  };
+  fala.onerror = () => {
+    _vozBlogFalando = false;
+    if(ind) ind.style.background = '#22c55e';
+  };
+  _vozBlogSynth.speak(fala);
+}
+
+function ehConfirmacao(textoNorm){
+  return textoNorm === 'sim' || textoNorm === 'isso' || textoNorm === 'certo' ||
+         textoNorm === 'confirma' || textoNorm === 'confirmar' || textoNorm === 'ok' ||
+         textoNorm === 'pode' || textoNorm.includes('esta certo') || textoNorm.includes('está certo');
+}
+
+function ehNegacao(textoNorm){
+  return textoNorm === 'nao' || textoNorm === 'não' || textoNorm === 'errado' ||
+         textoNorm === 'corrigir' || textoNorm === 'de novo' || textoNorm === 'repetir' ||
+         textoNorm.includes('nao e') || textoNorm.includes('não é');
+}
+
+async function processarComandoVozBlog(transcricao){
+  if(!_estadoRedacaoBlog || _vozBlogFalando) return;
+
+  const textoNorm = normalizarTextoBlog(transcricao);
+  const estado = _estadoRedacaoBlog;
+
+  // Comandos globais em qualquer etapa
+  if(textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar'){
+    falarVozBlog('Modo voz desligado. Se quiser começar de novo, é só ativar o botão de voz.');
+    setTimeout(pararModoVozBlog, 2500);
+    return;
+  }
+
+  // ----- NOME -----
+  if(estado.etapa === 'nome'){
+    estado.rascunho = transcricao.trim();
+    estado.etapa = 'confirmar_nome';
+    falarVozBlog('Entendi o nome: ' + estado.rascunho + '. Está certo? Fala sim ou não.');
+    return;
+  }
+
+  if(estado.etapa === 'confirmar_nome'){
+    if(ehConfirmacao(textoNorm)){
+      document.getElementById('blog-autor').value = estado.rascunho;
+      estado.rascunho = '';
+      estado.etapa = 'email';
+      falarVozBlog('Nome salvo. Agora, qual o seu e-mail? Se não quiser informar, fala pular.');
+    } else if(ehNegacao(textoNorm)){
+      estado.etapa = 'nome';
+      estado.rascunho = '';
+      falarVozBlog('Tudo bem. Fala o nome de autor de novo.');
+    } else {
+      falarVozBlog('Não entendi. Fala sim se o nome está certo, ou não para repetir.');
+    }
+    return;
+  }
+
+  // ----- E-MAIL -----
+  if(estado.etapa === 'email'){
+    if(textoNorm === 'pular' || textoNorm === 'nao' || textoNorm === 'não' || textoNorm === 'sem email' || textoNorm === 'sem e-mail'){
+      document.getElementById('blog-email').value = '';
+      estado.etapa = 'titulo';
+      falarVozBlog('E-mail pulado. Agora fala o título do artigo.');
+      return;
+    }
+    let email = transcricao.trim()
+      .replace(/\s+arroba\s+/gi, '@')
+      .replace(/\s+at\s+/gi, '@')
+      .replace(/\s+ponto\s+/gi, '.')
+      .replace(/\s+/g, '')
+      .toLowerCase();
+    estado.rascunho = email;
+    estado.etapa = 'confirmar_email';
+    // Lê o e-mail soletrado pra facilitar a confirmação
+    falarVozBlog('Entendi o e-mail: ' + email.split('').join(' ') + '. Está certo? Fala sim ou não.');
+    return;
+  }
+
+  if(estado.etapa === 'confirmar_email'){
+    if(ehConfirmacao(textoNorm)){
+      document.getElementById('blog-email').value = estado.rascunho;
+      estado.rascunho = '';
+      estado.etapa = 'titulo';
+      falarVozBlog('E-mail salvo. Agora fala o título do artigo.');
+    } else if(ehNegacao(textoNorm)){
+      estado.etapa = 'email';
+      estado.rascunho = '';
+      falarVozBlog('Tudo bem. Fala o e-mail de novo, ou fala pular.');
+    } else {
+      falarVozBlog('Não entendi. Fala sim se o e-mail está certo, ou não para repetir.');
+    }
+    return;
+  }
+
+  // ----- TÍTULO -----
+  if(estado.etapa === 'titulo'){
+    estado.rascunho = transcricao.trim();
+    estado.etapa = 'confirmar_titulo';
+    falarVozBlog('Entendi o título: ' + estado.rascunho + '. Está certo? Fala sim ou não.');
+    return;
+  }
+
+  if(estado.etapa === 'confirmar_titulo'){
+    if(ehConfirmacao(textoNorm)){
+      document.getElementById('blog-titulo').value = estado.rascunho;
+      estado.rascunho = '';
+      document.getElementById('blog-conteudo').value = '';
+      estado.etapa = 'conteudo';
+      falarVozBlog('Título salvo. Agora vamos ao conteúdo. Dite o texto do artigo. Pode falar em partes. Quando terminar, fala a palavra pronto.');
+    } else if(ehNegacao(textoNorm)){
+      estado.etapa = 'titulo';
+      estado.rascunho = '';
+      falarVozBlog('Tudo bem. Fala o título de novo.');
+    } else {
+      falarVozBlog('Não entendi. Fala sim se o título está certo, ou não para repetir.');
+    }
+    return;
+  }
+
+  // ----- CONTEÚDO (ditado contínuo) -----
+  if(estado.etapa === 'conteudo'){
+    if(textoNorm === 'pronto' || textoNorm === 'terminei' || textoNorm === 'finalizei' ||
+       textoNorm === 'acabou' || textoNorm === 'concluir' || textoNorm === 'enviar'){
+      const conteudoAtual = document.getElementById('blog-conteudo').value.trim();
+      if(conteudoAtual.length < 200){
+        falarVozBlog('O artigo ainda está curto. Tem ' + conteudoAtual.length + ' caracteres e precisa de pelo menos 200. Continue ditando. Quando chegar no mínimo, fala pronto de novo.');
+        return;
+      }
+      estado.etapa = 'confirmar_envio';
+      falarVozBlog('Artigo com ' + conteudoAtual.length + ' caracteres. Quer enviar pra revisão agora? Fala sim para enviar, ou não para só deixar preenchido na tela.');
+      return;
+    }
+
+    // Acrescenta o que foi dito ao conteúdo
+    const campo = document.getElementById('blog-conteudo');
+    const anterior = campo.value.trim();
+    campo.value = anterior ? (anterior + ' ' + transcricao.trim()) : transcricao.trim();
+    const chars = campo.value.length;
+
+    if(chars < 200){
+      falarVozBlog('Anotado. Já tem ' + chars + ' caracteres. Continue, ou fala pronto quando terminar.');
+    } else {
+      falarVozBlog('Anotado. Já tem ' + chars + ' caracteres. Pode continuar ou falar pronto para finalizar.');
+    }
+    return;
+  }
+
+  // ----- CONFIRMAR ENVIO -----
+  if(estado.etapa === 'confirmar_envio'){
+    if(ehConfirmacao(textoNorm) || textoNorm.includes('enviar') || textoNorm.includes('pode enviar')){
+      falarVozBlog('Enviando artigo pra revisão. Um momento.');
+      await enviarArtigo();
+      const msg = document.getElementById('blog-msg').textContent || '';
+      if(msg.includes('Enviado') || msg.includes('✓')){
+        falarVozBlog('Artigo enviado com sucesso. Ele aparece no blog depois da revisão. Modo voz desligado.');
+      } else {
+        falarVozBlog('Houve um problema ao enviar. O texto ficou preenchido na tela. Você pode tentar de novo pelo formulário. Modo voz desligado.');
+      }
+      setTimeout(pararModoVozBlog, 3500);
+    } else if(ehNegacao(textoNorm) || textoNorm.includes('cancelar')){
+      falarVozBlog('Tudo bem. O artigo ficou preenchido na tela. Você pode revisar e enviar quando quiser. Modo voz desligado.');
+      setTimeout(pararModoVozBlog, 3000);
+    } else {
+      falarVozBlog('Não entendi. Fala sim pra enviar o artigo, ou não pra só deixar na tela.');
+    }
+    return;
+  }
+}
 </script>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>

@@ -30,7 +30,7 @@ exports.handler = async function (event) {
         encontrado: true,
         razaoSocial: dados.razao_social,
         nomeFantasia: dados.nome_fantasia,
-        situacao: dados.descricao_situacao_cadastral, // ex: "ATIVA", "BAIXADA", "SUSPENSA"
+        situacao: dados.descricao_situacao_cadastral,
         ativo: dados.descricao_situacao_cadastral === 'ATIVA',
         municipio: dados.municipio,
         uf: dados.uf

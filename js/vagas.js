@@ -1,2595 +1,497 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Papo — GuiaZap</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="papo-manifest.json">
-<meta name="theme-color" content="#25D366">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GuiaPapo">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css">
-<style>
-  .chat-wrap { max-width: 700px; margin: 0 auto; height: calc(100vh - 56px); display: flex; flex-direction: column; position: relative; }
-  #chat-topo-lista { display: flex; flex-direction: column; height: 100%; position: relative; }
-  #chat-thread-box.aberto { padding: 15px; }
-  .voltar {
-    display: block;
-    margin-bottom: 10px;
-    color: var(--verde-escuro);
-    font-weight: 600;
-    text-decoration: none;
-    font-size: 0.85rem;
-    position: sticky;
-    top: 0;
-    z-index: 500;
-    background: var(--cinza-fundo, #F0F2F5);
-    padding: 6px 0;
-  }
-  body.dark-mode .voltar { background: #121212; }
+let supabaseClientVagas;
+let vagas = [];
+let filtroHomeOfficeAtivo = false;
+let filtroSemExperienciaAtivo = false;
 
-  /* ---------- CABEÇALHO ESTILO WHATSAPP ---------- */
-  .papo-header-app { background: var(--verde-whats); padding: 14px 16px 10px; }
-  .papo-header-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .papo-header-topo h1 { color: white; font-size: 1.5rem; font-weight: 800; }
-  .papo-header-icones { display: flex; gap: 18px; align-items: center; position: relative; }
-  .papo-header-icones button { background: none; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 2px; }
-  .papo-header-icones #sino-notificacoes {
-    background: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: white !important;
-    font-size: 1.25rem !important;
-    padding: 2px !important;
-  }
-  .papo-meu-codigo-badge {
-    background: rgba(255,255,255,0.22); color: white; border: 1px solid rgba(255,255,255,0.5);
-    border-radius: 50px; padding: 5px 12px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
-    cursor: pointer;
-  }
-  .papo-meu-codigo-badge:hover { background: rgba(255,255,255,0.32); }
-  .menu-papo-mais {
-    position: absolute; top: 34px; right: 0; background: white; border-radius: 10px;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.25); width: 240px; padding: 8px; z-index: 60;
-    display: flex; flex-direction: column; gap: 2px;
-  }
-  body.dark-mode .menu-papo-mais { background: #1e1e1e; }
-  .menu-papo-mais a, .menu-papo-mais button {
-    display: block; width: 100%; text-align: left; background: none; border: none;
-    padding: 10px 8px; border-radius: 8px; font-size: 0.85rem; color: #333; text-decoration: none; cursor: pointer;
-  }
-  .menu-papo-mais a:hover, .menu-papo-mais button:hover { background: var(--cinza-fundo); }
-  body.dark-mode .menu-papo-mais a, body.dark-mode .menu-papo-mais button { color: #ddd; }
+function toggleFiltroHomeOffice(){
+  filtroHomeOfficeAtivo = !filtroHomeOfficeAtivo;
+  document.getElementById('chip-home-office-vaga').classList.toggle('ativo', filtroHomeOfficeAtivo);
+  renderVagas();
+}
 
-  .papo-busca-wrap input {
-    width: 100%; padding: 11px 16px; border: none; border-radius: 50px;
-    background: rgba(255,255,255,0.25); color: white; font-size: 0.9rem;
-  }
-  .papo-busca-wrap input::placeholder { color: rgba(255,255,255,0.85); }
-  body.dark-mode .papo-busca-wrap input { background: rgba(0,0,0,0.2); }
+function toggleFiltroSemExperiencia(){
+  filtroSemExperienciaAtivo = !filtroSemExperienciaAtivo;
+  document.getElementById('chip-sem-experiencia-vaga').classList.toggle('ativo', filtroSemExperienciaAtivo);
+  renderVagas();
+}
+let meusCadastrosVagas = [];
+let currentUserVagas = null;
+let vagaFiltroId = null;
 
-  /* ---------- LISTA DE CONVERSAS ---------- */
-  .papo-aba-conteudo { overflow-y: auto; flex: 1; padding-bottom: 80px; }
-  .chat-lista-conversas { overflow-y: visible; }
-  .item-conversa {
-    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-    cursor: pointer; border-bottom: 1px solid #f0f0f0;
+function initSupabaseVagas(){
+  if(!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  supabaseClientVagas = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
+}
+
+async function initAuthVagas(){
+  const { data: { session } } = await supabaseClientVagas.auth.getSession();
+  currentUserVagas = session ? session.user : null;
+  document.getElementById('v-add-vaga-btn').style.display = currentUserVagas ? 'inline-block' : 'none';
+
+  if(currentUserVagas){
+    const { data } = await supabaseClientVagas
+      .from('profissionais')
+      .select('id, name')
+      .eq('user_id', currentUserVagas.id)
+      .eq('status_pagamento', 'ativo');
+    meusCadastrosVagas = data || [];
+
+    const sel = document.getElementById('vg-profissional');
+    sel.innerHTML = meusCadastrosVagas.map(c => `<option value="${c.id}">${escapeHtmlVagas(c.name)}</option>`).join('');
+
+    if(meusCadastrosVagas.length === 0){
+      document.getElementById('v-add-vaga-btn').style.display = 'none';
+    }
   }
-  .item-conversa:active { background: var(--cinza-fundo); }
-  body.dark-mode .item-conversa { border-bottom-color: #232323; }
-  .item-conversa img.avatar-conversa { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
-  .item-conversa .info-conversa { flex: 1; min-width: 0; }
-  .item-conversa .linha-topo-conversa { display: flex; justify-content: space-between; align-items: center; }
-  .item-conversa .nome-conversa { font-weight: 700; font-size: 1rem; color: #1c1c1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body.dark-mode .item-conversa .nome-conversa { color: #f0f0f0; }
-  .item-conversa .hora-conversa { font-size: 0.72rem; color: #888; flex-shrink: 0; margin-left: 8px; }
-  .item-conversa .hora-conversa.nao-lida-cor { color: var(--verde-whats); font-weight: 700; }
-  .item-conversa .ultima-msg {
-    font-size: 0.82rem; color: #888; margin-top: 3px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; display: flex; align-items: center; gap: 4px;
-  }
-  .item-conversa .check-lista { font-size: 0.85rem; color: #999; }
-  .item-conversa .check-lista.lido { color: #53bdeb; }
-  .item-conversa .bolinha-nao-lida {
-    background: var(--verde-whats); color: white; border-radius: 50%; min-width: 20px; height: 20px;
-    display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-left: 8px;
+}
+
+function normalizarTextoVagas(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+async function loadVagas(){
+  const { data, error } = await supabaseClientVagas
+    .from('vagas')
+    .select('*, profissionais(name, whatsapp, status_pagamento, plano)')
+    .eq('ativa', true)
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); return; }
+
+  vagas = (data || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
+
+  vagas.sort((a, b) => {
+    const premiumA = a.profissionais && a.profissionais.plano === 'premium' ? 1 : 0;
+    const premiumB = b.profissionais && b.profissionais.plano === 'premium' ? 1 : 0;
+    return premiumB - premiumA;
+  });
+
+  popularFiltrosVaga();
+
+  const params = new URLSearchParams(window.location.search);
+  vagaFiltroId = params.get('id');
+
+  renderVagas();
+}
+
+function popularFiltrosVaga(){
+  // mantém filtros se existirem no HTML
+}
+
+function renderVagas(){
+  const grid = document.getElementById('v-grid-vaga');
+  if(!grid) return;
+
+  let lista = vagas.slice();
+
+  if(filtroHomeOfficeAtivo) lista = lista.filter(v => v.home_office);
+  if(filtroSemExperienciaAtivo) lista = lista.filter(v => v.sem_experiencia);
+
+  const buscaEl = document.getElementById('v-busca-vaga');
+  if(buscaEl && buscaEl.value.trim()){
+    const q = normalizarTextoVagas(buscaEl.value);
+    lista = lista.filter(v =>
+      normalizarTextoVagas(v.titulo).includes(q) ||
+      normalizarTextoVagas(v.descricao).includes(q) ||
+      normalizarTextoVagas(v.profissionais && v.profissionais.name).includes(q)
+    );
   }
 
-  /* ---------- NAVEGAÇÃO INFERIOR + FAB ---------- */
-  .papo-nav-inferior {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    height: 68px; background: white;
-    border-top: 1px solid #eee; display: flex; justify-content: space-around; align-items: center;
-    z-index: 55; box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
-  }
-  body.dark-mode .papo-nav-inferior { background: #1a1a1a; border-top-color: #2a2a2a; }
-  .papo-nav-item {
-    background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
-    color: #888; font-size: 0.68rem; cursor: pointer; padding: 6px 10px; position: relative;
-  }
-  .papo-nav-item .papo-nav-icone { font-size: 1.3rem; }
-  .papo-nav-item.ativo { color: var(--verde-escuro); font-weight: 700; }
-  body.dark-mode .papo-nav-item { color: #999; }
-  body.dark-mode .papo-nav-item.ativo { color: #4fc3a1; }
-  .papo-nav-badge {
-    position: absolute; top: 0; right: 2px; background: #e05d5d; color: white; font-size: 0.6rem;
-    font-weight: 800; min-width: 15px; height: 15px; border-radius: 50px; display: flex; align-items: center; justify-content: center; padding: 0 3px;
-  }
-  .papo-fab {
-    position: absolute; bottom: 82px; right: 14px;
-    width: 54px; height: 54px; border-radius: 16px; background: var(--verde-whats); color: white;
-    border: none; font-size: 1.8rem; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 56;
+  if(vagaFiltroId){
+    lista = lista.filter(v => v.id === vagaFiltroId);
   }
 
-  .chat-thread { display: none; flex-direction: column; height: 100%; }
-  .chat-thread.aberto { display: flex; }
-  .chat-thread-header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; margin: -15px -15px 0; background: var(--verde-whats); color: white;
-  }
-  .chat-thread-header .voltar-lista { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px; color: white; }
-  .chat-thread-header .avatar-topo { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.3); flex-shrink: 0; cursor: pointer; }
-  .chat-thread-header .info-topo { line-height: 1.25; min-width: 0; cursor: pointer; }
-  .chat-thread-header .nome-topo { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chat-thread-header .status-topo { font-size: 0.72rem; opacity: 0.9; }
-  .chat-thread-header .btn-chamada { color: white; }
-  .chat-thread-header .btn-config-destaque { background: rgba(255,255,255,0.18) !important; }
-  .chat-thread-header .btn-config-destaque:hover { background: rgba(255,255,255,0.3) !important; }
-  .chat-thread-header .btn-add-agenda-topo { background: rgba(255,255,255,0.18) !important; }
-
-  .chat-mensagens {
-    flex: 1; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px;
-    background-color: #e9f3ee; margin: 0 -15px;
-    background-image: radial-gradient(circle, rgba(18,140,126,0.06) 1px, transparent 1px);
-    background-size: 18px 18px;
-  }
-  body.dark-mode .chat-mensagens { background-color: #0b1410; }
-
-  .chat-input-area-wrap { display: flex; align-items: flex-end; gap: 8px; margin: 10px -15px -15px; padding: 8px 12px 12px; background: transparent; }
-  .chat-input-pill {
-    flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; background: white; border-radius: 26px;
-    padding: 4px 6px 4px 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-  body.dark-mode .chat-input-pill { background: #202c33; }
-  .chat-input-pill input[type="text"] { flex: 1; min-width: 0; border: none; outline: none; background: transparent; padding: 8px 4px; font-size: 0.9rem; color: inherit; }
-  .btn-enviar-msg {
-    background: var(--verde-whats); color: white; border: none; width: 42px; height: 42px; border-radius: 50%;
-    font-size: 1.1rem; cursor: pointer; flex-shrink: 0; padding: 0;
-  }
-  .bolha-msg { max-width: 75%; padding: 9px 12px; border-radius: 14px; font-size: 0.88rem; line-height: 1.4; }
-  .bolha-msg.minha { align-self: flex-end; background: var(--verde-whats); color: white; border-bottom-right-radius: 4px; }
-  .bolha-msg.outra { align-self: flex-start; background: white; color: #333; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-  .bolha-msg .hora-msg { font-size: 0.62rem; opacity: 0.75; margin-top: 4px; display: block; text-align: right; }
-  .check-lida { opacity: 0.8; }
-  .bolha-msg.minha .check-lida { color: rgba(255,255,255,0.7); }
-  .bolha-msg.minha .check-lida.lida { color: #4fc3f7; }
-  .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.05rem !important; width: 28px !important; height: 28px !important; }
-  .btn-ferramenta-chat.gravando { color: #a4402f !important; }
-  .gravacao-audio-box {
-    display: flex; align-items: center; gap: 8px; margin-top: 10px;
-    background: white; border-radius: 50px; padding: 8px 14px;
-  }
-  .ponto-gravando {
-    width: 10px; height: 10px; border-radius: 50%; background: #a4402f;
-    animation: piscar-gravando 1s infinite;
-  }
-  @keyframes piscar-gravando { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-  .bolha-msg audio.midia-chat { max-width: 220px; }
-  .vazio-chat {
-    text-align: center;
-    padding: 50px 24px;
-    color: #999;
-  }
-  .vazio-chat-icone { font-size: 3.2rem; margin-bottom: 14px; opacity: 0.6; }
-  .vazio-chat-titulo { font-size: 1rem; font-weight: 700; color: #555; margin-bottom: 6px; }
-  .vazio-chat-texto { font-size: 0.85rem; color: #999; line-height: 1.5; margin-bottom: 18px; }
-  body.dark-mode .vazio-chat-titulo { color: #ccc; }
-
-  .bolha-msg img.midia-chat { max-width: 200px; border-radius: 10px; display: block; cursor: pointer; }
-  .bolha-msg .arquivo-chat { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
-  .bolha-msg .arquivo-chat .icone-arquivo { font-size: 1.5rem; }
-  .msg-chamada { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
-  .msg-chamada .chamada-seta { font-size: 0.9em; }
-  .msg-chamada .chamada-duracao { opacity: 0.85; font-weight: 500; }
-  .msg-chamada.chamada-perdida { color: #e05d5d; }
-  .bolha-msg.minha .msg-chamada.chamada-perdida { color: #ffd6d6; }
-
-  .painel-flutuante {
-    display: none; position: absolute; bottom: 60px; left: 10px; right: 10px;
-    max-width: 480px; margin: 0 auto; background: white; border-radius: 14px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 10px; z-index: 10; max-height: 320px; overflow-y: auto;
-  }
-  .painel-flutuante.aberto { display: block; }
-  .grid-emoji { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
-  .grid-emoji button { background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 4px; border-radius: 6px; }
-  .grid-emoji button:hover { background: #f0f0f0; }
-  .busca-gif-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; }
-  .grid-gif { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .grid-gif img { width: 100%; border-radius: 8px; cursor: pointer; }
-
-  .btn-chamada { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
-  .btn-config-destaque {
-    background: rgba(18,140,126,0.1);
-    border-radius: 50%;
-    font-size: 1.15rem;
-    padding: 6px 9px;
-  }
-  .btn-config-destaque:hover { background: rgba(18,140,126,0.2); }
-  body.dark-mode .btn-config-destaque { background: rgba(37,211,102,0.15); }
-  .btn-add-agenda-topo {
-    background: rgba(107,70,193,0.1) !important;
-    border-radius: 50%;
-    font-size: 1rem !important;
-    padding: 6px 8px !important;
-  }
-  .btn-add-agenda-topo:hover { background: rgba(107,70,193,0.2) !important; }
-  body.dark-mode .btn-add-agenda-topo { background: rgba(167,139,218,0.15) !important; }
-
-  .aviso-salvar-contato-box {
-    background: #e8f5f0;
-    border: 1px solid #b8e0d2;
-    border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 0.8rem;
-  }
-  body.dark-mode .aviso-salvar-contato-box { background: #16302a; border-color: #2a4a3f; }
-  .aviso-salvar-texto { display: block; color: #0a4a3a; font-weight: 600; margin-bottom: 6px; }
-  body.dark-mode .aviso-salvar-texto { color: #8fd9bb; }
-  .aviso-salvar-linha { display: flex; gap: 6px; align-items: center; }
-  .aviso-salvar-input {
-    flex: 1;
-    padding: 7px 9px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 0.8rem;
-  }
-  .aviso-salvar-btn {
-    background: var(--verde-escuro);
-    color: white;
-    border: none;
-    padding: 7px 12px;
-    border-radius: 8px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .aviso-salvar-fechar {
-    background: none;
-    border: none;
-    color: #888;
-    font-size: 0.9rem;
-    cursor: pointer;
-    padding: 4px 6px;
+  if(lista.length === 0){
+    grid.innerHTML = '<div class="vazio-vitrine">Nenhuma vaga encontrada no momento.</div>';
+    return;
   }
 
-  .menu-config-chat {
-    position: absolute;
-    top: 38px;
-    right: 0;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.18);
-    width: 240px;
-    padding: 10px;
-    z-index: 50;
-    flex-direction: column;
-    gap: 4px;
-  }
-  body.dark-mode .menu-config-chat { background: #1e1e1e; }
-  .config-chat-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    padding: 9px 8px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    color: #333;
-    cursor: pointer;
-  }
-  .config-chat-item:hover { background: var(--cinza-fundo); }
-  body.dark-mode .config-chat-item { color: #e8e8e8; }
-  .config-chat-perigo { color: #a4402f; }
-  .config-chat-secao {
-    padding: 8px;
-    border-top: 1px solid #eee;
-    margin-top: 2px;
-  }
-  body.dark-mode .config-chat-secao { border-top-color: #333; }
-  .config-chat-label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 4px; }
-  .config-chat-item-texto { font-size: 0.8rem; color: #444; padding: 6px 8px; }
-  body.dark-mode .config-chat-item-texto { color: #ccc; }
-  .link-editar-contato, .link-desbloquear {
-    background: none;
-    border: none;
-    color: var(--verde-escuro);
-    font-size: 0.72rem;
-    text-decoration: underline;
-    cursor: pointer;
-    padding: 0;
-    margin-left: 4px;
-  }
-  .aviso-bloqueio-box {
-    background: #fdf0ee;
-    color: #a4402f;
-    font-size: 0.78rem;
-    padding: 8px 10px;
-    border-radius: 8px;
-    margin-bottom: 8px;
-  }
+  grid.innerHTML = lista.map(v => {
+    const empresa = v.profissionais ? escapeHtmlVagas(v.profissionais.name) : '';
+    const wa = v.profissionais && v.profissionais.whatsapp ? v.profissionais.whatsapp.replace(/\D/g, '') : '';
+    const premium = v.profissionais && v.profissionais.plano === 'premium';
+    const podeExcluir = currentUserVagas && meusCadastrosVagas.some(c => c.id === v.profissional_id);
 
-  .overlay-chamada {
-    position: fixed; inset: 0; z-index: 2000;
-    background: rgba(0,0,0,0.9);
-    display: none; flex-direction: column; align-items: center; justify-content: center;
-    padding: 20px;
-  }
-  .overlay-chamada.aberto { display: flex; }
-  .chamada-info { color: white; text-align: center; margin-bottom: 20px; }
-  .chamada-info .nome-chamada { font-size: 1.3rem; font-weight: 700; }
-  .chamada-info .status-chamada { font-size: 0.9rem; color: #ccc; margin-top: 6px; }
-  .overlay-chamada { overflow-y: auto; }
-  .videos-chamada { position: relative; width: 100%; max-width: 500px; max-height: 50vh; aspect-ratio: 3/4; background: #222; border-radius: 14px; overflow: hidden; margin-bottom: 20px; flex-shrink: 1; }
-  .videos-chamada.somente-audio { display: none; }
-  .avatar-chamada-audio { width: 110px; height: 110px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 20px; }
-  #video-remoto { width: 100%; height: 100%; object-fit: cover; }
-  #video-local { position: absolute; bottom: 10px; right: 10px; width: 90px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid white; }
-  .chamada-controles { display: flex; gap: 16px; flex-shrink: 0; padding-bottom: 20px; }
-  .btn-controle-chamada {
-    width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
-    font-size: 1.3rem; display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.2); color: white;
-  }
-  .btn-controle-chamada.desligar { background: #a4402f; }
-  .btn-controle-chamada.ativo-off { background: rgba(164,64,47,0.7); }
-  .chamada-recebida-caixa {
-    background: white; border-radius: 14px; padding: 24px; text-align: center; max-width: 320px;
-  }
-  .chamada-recebida-caixa .icone-chamando { font-size: 2.5rem; margin-bottom: 8px; }
-  .chamada-recebida-botoes { display: flex; gap: 14px; justify-content: center; margin-top: 18px; }
-  .chamada-recebida-botoes button {
-    width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 1.4rem; cursor: pointer; color: white;
-  }
-  .chamada-recebida-botoes .aceitar { background: var(--verde-whats); }
-  .chamada-recebida-botoes .recusar { background: #a4402f; }
-</style>
-</head>
-<body>
-<div class="chat-wrap">
-  <div id="chat-topo-lista">
-    <div class="papo-header-app">
-      <div class="papo-header-topo">
-        <h1>Papo</h1>
-        <button type="button" id="btn-instalar-papo-topo" onclick="instalarAppPapo()" title="Instalar o GuiaPapo no seu celular" style="display:none; background:none; border:none; color:white; font-size:1.15rem; cursor:pointer; padding:2px;">📲</button>
-        <button type="button" class="papo-meu-codigo-badge" id="papo-meu-codigo-badge" onclick="copiarMeuCodigoPapo()" title="Seu código do Papo — compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone" style="display:none;"></button>
-        <div class="papo-header-icones">
-          <button type="button" id="btn-ativar-push-icone" onclick="ativarNotificacoesPushPapo()" title="Ativar notificações (chamadas e mensagens mesmo com o site fechado)" style="display:none;">🛎️</button>
-          <button type="button" id="sino-notificacoes" title="Notificações">🔔<span class="badge-notif" id="badge-notif" style="display:none;">0</span></button>
-          <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔊</button>
-          <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
-          <button type="button" onclick="toggleMenuPapoMais()" title="Mais opções">⋮</button>
-          <div class="menu-papo-mais" id="menu-papo-mais" style="display:none;">
-            <a href="index.html">← Voltar ao GuiaZap</a>
-            <button type="button" onclick="toggleMenuPapoMais(); adicionarContatoPorCodigo()">+ Adicionar contato por código</button>
-            <a href="agenda.html">📇 Ver agenda completa</a>
-            <button type="button" onclick="toggleMenuPapoMais(); editarMeuNomeExibicao()">✏️ Meu nome no Papo</button>
-            <button type="button" id="btn-instalar-papo" onclick="instalarAppPapo()" style="display:none;">📲 Instalar o GuiaPapo</button>
-          </div>
+    return `
+      <div class="card-vaga${premium ? ' card-premium' : ''}">
+        <div class="card-vaga-titulo">${escapeHtmlVagas(v.titulo)}</div>
+        <div class="card-vaga-meta">${empresa}${v.tipo ? ' · ' + escapeHtmlVagas(v.tipo) : ''}</div>
+        ${v.salario ? `<div class="card-vaga-salario">💰 ${escapeHtmlVagas(v.salario)}</div>` : ''}
+        <div class="card-vaga-tags">
+          ${v.home_office ? '<span class="tag-vaga">🏠 Home office</span>' : ''}
+          ${v.sem_experiencia ? '<span class="tag-vaga">🔰 Sem experiência</span>' : ''}
+        </div>
+        ${v.descricao ? `<div class="card-vaga-desc">${escapeHtmlVagas(v.descricao)}</div>` : ''}
+        ${v.requisitos ? `<div class="card-vaga-req"><b>Requisitos:</b> ${escapeHtmlVagas(v.requisitos)}</div>` : ''}
+        <div class="card-vaga-acoes">
+          ${wa ? `<a class="btn-whats" href="https://wa.me/55${wa}?text=${encodeURIComponent('Olá! Vi a vaga de ' + v.titulo + ' no GuiaZap e tenho interesse.')}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+          ${podeExcluir ? `<button type="button" class="btn-cancelar" onclick="excluirVaga('${v.id}')">Excluir</button>` : ''}
         </div>
       </div>
-      <div class="papo-busca-wrap">
-        <input type="text" id="papo-busca-conversas" placeholder="🔍 Pesquisar conversas..." oninput="filtrarListaConversas()">
-      </div>
-    </div>
+    `;
+  }).join('');
+}
 
-    <div id="papo-aba-conversas" class="papo-aba-conteudo">
-      <div id="aviso-ativar-push" style="display:none; background:#f3eefc; border:1px solid #d8c8f0; border-radius:10px; padding:10px 12px; margin:10px 14px 0; font-size:0.8rem; color:#4a2d7a;">
-        🔔 Ative as notificações pra não perder chamadas e mensagens quando o Papo estiver fechado.
-        <button type="button" onclick="ativarNotificacoesPushPapo()" style="display:block; width:100%; margin-top:8px; background:#6b46c1; color:white; border:none; padding:8px; border-radius:8px; font-weight:700; font-size:0.78rem; cursor:pointer;">Ativar agora</button>
-      </div>
-      <div id="chat-lista-box" class="chat-lista-conversas">
-        <p style="text-align:center; padding:20px; color:#999;">Carregando...</p>
-      </div>
-    </div>
+function formatarValorVaga(event){
+  let v = event.target.value.replace(/\D/g, '');
+  if(!v){ event.target.value = ''; return; }
+  v = (parseInt(v, 10) / 100).toFixed(2) + '';
+  v = v.replace('.', ',');
+  v = v.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  event.target.value = v;
+}
 
-    <div id="papo-aba-novidades" class="papo-aba-conteudo" style="display:none;">
-      <div id="papo-novidades-conteudo" style="padding:16px;">Carregando...</div>
-    </div>
+function abrirFormVaga(){
+  document.getElementById('vaga-form').classList.add('open');
+  document.getElementById('vg-msg').textContent = '';
+}
 
-    <div id="papo-aba-agenda" class="papo-aba-conteudo" style="display:none;">
-      <div id="papo-agenda-conteudo" style="padding:16px;">Carregando...</div>
-    </div>
+function fecharFormVaga(){
+  document.getElementById('vaga-form').classList.remove('open');
+  document.getElementById('vg-id').value = '';
+  document.getElementById('vg-titulo').value = '';
+  document.getElementById('vg-descricao').value = '';
+  document.getElementById('vg-requisitos').value = '';
+  document.getElementById('vg-salario').value = '';
+  const ho = document.getElementById('vg-home-office');
+  const se = document.getElementById('vg-sem-experiencia');
+  if(ho) ho.checked = false;
+  if(se) se.checked = false;
+  const msg = document.getElementById('vg-msg');
+  if(msg) msg.textContent = '';
+}
 
-    <div id="papo-aba-chamadas" class="papo-aba-conteudo" style="display:none;">
-      <div id="papo-chamadas-conteudo" style="padding:16px;">Carregando...</div>
-    </div>
+async function salvarVaga(e){
+  if(e && e.preventDefault) e.preventDefault();
+  const msg = document.getElementById('vg-msg');
 
-    <button type="button" class="papo-fab" onclick="adicionarContatoPorCodigo()" title="Adicionar contato por código">+</button>
+  const payload = {
+    profissional_id: document.getElementById('vg-profissional').value,
+    titulo: document.getElementById('vg-titulo').value.trim(),
+    tipo: document.getElementById('vg-tipo').value,
+    descricao: document.getElementById('vg-descricao').value.trim() || null,
+    requisitos: document.getElementById('vg-requisitos').value.trim() || null,
+    salario: document.getElementById('vg-salario').value.trim() || null,
+    home_office: document.getElementById('vg-home-office').checked,
+    sem_experiencia: document.getElementById('vg-sem-experiencia').checked
+  };
 
-    <nav class="papo-nav-inferior">
-      <button type="button" class="papo-nav-item ativo" id="nav-conversas" onclick="trocarAbaPapo('conversas')">
-        <span class="papo-nav-icone">💬</span><span>Conversas</span>
-        <span class="papo-nav-badge" id="badge-nav-conversas" style="display:none;"></span>
-      </button>
-      <button type="button" class="papo-nav-item" id="nav-novidades" onclick="trocarAbaPapo('novidades')">
-        <span class="papo-nav-icone">📸</span><span>Novidades</span>
-      </button>
-      <button type="button" class="papo-nav-item" id="nav-agenda" onclick="trocarAbaPapo('agenda')">
-        <span class="papo-nav-icone">📇</span><span>Agenda</span>
-      </button>
-      <button type="button" class="papo-nav-item" id="nav-chamadas" onclick="trocarAbaPapo('chamadas')">
-        <span class="papo-nav-icone">📞</span><span>Chamadas</span>
-      </button>
-    </nav>
-  </div>
+  if(!payload.titulo || !payload.profissional_id){ msg.textContent = 'Preencha o cargo da vaga.'; return false; }
 
-  <div id="chat-thread-box" class="chat-thread">
-    <div class="chat-thread-header">
-      <button class="voltar-lista" onclick="fecharConversa()">←</button>
-      <img class="avatar-topo" id="chat-avatar-topo" src="" alt="">
-      <div class="info-topo" style="flex:1;">
-        <div class="nome-topo" id="chat-nome-topo"></div>
-        <div class="status-topo" id="chat-status-topo"></div>
-      </div>
-      <div style="display:flex; gap:4px; position:relative;">
-        <button class="btn-chamada btn-add-agenda-topo" id="btn-add-agenda-topo" onclick="mostrarAvisoSalvarContato()" title="Adicionar à agenda" style="display:none;">➕📇</button>
-        <button class="btn-chamada" onclick="iniciarChamada(true)" title="Chamada de vídeo">📹</button>
-        <button class="btn-chamada" onclick="iniciarChamada(false)" title="Ligar (áudio)">📞</button>
-        <button class="btn-chamada btn-config-destaque" onclick="toggleConfigChat()" title="Configurações da conversa">⚙️</button>
-        <div class="menu-config-chat" id="menu-config-chat" style="display:none;">
-          <div class="config-chat-secao" id="config-salvar-contato-area"></div>
-          <button type="button" class="config-chat-item" id="btn-bloquear-config" onclick="toggleBloquearContatoAtual()">🚫 Bloquear contato</button>
-          <button type="button" class="config-chat-item" id="btn-silenciar-config" onclick="toggleSilenciarConversa()">🔔 Silenciar conversa</button>
-          <div class="config-chat-secao">
-            <label class="config-chat-label" for="volume-chat">🔊 Volume da notificação</label>
-            <input type="range" id="volume-chat" min="0" max="100" value="50" style="width:100%;" onchange="localStorage.setItem('volume_chat', this.value)">
-          </div>
-          <button type="button" class="config-chat-item config-chat-perigo" onclick="apagarConversaAtual()">🗑️ Apagar conversa</button>
-        </div>
-      </div>
-    </div>
-    <div class="aviso-bloqueio-box" id="aviso-bloqueio-box" style="display:none; margin:10px 0 0;"></div>
-    <div class="aviso-salvar-contato-box" id="aviso-salvar-contato-box" style="display:none; margin:10px 0 0;"></div>
-    <div class="chat-mensagens" id="chat-mensagens"></div>
+  msg.textContent = 'publicando...';
+  const { error } = await supabaseClientVagas.from('vagas').insert(payload);
+  if(error){ console.error(error); msg.textContent = 'erro ao publicar vaga'; return false; }
 
-    <div class="painel-flutuante" id="painel-emoji">
-      <div class="grid-emoji" id="grid-emoji-lista"></div>
-    </div>
-    <div class="painel-flutuante" id="painel-gif">
-      <input type="text" class="busca-gif-input" id="busca-gif-texto" placeholder="Buscar GIF..." oninput="buscarGifOuSticker('gif')">
-      <div class="grid-gif" id="grid-gif-lista"></div>
-    </div>
-    <div class="painel-flutuante" id="painel-sticker">
-      <input type="text" class="busca-gif-input" id="busca-sticker-texto" placeholder="Buscar figurinha..." oninput="buscarGifOuSticker('sticker')">
-      <div class="grid-gif" id="grid-sticker-lista"></div>
-    </div>
+  msg.textContent = 'vaga publicada!';
+  await loadVagas();
+  setTimeout(fecharFormVaga, 1200);
 
-    <div class="gravacao-audio-box" id="gravacao-audio-box" style="display:none;">
-      <span class="ponto-gravando"></span>
-      <span id="gravacao-tempo">0:00</span>
-      <span style="flex:1; font-size:0.8rem; color:#666;">Gravando áudio...</span>
-      <button type="button" class="btn-ferramenta-chat" onclick="cancelarGravacaoAudio()" title="Cancelar">✕</button>
-      <button type="button" onclick="pararGravacaoAudio()" title="Enviar">➤</button>
-    </div>
+  fetch('/.netlify/functions/enviar-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      titulo: '💼 Nova vaga no GuiaZap!',
+      mensagem: payload.titulo,
+      url: '/vagas.html',
+      userIds: 'todos'
+    })
+  }).catch(err => console.error('erro ao enviar push', err));
 
-    <div class="chat-input-area-wrap" id="chat-input-row-normal">
-      <div class="chat-input-pill">
-        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
-        <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
-        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/arquivo">📎</button>
-        <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
-        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
-        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
-      </div>
-      <button type="button" class="btn-enviar-msg" id="btn-microfone" onclick="acaoBotaoEnviarOuMic()" title="Gravar áudio">🎤</button>
-    </div>
-  </div>
-</div>
+  return false;
+}
 
-<div id="overlay-compartilhar" class="overlay-chamada">
-  <div class="chamada-recebida-caixa" style="max-width:400px; width:90%; max-height:70vh; overflow-y:auto; text-align:left;">
-    <div style="text-align:center; margin-bottom:10px;">
-      <div style="font-weight:700; font-size:1rem;">Enviar pra quem?</div>
-      <div id="compartilhar-preview" style="font-size:0.8rem; color:#666; margin-top:4px;"></div>
-    </div>
-    <div id="compartilhar-lista-conversas"></div>
-    <button type="button" class="btn-baixar-app" style="background:#6b46c1; margin-top:10px;" onclick="compartilharComNovoContato()">+ Adicionar novo contato por código</button>
-    <button type="button" class="btn-cancelar" style="width:100%; margin-top:8px;" onclick="fecharOverlayCompartilhar()">Cancelar</button>
-  </div>
-</div>
+async function excluirVaga(id){
+  if(!confirm('Excluir esta vaga?')) return;
+  const { error } = await supabaseClientVagas.from('vagas').delete().eq('id', id);
+  if(error){ console.error(error); alert('Erro ao excluir.'); return; }
+  await loadVagas();
+}
 
-<div id="overlay-chamada" class="overlay-chamada">
-  <div id="chamada-recebida-view" style="display:none;">
-    <div class="chamada-recebida-caixa">
-      <div class="icone-chamando">📞</div>
-      <div id="chamada-recebida-nome" style="font-weight:700; font-size:1.1rem;"></div>
-      <div style="color:#888; font-size:0.85rem; margin-top:4px;">Chamada recebida...</div>
-      <div class="chamada-recebida-botoes">
-        <button class="recusar" onclick="recusarChamada()">✕</button>
-        <button class="aceitar" onclick="aceitarChamada()">✓</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="chamada-ativa-view" style="display:none; width:100%; align-items:center; flex-direction:column;">
-    <div class="chamada-info">
-      <div class="nome-chamada" id="chamada-nome-ativa"></div>
-      <div class="status-chamada" id="chamada-status-ativa">Chamando...</div>
-    </div>
-    <div class="avatar-chamada-audio" id="avatar-chamada-audio" style="display:none;">📞</div>
-    <div class="videos-chamada" id="videos-chamada-box">
-      <video id="video-remoto" autoplay playsinline></video>
-      <video id="video-local" autoplay playsinline muted></video>
-    </div>
-    <div class="chamada-controles">
-      <button class="btn-controle-chamada" id="btn-mudo" onclick="alternarMudo()">🎤</button>
-      <button class="btn-controle-chamada" id="btn-camera" onclick="onCliqueBotaoCamera()">📹</button>
-      <button class="btn-controle-chamada desligar" onclick="encerrarChamada(true)">📵</button>
-    </div>
-  </div>
-</div>
-
-<script src="config.js"></script>
-<script src="js/notificacoes.js"></script>
-<script>
-const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let currentUserChat = null;
-let meusCadastrosChat = [];
-let conversaAtual = null;
-let souEuAEmpresaNaConversaAtual = false;
-let canalRealtimeAtual = null;
-let outroLadoUserIdAtual = null;
-let outroLadoNomeAtual = null;
-let outroLadoFotoAtual = null;
-let outroLadoProfissionalIdAtual = null;
-let bloqueadoNaConversaAtual = false; // true se EU bloquei ou fui bloqueado pelo outro lado
-
-function escapeHtmlChat(str){
+function escapeHtmlVagas(str){
   const d = document.createElement('div');
   d.textContent = str || '';
   return d.innerHTML;
 }
 
-async function carregarAbaChamadas(){
-  const container = document.getElementById('papo-chamadas-conteudo');
-  if(conversasCarregadasCache.length === 0){
-    container.innerHTML = '<p style="text-align:center; color:#999; padding:30px 0;">Nenhuma chamada ainda.</p>';
+if(initSupabaseVagas()){
+  initAuthVagas().then(loadVagas);
+}
+
+// ---------- MODO VOZ: PUBLICAR VAGA POR VOZ (fluxo guiado) ----------
+let _vozVagasReconhecimento = null;
+let _vozVagasAtiva = false;
+let _vozVagasFalando = false;
+const _vozVagasSynth = window.speechSynthesis;
+let _estadoVozVagas = null;
+
+function normalizarVozVagas(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function toggleModoVozVagas(){
+  if(_vozVagasAtiva) pararModoVozVagas();
+  else iniciarModoVozVagas();
+}
+
+function iniciarModoVozVagas(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta reconhecimento de voz. Tenta pelo Chrome no celular ou computador.');
+    return;
+  }
+  if(!currentUserVagas){
+    alert('Faça login na página inicial pra publicar vaga por voz.');
+    return;
+  }
+  if(meusCadastrosVagas.length === 0){
+    alert('Você precisa ter um cadastro ativo no GuiaZap pra publicar vaga.');
     return;
   }
 
-  const idsConversas = conversasCarregadasCache.map(c => c.id);
-  const { data: chamadas, error } = await supabaseClientChat
-    .from('mensagens_chat')
-    .select('id, conversa_id, remetente_user_id, tipo, texto, created_at')
-    .in('conversa_id', idsConversas)
-    .in('tipo', ['chamada_atendida', 'chamada_perdida'])
-    .order('created_at', { ascending: false })
-    .limit(50);
+  _vozVagasAtiva = true;
+  _estadoVozVagas = { etapa: 'titulo', rascunho: '', dados: {} };
+  document.getElementById('btn-modo-voz-vagas').style.background = '#a4402f';
+  document.getElementById('btn-modo-voz-vagas').setAttribute('aria-label', 'Desativar modo voz');
+  document.getElementById('painel-modo-voz-vagas').style.display = 'block';
+  document.getElementById('voz-vagas-status').textContent = '🎙️ Modo voz ativado';
+  document.getElementById('voz-vagas-transcricao').textContent = '';
 
-  if(error || !chamadas || chamadas.length === 0){
-    container.innerHTML = '<p style="text-align:center; color:#999; padding:30px 0;">Nenhuma chamada ainda.</p>';
+  abrirFormVaga();
+
+  _vozVagasReconhecimento = new SpeechRecognitionApi();
+  _vozVagasReconhecimento.lang = 'pt-BR';
+  _vozVagasReconhecimento.continuous = true;
+  _vozVagasReconhecimento.interimResults = false;
+
+  _vozVagasReconhecimento.onresult = (event) => {
+    const ultimo = event.results[event.results.length - 1];
+    if(!ultimo || !ultimo.isFinal) return;
+    const transcricao = (ultimo[0] && ultimo[0].transcript || '').trim();
+    if(!transcricao) return;
+    document.getElementById('voz-vagas-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarComandoVozVagas(transcricao);
+  };
+
+  _vozVagasReconhecimento.onend = () => {
+    if(_vozVagasAtiva && !_vozVagasFalando){
+      try{ _vozVagasReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozVagasReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      pararModoVozVagas();
+    }
+  };
+
+  try{ _vozVagasReconhecimento.start(); } catch(e){}
+  falarVozVagas('Modo voz ativado. Vamos publicar uma vaga juntos. Qual o cargo ou título da vaga?');
+}
+
+function pararModoVozVagas(){
+  _vozVagasAtiva = false;
+  _estadoVozVagas = null;
+  if(_vozVagasReconhecimento){
+    try{ _vozVagasReconhecimento.stop(); } catch(e){}
+    _vozVagasReconhecimento = null;
+  }
+  if(_vozVagasSynth) _vozVagasSynth.cancel();
+  const btn = document.getElementById('btn-modo-voz-vagas');
+  if(btn){
+    btn.style.background = '#6b46c1';
+    btn.setAttribute('aria-label', 'Publicar vaga por voz, sem tocar na tela');
+  }
+  const painel = document.getElementById('painel-modo-voz-vagas');
+  if(painel) painel.style.display = 'none';
+  const ind = document.getElementById('voz-vagas-indicador');
+  if(ind) ind.style.background = '#6b46c1';
+}
+
+function falarVozVagas(texto){
+  if(!_vozVagasSynth) return;
+  _vozVagasFalando = true;
+  const ind = document.getElementById('voz-vagas-indicador');
+  if(ind) ind.style.background = '#e05d5d';
+  const status = document.getElementById('voz-vagas-status');
+  if(status) status.textContent = '🔊 ' + texto;
+
+  _vozVagasSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1.0;
+  fala.onend = () => {
+    _vozVagasFalando = false;
+    if(ind) ind.style.background = '#22c55e';
+    if(status) status.textContent = '🎙️ Pode falar...';
+    if(_vozVagasAtiva && _vozVagasReconhecimento){
+      try{ _vozVagasReconhecimento.start(); } catch(e){}
+    }
+  };
+  fala.onerror = () => {
+    _vozVagasFalando = false;
+    if(ind) ind.style.background = '#22c55e';
+  };
+  _vozVagasSynth.speak(fala);
+}
+
+function ehSimVagas(t){
+  return t === 'sim' || t === 'isso' || t === 'certo' || t === 'confirma' || t === 'confirmar' || t === 'ok' || t === 'pode' || t.includes('esta certo') || t.includes('está certo');
+}
+function ehNaoVagas(t){
+  return t === 'nao' || t === 'não' || t === 'errado' || t === 'corrigir' || t === 'de novo' || t === 'repetir';
+}
+
+async function processarComandoVozVagas(transcricao){
+  if(!_estadoVozVagas || _vozVagasFalando) return;
+  const t = normalizarVozVagas(transcricao);
+  const estado = _estadoVozVagas;
+
+  if(t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar'){
+    falarVozVagas('Modo voz desligado.');
+    setTimeout(pararModoVozVagas, 1500);
     return;
   }
 
-  container.innerHTML = `<div class="chat-lista-conversas">${chamadas.map(m => {
-    const conversa = conversasCarregadasCache.find(c => c.id === m.conversa_id);
-    const nome = conversa ? conversa.nomeExibido : 'Contato';
-    const fotoFallback = conversa && conversa.fotoExibida ? escapeHtmlChat(conversa.fotoExibida) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(nome);
-    const minha = m.remetente_user_id === currentUserChat.id;
-    return `
-      <div class="item-conversa" onclick="abrirConversa('${m.conversa_id}')">
-        <img class="avatar-conversa" src="${fotoFallback}" alt="">
-        <div class="info-conversa">
-          <div class="linha-topo-conversa">
-            <div class="nome-conversa">${escapeHtmlChat(nome)}</div>
-            <div class="hora-conversa">${formatarHoraOuDataChat(m.created_at)}</div>
-          </div>
-          <div class="ultima-msg">${conteudoDaMensagem(m, minha)}</div>
-        </div>
-      </div>
-    `;
-  }).join('')}</div>`;
-}
-
-async function carregarAbaAgenda(){
-  const container = document.getElementById('papo-agenda-conteudo');
-  const { data: contatos, error } = await supabaseClientChat.from('agenda_contatos').select('id, contato_user_id, profissional_id, nome_salvo').eq('dono_user_id', currentUserChat.id).order('nome_salvo', { ascending: true });
-
-  const linkAgendaCompleta = `<a href="agenda.html" class="btn-baixar-app" style="background:transparent; border:1.5px solid #6b46c1; color:#6b46c1; text-decoration:none; display:block; text-align:center; margin-top:14px;">📇 Ver agenda completa (editar, bloquear, etc)</a>`;
-
-  if(error || !contatos || contatos.length === 0){
-    container.innerHTML = `<p style="text-align:center; color:#999; padding:20px 0;">Você ainda não salvou nenhum contato.</p>${linkAgendaCompleta}`;
+  if(estado.etapa === 'titulo'){
+    estado.rascunho = transcricao.trim();
+    estado.etapa = 'confirmar_titulo';
+    falarVozVagas('Entendi o cargo: ' + estado.rascunho + '. Está certo? Fala sim ou não.');
     return;
   }
-
-  const linhas = contatos.map(c => {
-    const ehEmpresa = !!c.profissional_id;
-    const link = ehEmpresa ? `chat.html?empresa=${c.profissional_id}` : `chat.html?pessoa=${c.contato_user_id}`;
-    const fotoFallback = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nome_salvo);
-    return `
-      <div class="item-conversa" onclick="window.location.href='${link}'">
-        <img class="avatar-conversa" src="${fotoFallback}" alt="">
-        <div class="info-conversa">
-          <div class="nome-conversa">${escapeHtmlChat(c.nome_salvo)}</div>
-          <div class="ultima-msg">${ehEmpresa ? '🏢 Empresa' : '👤 Pessoa'}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = `<div class="chat-lista-conversas">${linhas}</div>${linkAgendaCompleta}`;
-}
-
-// ---------- NOVIDADES (Stories do Papo) ----------
-
-let storiesPapoChatAgrupados = {};
-let storiesPapoChatOrdem = [];
-let storyPapoChatAtual = null;
-let storyPapoChatChaveAtual = null;
-let storyPapoChatSlideAtual = 0;
-let storyPapoChatTimer = null;
-
-async function carregarAbaNovidades(){
-  const container = document.getElementById('papo-novidades-conteudo');
-  container.innerHTML = 'Carregando...';
-
-  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const { data: contatosSalvos } = await supabaseClientChat.from('agenda_contatos').select('contato_user_id, profissional_id').eq('dono_user_id', currentUserChat.id);
-  const idsEmpresasSalvas = (contatosSalvos || []).filter(c => c.profissional_id).map(c => c.profissional_id);
-  const idsPessoasSalvas = (contatosSalvos || []).filter(c => c.contato_user_id).map(c => c.contato_user_id);
-
-  const { data: seguindo } = await supabaseClientChat.from('seguidores').select('profissional_id').eq('user_id', currentUserChat.id);
-  const idsEmpresasSeguidas = (seguindo || []).map(s => s.profissional_id);
-
-  const idsEmpresas = [...new Set([...idsEmpresasSalvas, ...idsEmpresasSeguidas, ...meusIdsEmpresa])];
-
-  let storiesEmpresas = [];
-  if(idsEmpresas.length > 0){
-    const { data } = await supabaseClientChat.from('stories').select('*, profissionais(id, name, foto)').eq('visivel_papo', true).in('profissional_id', idsEmpresas);
-    storiesEmpresas = data || [];
-  }
-
-  let storiesPessoais = [];
-  const idsPessoas = [...new Set([...idsPessoasSalvas, currentUserChat.id])];
-  if(idsPessoas.length > 0){
-    const { data } = await supabaseClientChat.from('stories').select('*').eq('visivel_papo', true).in('usuario_id', idsPessoas);
-    storiesPessoais = data || [];
-  }
-
-  const idsNomesPessoais = [...new Set(storiesPessoais.map(s => s.usuario_id))];
-  let nomesPessoais = {};
-  if(idsNomesPessoais.length > 0){
-    const { data: perfis } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').in('user_id', idsNomesPessoais);
-    (perfis || []).forEach(p => { nomesPessoais[p.user_id] = p.nome_exibicao; });
-  }
-
-  storiesPapoChatAgrupados = {};
-  storiesEmpresas.forEach(s => {
-    if(!s.profissionais) return;
-    const chave = 'e_' + s.profissional_id;
-    if(!storiesPapoChatAgrupados[chave]) storiesPapoChatAgrupados[chave] = { tipo: 'empresa', id: s.profissional_id, nome: s.profissionais.name, foto: s.profissionais.foto, stories: [] };
-    storiesPapoChatAgrupados[chave].stories.push(s);
-  });
-  storiesPessoais.forEach(s => {
-    const chave = 'p_' + s.usuario_id;
-    if(!storiesPapoChatAgrupados[chave]) storiesPapoChatAgrupados[chave] = { tipo: 'pessoa', id: s.usuario_id, nome: nomesPessoais[s.usuario_id] || 'Você', foto: null, stories: [] };
-    storiesPapoChatAgrupados[chave].stories.push(s);
-  });
-
-  const grupos = Object.entries(storiesPapoChatAgrupados);
-  storiesPapoChatOrdem = grupos.map(([chave]) => chave);
-
-  if(grupos.length === 0){
-    container.innerHTML = `
-      <p style="text-align:center; color:#999; padding:20px 0;">Nenhuma novidade dos seus contatos por enquanto.</p>
-      <a href="agenda.html" class="btn-baixar-app" style="background:#e91e63; text-decoration:none; display:block; text-align:center;">📸 Postar uma novidade</a>
-    `;
-    return;
-  }
-
-  const bolinhas = grupos.map(([chave, grupo]) => {
-    const primeiraFoto = grupo.stories[0] && grupo.stories[0].fotos && grupo.stories[0].fotos[0];
-    const fotoFallback = grupo.foto ? escapeHtmlChat(grupo.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(grupo.nome);
-    return `
-      <div class="story-bolinha" onclick="abrirStoryPapoChatViewer('${chave}')">
-        <img src="${primeiraFoto ? escapeHtmlChat(primeiraFoto) : fotoFallback}">
-        <span>${escapeHtmlChat(grupo.nome.split(' ')[0])}</span>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="stories-linha" style="display:flex; padding:0 0 14px;">${bolinhas}</div>
-    <a href="agenda.html" class="btn-baixar-app" style="background:#e91e63; text-decoration:none; display:block; text-align:center;">📸 Postar uma novidade</a>
-  `;
-}
-
-function abrirStoryPapoChatViewer(chave){
-  const grupo = storiesPapoChatAgrupados[chave];
-  if(!grupo) return;
-
-  storyPapoChatAtual = grupo;
-  storyPapoChatChaveAtual = chave;
-  storyPapoChatSlideAtual = 0;
-
-  storyPapoChatAtual.slidesFlat = [];
-  grupo.stories.forEach(s => {
-    s.fotos.forEach(foto => {
-      storyPapoChatAtual.slidesFlat.push({ foto, texto: s.texto, nome: grupo.nome, tipo: grupo.tipo, id: grupo.id });
-    });
-  });
-
-  if(!document.getElementById('papo-chat-story-viewer')) _criarViewerStoryPapoChat();
-  document.getElementById('papo-chat-story-viewer').classList.add('aberto');
-  renderStoryPapoChatSlideAtual();
-}
-
-function _criarViewerStoryPapoChat(){
-  const viewer = document.createElement('div');
-  viewer.id = 'papo-chat-story-viewer';
-  viewer.className = 'agenda-story-viewer';
-  viewer.innerHTML = `
-    <div class="agenda-story-conteudo">
-      <button class="agenda-story-fechar" onclick="fecharStoryPapoChatViewer()">✕</button>
-      <div class="agenda-story-progresso"><div class="agenda-story-progresso-barra" id="papo-chat-story-progresso-barra"></div></div>
-      <div class="agenda-story-nome" id="papo-chat-story-nome-topo"></div>
-      <div class="agenda-story-foto-area">
-        <img class="agenda-story-foto" id="papo-chat-story-foto">
-        <div class="agenda-story-tap-esquerda" onclick="voltarStoryPapoChatSlide()"></div>
-        <div class="agenda-story-tap-direita" onclick="avancarStoryPapoChatSlide()"></div>
-        <div class="agenda-story-texto" id="papo-chat-story-texto-viewer"></div>
-      </div>
-      <div class="agenda-story-acoes" id="papo-chat-story-acoes"></div>
-    </div>
-  `;
-  document.body.appendChild(viewer);
-
-  const style = document.createElement('style');
-  style.textContent = `
-    .agenda-story-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 999; display: none; align-items: center; justify-content: center; padding: 10px; }
-    .agenda-story-viewer.aberto { display: flex; }
-    .agenda-story-conteudo { position: relative; width: 100%; max-width: 420px; max-height: 92vh; background: #111; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
-    .agenda-story-progresso { height: 3px; background: rgba(255,255,255,0.25); }
-    .agenda-story-progresso-barra { height: 100%; background: white; transition: width 0.3s linear; }
-    .agenda-story-nome { color: white; font-weight: 700; font-size: 0.85rem; padding: 10px 14px 4px; position: absolute; top: 6px; left: 8px; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
-    .agenda-story-fechar { position: absolute; top: 8px; right: 10px; z-index: 2; background: rgba(0,0,0,0.4); color: white; border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer; }
-    .agenda-story-foto-area { position: relative; width: 100%; aspect-ratio: 9/13; background: #000; }
-    .agenda-story-foto { width: 100%; height: 100%; object-fit: contain; }
-    .agenda-story-tap-esquerda, .agenda-story-tap-direita { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 1; cursor: pointer; }
-    .agenda-story-tap-esquerda { left: 0; }
-    .agenda-story-tap-direita { right: 0; }
-    .agenda-story-texto { color: white; font-size: 0.85rem; padding: 30px 14px 12px; min-height: 20px; position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; background: linear-gradient(to top, rgba(0,0,0,0.75), transparent); white-space: pre-line; }
-    .agenda-story-acoes { padding: 10px 14px 16px; flex-shrink: 0; }
-    .agenda-story-acoes a { display: block; text-align: center; padding: 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; text-decoration: none; background: var(--verde-whats); color: white; }
-  `;
-  document.head.appendChild(style);
-}
-
-function renderStoryPapoChatSlideAtual(){
-  const slides = storyPapoChatAtual.slidesFlat;
-  const slide = slides[storyPapoChatSlideAtual];
-  if(!slide){ fecharStoryPapoChatViewer(); return; }
-
-  document.getElementById('papo-chat-story-nome-topo').textContent = slide.nome;
-  document.getElementById('papo-chat-story-foto').src = slide.foto;
-  document.getElementById('papo-chat-story-texto-viewer').textContent = slide.texto || '';
-
-  const barra = document.getElementById('papo-chat-story-progresso-barra');
-  barra.style.width = `${((storyPapoChatSlideAtual + 1) / slides.length) * 100}%`;
-
-  const acoes = document.getElementById('papo-chat-story-acoes');
-  const linkChat = slide.tipo === 'empresa' ? `chat.html?empresa=${slide.id}` : `chat.html?pessoa=${slide.id}`;
-  acoes.innerHTML = slide.id !== currentUserChat.id ? `<a href="${linkChat}">💬 Falar no Papo</a>` : '';
-
-  clearTimeout(storyPapoChatTimer);
-  storyPapoChatTimer = setTimeout(() => avancarStoryPapoChatSlide(), 5000);
-}
-
-function avancarStoryPapoChatSlide(){
-  storyPapoChatSlideAtual++;
-  if(storyPapoChatSlideAtual >= storyPapoChatAtual.slidesFlat.length){
-    const indiceAtual = storiesPapoChatOrdem.indexOf(storyPapoChatChaveAtual);
-    const proximaChave = storiesPapoChatOrdem[indiceAtual + 1];
-    if(proximaChave) abrirStoryPapoChatViewer(proximaChave);
-    else fecharStoryPapoChatViewer();
-    return;
-  }
-  renderStoryPapoChatSlideAtual();
-}
-
-function voltarStoryPapoChatSlide(){
-  storyPapoChatSlideAtual--;
-  if(storyPapoChatSlideAtual < 0){
-    const indiceAtual = storiesPapoChatOrdem.indexOf(storyPapoChatChaveAtual);
-    const chaveAnterior = storiesPapoChatOrdem[indiceAtual - 1];
-    if(chaveAnterior){
-      abrirStoryPapoChatViewer(chaveAnterior);
-      storyPapoChatSlideAtual = storyPapoChatAtual.slidesFlat.length - 1;
-      renderStoryPapoChatSlideAtual();
+  if(estado.etapa === 'confirmar_titulo'){
+    if(ehSimVagas(t)){
+      estado.dados.titulo = estado.rascunho;
+      document.getElementById('vg-titulo').value = estado.rascunho;
+      estado.rascunho = '';
+      estado.etapa = 'tipo';
+      falarVozVagas('Cargo salvo. Qual o tipo de contrato? Fala: CLT, PJ, meio período, temporário, freelancer, estágio ou diarista.');
+    } else if(ehNaoVagas(t)){
+      estado.etapa = 'titulo';
+      estado.rascunho = '';
+      falarVozVagas('Tudo bem. Fala o cargo de novo.');
     } else {
-      storyPapoChatSlideAtual = 0;
-      renderStoryPapoChatSlideAtual();
+      falarVozVagas('Não entendi. Fala sim se o cargo está certo, ou não para repetir.');
     }
     return;
   }
-  renderStoryPapoChatSlideAtual();
-}
 
-function fecharStoryPapoChatViewer(){
-  clearTimeout(storyPapoChatTimer);
-  const viewer = document.getElementById('papo-chat-story-viewer');
-  if(viewer) viewer.classList.remove('aberto');
-}
-
-let meuCodigoPapoAtual = null;
-
-async function editarMeuNomeExibicao(){
-  if(!currentUserChat) return;
-
-  const { data: perfilAtual } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', currentUserChat.id).maybeSingle();
-  const nomeAtual = perfilAtual ? perfilAtual.nome_exibicao : '';
-
-  const novoNome = prompt('Esse é o nome que outras pessoas veem quando você conversa com elas no Papo (pessoa a pessoa):', nomeAtual || '');
-  if(!novoNome || !novoNome.trim()) return;
-
-  const { error } = await supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: novoNome.trim() }).eq('user_id', currentUserChat.id);
-  if(error){ console.error(error); alert('Erro ao salvar. Tente de novo.'); return; }
-
-  alert('Nome atualizado!');
-}
-
-async function descobrirNomeParaExibicaoChat(user){
-  if(user.user_metadata?.nome) return user.user_metadata.nome;
-
-  const { data: minhaEmpresa } = await supabaseClientChat.from('profissionais').select('name').eq('user_id', user.id).limit(1).maybeSingle();
-  if(minhaEmpresa) return minhaEmpresa.name;
-
-  return user.email.split('@')[0];
-}
-
-async function exibirBadgeMeuCodigoPapo(){
-  if(!currentUserChat) return;
-
-  const { data: perfilExistente } = await supabaseClientChat.from('perfis_usuario').select('codigo_guiazap, nome_exibicao').eq('user_id', currentUserChat.id).maybeSingle();
-
-  if(perfilExistente){
-    meuCodigoPapoAtual = perfilExistente.codigo_guiazap;
-    if(!perfilExistente.nome_exibicao){
-      descobrirNomeParaExibicaoChat(currentUserChat).then(nome => {
-        supabaseClientChat.from('perfis_usuario').update({ nome_exibicao: nome }).eq('user_id', currentUserChat.id).then(() => {});
-      });
+  if(estado.etapa === 'tipo'){
+    let tipoLabel = 'CLT';
+    if(t.includes('clt')) tipoLabel = 'CLT';
+    else if(t.includes('pj') || t.includes('pessoa juridica') || t.includes('pessoa jurídica')) tipoLabel = 'PJ';
+    else if(t.includes('meio') || t.includes('parcial')) tipoLabel = 'Meio período';
+    else if(t.includes('tempor')) tipoLabel = 'Temporário';
+    else if(t.includes('freelancer') || t.includes('free lancer') || t.includes('autonom')) tipoLabel = 'Freelancer';
+    else if(t.includes('estagio') || t.includes('estágio')) tipoLabel = 'Estágio';
+    else if(t.includes('diarista') || t.includes('diaria') || t.includes('diária')) tipoLabel = 'Diarista';
+    estado.dados.tipo = tipoLabel;
+    const sel = document.getElementById('vg-tipo');
+    if(sel){
+      for(const opt of sel.options){
+        if(opt.value === tipoLabel || normalizarVozVagas(opt.value) === normalizarVozVagas(tipoLabel)){
+          sel.value = opt.value;
+          break;
+        }
+      }
     }
-  } else {
-    const nomeDoCadastro = await descobrirNomeParaExibicaoChat(currentUserChat);
-    // Primeira vez — gera um código novo (mesmo padrão usado na tela inicial)
-    let codigoNovo, salvo = false, tentativas = 0;
-    while(!salvo && tentativas < 5){
-      codigoNovo = 'GZ' + Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
-      const { error } = await supabaseClientChat.from('perfis_usuario').insert({ user_id: currentUserChat.id, codigo_guiazap: codigoNovo, nome_exibicao: nomeDoCadastro });
-      if(!error) salvo = true; else tentativas++;
-    }
-    meuCodigoPapoAtual = salvo ? codigoNovo : null;
-  }
-
-  const badge = document.getElementById('papo-meu-codigo-badge');
-  if(meuCodigoPapoAtual && badge){
-    badge.textContent = '🔑 ' + meuCodigoPapoAtual;
-    badge.style.display = 'inline-block';
-  }
-}
-
-async function copiarMeuCodigoPapo(){
-  if(!meuCodigoPapoAtual) return;
-  try{
-    await navigator.clipboard.writeText(meuCodigoPapoAtual);
-    alert('Código copiado! Esse é o número que outras pessoas usam pra te adicionar no Papo, sem precisar do seu e-mail ou telefone.');
-  } catch(e){
-    prompt('Copie seu código abaixo:', meuCodigoPapoAtual);
-  }
-}
-
-const VAPID_PUBLIC_KEY_PAPO = 'BGuNuGRR8zQZL0ZUeJo4y-zeiGItjWzLelApvMPh-F5Sj2wkcmZWcjHKF3RO6fkLCrh1Pmt0HIu4oPzFLz_41fg';
-
-function urlBase64ToUint8ArrayPapo(base64String){
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for(let i = 0; i < rawData.length; ++i){ outputArray[i] = rawData.charCodeAt(i); }
-  return outputArray;
-}
-
-function atualizarAvisoAtivarPush(){
-  const icone = document.getElementById('btn-ativar-push-icone');
-  if(!icone) return;
-  const suportado = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  icone.style.display = (suportado && currentUserChat && Notification.permission !== 'granted') ? 'inline-block' : 'none';
-}
-
-async function ativarNotificacoesPushPapo(){
-  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    alert('Seu navegador não suporta notificações push.');
-    return;
-  }
-  if(!currentUserChat) return;
-
-  const permissao = await Notification.requestPermission();
-  if(permissao !== 'granted'){
-    alert('Você precisa permitir notificações pra ativar esse recurso — sem isso, chamadas e mensagens não vão avisar quando o Papo estiver fechado.');
+    estado.etapa = 'descricao';
+    falarVozVagas('Tipo ' + tipoLabel + ' anotado. Agora descreva a vaga: o que a pessoa vai fazer no dia a dia. Quando terminar, fala pronto.');
+    document.getElementById('vg-descricao').value = '';
     return;
   }
 
-  try{
-    const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-    if(!subscription){
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8ArrayPapo(VAPID_PUBLIC_KEY_PAPO)
-      });
+  if(estado.etapa === 'descricao'){
+    if(t === 'pronto' || t === 'terminei' || t === 'finalizei' || t === 'pular'){
+      const desc = document.getElementById('vg-descricao').value.trim();
+      estado.dados.descricao = desc || null;
+      estado.etapa = 'requisitos';
+      document.getElementById('vg-requisitos').value = '';
+      falarVozVagas('Descrição salva. Agora fala os requisitos, o que vocês procuram. Ou fala pular. Quando terminar, fala pronto.');
+      return;
     }
+    const campo = document.getElementById('vg-descricao');
+    campo.value = (campo.value.trim() ? campo.value.trim() + ' ' : '') + transcricao.trim();
+    falarVozVagas('Anotado. Continue ou fala pronto.');
+    return;
+  }
 
-    const subJson = subscription.toJSON();
-    const { data: existente } = await supabaseClientChat.from('push_subscriptions').select('id').eq('endpoint', subJson.endpoint).maybeSingle();
-    if(existente){
-      await supabaseClientChat.from('push_subscriptions').update({ user_id: currentUserChat.id, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }).eq('endpoint', subJson.endpoint);
+  if(estado.etapa === 'requisitos'){
+    if(t === 'pronto' || t === 'terminei' || t === 'finalizei' || t === 'pular'){
+      const req = document.getElementById('vg-requisitos').value.trim();
+      estado.dados.requisitos = req || null;
+      estado.etapa = 'salario';
+      falarVozVagas('Requisitos salvos. Qual o salário? Fala o valor, ou fala a combinar, ou pular.');
+      return;
+    }
+    const campo = document.getElementById('vg-requisitos');
+    campo.value = (campo.value.trim() ? campo.value.trim() + ' ' : '') + transcricao.trim();
+    falarVozVagas('Anotado. Continue ou fala pronto.');
+    return;
+  }
+
+  if(estado.etapa === 'salario'){
+    if(t === 'pular' || t === 'nao' || t === 'não'){
+      estado.dados.salario = null;
+      document.getElementById('vg-salario').value = '';
+    } else if(t.includes('combinar')){
+      estado.dados.salario = 'A combinar';
+      document.getElementById('vg-salario').value = 'A combinar';
     } else {
-      await supabaseClientChat.from('push_subscriptions').insert({ user_id: currentUserChat.id, endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth });
+      estado.dados.salario = transcricao.trim();
+      document.getElementById('vg-salario').value = transcricao.trim();
     }
-
-    alert('🔔 Notificações ativadas! Agora chamadas e mensagens vão te avisar mesmo com o Papo fechado.');
-    atualizarAvisoAtivarPush();
-  } catch(e){
-    console.error(e);
-    alert('Erro ao ativar notificações. Tente de novo.');
-  }
-}
-
-function toggleModoVibracaoChamada(){
-  const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
-  const novoValor = !ativo;
-  localStorage.setItem('modo_vibracao_chamada', novoValor ? '1' : '0');
-  aplicarIconeModoVibracao();
-}
-
-function aplicarIconeModoVibracao(){
-  const btn = document.getElementById('btn-modo-vibracao');
-  if(!btn) return;
-  const ativo = localStorage.getItem('modo_vibracao_chamada') === '1';
-  btn.textContent = ativo ? '📳' : '🔊';
-  btn.title = ativo ? 'Chamada só vibrando (toque no ícone pra ligar o som)' : 'Chamada com som (toque no ícone pra deixar só vibrando)';
-}
-
-function toggleMenuPapoMais(){
-  const menu = document.getElementById('menu-papo-mais');
-  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
-}
-
-let abaPapoAtual = 'conversas';
-
-function trocarAbaPapo(aba){
-  abaPapoAtual = aba;
-  ['conversas', 'novidades', 'agenda', 'chamadas'].forEach(a => {
-    document.getElementById('papo-aba-' + a).style.display = a === aba ? 'block' : 'none';
-    document.getElementById('nav-' + a).classList.toggle('ativo', a === aba);
-  });
-
-  if(aba === 'novidades') carregarAbaNovidades();
-  else if(aba === 'agenda') carregarAbaAgenda();
-  else if(aba === 'chamadas') carregarAbaChamadas();
-}
-
-async function initChat(){
-  const { data: { session } } = await supabaseClientChat.auth.getSession();
-  let sessaoFinal = session;
-
-  if(!sessaoFinal){
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const { data: { session: sessaoTentativa2 } } = await supabaseClientChat.auth.getSession();
-    sessaoFinal = sessaoTentativa2;
-  }
-
-  if(!sessaoFinal){
-    localStorage.setItem('abrirCadastroPapoAoCarregar', '1');
-    window.location.href = 'index.html';
-    return;
-  }
-  currentUserChat = sessaoFinal.user;
-  exibirBadgeMeuCodigoPapo();
-  atualizarAvisoAtivarPush();
-
-  const { data: cadastros } = await supabaseClientChat.from('profissionais').select('id, name').eq('user_id', currentUserChat.id);
-  meusCadastrosChat = cadastros || [];
-
-  const inputMsg = document.getElementById('chat-input-texto');
-  if(inputMsg){
-    inputMsg.addEventListener('input', atualizarBotaoEnviarOuMic);
-    inputMsg.addEventListener('keyup', atualizarBotaoEnviarOuMic);
-    inputMsg.addEventListener('paste', () => setTimeout(atualizarBotaoEnviarOuMic, 10));
-  }
-
-  if(typeof initNotificacoes === 'function'){
-    initNotificacoes({ supabaseClient: supabaseClientChat, userId: currentUserChat.id, empresaIds: meusCadastrosChat.map(c => c.id) });
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const empresaId = params.get('empresa');
-  if(empresaId) await abrirOuCriarConversa(empresaId);
-
-  const pessoaId = params.get('pessoa');
-  if(pessoaId) await abrirOuCriarConversaComPessoa(pessoaId);
-
-  const mensagemPreenchida = params.get('msg');
-  if(mensagemPreenchida && (empresaId || pessoaId)){
-    const inputTexto = document.getElementById('chat-input-texto');
-    if(inputTexto){
-      inputTexto.value = decodeURIComponent(mensagemPreenchida);
-      atualizarBotaoEnviarOuMic();
-      inputTexto.focus();
-    }
-    window.history.replaceState({}, '', window.location.pathname + '?' + (empresaId ? 'empresa=' + empresaId : 'pessoa=' + pessoaId));
-  }
-
-  const compartilharParam = params.get('compartilhar');
-  if(compartilharParam) await abrirTelaCompartilhar(compartilharParam);
-
-  carregarListaConversas();
-  ligarCanalDeChamadas();
-  atualizarPresencaOnline();
-  setInterval(atualizarPresencaOnline, 20000);
-
-  // Se a pessoa aceitou a chamada pelo popup enquanto estava no GuiaZap ou
-  // na Agenda (fora do Papo), a oferta ficou guardada — atende ela agora
-  const atenderPendente = params.get('atenderPendente');
-  const ofertaGuardada = sessionStorage.getItem('chamada_pendente_offer');
-  if(atenderPendente && ofertaGuardada){
-    sessionStorage.removeItem('chamada_pendente_offer');
-    window.history.replaceState({}, '', window.location.pathname + (empresaId ? '?empresa=' + empresaId : ''));
-    try{
-      const payload = JSON.parse(ofertaGuardada);
-      await receberChamadaEntrando(payload);
-      await aceitarChamada();
-    } catch(e){ console.error('erro ao atender chamada pendente', e); }
-  } else if(!peerConnectionAtual) {
-    // Se a pessoa clicou na notificação push vindo de FORA do site inteiro
-    // (sem nenhuma aba do GuiaZap aberta), não teve como o popup ao vivo
-    // avisar — busca no banco se tem alguma chamada recente esperando
-    // resposta e mostra a tela normal de "chamada recebida" pra ela decidir.
-    const { data: chamadaPendenteDb } = await supabaseClientChat
-      .from('chamadas_pendentes')
-      .select('*')
-      .eq('para_user_id', currentUserChat.id)
-      .gt('created_at', new Date(Date.now() - 45000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if(chamadaPendenteDb){
-      await supabaseClientChat.from('chamadas_pendentes').delete().eq('id', chamadaPendenteDb.id);
-      receberChamadaEntrando({
-        de: chamadaPendenteDb.de_user_id,
-        deNome: chamadaPendenteDb.de_nome,
-        offer: chamadaPendenteDb.oferta,
-        comVideo: chamadaPendenteDb.com_video,
-        conversaId: chamadaPendenteDb.conversa_id
-      });
-    }
-  }
-}
-
-async function atualizarPresencaOnline(){
-  if(!currentUserChat) return;
-  const { data: existente } = await supabaseClientChat.from('presenca_usuarios').select('user_id').eq('user_id', currentUserChat.id).maybeSingle();
-  if(existente){
-    await supabaseClientChat.from('presenca_usuarios').update({ atualizado_em: new Date().toISOString() }).eq('user_id', currentUserChat.id);
-  } else {
-    await supabaseClientChat.from('presenca_usuarios').insert({ user_id: currentUserChat.id });
-  }
-}
-
-async function pessoaEstaOnline(userId){
-  const { data } = await supabaseClientChat.from('presenca_usuarios').select('atualizado_em').eq('user_id', userId).maybeSingle();
-  if(!data) return false;
-  const segundosDesdeUltimaAtualizacao = (Date.now() - new Date(data.atualizado_em).getTime()) / 1000;
-  return segundosDesdeUltimaAtualizacao < 30; // considera "online" se atualizou nos últimos 30s
-}
-
-let conteudoParaCompartilhar = null;
-
-async function abrirTelaCompartilhar(paramCodificado){
-  try{
-    conteudoParaCompartilhar = JSON.parse(decodeURIComponent(paramCodificado));
-  } catch(e){ console.error(e); return; }
-
-  document.getElementById('compartilhar-preview').textContent = conteudoParaCompartilhar.titulo || 'Conteúdo do GuiaZap';
-  document.getElementById('overlay-compartilhar').classList.add('aberto');
-
-  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const colunasBase = 'id, profissional_id, visitante_user_id, usuario2_id';
-
-  const { data: comoParticipante } = await supabaseClientChat.from('conversas').select(colunasBase).or(`visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`);
-  let comoEmpresa = [];
-  if(meusIdsEmpresa.length > 0){
-    const { data: dataEmpresa } = await supabaseClientChat.from('conversas').select(colunasBase).in('profissional_id', meusIdsEmpresa);
-    comoEmpresa = dataEmpresa || [];
-  }
-  const mapaConv = {};
-  [...(comoParticipante || []), ...comoEmpresa].forEach(c => { mapaConv[c.id] = c; });
-  const data = Object.values(mapaConv);
-
-  const lista = document.getElementById('compartilhar-lista-conversas');
-  if(!data || data.length === 0){
-    lista.innerHTML = '<p style="text-align:center; color:#999; font-size:0.8rem; padding:10px 0;">Você ainda não tem conversas. Adicione um contato abaixo.</p>';
+    estado.etapa = 'home_office';
+    falarVozVagas('Salário anotado. A vaga é home office? Fala sim ou não.');
     return;
   }
 
-  // Busca os nomes das empresas envolvidas numa consulta separada (sem embed,
-  // pra evitar erro de relação ambígua entre conversas e profissionais)
-  const idsEmpresasEnvolvidas = [...new Set(data.filter(c => c.profissional_id).map(c => c.profissional_id))];
-  let nomesEmpresas = {};
-  if(idsEmpresasEnvolvidas.length > 0){
-    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name').in('id', idsEmpresasEnvolvidas);
-    (empresas || []).forEach(e => { nomesEmpresas[e.id] = e.name; });
-  }
-
-  const comNomes = await Promise.all(data.map(async (c) => {
-    let nome;
-    if(c.usuario2_id){
-      const outroId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
-      const { data: perfil } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroId).maybeSingle();
-      nome = (perfil && perfil.nome_exibicao) || 'Contato do GuiaZap';
-    } else {
-      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
-      nome = souEuAEmpresa ? 'Visitante' : (nomesEmpresas[c.profissional_id] || 'Empresa');
-    }
-    return { ...c, nome };
-  }));
-
-  lista.innerHTML = comNomes.map(c => `
-    <div class="item-conversa" onclick="enviarConteudoCompartilhado('${c.id}')">
-      <div class="nome-conversa">${escapeHtmlChat(c.nome)}</div>
-    </div>
-  `).join('');
-}
-
-async function enviarConteudoCompartilhado(conversaId){
-  if(!conteudoParaCompartilhar) return;
-  conversaAtual = conversaId;
-  await enviarQualquerMensagem({
-    tipo: 'link',
-    arquivo_url: conteudoParaCompartilhar.url,
-    arquivo_nome: conteudoParaCompartilhar.titulo
-  });
-  conversaAtual = null;
-  fecharOverlayCompartilhar();
-  window.history.replaceState({}, '', window.location.pathname);
-  alert('Enviado!');
-  carregarListaConversas();
-}
-
-async function compartilharComNovoContato(){
-  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ12345678):');
-  if(!codigo) return;
-
-  const codigoLimpo = codigo.trim().toUpperCase();
-  const { data: perfilAlvo } = await supabaseClientChat.from('perfis_usuario').select('user_id').eq('codigo_guiazap', codigoLimpo).maybeSingle();
-  if(!perfilAlvo){ alert('Código não encontrado.'); return; }
-
-  const { data: existente } = await supabaseClientChat.from('conversas').select('id').is('profissional_id', null)
-    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
-    .maybeSingle();
-
-  let conversaId = existente ? existente.id : null;
-  if(!conversaId){
-    const { data: nova } = await supabaseClientChat.from('conversas').insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id }).select('id').single();
-    conversaId = nova.id;
-  }
-
-  enviarConteudoCompartilhado(conversaId);
-}
-
-function fecharOverlayCompartilhar(){
-  document.getElementById('overlay-compartilhar').classList.remove('aberto');
-  conteudoParaCompartilhar = null;
-  window.history.replaceState({}, '', window.location.pathname);
-}
-
-async function abrirOuCriarConversaComPessoa(userId){
-  if(userId === currentUserChat.id) return;
-
-  const { data: existente } = await supabaseClientChat
-    .from('conversas')
-    .select('id')
-    .is('profissional_id', null)
-    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${userId}),and(visitante_user_id.eq.${userId},usuario2_id.eq.${currentUserChat.id})`)
-    .maybeSingle();
-
-  let conversaId = existente ? existente.id : null;
-
-  if(!conversaId){
-    const { data: nova, error } = await supabaseClientChat
-      .from('conversas')
-      .insert({ visitante_user_id: currentUserChat.id, usuario2_id: userId })
-      .select('id')
-      .single();
-    if(error){ console.error(error); return; }
-    conversaId = nova.id;
-  }
-
-  abrirConversa(conversaId);
-}
-
-async function adicionarContatoPorCodigo(){
-  const codigo = prompt('Digite o código GuiaZap da pessoa (ex: GZ12345678):');
-  if(!codigo) return;
-
-  const codigoLimpo = codigo.trim().toUpperCase();
-  const { data: perfilAlvo, error } = await supabaseClientChat.from('perfis_usuario').select('user_id, nome_exibicao').eq('codigo_guiazap', codigoLimpo).maybeSingle();
-
-  if(error || !perfilAlvo){
-    alert('Código não encontrado. Confira se digitou certinho.');
+  if(estado.etapa === 'home_office'){
+    const sim = ehSimVagas(t);
+    estado.dados.home_office = sim;
+    document.getElementById('vg-home-office').checked = sim;
+    estado.etapa = 'sem_experiencia';
+    falarVozVagas((sim ? 'Home office sim. ' : 'Home office não. ') + 'Aceita candidato sem experiência? Fala sim ou não.');
     return;
   }
 
-  if(perfilAlvo.user_id === currentUserChat.id){
-    alert('Esse é o seu próprio código!');
+  if(estado.etapa === 'sem_experiencia'){
+    const sim = ehSimVagas(t);
+    estado.dados.sem_experiencia = sim;
+    document.getElementById('vg-sem-experiencia').checked = sim;
+    estado.etapa = 'confirmar_envio';
+    const resumo = 'Vaga: ' + (estado.dados.titulo || '') +
+      '. Tipo: ' + (estado.dados.tipo || '') +
+      '. Home office: ' + (estado.dados.home_office ? 'sim' : 'não') +
+      '. Sem experiência: ' + (sim ? 'sim' : 'não') +
+      '. Quer publicar agora? Fala sim ou não.';
+    falarVozVagas(resumo);
     return;
   }
 
-  // Pede um nome pra salvar esse contato na agenda, já sugerindo o nome de
-  // exibição da pessoa como ponto de partida
-  const nomeParaSalvar = prompt('Encontrado! Qual nome você quer salvar pra esse contato?', perfilAlvo.nome_exibicao || '');
-  if(nomeParaSalvar && nomeParaSalvar.trim()){
-    const { data: contatoExistente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', perfilAlvo.user_id).maybeSingle();
-    if(contatoExistente){
-      await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nomeParaSalvar.trim() }).eq('id', contatoExistente.id);
-    } else {
-      await supabaseClientChat.from('agenda_contatos').insert({ dono_user_id: currentUserChat.id, contato_user_id: perfilAlvo.user_id, nome_salvo: nomeParaSalvar.trim() });
-    }
-  }
-
-  // Confere se já existe uma conversa com essa pessoa (em qualquer ordem)
-  const { data: existente } = await supabaseClientChat
-    .from('conversas')
-    .select('id')
-    .is('profissional_id', null)
-    .or(`and(visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${perfilAlvo.user_id}),and(visitante_user_id.eq.${perfilAlvo.user_id},usuario2_id.eq.${currentUserChat.id})`)
-    .maybeSingle();
-
-  let conversaId = existente ? existente.id : null;
-
-  if(!conversaId){
-    const { data: nova, error: erroNova } = await supabaseClientChat
-      .from('conversas')
-      .insert({ visitante_user_id: currentUserChat.id, usuario2_id: perfilAlvo.user_id })
-      .select('id')
-      .single();
-    if(erroNova){ console.error(erroNova); alert('Erro ao adicionar contato.'); return; }
-    conversaId = nova.id;
-  }
-
-  carregarListaConversas();
-  abrirConversa(conversaId);
-}
-
-async function abrirOuCriarConversa(profissionalId){
-  const { data: existente } = await supabaseClientChat
-    .from('conversas')
-    .select('id')
-    .eq('profissional_id', profissionalId)
-    .eq('visitante_user_id', currentUserChat.id)
-    .maybeSingle();
-
-  let conversaId = existente ? existente.id : null;
-
-  if(!conversaId){
-    const { data: nova, error } = await supabaseClientChat
-      .from('conversas')
-      .insert({ profissional_id: profissionalId, visitante_user_id: currentUserChat.id })
-      .select('id')
-      .single();
-    if(error){ console.error(error); return; }
-    conversaId = nova.id;
-  }
-
-  abrirConversa(conversaId);
-}
-
-let conversasCarregadasCache = [];
-
-async function carregarListaConversas(){
-  const box = document.getElementById('chat-lista-box');
-
-  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const colunasSelect = 'id, profissional_id, visitante_user_id, usuario2_id, ultima_mensagem_em';
-
-  // Busca em duas consultas separadas (em vez de um único .or() com .in()
-  // embutido, que estava dando erro 400) e junta o resultado aqui no JS —
-  // mais simples de montar certo e mais fácil de debugar se der problema.
-  const { data: comoParticipante, error: erro1 } = await supabaseClientChat
-    .from('conversas')
-    .select(colunasSelect)
-    .or(`visitante_user_id.eq.${currentUserChat.id},usuario2_id.eq.${currentUserChat.id}`);
-
-  let comoEmpresa = [];
-  if(meusIdsEmpresa.length > 0){
-    const { data, error: erro2 } = await supabaseClientChat
-      .from('conversas')
-      .select(colunasSelect)
-      .in('profissional_id', meusIdsEmpresa);
-    if(erro2) console.error('erro ao buscar conversas como empresa', erro2);
-    comoEmpresa = data || [];
-  }
-
-  if(erro1) console.error('erro ao buscar conversas como participante', erro1);
-
-  // Junta as duas listas sem duplicar (uma conversa pode aparecer nas duas
-  // buscas se, por exemplo, a pessoa conversar com a própria empresa)
-  const mapaConversas = {};
-  [...(comoParticipante || []), ...comoEmpresa].forEach(c => { mapaConversas[c.id] = c; });
-  const data = Object.values(mapaConversas).sort((a, b) => new Date(b.ultima_mensagem_em) - new Date(a.ultima_mensagem_em));
-  const error = erro1 && comoEmpresa.length === 0 ? erro1 : null;
-
-  if(error || !data || data.length === 0){
-    conversasCarregadasCache = [];
-    box.innerHTML = `
-      <div class="vazio-chat">
-        <div class="vazio-chat-icone">💬</div>
-        <div class="vazio-chat-titulo">Nenhuma conversa ainda</div>
-        <div class="vazio-chat-texto">Vá até o perfil de uma empresa e clique em "💬 Papo pelo site", ou toque no + pra adicionar uma pessoa pelo código GuiaZap dela.</div>
-      </div>
-    `;
-    atualizarBadgeNavConversas(0);
-    return;
-  }
-
-  // Busca de uma vez todos os contatos que essa pessoa já salvou na agenda,
-  // pra poder mostrar o nome salvo em vez do nome padrão (igual WhatsApp)
-  const { data: contatosSalvos } = await supabaseClientChat.from('agenda_contatos').select('contato_user_id, profissional_id, nome_salvo').eq('dono_user_id', currentUserChat.id);
-  const nomesSalvosPorUserId = {};
-  const nomesSalvosPorProfissionalId = {};
-  (contatosSalvos || []).forEach(c => {
-    if(c.contato_user_id) nomesSalvosPorUserId[c.contato_user_id] = c.nome_salvo;
-    if(c.profissional_id) nomesSalvosPorProfissionalId[c.profissional_id] = c.nome_salvo;
-  });
-
-  // Busca os nomes/fotos das empresas envolvidas numa consulta separada (sem
-  // embed, pra evitar o erro 400 de relação ambígua entre conversas e profissionais)
-  const idsEmpresasEnvolvidas = [...new Set(data.filter(c => c.profissional_id).map(c => c.profissional_id))];
-  let empresasPorId = {};
-  if(idsEmpresasEnvolvidas.length > 0){
-    const { data: empresas } = await supabaseClientChat.from('profissionais').select('id, name, foto').in('id', idsEmpresasEnvolvidas);
-    (empresas || []).forEach(e => { empresasPorId[e.id] = e; });
-  }
-
-  const listaComInfo = await Promise.all(data.map(async (c) => {
-    let nomeExibido, fotoExibida = null;
-    if(c.usuario2_id){
-      // Conversa entre pessoas — busca o nome de exibição do OUTRO participante
-      const outroUserId = c.visitante_user_id === currentUserChat.id ? c.usuario2_id : c.visitante_user_id;
-      if(nomesSalvosPorUserId[outroUserId]){
-        nomeExibido = nomesSalvosPorUserId[outroUserId];
+  if(estado.etapa === 'confirmar_envio'){
+    if(ehSimVagas(t) || t.includes('publicar') || t.includes('enviar')){
+      falarVozVagas('Publicando a vaga. Um momento.');
+      const sel = document.getElementById('vg-profissional');
+      if(sel && !sel.value && meusCadastrosVagas.length > 0){
+        sel.value = meusCadastrosVagas[0].id;
+      }
+      const fakeEvent = { preventDefault: function(){} };
+      await salvarVaga(fakeEvent);
+      const msgTxt = (document.getElementById('vg-msg').textContent || '');
+      if(msgTxt.includes('publicada')){
+        falarVozVagas('Vaga publicada com sucesso. Modo voz desligado.');
       } else {
-        const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroUserId).maybeSingle();
-        nomeExibido = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
+        falarVozVagas('Houve um problema ao publicar. Os dados ficaram no formulário. Modo voz desligado.');
       }
+      setTimeout(pararModoVozVagas, 3000);
+    } else if(ehNaoVagas(t) || t.includes('cancelar')){
+      falarVozVagas('Tudo bem. Os dados ficaram preenchidos no formulário. Você pode revisar e publicar quando quiser. Modo voz desligado.');
+      setTimeout(pararModoVozVagas, 3000);
     } else {
-      const souEuAEmpresa = meusIdsEmpresa.includes(c.profissional_id);
-      const empresa = empresasPorId[c.profissional_id];
-      if(!souEuAEmpresa && nomesSalvosPorProfissionalId[c.profissional_id]){
-        nomeExibido = nomesSalvosPorProfissionalId[c.profissional_id];
-      } else {
-        nomeExibido = souEuAEmpresa ? 'Visitante' : (empresa ? empresa.name : 'Empresa');
-      }
-      fotoExibida = empresa ? empresa.foto : null;
+      falarVozVagas('Não entendi. Fala sim pra publicar, ou não pra só deixar no formulário.');
     }
-
-    const { data: ultimaMsg } = await supabaseClientChat.from('mensagens_chat').select('texto, tipo, arquivo_nome, remetente_user_id, lida, created_at').eq('conversa_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    const { count: naoLidas } = await supabaseClientChat.from('mensagens_chat').select('id', { count: 'exact', head: true }).eq('conversa_id', c.id).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
-
-    let resumoUltimaMsg = '';
-    if(ultimaMsg){
-      if(ultimaMsg.tipo === 'imagem') resumoUltimaMsg = '📷 Foto';
-      else if(ultimaMsg.tipo === 'audio') resumoUltimaMsg = '🎤 Áudio';
-      else if(ultimaMsg.tipo === 'arquivo') resumoUltimaMsg = '📄 ' + (ultimaMsg.arquivo_nome || 'Arquivo');
-      else if(ultimaMsg.tipo === 'gif') resumoUltimaMsg = '🎞️ GIF';
-      else if(ultimaMsg.tipo === 'sticker') resumoUltimaMsg = '🏷️ Figurinha';
-      else if(ultimaMsg.tipo === 'chamada_perdida' || ultimaMsg.tipo === 'chamada_atendida') resumoUltimaMsg = resumoChamada(ultimaMsg);
-      else if(ultimaMsg.tipo === 'link') resumoUltimaMsg = '🔗 ' + (ultimaMsg.arquivo_nome || 'Link compartilhado');
-      else resumoUltimaMsg = ultimaMsg.texto || '';
-    }
-
-    return {
-      ...c,
-      nomeExibido,
-      fotoExibida,
-      ultimaMsg: resumoUltimaMsg,
-      naoLidas: naoLidas || 0,
-      ultimaMsgDeMim: ultimaMsg ? ultimaMsg.remetente_user_id === currentUserChat.id : false,
-      ultimaMsgLida: ultimaMsg ? ultimaMsg.lida : false,
-      ultimaMsgData: ultimaMsg ? ultimaMsg.created_at : c.ultima_mensagem_em
-    };
-  }));
-
-  conversasCarregadasCache = listaComInfo;
-  const totalNaoLidas = listaComInfo.reduce((soma, c) => soma + c.naoLidas, 0);
-  atualizarBadgeNavConversas(totalNaoLidas);
-  renderizarListaConversas(listaComInfo);
-}
-
-function atualizarBadgeNavConversas(total){
-  const badge = document.getElementById('badge-nav-conversas');
-  if(!badge) return;
-  if(total > 0){ badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'flex'; }
-  else badge.style.display = 'none';
-}
-
-function formatarHoraOuDataChat(dataStr){
-  if(!dataStr) return '';
-  const data = new Date(dataStr);
-  const agora = new Date();
-  const mesmoDay = data.toDateString() === agora.toDateString();
-  if(mesmoDay) return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-  const ontem = new Date(agora); ontem.setDate(ontem.getDate() - 1);
-  if(data.toDateString() === ontem.toDateString()) return 'Ontem';
-
-  const diffDias = Math.floor((agora - data) / (1000 * 60 * 60 * 24));
-  if(diffDias < 7) return data.toLocaleDateString('pt-BR', { weekday: 'short' });
-  return data.toLocaleDateString('pt-BR');
-}
-
-function renderizarListaConversas(lista){
-  const box = document.getElementById('chat-lista-box');
-
-  if(lista.length === 0){
-    box.innerHTML = '<div class="vazio-chat"><div class="vazio-chat-texto">Nenhuma conversa encontrada.</div></div>';
     return;
   }
-
-  box.innerHTML = lista.map(c => {
-    const fotoFallback = c.fotoExibida ? escapeHtmlChat(c.fotoExibida) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(c.nomeExibido);
-    const checkHtml = c.ultimaMsgDeMim ? `<span class="check-lista${c.ultimaMsgLida ? ' lido' : ''}">${c.ultimaMsgLida ? '✓✓' : '✓'}</span>` : '';
-    return `
-    <div class="item-conversa" onclick="abrirConversa('${c.id}')">
-      <img class="avatar-conversa" src="${fotoFallback}" alt="">
-      <div class="info-conversa">
-        <div class="linha-topo-conversa">
-          <div class="nome-conversa">${escapeHtmlChat(c.nomeExibido)}</div>
-          <div class="hora-conversa${c.naoLidas > 0 ? ' nao-lida-cor' : ''}">${formatarHoraOuDataChat(c.ultimaMsgData)}</div>
-        </div>
-        <div class="ultima-msg">
-          ${checkHtml}
-          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtmlChat(c.ultimaMsg) || 'Nenhuma mensagem ainda'}</span>
-        </div>
-      </div>
-      ${c.naoLidas > 0 ? `<div class="bolinha-nao-lida">${c.naoLidas}</div>` : ''}
-    </div>
-  `;
-  }).join('');
 }
-
-function filtrarListaConversas(){
-  const query = normalizarBuscaChat(document.getElementById('papo-busca-conversas').value);
-  if(!query){ renderizarListaConversas(conversasCarregadasCache); return; }
-  const filtradas = conversasCarregadasCache.filter(c => normalizarBuscaChat(c.nomeExibido).includes(query));
-  renderizarListaConversas(filtradas);
-}
-
-function normalizarBuscaChat(str){
-  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-async function abrirConversa(conversaId){
-  conversaAtual = conversaId;
-  avisoSalvarContatoFechadoNestaConversa = false;
-  document.getElementById('chat-topo-lista').style.display = 'none';
-  document.getElementById('chat-thread-box').classList.add('aberto');
-  document.getElementById('menu-config-chat').style.display = 'none';
-
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaId).single();
-  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
-
-  let empresaDaConversa = null;
-  if(conversa.profissional_id){
-    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, id, user_id, foto').eq('id', conversa.profissional_id).maybeSingle();
-    empresaDaConversa = empresa;
-  }
-
-  if(conversa.usuario2_id){
-    outroLadoUserIdAtual = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
-    outroLadoProfissionalIdAtual = null;
-    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', outroLadoUserIdAtual).maybeSingle();
-    outroLadoNomeAtual = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
-    outroLadoFotoAtual = null;
-    document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
-  } else {
-    outroLadoProfissionalIdAtual = conversa.profissional_id;
-    outroLadoUserIdAtual = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaConversa ? empresaDaConversa.user_id : null);
-    outroLadoNomeAtual = souEuAEmpresa ? 'Visitante' : (empresaDaConversa ? empresaDaConversa.name : 'Empresa');
-    outroLadoFotoAtual = empresaDaConversa ? empresaDaConversa.foto : null;
-    document.getElementById('chat-nome-topo').textContent = outroLadoNomeAtual;
-  }
-
-  document.getElementById('chat-avatar-topo').src = outroLadoFotoAtual || ('https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(outroLadoNomeAtual));
-
-  const statusTopoEl = document.getElementById('chat-status-topo');
-  statusTopoEl.textContent = '';
-  if(outroLadoUserIdAtual){
-    pessoaEstaOnline(outroLadoUserIdAtual).then(online => {
-      if(conversaAtual === conversaId) statusTopoEl.textContent = online ? 'online' : '';
-    });
-  }
-
-  souEuAEmpresaNaConversaAtual = souEuAEmpresa || (conversa.usuario2_id && conversa.usuario2_id === currentUserChat.id);
-  const jaSilenciada = souEuAEmpresaNaConversaAtual ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
-  atualizarBotaoSilenciar(jaSilenciada);
-  document.getElementById('volume-chat').value = localStorage.getItem('volume_chat') || '50';
-
-  await verificarBloqueioConversaAtual();
-  await montarAreaSalvarContato();
-
-  await carregarMensagens(conversaId);
-
-  // Marca como lidas todas as mensagens que não foram enviadas por mim
-  await supabaseClientChat.from('mensagens_chat').update({ lida: true }).eq('conversa_id', conversaId).eq('lida', false).neq('remetente_user_id', currentUserChat.id);
-
-  // Liga o tempo real pra essa conversa específica
-  if(canalRealtimeAtual) supabaseClientChat.removeChannel(canalRealtimeAtual);
-  canalRealtimeAtual = supabaseClientChat
-    .channel('conversa-' + conversaId)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
-      adicionarBolhaMensagem(payload.new);
-      document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
-      if(payload.new.remetente_user_id !== currentUserChat.id) tocarSomNotificacao();
-    })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
-      atualizarCheckLida(payload.new.id, payload.new.lida);
-    })
-    .subscribe();
-}
-
-// ---------- SONS DE CHAMADA (toque + tom de discagem) ----------
-
-let intervaloSomChamada = null;
-let intervaloVibracaoChamada = null;
-let contextoAudioChamada = null;
-
-function tocarBip(frequencia, duracaoMs, volume){
-  try{
-    if(!contextoAudioChamada) contextoAudioChamada = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = contextoAudioChamada.createOscillator();
-    const gainNode = contextoAudioChamada.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(contextoAudioChamada.destination);
-    oscillator.frequency.value = frequencia;
-    gainNode.gain.value = volume;
-    oscillator.start();
-    gainNode.gain.exponentialRampToValueAtTime(0.001, contextoAudioChamada.currentTime + duracaoMs / 1000);
-    oscillator.stop(contextoAudioChamada.currentTime + duracaoMs / 1000);
-  } catch(e){ console.error('erro ao tocar som de chamada', e); }
-}
-
-// Tom de discagem — pra quem está ligando, toca enquanto espera a pessoa atender
-function iniciarTomDiscagem(){
-  pararSomChamada();
-  intervaloSomChamada = setInterval(() => {
-    tocarBip(480, 900, 0.12);
-    setTimeout(() => tocarBip(440, 900, 0.12), 100);
-  }, 3000);
-}
-
-// Toque — pra quem está recebendo a chamada, mais forte e chamativo
-function iniciarToqueChamada(){
-  pararSomChamada();
-
-  if(localStorage.getItem('modo_vibracao_chamada') !== '1'){
-    intervaloSomChamada = setInterval(() => {
-      tocarBip(880, 400, 0.25);
-      setTimeout(() => tocarBip(1046, 400, 0.25), 450);
-    }, 1800);
-  }
-
-  if(navigator.vibrate){
-    intervaloVibracaoChamada = setInterval(() => { navigator.vibrate([400, 200, 400]); }, 1800);
-    navigator.vibrate([400, 200, 400]);
-  }
-}
-
-function pararSomChamada(){
-  if(intervaloSomChamada){ clearInterval(intervaloSomChamada); intervaloSomChamada = null; }
-  if(intervaloVibracaoChamada){ clearInterval(intervaloVibracaoChamada); intervaloVibracaoChamada = null; }
-  if(navigator.vibrate) navigator.vibrate(0);
-}
-
-function tocarSomNotificacao(){
-  const volumeSalvo = parseInt(localStorage.getItem('volume_chat') || '50', 10);
-  if(volumeSalvo === 0) return;
-
-  try{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    oscillator.frequency.value = 880;
-    gainNode.gain.value = (volumeSalvo / 100) * 0.3;
-    oscillator.start();
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    oscillator.stop(ctx.currentTime + 0.3);
-  } catch(e){ console.error('erro ao tocar som de notificação', e); }
-}
-
-function atualizarBotaoSilenciar(silenciada){
-  const btn = document.getElementById('btn-silenciar-config');
-  if(!btn) return;
-  btn.textContent = silenciada ? '🔕 Reativar notificações' : '🔔 Silenciar conversa';
-}
-
-function toggleConfigChat(){
-  const menu = document.getElementById('menu-config-chat');
-  if(!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
-}
-
-// ---------- BLOQUEIO DE CONTATO ----------
-
-async function verificarBloqueioConversaAtual(){
-  if(!outroLadoUserIdAtual) return;
-
-  const { data: bloqueiEu } = await supabaseClientChat.from('contatos_bloqueados').select('id').eq('bloqueador_user_id', currentUserChat.id).eq('bloqueado_user_id', outroLadoUserIdAtual).maybeSingle();
-  const { data: fuiBloqueado } = await supabaseClientChat.from('contatos_bloqueados').select('id').eq('bloqueador_user_id', outroLadoUserIdAtual).eq('bloqueado_user_id', currentUserChat.id).maybeSingle();
-
-  bloqueadoNaConversaAtual = !!(bloqueiEu || fuiBloqueado);
-
-  const avisoBox = document.getElementById('aviso-bloqueio-box');
-  const inputRow = document.getElementById('chat-input-row-normal');
-  const btnBloquear = document.getElementById('btn-bloquear-config');
-
-  if(bloqueiEu){
-    avisoBox.style.display = 'block';
-    avisoBox.innerHTML = `🚫 Você bloqueou ${escapeHtmlChat(outroLadoNomeAtual)}. <button type="button" class="link-desbloquear" onclick="toggleBloquearContatoAtual()">Desbloquear</button>`;
-    if(inputRow) inputRow.style.display = 'none';
-    if(btnBloquear) btnBloquear.textContent = '✅ Desbloquear contato';
-  } else if(fuiBloqueado){
-    avisoBox.style.display = 'block';
-    avisoBox.innerHTML = `🚫 Você não pode enviar mensagens pra esse contato.`;
-    if(inputRow) inputRow.style.display = 'none';
-    if(btnBloquear) btnBloquear.style.display = 'none';
-  } else {
-    avisoBox.style.display = 'none';
-    if(inputRow) inputRow.style.display = 'flex';
-    if(btnBloquear){ btnBloquear.style.display = 'block'; btnBloquear.textContent = '🚫 Bloquear contato'; }
-  }
-}
-
-async function toggleBloquearContatoAtual(){
-  if(!outroLadoUserIdAtual) return;
-  toggleConfigChat();
-
-  const { data: bloqueioExistente } = await supabaseClientChat.from('contatos_bloqueados').select('id').eq('bloqueador_user_id', currentUserChat.id).eq('bloqueado_user_id', outroLadoUserIdAtual).maybeSingle();
-
-  if(bloqueioExistente){
-    await supabaseClientChat.from('contatos_bloqueados').delete().eq('id', bloqueioExistente.id);
-  } else {
-    if(!confirm(`Bloquear ${outroLadoNomeAtual}? A pessoa não vai mais conseguir te enviar mensagens nem te ligar pelo Papo.`)) return;
-    await supabaseClientChat.from('contatos_bloqueados').insert({ bloqueador_user_id: currentUserChat.id, bloqueado_user_id: outroLadoUserIdAtual });
-  }
-
-  await verificarBloqueioConversaAtual();
-}
-
-// ---------- AGENDA DE CONTATOS ----------
-
-let avisoSalvarContatoFechadoNestaConversa = false;
-
-async function montarAreaSalvarContato(){
-  const area = document.getElementById('config-salvar-contato-area');
-  const banner = document.getElementById('aviso-salvar-contato-box');
-  const btnTopo = document.getElementById('btn-add-agenda-topo');
-  if(!outroLadoUserIdAtual){
-    if(area) area.innerHTML = '';
-    if(banner) banner.style.display = 'none';
-    if(btnTopo) btnTopo.style.display = 'none';
-    return;
-  }
-
-  const { data: contatoSalvo } = await supabaseClientChat.from('agenda_contatos').select('id, nome_salvo').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
-
-  if(contatoSalvo){
-    area.innerHTML = `<div class="config-chat-item-texto">💾 Salvo como <b>${escapeHtmlChat(contatoSalvo.nome_salvo)}</b> <button type="button" class="link-editar-contato" onclick="abrirCampoSalvarContato('${escapeHtmlChat(contatoSalvo.nome_salvo)}')">editar</button></div>`;
-    banner.style.display = 'none';
-    if(btnTopo) btnTopo.style.display = 'none';
-  } else {
-    area.innerHTML = `<button type="button" class="config-chat-item" onclick="abrirCampoSalvarContato('${escapeHtmlChat(outroLadoNomeAtual)}')">💾 Salvar contato</button>`;
-    if(btnTopo) btnTopo.style.display = 'flex';
-
-    if(avisoSalvarContatoFechadoNestaConversa){
-      banner.style.display = 'none';
-    } else {
-      banner.innerHTML = `
-        <span class="aviso-salvar-texto">💾 Salvar esse contato na sua agenda?</span>
-        <div class="aviso-salvar-linha">
-          <input type="text" id="aviso-salvar-nome-input" class="aviso-salvar-input" value="${escapeHtmlChat(outroLadoNomeAtual)}" placeholder="Nome pra salvar">
-          <button type="button" class="aviso-salvar-btn" onclick="salvarContatoAgendaViaBanner()">Salvar</button>
-          <button type="button" class="aviso-salvar-fechar" onclick="fecharAvisoSalvarContato()" title="Agora não">✕</button>
-        </div>
-      `;
-      banner.style.display = 'block';
-    }
-  }
-}
-
-function mostrarAvisoSalvarContato(){
-  avisoSalvarContatoFechadoNestaConversa = false;
-  montarAreaSalvarContato().then(() => {
-    const banner = document.getElementById('aviso-salvar-contato-box');
-    if(banner) banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
-}
-
-function fecharAvisoSalvarContato(){
-  avisoSalvarContatoFechadoNestaConversa = true;
-  document.getElementById('aviso-salvar-contato-box').style.display = 'none';
-}
-
-async function salvarContatoAgendaViaBanner(){
-  const nome = document.getElementById('aviso-salvar-nome-input').value.trim();
-  if(!nome || !outroLadoUserIdAtual) return;
-
-  const { data: existente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
-
-  let erro;
-  if(existente){
-    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id));
-  } else {
-    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').insert({
-      dono_user_id: currentUserChat.id,
-      contato_user_id: outroLadoUserIdAtual,
-      profissional_id: outroLadoProfissionalIdAtual,
-      nome_salvo: nome
-    }));
-  }
-
-  if(erro){ console.error(erro); alert('Erro ao salvar contato. Tente de novo.'); return; }
-
-  document.getElementById('aviso-salvar-contato-box').style.display = 'none';
-  await montarAreaSalvarContato();
-  carregarListaConversas();
-}
-
-function abrirCampoSalvarContato(nomeAtual){
-  const area = document.getElementById('config-salvar-contato-area');
-  area.innerHTML = `
-    <div class="config-chat-secao">
-      <input type="text" id="input-nome-contato" class="review-input" value="${escapeHtmlChat(nomeAtual)}" placeholder="Nome pra salvar" style="margin-bottom:6px;">
-      <button type="button" class="btn-auth" style="width:100%;" onclick="salvarContatoAgenda()">Salvar nos meus contatos</button>
-    </div>
-  `;
-  document.getElementById('input-nome-contato').focus();
-}
-
-async function salvarContatoAgenda(){
-  const nome = document.getElementById('input-nome-contato').value.trim();
-  if(!nome || !outroLadoUserIdAtual) return;
-
-  const { data: existente } = await supabaseClientChat.from('agenda_contatos').select('id').eq('dono_user_id', currentUserChat.id).eq('contato_user_id', outroLadoUserIdAtual).maybeSingle();
-
-  let erro;
-  if(existente){
-    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').update({ nome_salvo: nome }).eq('id', existente.id));
-  } else {
-    ({ error: erro } = await supabaseClientChat.from('agenda_contatos').insert({
-      dono_user_id: currentUserChat.id,
-      contato_user_id: outroLadoUserIdAtual,
-      profissional_id: outroLadoProfissionalIdAtual,
-      nome_salvo: nome
-    }));
-  }
-
-  if(erro){ console.error(erro); alert('Erro ao salvar contato. Tente de novo.'); return; }
-
-  await montarAreaSalvarContato();
-  carregarListaConversas();
-}
-
-async function apagarConversaAtual(){
-  if(!conversaAtual) return;
-  const confirmar = confirm('Apagar essa conversa? Ela some pros dois lados, e não tem como desfazer.');
-  if(!confirmar) return;
-
-  const { error } = await supabaseClientChat.from('conversas').delete().eq('id', conversaAtual);
-  if(error){ console.error(error); alert('Erro ao apagar a conversa.'); return; }
-
-  fecharConversa();
-}
-
-async function toggleSilenciarConversa(){
-  if(!conversaAtual) return;
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('silenciada_por_visitante, silenciada_por_empresa').eq('id', conversaAtual).single();
-  const campoParaMudar = souEuAEmpresaNaConversaAtual ? 'silenciada_por_empresa' : 'silenciada_por_visitante';
-  const valorAtual = souEuAEmpresaNaConversaAtual ? conversa.silenciada_por_empresa : conversa.silenciada_por_visitante;
-  const novoValor = !valorAtual;
-
-  await supabaseClientChat.from('conversas').update({ [campoParaMudar]: novoValor }).eq('id', conversaAtual);
-  atualizarBotaoSilenciar(novoValor);
-}
-
-function fecharConversa(){
-  document.getElementById('chat-thread-box').classList.remove('aberto');
-  document.getElementById('chat-topo-lista').style.display = 'flex';
-  if(canalRealtimeAtual){ supabaseClientChat.removeChannel(canalRealtimeAtual); canalRealtimeAtual = null; }
-  conversaAtual = null;
-  carregarListaConversas();
-}
-
-async function carregarMensagens(conversaId){
-  const container = document.getElementById('chat-mensagens');
-  container.innerHTML = '';
-  const { data } = await supabaseClientChat.from('mensagens_chat').select('*').eq('conversa_id', conversaId).order('created_at', { ascending: true });
-  (data || []).forEach(m => adicionarBolhaMensagem(m));
-  container.scrollTop = container.scrollHeight;
-}
-
-function formatarDuracaoChamada(segundos){
-  const min = Math.floor(segundos / 60);
-  const seg = segundos % 60;
-  return `${min}:${String(seg).padStart(2, '0')}`;
-}
-
-// m.texto guarda "video|123" ou "audio|0" (tipo da chamada | duração em segundos)
-function detalhesChamada(m){
-  const [tipoChamada, duracaoStr] = (m.texto || 'audio|0').split('|');
-  return {
-    ehVideo: tipoChamada === 'video',
-    duracao: parseInt(duracaoStr, 10) || 0,
-    atendida: m.tipo === 'chamada_atendida'
-  };
-}
-
-// Resumo curto pra lista de conversas (não sabe quem sou eu ali, então fica neutro)
-function resumoChamada(m){
-  const { ehVideo, duracao, atendida } = detalhesChamada(m);
-  const icone = ehVideo ? '📹' : '📞';
-  if(atendida) return `${icone} Chamada de ${ehVideo ? 'vídeo' : 'voz'} • ${formatarDuracaoChamada(duracao)}`;
-  return `${icone} Chamada de ${ehVideo ? 'vídeo' : 'voz'} não atendida`;
-}
-
-function conteudoDaMensagem(m, minha){
-  if(m.tipo === 'imagem'){
-    return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat" onclick="window.open('${escapeHtmlChat(m.arquivo_url)}', '_blank')">`;
-  }
-  if(m.tipo === 'audio'){
-    return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>`;
-  }
-  if(m.tipo === 'gif' || m.tipo === 'sticker'){
-    return `<img src="${escapeHtmlChat(m.arquivo_url)}" class="midia-chat">`;
-  }
-  if(m.tipo === 'arquivo'){
-    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">📄</span> ${escapeHtmlChat(m.arquivo_nome || 'Arquivo')}</a>`;
-  }
-  if(m.tipo === 'chamada_perdida' || m.tipo === 'chamada_atendida'){
-    const { ehVideo, duracao, atendida } = detalhesChamada(m);
-    const icone = ehVideo ? '📹' : '📞';
-    const seta = minha ? '↗' : '↙'; // ↗ eu liguei · ↙ me ligaram
-    const rotulo = `Chamada de ${ehVideo ? 'vídeo' : 'voz'}`;
-
-    if(atendida){
-      return `<span class="msg-chamada">${icone} <span class="chamada-seta">${seta}</span> ${rotulo} <span class="chamada-duracao">${formatarDuracaoChamada(duracao)}</span></span>`;
-    }
-
-    // Perdida por mim (alguém me ligou e eu não atendi) fica em vermelho, igual WhatsApp.
-    // Não atendida por quem ligou (eu liguei e não atenderam) fica neutro.
-    const perdidaPorMim = !minha;
-    return `<span class="msg-chamada${perdidaPorMim ? ' chamada-perdida' : ''}">${icone} <span class="chamada-seta">${seta}</span> ${rotulo} ${perdidaPorMim ? 'perdida' : 'não atendida'}</span>`;
-  }
-  if(m.tipo === 'link'){
-    return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">🔗</span> ${escapeHtmlChat(m.arquivo_nome || 'Ver no GuiaZap')}</a>`;
-  }
-  return escapeHtmlChat(m.texto);
-}
-
-function adicionarBolhaMensagem(m){
-  const container = document.getElementById('chat-mensagens');
-  const minha = m.remetente_user_id === currentUserChat.id;
-  const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  container.insertAdjacentHTML('beforeend', `
-    <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}">
-      ${conteudoDaMensagem(m, minha)}
-      <span class="hora-msg">${hora}${minha ? ` <span class="check-lida${m.lida ? ' lida' : ''}">${m.lida ? '✓✓' : '✓'}</span>` : ''}</span>
-    </div>
-  `);
-}
-
-function atualizarCheckLida(mensagemId, lida){
-  const bolha = document.querySelector(`[data-msg-id="${mensagemId}"] .check-lida`);
-  if(bolha){
-    bolha.textContent = lida ? '✓✓' : '✓';
-    bolha.classList.toggle('lida', lida);
-  }
-}
-
-function atualizarBotaoEnviarOuMic(){
-  const btn = document.getElementById('btn-microfone');
-  const input = document.getElementById('chat-input-texto');
-  if(!btn || !input) return;
-  const temTexto = input.value.trim().length > 0;
-  btn.textContent = temTexto ? '➤' : '🎤';
-  btn.title = temTexto ? 'Enviar' : 'Gravar áudio';
-}
-
-function acaoBotaoEnviarOuMic(){
-  const temTexto = document.getElementById('chat-input-texto').value.trim().length > 0;
-  if(temTexto) enviarMensagemChat();
-  else alternarGravacaoAudio();
-}
-
-async function enviarMensagemChat(){
-  const input = document.getElementById('chat-input-texto');
-  const texto = input.value.trim();
-  if(!texto || !conversaAtual) return;
-  input.value = '';
-  atualizarBotaoEnviarOuMic();
-  await enviarQualquerMensagem({ tipo: 'texto', texto });
-}
-
-async function enviarQualquerMensagem(payload){
-  if(!conversaAtual) return;
-  if(bloqueadoNaConversaAtual){ alert('Não é possível enviar mensagens nessa conversa.'); return; }
-
-  const { error } = await supabaseClientChat.from('mensagens_chat').insert({
-    conversa_id: conversaAtual,
-    remetente_user_id: currentUserChat.id,
-    tipo: payload.tipo,
-    texto: payload.texto || '',
-    arquivo_url: payload.arquivo_url || null,
-    arquivo_nome: payload.arquivo_nome || null,
-    lida: false
-  });
-  if(error){ console.error('erro ao enviar mensagem:', JSON.stringify(error)); alert('Erro ao enviar mensagem: ' + (error.message || 'desconhecido')); return; }
-
-  await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
-
-  const resumoParaNotificacao = payload.tipo === 'texto' ? payload.texto
-    : payload.tipo === 'imagem' ? '📷 Foto'
-    : payload.tipo === 'arquivo' ? '📄 Arquivo: ' + (payload.arquivo_nome || '')
-    : payload.tipo === 'gif' ? '🎞️ GIF'
-    : '🏷️ Figurinha';
-
-  fetch('/.netlify/functions/notificar-nova-mensagem', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: resumoParaNotificacao })
-  }).catch(e => console.error('erro ao notificar nova mensagem', e));
-}
-
-// ---------- FERRAMENTAS: EMOJI, ARQUIVO, GIF, FIGURINHA ----------
-
-const LISTA_EMOJIS = ['😀','😂','😍','😘','😉','😊','🙂','😎','🤔','😢','😭','😡','😱','🥳','👍','👎','🙏','👏','💪','🤝','❤️','💚','💙','💜','🔥','⭐','✅','❌','🎉','🎁','📞','💬','😴','🤗','😅','🥰','😇','🙄','😬','🤩','💰','🛒','📦','🚀','⏰','📍','🏠','🚗','☕','🍕'];
-
-function togglePainel(id){
-  document.querySelectorAll('.painel-flutuante').forEach(p => {
-    if(p.id !== id) p.classList.remove('aberto');
-  });
-  const painel = document.getElementById(id);
-  const jaAberto = painel.classList.contains('aberto');
-  painel.classList.toggle('aberto', !jaAberto);
-
-  if(!jaAberto && id === 'painel-emoji' && document.getElementById('grid-emoji-lista').children.length === 0){
-    document.getElementById('grid-emoji-lista').innerHTML = LISTA_EMOJIS.map(e => `<button type="button" onclick="inserirEmoji('${e}')">${e}</button>`).join('');
-  }
-}
-
-function inserirEmoji(emoji){
-  const input = document.getElementById('chat-input-texto');
-  input.value += emoji;
-  input.focus();
-}
-
-let timeoutBuscaGif = null;
-async function buscarGifOuSticker(tipo){
-  clearTimeout(timeoutBuscaGif);
-  timeoutBuscaGif = setTimeout(async () => {
-    const termo = document.getElementById(tipo === 'gif' ? 'busca-gif-texto' : 'busca-sticker-texto').value.trim();
-    const container = document.getElementById(tipo === 'gif' ? 'grid-gif-lista' : 'grid-sticker-lista');
-    container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Buscando...</p>';
-
-    const resp = await fetch(`/.netlify/functions/buscar-gif?q=${encodeURIComponent(termo)}&tipo=${tipo}`);
-    const data = await resp.json();
-
-    if(data.erro === 'GIPHY_API_KEY não configurada ainda'){
-      container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Esse recurso ainda não foi configurado pelo administrador do site.</p>';
-      return;
-    }
-
-    if(!data.resultados || data.resultados.length === 0){
-      container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#999; font-size:0.8rem;">Nenhum resultado.</p>';
-      return;
-    }
-
-    container.innerHTML = data.resultados.map(r => `<img src="${r.preview || r.url}" onclick="enviarGifOuSticker('${r.url}', '${tipo}')">`).join('');
-  }, 400);
-}
-
-async function enviarGifOuSticker(url, tipo){
-  document.querySelectorAll('.painel-flutuante').forEach(p => p.classList.remove('aberto'));
-  await enviarQualquerMensagem({ tipo, arquivo_url: url });
-}
-
-let mediaRecorderAtual = null;
-let chunksAudioAtual = [];
-let gravandoAudio = false;
-let timerGravacao = null;
-let segundosGravacao = 0;
-
-async function alternarGravacaoAudio(){
-  if(gravandoAudio) return;
-  if(!conversaAtual) return;
-
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    chunksAudioAtual = [];
-    mediaRecorderAtual = new MediaRecorder(stream);
-    mediaRecorderAtual._streamOriginal = stream;
-
-    mediaRecorderAtual.ondataavailable = (e) => { if(e.data.size > 0) chunksAudioAtual.push(e.data); };
-
-    mediaRecorderAtual.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      if(mediaRecorderAtual._cancelado){ resetarUiGravacao(); return; }
-      if(chunksAudioAtual.length === 0){ resetarUiGravacao(); return; }
-      const blob = new Blob(chunksAudioAtual, { type: 'audio/webm' });
-      await enviarAudioGravado(blob);
-      resetarUiGravacao();
-    };
-
-    mediaRecorderAtual.start();
-    gravandoAudio = true;
-    segundosGravacao = 0;
-
-    document.getElementById('chat-input-row-normal').style.display = 'none';
-    document.getElementById('gravacao-audio-box').style.display = 'flex';
-    atualizarTempoGravacao();
-
-    timerGravacao = setInterval(() => { segundosGravacao++; atualizarTempoGravacao(); }, 1000);
-  } catch(e){
-    alert('Não conseguimos acessar seu microfone. Verifique as permissões do navegador.');
-  }
-}
-
-function atualizarTempoGravacao(){
-  const min = Math.floor(segundosGravacao / 60);
-  const seg = segundosGravacao % 60;
-  document.getElementById('gravacao-tempo').textContent = `${min}:${seg.toString().padStart(2, '0')}`;
-}
-
-function pararGravacaoAudio(){
-  if(mediaRecorderAtual && gravandoAudio){
-    mediaRecorderAtual._cancelado = false;
-    mediaRecorderAtual.stop();
-    gravandoAudio = false;
-    clearInterval(timerGravacao);
-  }
-}
-
-function cancelarGravacaoAudio(){
-  if(mediaRecorderAtual && gravandoAudio){
-    mediaRecorderAtual._cancelado = true;
-    mediaRecorderAtual.stop();
-    gravandoAudio = false;
-    clearInterval(timerGravacao);
-  }
-}
-
-function resetarUiGravacao(){
-  document.getElementById('chat-input-row-normal').style.display = 'flex';
-  document.getElementById('gravacao-audio-box').style.display = 'none';
-  segundosGravacao = 0;
-}
-
-async function enviarAudioGravado(blob){
-  const nomeArquivo = `chat/${currentUserChat.id}/${Date.now()}-audio.webm`;
-  const arquivo = new File([blob], 'audio.webm', { type: 'audio/webm' });
-
-  const { error } = await supabaseClientChat.storage.from('fotos').upload(nomeArquivo, arquivo);
-  if(error){ console.error('erro ao enviar áudio:', JSON.stringify(error)); alert('Erro ao enviar o áudio: ' + (error.message || 'desconhecido')); return; }
-
-  const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
-  await enviarQualquerMensagem({ tipo: 'audio', arquivo_url: urlData.publicUrl });
-}
-
-async function enviarArquivoChat(event){
-  const file = event.target.files[0];
-  if(!file || !currentUserChat || !conversaAtual) return;
-
-  const ehImagem = file.type.startsWith('image/');
-  const nomeArquivo = `chat/${currentUserChat.id}/${Date.now()}-${file.name}`;
-
-  const { error: erroUpload } = await supabaseClientChat.storage.from('fotos').upload(nomeArquivo, file);
-  if(erroUpload){ console.error(erroUpload); alert('Erro ao enviar o arquivo.'); return; }
-
-  const { data: urlData } = supabaseClientChat.storage.from('fotos').getPublicUrl(nomeArquivo);
-  await enviarQualquerMensagem({
-    tipo: ehImagem ? 'imagem' : 'arquivo',
-    arquivo_url: urlData.publicUrl,
-    arquivo_nome: file.name
-  });
-
-  event.target.value = '';
-}
-
-// ---------- CHAMADA DE VOZ/VÍDEO (WebRTC) ----------
-
-const STUN_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-let canalChamadasPessoal = null;
-let peerConnectionAtual = null;
-let canalEnvioAtual = null;
-let streamLocalAtual = null;
-let chamadaComQuemUserId = null;
-let chamadaComQuemNome = null;
-let microfoneMudo = false;
-let cameraDesligada = false;
-let chamadaFoiAtendida = false;
-let euIniciariAChamada = false;
-let conversaDaChamadaAtual = null;
-let chamadaComVideoAtual = false;
-let euTenhoVideoAtivo = false;
-let momentoConexaoChamada = null;
-let chamadaPendenteIdAtual = null;
-
-// Fica sempre "escutando" nesse canal próprio, esperando alguém te ligar —
-// todos os eventos de uma chamada (oferta, resposta, pedaços de conexão,
-// encerramento) chegam por aqui, registrados uma única vez, e a função
-// verifica o estado atual (peerConnectionAtual) pra saber o que fazer.
-function ligarCanalDeChamadas(){
-  canalChamadasPessoal = supabaseClientChat.channel('chamada-user-' + currentUserChat.id, {
-    config: { broadcast: { self: false } }
-  });
-
-  canalChamadasPessoal.on('broadcast', { event: 'offer' }, (msg) => {
-    if(peerConnectionAtual){
-      // Já estamos numa chamada — só interessa se for o mesmo contato pedindo
-      // pra ligar a câmera no meio da ligação (upgrade pra vídeo)
-      if(msg.payload.renegociacao && msg.payload.de === chamadaComQuemUserId){
-        processarRenegociacaoOferta(msg.payload);
-      }
-      return;
-    }
-    receberChamadaEntrando(msg.payload);
-  });
-
-  canalChamadasPessoal.on('broadcast', { event: 'answer' }, async (msg) => {
-    if(!peerConnectionAtual) return;
-    await peerConnectionAtual.setRemoteDescription(new RTCSessionDescription(msg.payload.answer));
-  });
-
-  canalChamadasPessoal.on('broadcast', { event: 'ice-candidate' }, async (msg) => {
-    if(!peerConnectionAtual) return;
-    try{ await peerConnectionAtual.addIceCandidate(new RTCIceCandidate(msg.payload.candidate)); } catch(e){ console.error(e); }
-  });
-
-  canalChamadasPessoal.on('broadcast', { event: 'encerrar' }, () => {
-    encerrarChamada(false);
-  });
-
-  canalChamadasPessoal.subscribe();
-}
-
-// Abre um canal "de saída", só pra mandar mensagens pro canal pessoal da
-// outra pessoa (quem recebe já está ouvindo o próprio canal o tempo todo)
-function abrirCanalEnvio(destinatarioId){
-  return new Promise((resolve) => {
-    const canal = supabaseClientChat.channel('chamada-user-' + destinatarioId, {
-      config: { broadcast: { self: false } }
-    });
-    canal.subscribe((status) => { if(status === 'SUBSCRIBED') resolve(canal); });
-  });
-}
-
-async function receberChamadaEntrando(payload){
-  // Se eu bloqueei quem está ligando, ou fui bloqueado por essa pessoa, recusa
-  // automaticamente — a chamada nem chega a tocar.
-  const { data: bloqueioExistente } = await supabaseClientChat
-    .from('contatos_bloqueados')
-    .select('id')
-    .or(`and(bloqueador_user_id.eq.${currentUserChat.id},bloqueado_user_id.eq.${payload.de}),and(bloqueador_user_id.eq.${payload.de},bloqueado_user_id.eq.${currentUserChat.id})`)
-    .maybeSingle();
-
-  if(bloqueioExistente){
-    const canal = await abrirCanalEnvio(payload.de);
-    canal.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
-    return;
-  }
-
-  chamadaComQuemUserId = payload.de;
-  chamadaComQuemNome = payload.deNome || 'Alguém';
-  window._ofertaRecebidaChamada = payload.offer;
-  window._comVideoChamadaRecebida = payload.comVideo;
-  euIniciariAChamada = false;
-  chamadaFoiAtendida = false;
-  conversaDaChamadaAtual = payload.conversaId || null;
-
-  document.getElementById('overlay-chamada').classList.add('aberto');
-  document.getElementById('chamada-recebida-view').style.display = 'block';
-  document.getElementById('chamada-ativa-view').style.display = 'none';
-  document.getElementById('chamada-recebida-nome').textContent = chamadaComQuemNome;
-  iniciarToqueChamada();
-}
-
-async function recusarChamada(){
-  pararSomChamada();
-  if(chamadaComQuemUserId){
-    const canal = await abrirCanalEnvio(chamadaComQuemUserId);
-    canal.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
-  }
-  fecharOverlayChamada();
-}
-
-async function aceitarChamada(){
-  pararSomChamada();
-  document.getElementById('chamada-recebida-view').style.display = 'none';
-  document.getElementById('chamada-ativa-view').style.display = 'flex';
-  document.getElementById('chamada-nome-ativa').textContent = chamadaComQuemNome;
-  document.getElementById('chamada-status-ativa').textContent = 'Conectando...';
-
-  try{
-    streamLocalAtual = await navigator.mediaDevices.getUserMedia({ audio: true, video: !!window._comVideoChamadaRecebida });
-  } catch(e){
-    alert('Não conseguimos acessar seu microfone/câmera. Verifique as permissões do navegador.');
-    recusarChamada();
-    return;
-  }
-
-  document.getElementById('video-local').srcObject = streamLocalAtual;
-  document.getElementById('video-local').style.display = window._comVideoChamadaRecebida ? 'block' : 'none';
-  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !window._comVideoChamadaRecebida);
-  document.getElementById('avatar-chamada-audio').style.display = window._comVideoChamadaRecebida ? 'none' : 'flex';
-  document.getElementById('btn-camera').style.display = 'flex';
-
-  const pc = new RTCPeerConnection(STUN_SERVERS);
-  streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
-  chamadaComVideoAtual = !!window._comVideoChamadaRecebida;
-  euTenhoVideoAtivo = !!window._comVideoChamadaRecebida;
-  pc.ontrack = (event) => {
-    document.getElementById('video-remoto').srcObject = event.streams[0];
-    document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
-    chamadaFoiAtendida = true;
-    momentoConexaoChamada = Date.now();
-    pararSomChamada();
-  };
-
-  const canalEnvio = await abrirCanalEnvio(chamadaComQuemUserId);
-
-  pc.onicecandidate = (event) => {
-    if(event.candidate){
-      canalEnvio.send({ type: 'broadcast', event: 'ice-candidate', payload: { candidate: event.candidate, de: currentUserChat.id } });
-    }
-  };
-
-  await pc.setRemoteDescription(new RTCSessionDescription(window._ofertaRecebidaChamada));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  canalEnvio.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
-
-  peerConnectionAtual = pc;
-  canalEnvioAtual = canalEnvio;
-}
-
-async function iniciarChamada(comVideo){
-  if(!conversaAtual || peerConnectionAtual) return;
-  if(bloqueadoNaConversaAtual){ alert('Não é possível ligar nessa conversa.'); return; }
-
-  euIniciariAChamada = true;
-  chamadaFoiAtendida = false;
-  conversaDaChamadaAtual = conversaAtual;
-
-  const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaAtual).single();
-  const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
-  const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
-
-  let empresaDaChamada = null;
-  if(conversa.profissional_id){
-    const { data: empresa } = await supabaseClientChat.from('profissionais').select('name, user_id').eq('id', conversa.profissional_id).maybeSingle();
-    empresaDaChamada = empresa;
-  }
-
-  let destinatarioId, nomeDestinatario;
-  if(conversa.usuario2_id){
-    destinatarioId = conversa.visitante_user_id === currentUserChat.id ? conversa.usuario2_id : conversa.visitante_user_id;
-    const { data: perfilOutro } = await supabaseClientChat.from('perfis_usuario').select('nome_exibicao').eq('user_id', destinatarioId).maybeSingle();
-    nomeDestinatario = (perfilOutro && perfilOutro.nome_exibicao) || 'Contato do GuiaZap';
-  } else {
-    destinatarioId = souEuAEmpresa ? conversa.visitante_user_id : (empresaDaChamada ? empresaDaChamada.user_id : null);
-    nomeDestinatario = souEuAEmpresa ? 'Visitante' : (empresaDaChamada ? empresaDaChamada.name : 'Empresa');
-  }
-
-  if(!destinatarioId){ alert('Não foi possível identificar quem receberá a chamada.'); return; }
-
-  try{
-    streamLocalAtual = await navigator.mediaDevices.getUserMedia({ audio: true, video: comVideo });
-  } catch(e){
-    alert('Não conseguimos acessar seu microfone/câmera. Verifique as permissões do navegador.');
-    return;
-  }
-
-  chamadaComQuemUserId = destinatarioId;
-  chamadaComQuemNome = nomeDestinatario;
-
-  const destinatarioOnline = await pessoaEstaOnline(destinatarioId);
-
-  document.getElementById('overlay-chamada').classList.add('aberto');
-  document.getElementById('chamada-recebida-view').style.display = 'none';
-  document.getElementById('chamada-ativa-view').style.display = 'flex';
-  document.getElementById('chamada-nome-ativa').textContent = nomeDestinatario;
-  document.getElementById('chamada-status-ativa').textContent = destinatarioOnline ? 'Chamando...' : 'Ligando... (a pessoa não está online agora, mas vai receber a notificação)';
-  iniciarTomDiscagem();
-  document.getElementById('video-local').srcObject = streamLocalAtual;
-  document.getElementById('video-local').style.display = comVideo ? 'block' : 'none';
-  document.getElementById('videos-chamada-box').classList.toggle('somente-audio', !comVideo);
-  document.getElementById('avatar-chamada-audio').style.display = comVideo ? 'none' : 'flex';
-  document.getElementById('btn-camera').style.display = 'flex';
-
-  const pc = new RTCPeerConnection(STUN_SERVERS);
-  peerConnectionAtual = pc;
-  streamLocalAtual.getTracks().forEach(track => pc.addTrack(track, streamLocalAtual));
-  chamadaComVideoAtual = comVideo;
-  euTenhoVideoAtivo = comVideo;
-  pc.ontrack = (event) => {
-    document.getElementById('video-remoto').srcObject = event.streams[0];
-    document.getElementById('chamada-status-ativa').textContent = 'Em chamada';
-    chamadaFoiAtendida = true;
-    momentoConexaoChamada = Date.now();
-    pararSomChamada();
-  };
-
-  const canalEnvio = await abrirCanalEnvio(destinatarioId);
-  canalEnvioAtual = canalEnvio;
-
-  // Se a pessoa cancelou enquanto isso tudo carregava (ex: clicou muito
-  // rápido em desligar), para tudo aqui em vez de continuar discando —
-  // sem essa checagem, a chamada seguia tocando pro outro lado mesmo
-  // depois de cancelada.
-  if(!peerConnectionAtual){
-    supabaseClientChat.removeChannel(canalEnvio);
-    return;
-  }
-
-  pc.onicecandidate = (event) => {
-    if(event.candidate){
-      canalEnvio.send({ type: 'broadcast', event: 'ice-candidate', payload: { candidate: event.candidate, de: currentUserChat.id } });
-    }
-  };
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
-  canalEnvio.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo, conversaId: conversaAtual } });
-
-  // Guarda a oferta no banco por um tempinho — se a pessoa estiver totalmente
-  // fora do site, ela só vai ver a notificação push; ao clicar nela, o
-  // chat.html carrega do zero e essa oferta "ao vivo" (via canal) já teria
-  // se perdido. Salvando aqui, dá pra retomar a chamada mesmo nesse caso.
-  const { data: chamadaPendente } = await supabaseClientChat.from('chamadas_pendentes').insert({
-    de_user_id: currentUserChat.id,
-    de_nome: meuNome,
-    para_user_id: destinatarioId,
-    oferta: offer,
-    com_video: comVideo,
-    conversa_id: conversaAtual
-  }).select('id').single();
-  chamadaPendenteIdAtual = chamadaPendente ? chamadaPendente.id : null;
-
-  // Avisa por notificação push também, caso a pessoa não esteja com o chat
-  // aberto agora — não toca como telefone de verdade, mas ajuda a avisar
-  fetch('/.netlify/functions/enviar-push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      titulo: `${comVideo ? '📹' : '📞'} Chamada de ${meuNome}`,
-      mensagem: 'Toque pra atender no GuiaZap',
-      url: '/chat.html',
-      userIds: [destinatarioId],
-      tipo: 'chamada'
-    })
-  }).catch(e => console.error('erro ao notificar chamada', e));
-}
-
-function alternarMudo(){
-  if(!streamLocalAtual) return;
-  microfoneMudo = !microfoneMudo;
-  streamLocalAtual.getAudioTracks().forEach(t => { t.enabled = !microfoneMudo; });
-  document.getElementById('btn-mudo').classList.toggle('ativo-off', microfoneMudo);
-  document.getElementById('btn-mudo').textContent = microfoneMudo ? '🔇' : '🎤';
-}
-
-function onCliqueBotaoCamera(){
-  if(euTenhoVideoAtivo){
-    alternarCamera();
-  } else {
-    ativarVideoNaChamada();
-  }
-}
-
-async function ativarVideoNaChamada(){
-  if(!peerConnectionAtual || !streamLocalAtual || !canalEnvioAtual) return;
-
-  const btnCamera = document.getElementById('btn-camera');
-  btnCamera.disabled = true;
-
-  try{
-    const streamVideo = await navigator.mediaDevices.getUserMedia({ video: true });
-    const videoTrack = streamVideo.getVideoTracks()[0];
-    streamLocalAtual.addTrack(videoTrack);
-    peerConnectionAtual.addTrack(videoTrack, streamLocalAtual);
-
-    document.getElementById('video-local').srcObject = streamLocalAtual;
-    document.getElementById('video-local').style.display = 'block';
-    document.getElementById('videos-chamada-box').classList.remove('somente-audio');
-    document.getElementById('avatar-chamada-audio').style.display = 'none';
-    chamadaComVideoAtual = true;
-    euTenhoVideoAtivo = true;
-
-    // Renegocia a conexão já ativa pra passar a mandar vídeo também pro outro lado
-    const offer = await peerConnectionAtual.createOffer();
-    await peerConnectionAtual.setLocalDescription(offer);
-    const meuNome = meusCadastrosChat[0] ? meusCadastrosChat[0].name : 'Alguém';
-    canalEnvioAtual.send({ type: 'broadcast', event: 'offer', payload: { offer, de: currentUserChat.id, deNome: meuNome, comVideo: true, conversaId: conversaAtual, renegociacao: true } });
-  } catch(e){
-    console.error(e);
-    alert('Não foi possível ativar a câmera. Verifique as permissões do navegador.');
-  }
-
-  btnCamera.disabled = false;
-}
-
-async function processarRenegociacaoOferta(payload){
-  if(!peerConnectionAtual || !canalEnvioAtual) return;
-
-  try{
-    // A resposta técnica (SDP) precisa ser enviada de qualquer forma pra
-    // conexão continuar funcionando — isso não liga a MINHA câmera sozinho,
-    // só permite que eu comece a ver o vídeo que o outro lado já decidiu mandar.
-    await peerConnectionAtual.setRemoteDescription(new RTCSessionDescription(payload.offer));
-    const answer = await peerConnectionAtual.createAnswer();
-    await peerConnectionAtual.setLocalDescription(answer);
-    canalEnvioAtual.send({ type: 'broadcast', event: 'answer', payload: { answer, de: currentUserChat.id } });
-
-    document.getElementById('videos-chamada-box').classList.remove('somente-audio');
-    document.getElementById('avatar-chamada-audio').style.display = 'none';
-
-    // Pergunta pra pessoa se ela também quer ligar a própria câmera —
-    // em vez de já ligar tudo sozinho sem avisar
-    mostrarAvisoOutroLadoAtivouVideo();
-  } catch(e){
-    console.error('erro ao processar pedido de vídeo do outro lado', e);
-  }
-}
-
-function mostrarAvisoOutroLadoAtivouVideo(){
-  if(document.getElementById('aviso-video-outro-lado')) return;
-
-  const aviso = document.createElement('div');
-  aviso.id = 'aviso-video-outro-lado';
-  aviso.style.cssText = 'position:absolute; bottom:100px; left:12px; right:12px; background:rgba(0,0,0,0.85); color:white; border-radius:12px; padding:12px 14px; z-index:50; text-align:center; font-size:0.85rem;';
-  aviso.innerHTML = `
-    <div style="margin-bottom:10px;">📹 ${chamadaComQuemNome || 'A pessoa'} ativou a câmera. Quer ativar a sua também?</div>
-    <div style="display:flex; gap:8px; justify-content:center;">
-      <button type="button" onclick="ativarVideoNaChamada(); document.getElementById('aviso-video-outro-lado').remove();" style="background:var(--verde-whats); color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Sim, ativar</button>
-      <button type="button" onclick="document.getElementById('aviso-video-outro-lado').remove();" style="background:rgba(255,255,255,0.2); color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Agora não</button>
-    </div>
-  `;
-  const containerChamada = document.getElementById('chamada-ativa-view');
-  if(containerChamada) containerChamada.appendChild(aviso);
-  else document.body.appendChild(aviso);
-
-  setTimeout(() => { const el = document.getElementById('aviso-video-outro-lado'); if(el) el.remove(); }, 12000);
-}
-
-function alternarCamera(){
-  if(!streamLocalAtual) return;
-  const tracks = streamLocalAtual.getVideoTracks();
-  if(tracks.length === 0) return;
-  cameraDesligada = !cameraDesligada;
-  tracks.forEach(t => { t.enabled = !cameraDesligada; });
-  document.getElementById('btn-camera').classList.toggle('ativo-off', cameraDesligada);
-}
-
-async function encerrarChamada(avisarOutraPonta){
-  if(avisarOutraPonta && canalEnvioAtual){
-    canalEnvioAtual.send({ type: 'broadcast', event: 'encerrar', payload: { de: currentUserChat.id } });
-  }
-
-  if(chamadaPendenteIdAtual){
-    supabaseClientChat.from('chamadas_pendentes').delete().eq('id', chamadaPendenteIdAtual).then(() => {});
-    chamadaPendenteIdAtual = null;
-  }
-
-  // Registra no histórico da conversa, só do lado de quem ligou (evita
-  // duplicar o registro dos dois lados). O campo texto guarda
-  // "video|segundos" ou "audio|segundos" — segundos é 0 quando não atendida.
-  if(euIniciariAChamada && conversaDaChamadaAtual){
-    const duracaoSegundos = (chamadaFoiAtendida && momentoConexaoChamada) ? Math.round((Date.now() - momentoConexaoChamada) / 1000) : 0;
-    const { error: erroRegistroChamada } = await supabaseClientChat.from('mensagens_chat').insert({
-      conversa_id: conversaDaChamadaAtual,
-      remetente_user_id: currentUserChat.id,
-      tipo: chamadaFoiAtendida ? 'chamada_atendida' : 'chamada_perdida',
-      texto: `${chamadaComVideoAtual ? 'video' : 'audio'}|${duracaoSegundos}`,
-      lida: false
-    });
-    if(erroRegistroChamada) console.error('erro ao registrar chamada no histórico:', JSON.stringify(erroRegistroChamada));
-    await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaDaChamadaAtual);
-  }
-
-  momentoConexaoChamada = null;
-
-  if(peerConnectionAtual){ peerConnectionAtual.close(); peerConnectionAtual = null; }
-  if(streamLocalAtual){ streamLocalAtual.getTracks().forEach(t => t.stop()); streamLocalAtual = null; }
-  if(canalEnvioAtual){ supabaseClientChat.removeChannel(canalEnvioAtual); canalEnvioAtual = null; }
-  fecharOverlayChamada();
-}
-
-function fecharOverlayChamada(){
-  pararSomChamada();
-  document.getElementById('overlay-chamada').classList.remove('aberto');
-  document.getElementById('video-local').srcObject = null;
-  document.getElementById('video-remoto').srcObject = null;
-  document.getElementById('avatar-chamada-audio').style.display = 'none';
-  document.getElementById('videos-chamada-box').classList.remove('somente-audio');
-  document.getElementById('btn-camera').style.display = 'flex';
-  microfoneMudo = false;
-  cameraDesligada = false;
-  euTenhoVideoAtivo = false;
-  chamadaComQuemUserId = null;
-}
-
-aplicarIconeModoVibracao();
-initChat();
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
-  });
-}
-
-let promptInstalacaoPapo = null;
-
-function _controlarBotoesInstalarPapo(mostrar){
-  ['btn-instalar-papo', 'btn-instalar-papo-topo'].forEach(id => {
-    const btn = document.getElementById(id);
-    if(btn) btn.style.display = mostrar ? (id === 'btn-instalar-papo-topo' ? 'inline-block' : 'block') : 'none';
-  });
-}
-
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  promptInstalacaoPapo = event;
-  _controlarBotoesInstalarPapo(true);
-});
-
-async function instalarAppPapo(){
-  if(!promptInstalacaoPapo) return;
-  promptInstalacaoPapo.prompt();
-  const { outcome } = await promptInstalacaoPapo.userChoice;
-  if(outcome === 'accepted'){
-    _controlarBotoesInstalarPapo(false);
-  }
-  promptInstalacaoPapo = null;
-}
-
-window.addEventListener('appinstalled', () => {
-  _controlarBotoesInstalarPapo(false);
-});
-</script>
-<script src="js/modo-escuro.js"></script>
-</body>
-</html>
