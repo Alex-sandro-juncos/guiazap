@@ -3702,6 +3702,7 @@ async function ativarNotificacoesPush(){
 
 let _vozIndexReconhecimento = null;
 let _vozIndexAtiva = false;
+  window._vozIndexAtiva = false;
 let _vozIndexFalando = false;
 const _vozIndexSynth = window.speechSynthesis;
 
@@ -3721,6 +3722,7 @@ function iniciarModoVozIndex(){
   }
 
   _vozIndexAtiva = true;
+  window._vozIndexAtiva = true;
   document.getElementById('btn-modo-voz-index').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';

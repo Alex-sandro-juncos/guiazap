@@ -782,5 +782,15 @@ Content-Type: application/json
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>
 <script src="js/vitrine.js"></script>
+
+<script src="js/voz-acesso-cego.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(typeof prepararAcessoVozCego === 'function'){
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozVitrine === 'function') iniciarModoVozVitrine(); });
+  }
+});
+</script>
+
 </body>
 </html>

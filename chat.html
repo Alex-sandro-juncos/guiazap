@@ -418,6 +418,18 @@
     </div>
   </div>
 </div>
+
+<div id="painel-modo-voz-papo" style="display:none; position:fixed; bottom:86px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div id="voz-papo-indicador" style="width:14px;height:14px;border-radius:50%;background:#22c55e;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-papo-status" style="color:white;font-weight:700;font-size:0.85rem;" aria-live="polite">Modo voz do Papo</div>
+      <div id="voz-papo-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozPapo()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;">✕</button>
+  </div>
+</div>
+
 <div class="chat-wrap">
   <div id="chat-topo-lista">
     <div class="papo-header-app">
@@ -429,6 +441,7 @@
           <button type="button" id="btn-ativar-push-icone" onclick="ativarNotificacoesPushPapo()" title="Ativar notificações (chamadas e mensagens mesmo com o site fechado)" style="display:none;">🛎️</button>
           <button type="button" id="sino-notificacoes" title="Notificações">🔔<span class="badge-notif" id="badge-notif" style="display:none;">0</span></button>
           <button type="button" onclick="toggleModoVibracaoChamada()" title="Som da chamada" id="btn-modo-vibracao">🔊</button>
+          <button type="button" id="btn-modo-voz-papo" onclick="toggleModoVozPapo()" title="Modo voz" aria-label="Ativar modo voz do Papo">🎙️</button>
           <button type="button" onclick="toggleModoEscuro()" title="Modo escuro" id="btn-modo-escuro">🌙</button>
           <button type="button" onclick="toggleMenuPapoMais()" title="Mais opções">⋮</button>
           <div class="menu-papo-mais" id="menu-papo-mais" style="display:none;">
@@ -3501,6 +3514,18 @@ window.addEventListener('appinstalled', () => {
   _controlarBotoesInstalarPapo(false);
 });
 </script>
+
+<script src="js/papo-acessibilidade.js"></script>
+<script src="js/voz-acesso-cego.js"></script>
+<script src="js/papo-voz.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(typeof prepararAcessoVozCego === 'function'){
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPapo === 'function') iniciarModoVozPapo(); });
+  }
+});
+</script>
+
 <script src="js/modo-escuro.js"></script>
 </body>
 </html>
