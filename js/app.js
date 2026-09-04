@@ -3594,7 +3594,7 @@ if(initSupabase()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(() => iniciarModoVozIndex(true), 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
+  setTimeout(iniciarModoVozIndex, 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
@@ -3724,7 +3724,7 @@ function toggleModoVozIndex(){
   }
 }
 
-function iniciarModoVozIndex(retomandoAutomaticamente){
+function iniciarModoVozIndex(){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -3737,11 +3737,6 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
 
-  // Se o microfone está voltando SOZINHO (ao trocar de página, por
-  // exemplo), começa em "modo de espera" — só reage à palavra de ativação,
-  // pra não confundir qualquer fala do ambiente com um comando de verdade
-  _aguardandoAtivacaoIndex = !!retomandoAutomaticamente;
-
   _vozIndexReconhecimento = new SpeechRecognitionApi();
   _vozIndexReconhecimento.lang = 'pt-BR';
   _vozIndexReconhecimento.continuous = true;
@@ -3750,16 +3745,6 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   _vozIndexReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
-
-    if(_aguardandoAtivacaoIndex){
-      const textoNorm = normalizarTexto(transcricao);
-      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
-        _aguardandoAtivacaoIndex = false;
-        falarVozIndex('Modo voz ativado. Fala o que você procura.');
-      }
-      return; // ignora qualquer outra fala enquanto está em espera
-    }
-
     processarComandoVozIndex(transcricao);
   };
 
@@ -3781,15 +3766,8 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   };
 
   try{ _vozIndexReconhecimento.start(); } catch(e){}
-
-  if(_aguardandoAtivacaoIndex){
-    falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
-  } else {
-    falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
-  }
+  falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
 }
-
-let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
@@ -4242,6 +4220,7 @@ function extrairDigitosDaFalaIndex(texto){
 async function processarComandoVozIndex(transcricao){
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
+  try {
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
@@ -4407,7 +4386,7 @@ async function processarComandoVozIndex(transcricao){
     falarVozIndex('Busca limpa.');
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
     falarVozIndex('Modo voz desativado.');
     setTimeout(pararModoVozIndex, 1500);
     return;
@@ -4460,7 +4439,7 @@ async function processarComandoVozIndex(transcricao){
   if(matchDe) nomeAlvo = matchDe[1].trim();
 
   const textoSemAlvo = nomeAlvo
-    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|no|na)\\s+' + nomeAlvo.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '$'), '').trim()
+    ? textoNormalizado.replace(nomeAlvo, '').replace(/\b(do|da|de|no|na)\s*$/,'').trim()
     : textoNormalizado;
 
   const palavrasPedido = textoSemAlvo.split(/\s+/).map(w => w.replace(/[^\wáéíóúâêôãõç]/gi,'')).filter(w => w.length > 1 && !STOP_VOZ_INDEX.includes(w));
@@ -4519,11 +4498,16 @@ async function processarComandoVozIndex(transcricao){
   const termoBuscaLocal = termoPedido || transcricao.trim();
 
   if(!pareceComandoComplexo && termoBuscaLocal.length >= 2 && termoBuscaLocal.length <= 60){
-    const tipoPedido = classificarPedidoVoz(termoPedido || termoBuscaLocal);
+    const tipoPedido = classificarPedidoVoz(termoBuscaLocal);
     if(tipoPedido === 'produto'){
+      const querComprar = /comprar|compra|quero|adicionar|carrinho/.test(normalizarTexto(transcricao));
+      const termoLimpoVitrine = normalizarTexto(transcricao)
+        .replace(/\b(quero|queria|comprar|compra|adicionar|colocar|pedir|um|uma|de|do|da|pra|para|o|a)\b/g, ' ')
+        .replace(/\s+/g, ' ').trim() || termoBuscaLocal;
       localStorage.setItem('retomarModoVozAoCarregar', '1');
-      localStorage.setItem('guiazap_busca_vitrine', termoPedido || termoBuscaLocal);
-      falarVozIndex('Isso é produto. Abrindo a vitrine.');
+      localStorage.setItem('guiazap_busca_vitrine', termoLimpoVitrine);
+      if(querComprar) localStorage.setItem('guiazap_comprar_agora', '1');
+      falarVozIndex(querComprar ? ('Indo comprar ' + termoLimpoVitrine + '.') : ('Abrindo a vitrine em ' + termoLimpoVitrine + '.'));
       setTimeout(() => { window.location.href = 'vitrine.html'; }, 900);
       return;
     }
@@ -4596,6 +4580,10 @@ async function processarComandoVozIndex(transcricao){
     document.getElementById('search').value = termoBuscaLocal;
     render();
     falarVozIndex(lerResultadosBuscaIndex());
+  }
+  } catch(e){
+    console.error('voz index', e);
+    try{ falarVozIndex('Entendi ' + (transcricao||'') + '. Tenta falar de novo.'); } catch(err){}
   }
 }
 

@@ -12,14 +12,19 @@ function toggleFavoritoProduto(id, event){
   else favoritosProdutos.add(id);
   localStorage.setItem('favoritos_produtos', JSON.stringify([...favoritosProdutos]));
   const buscaTrazida = localStorage.getItem('guiazap_busca_vitrine');
+  const comprarAgora = localStorage.getItem('guiazap_comprar_agora') === '1';
   if(buscaTrazida){
     localStorage.removeItem('guiazap_busca_vitrine');
+    localStorage.removeItem('guiazap_comprar_agora');
     produtoFiltroId = null;
     empresaFiltroId = null;
     const campo = document.getElementById('v-search');
     if(campo) campo.value = buscaTrazida;
   }
   renderProdutos();
+  if(buscaTrazida){
+    setTimeout(() => concluirCompraPorVoz(buscaTrazida, comprarAgora), 600);
+  }
 }
 
 function toggleFiltroFavoritosProdutos(){
@@ -2497,6 +2502,39 @@ async function salvarProdutosExtraidosIA(){
   }, 1500);
 }
 
+
+function concluirCompraPorVoz(termo, comprar){
+  const q = normalizarTextoV(termo || '');
+  if(!q) return;
+  const palavras = q.split(/\s+/).filter(w => w.length > 1);
+  const achados = (produtos || []).filter(p => {
+    const nome = normalizarTextoV(p.nome);
+    return nome.includes(q) || (palavras.length && palavras.every(w => nome.includes(w)));
+  });
+  if(!achados.length){
+    if(typeof falarVozVitrine === 'function') falarVozVitrine('Não achei ' + termo + ' na vitrine.');
+    return;
+  }
+  const p0 = achados[0];
+  produtoFiltroId = null;
+  empresaFiltroId = p0.profissionais ? p0.profissionais.id : null;
+  const campo = document.getElementById('v-search');
+  if(campo) campo.value = p0.nome;
+  renderProdutos();
+  const preco = p0.preco ? (' por ' + String(p0.preco).replace('.', ',') + ' reais') : '';
+  const emp = p0.profissionais && p0.profissionais.name ? (', na ' + p0.profissionais.name) : '';
+  if(comprar){
+    if(typeof adicionarAoCarrinho === 'function') adicionarAoCarrinho(p0.id);
+    if(achados.length === 1){
+      if(typeof falarVozVitrine === 'function') falarVozVitrine(p0.nome + preco + emp + '. Coloquei no carrinho. Diga finalizar pra pagar.');
+    } else {
+      if(typeof falarVozVitrine === 'function') falarVozVitrine('Achei ' + achados.length + ' opções. Coloquei ' + p0.nome + preco + emp + '. Se quiser outro, fala o nome da empresa.');
+    }
+  } else if(typeof falarVozVitrine === 'function'){
+    falarVozVitrine('Achei ' + achados.length + ' opções de ' + termo + '. A primeira é ' + p0.nome + preco + emp + '.');
+  }
+}
+
 // ---------- MODO VOZ (MÃOS LIVRES) NA VITRINE ----------
 // Fluxo: usuário toca no botão (isso conta como "gesto do usuário", exigido
 // pelo navegador pra liberar o microfone) -> escuta contínua ativa ->
@@ -2600,9 +2638,7 @@ function toggleModoVozVitrine(){
   }
 }
 
-let _aguardandoAtivacaoVitrine = false;
-
-function iniciarModoVozVitrine(retomandoAutomaticamente){
+function iniciarModoVozVitrine(){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -2617,7 +2653,6 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
-  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente;
 
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
   _vozVitrineReconhecimento.lang = 'pt-BR';
@@ -2627,16 +2662,6 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   _vozVitrineReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
-
-    if(_aguardandoAtivacaoVitrine){
-      const textoNorm = normalizarTextoV(transcricao);
-      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
-        _aguardandoAtivacaoVitrine = false;
-        falarVozVitrine('Modo voz ativado.');
-      }
-      return;
-    }
-
     processarComandoVozVitrine(transcricao);
   };
 
@@ -2658,12 +2683,7 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   };
 
   try{ _vozVitrineReconhecimento.start(); } catch(e){}
-
-  if(_aguardandoAtivacaoVitrine){
-    falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
-  } else {
-    falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
-  }
+  falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
 }
 
 function pararModoVozVitrine(){
@@ -2800,7 +2820,7 @@ async function processarComandoVozVitrine(transcricao){
     dispararFinalizarPorVoz();
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
     falarVozVitrine('Modo voz desativado.');
     setTimeout(pararModoVozVitrine, 1500);
     return;
@@ -3636,5 +3656,5 @@ if(initSupabaseV()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(() => iniciarModoVozVitrine(true), 800);
+  setTimeout(iniciarModoVozVitrine, 800);
 }
