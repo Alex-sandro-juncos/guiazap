@@ -2764,53 +2764,67 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
-  // Busca / adicionar produto LOCAL — "dog duplo de frango", "adicionar dog doritos"
-  // não depende da IA (que costuma falhar e responder "não entendi")
-  const querAdicionar = textoNormalizado.startsWith('adicionar ') || textoNormalizado.startsWith('coloca ') ||
-    textoNormalizado.startsWith('colocar ') || textoNormalizado.startsWith('poe ') || textoNormalizado.startsWith('põe ') ||
-    textoNormalizado.includes('adicionar ao carrinho') || textoNormalizado.includes('pro carrinho');
+  // Busca / adicionar produto LOCAL
+  const STOP_VOZ_VITRINE = ['comprar','compra','quero','queria','queria','me','ve','vê','ver','mostra','mostrar','busca','buscar','procurar','procura','pede','pedir','um','uma','uns','umas','o','a','os','as','de','do','da','dos','das','pra','para','pro','no','na','com','por','favor','ai','aí','esse','essa','aquele','aquela'];
 
-  let termoProduto = textoNormalizado;
-  if(querAdicionar){
-    termoProduto = textoNormalizado
-      .replace(/^adicionar( ao carrinho)?\s*/, '')
-      .replace(/^coloca(r)?\s*/, '')
-      .replace(/^p[oô]e\s*/, '')
-      .replace(/\s*pro carrinho\s*/, '')
-      .replace(/\s*no carrinho\s*/, '')
-      .trim();
+  const querAdicionar = (
+    textoNormalizado.includes('adicionar') ||
+    textoNormalizado.includes('coloca') ||
+    textoNormalizado.includes('colocar') ||
+    textoNormalizado.startsWith('poe ') ||
+    textoNormalizado.startsWith('põe ') ||
+    textoNormalizado.includes('pro carrinho') ||
+    textoNormalizado.includes('no carrinho') ||
+    textoNormalizado.startsWith('comprar ') ||
+    textoNormalizado.startsWith('compra ') ||
+    textoNormalizado.startsWith('quero ') ||
+    textoNormalizado.includes('quero comprar')
+  );
+
+  const palavrasBusca = textoNormalizado
+    .split(/\s+/)
+    .map(w => w.replace(/[^\wáéíóúâêôãõç]/gi, ''))
+    .filter(w => w.length > 1 && !STOP_VOZ_VITRINE.includes(w));
+
+  const termoLimpo = palavrasBusca.join(' ');
+
+  function pontuarProdutoVoz(p){
+    const nome = normalizarTextoV(p.nome);
+    const marca = normalizarTextoV(p.marca);
+    const cat = normalizarTextoV(p.categoria);
+    const desc = normalizarTextoV(p.descricao);
+    const blob = (nome + ' ' + marca + ' ' + cat + ' ' + desc).trim();
+    if(!palavrasBusca.length) return 0;
+    let pts = 0;
+    let acertos = 0;
+    palavrasBusca.forEach(w => {
+      if(nome.includes(w)){ pts += 5; acertos++; }
+      else if(marca.includes(w) || cat.includes(w)){ pts += 3; acertos++; }
+      else if(blob.includes(w)){ pts += 1; acertos++; }
+    });
+    if(acertos === 0) return 0;
+    if(nome.includes(termoLimpo)) pts += 8;
+    return pts;
   }
 
-  // Remove palavras miúdas que atrapalham o match ("de", "do", "da")
-  const termoLimpo = termoProduto.replace(/\b(de|do|da|dos|das|um|uma|o|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
-
   if(termoLimpo.length >= 2){
-    const candidatos = (produtos || []).filter(p => {
-      const nome = normalizarTextoV(p.nome);
-      const marca = normalizarTextoV(p.marca);
-      return nome.includes(termoLimpo) || termoLimpo.includes(nome) ||
-        nome.includes(termoProduto) || termoProduto.includes(nome) ||
-        (marca && (marca.includes(termoLimpo) || termoLimpo.includes(marca)));
-    });
+    const ranqueados = (produtos || [])
+      .map(p => ({ p, pts: pontuarProdutoVoz(p) }))
+      .filter(x => x.pts > 0)
+      .sort((a, b) => b.pts - a.pts);
 
-    // Match mais frouxo: todas as palavras do termo aparecem no nome
-    const palavras = termoLimpo.split(' ').filter(w => w.length > 1);
-    const candidatosFrouxos = candidatos.length > 0 ? candidatos : (produtos || []).filter(p => {
-      const nome = normalizarTextoV(p.nome);
-      return palavras.length > 0 && palavras.every(w => nome.includes(w));
-    });
+    if(ranqueados.length > 0){
+      const melhor = ranqueados[0].p;
+      document.getElementById('v-search').value = termoLimpo;
+      renderProdutos();
 
-    if(candidatosFrouxos.length > 0){
-      if(querAdicionar){
-        const produto = candidatosFrouxos[0];
-        adicionarAoCarrinho(produto.id);
+      if(querAdicionar && ranqueados[0].pts >= 5){
+        adicionarAoCarrinho(melhor.id);
         renderProdutos();
-        falarVozVitrine(`${produto.nome} adicionado ao carrinho.`);
+        falarVozVitrine(melhor.nome + ' adicionado ao carrinho. ' + lerResultadosBuscaVitrine());
         return;
       }
-      // Só busca/filtra e lê o que achou
-      document.getElementById('v-search').value = transcricao.trim();
-      renderProdutos();
+
       falarVozVitrine(lerResultadosBuscaVitrine());
       return;
     }
@@ -2837,14 +2851,14 @@ async function processarComandoVozVitrine(transcricao){
 
     if(!resp.ok){
       // Fallback: busca o termo falado
-      document.getElementById('v-search').value = transcricao.trim();
+      document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
       renderProdutos();
       falarVozVitrine(lerResultadosBuscaVitrine());
       return;
     }
 
     if(resultado.action === 'NENHUMA'){
-      document.getElementById('v-search').value = transcricao.trim();
+      document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
       renderProdutos();
       falarVozVitrine(lerResultadosBuscaVitrine());
       return;
@@ -2853,7 +2867,7 @@ async function processarComandoVozVitrine(transcricao){
     executarAcaoVozVitrine(resultado);
   } catch(e){
     console.error(e);
-    document.getElementById('v-search').value = transcricao.trim();
+    document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
     renderProdutos();
     falarVozVitrine(lerResultadosBuscaVitrine());
   }
