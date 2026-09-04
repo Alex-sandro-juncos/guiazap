@@ -3739,7 +3739,8 @@ function iniciarModoVozIndex(){
 
   _vozIndexReconhecimento = new SpeechRecognitionApi();
   _vozIndexReconhecimento.lang = 'pt-BR';
-  _vozIndexReconhecimento.continuous = true;
+  const ehCelularVoz = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  _vozIndexReconhecimento.continuous = !!ehCelularVoz;
   _vozIndexReconhecimento.interimResults = false;
 
   _vozIndexReconhecimento.onresult = (event) => {
@@ -4218,6 +4219,18 @@ function extrairDigitosDaFalaIndex(texto){
 }
 
 async function processarComandoVozIndex(transcricao){
+  const _tCmd = (transcricao||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(/\b(desligar|desativar|parar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd) || _tCmd === 'desligar' || _tCmd === 'parar' || _tCmd === 'sair'){
+    try{ speechSynthesis.cancel(); }catch(e){}
+    setTimeout(pararModoVozIndex, 400);
+    return;
+  }
+  if(/\b(ligar|ativar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd)){
+    if(typeof falarVozIndex === 'function' && 'processarComandoVozIndex'==='processarComandoVozIndex') falarVozIndex('Modo voz já está ligado.');
+    if(typeof falarVozVitrine === 'function' && 'processarComandoVozIndex'==='processarComandoVozVitrine') falarVozVitrine('Modo voz já está ligado.');
+    return;
+  }
+
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
   try {

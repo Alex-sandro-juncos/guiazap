@@ -2656,7 +2656,8 @@ function iniciarModoVozVitrine(){
 
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
   _vozVitrineReconhecimento.lang = 'pt-BR';
-  _vozVitrineReconhecimento.continuous = true;
+  const ehCelularVoz = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  _vozVitrineReconhecimento.continuous = !!ehCelularVoz;
   _vozVitrineReconhecimento.interimResults = false;
 
   _vozVitrineReconhecimento.onresult = (event) => {
@@ -2738,6 +2739,18 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  const _tCmd = (transcricao||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(/\b(desligar|desativar|parar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd) || _tCmd === 'desligar' || _tCmd === 'parar' || _tCmd === 'sair'){
+    try{ speechSynthesis.cancel(); }catch(e){}
+    setTimeout(pararModoVozVitrine, 400);
+    return;
+  }
+  if(/\b(ligar|ativar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd)){
+    if(typeof falarVozIndex === 'function' && 'processarComandoVozVitrine'==='processarComandoVozIndex') falarVozIndex('Modo voz já está ligado.');
+    if(typeof falarVozVitrine === 'function' && 'processarComandoVozVitrine'==='processarComandoVozVitrine') falarVozVitrine('Modo voz já está ligado.');
+    return;
+  }
+
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
