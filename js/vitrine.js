@@ -2693,10 +2693,18 @@ function falarVozVitrine(texto){
     }
   };
 
-  _vozVitrineSynth.speak(fala);
+  _vozVitrineSynth.speak(fala)
+  setTimeout(() => {
+    _vozVitrineFalando = false;
+    if(_vozVitrineReconhecimento){
+      try{ _vozVitrineReconhecimento.start(); } catch(e){}
+    }
+  }, 6000);;
 }
 
 async function processarComandoVozVitrine(transcricao){
+  if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
+  _vozVitrineFalando = false;
   if(typeof autorizarComandoPorVoz === "function" && !autorizarComandoPorVoz()) return;
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
   // somente voz, essa fala é sobre isso — nada mais é processado
