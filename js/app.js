@@ -62,6 +62,7 @@ function toggleAuthForm(){
           <button type="button" class="btn-auth-outline" onclick="signUp()">Criar conta</button>
           <span class="auth-msg" id="auth-msg"></span>
         </div>
+        ${localStorage.getItem('pin_login_configurado_neste_aparelho') ? `<button type="button" class="btn-auth-outline" style="width:100%; margin-top:8px;" onclick="entrarComPin()">🔢 Entrar com PIN</button>` : ''}
         <a href="#" class="forgot-link" onclick="forgotPassword(); return false;">Esqueci minha senha</a>
       </form>
     `;
@@ -272,6 +273,15 @@ async function signUp(){
   localStorage.setItem('abrirCadastroAposLogin', '1');
 }
 
+function obterDeviceTokenPin(){
+  let token = localStorage.getItem('device_token_pin');
+  if(!token){
+    token = 'dev_' + Array.from(crypto.getRandomValues(new Uint8Array(20))).map(b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('device_token_pin', token);
+  }
+  return token;
+}
+
 async function signIn(){
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
@@ -282,6 +292,65 @@ async function signIn(){
   const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if(error){ msg.textContent = error.message; return; }
   msg.textContent = '';
+
+  // Se esse aparelho ainda não tem um PIN de login rápido configurado,
+  // oferece a opção — útil especialmente pra quem usa leitor de tela, já
+  // que digitar e-mail/senha toda vez é mais trabalhoso
+  if(!localStorage.getItem('pin_login_configurado_neste_aparelho')){
+    setTimeout(oferecerConfigurarPinLogin, 800);
+  }
+}
+
+async function oferecerConfigurarPinLogin(){
+  if(!confirm('Quer configurar um PIN de 4 números pra entrar mais rápido nesse mesmo aparelho da próxima vez (sem digitar e-mail/senha de novo)?')) return;
+
+  const pin = prompt('Escolhe um PIN de 4 números:');
+  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const deviceToken = obterDeviceTokenPin();
+
+  try{
+    const resp = await fetch('/.netlify/functions/definir-pin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pin, deviceToken })
+    });
+    const data = await resp.json();
+    if(!resp.ok){ alert('Erro ao configurar PIN: ' + (data.error || 'tenta de novo')); return; }
+
+    localStorage.setItem('pin_login_configurado_neste_aparelho', '1');
+    alert('✓ PIN configurado! Da próxima vez, é só usar o botão "Entrar com PIN" nesse mesmo aparelho.');
+  } catch(e){
+    console.error(e);
+  }
+}
+
+async function entrarComPin(){
+  const pin = prompt('Digite seu PIN de login:');
+  if(!pin) return;
+
+  const deviceToken = localStorage.getItem('device_token_pin');
+  if(!deviceToken){ alert('Esse aparelho ainda não tem PIN configurado. Faz login normal primeiro.'); return; }
+
+  try{
+    const resp = await fetch('/.netlify/functions/login-com-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, deviceToken })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok){ alert(data.error || 'Erro ao entrar com PIN.'); return; }
+
+    const { error } = await supabaseClient.auth.verifyOtp({ email: data.email, token: data.hashedToken, type: 'magiclink' });
+    if(error){ alert('PIN certo, mas houve um erro ao completar o login: ' + error.message); return; }
+
+    window.location.reload();
+  } catch(e){
+    console.error(e);
+    alert('Erro ao entrar com PIN.');
+  }
 }
 
 async function signOut(){
@@ -3347,67 +3416,6 @@ function validarCNPJ(cnpj){
   return true;
 }
 
-async function conferirDocumentoAoSair(){
-  const campo = document.getElementById('f-documento');
-  const msg = document.getElementById('f-documento-msg');
-  const digitos = campo.value.replace(/\D/g, '');
-  if(!msg || !digitos) return;
-
-  if(digitos.length === 11){
-    msg.textContent = validarCPF(digitos) ? '✓ CPF válido' : '⚠️ Esse CPF não é válido — confira os números';
-    msg.style.color = validarCPF(digitos) ? 'var(--verde-escuro)' : '#a4402f';
-    return;
-  }
-
-  if(digitos.length === 14){
-    if(!validarCNPJ(digitos)){
-      msg.textContent = '⚠️ Esse CNPJ não é válido — confira os números';
-      msg.style.color = '#a4402f';
-      return;
-    }
-
-    msg.textContent = 'Consultando na Receita Federal...';
-    msg.style.color = '#888';
-    try{
-      const resp = await fetch(`/.netlify/functions/consultar-cnpj?cnpj=${digitos}`);
-      const data = await resp.json();
-
-      if(!data.encontrado){
-        msg.textContent = '⚠️ Não encontramos esse CNPJ na Receita Federal — confira os números';
-        msg.style.color = '#a4402f';
-        return;
-      }
-
-      const nomeDigitado = normalizarTexto(document.getElementById('f-name').value.trim());
-      const razaoSocial = normalizarTexto(data.razao_social || '');
-      const nomeFantasia = normalizarTexto(data.nome_fantasia || '');
-      const bateComAlgum = nomeDigitado && (razaoSocial.includes(nomeDigitado) || nomeDigitado.includes(razaoSocial) || (nomeFantasia && (nomeFantasia.includes(nomeDigitado) || nomeDigitado.includes(nomeFantasia))));
-
-      if(data.situacao && data.situacao.toUpperCase() !== 'ATIVA'){
-        msg.textContent = `⚠️ CNPJ válido, mas a situação na Receita é "${data.situacao}" (não ativa)`;
-        msg.style.color = '#a4402f';
-      } else if(!nomeDigitado){
-        msg.textContent = `✓ CNPJ válido — Razão Social: ${data.razao_social}`;
-        msg.style.color = 'var(--verde-escuro)';
-      } else if(bateComAlgum){
-        msg.textContent = `✓ CNPJ válido e o nome bate com a Receita Federal (${data.razao_social})`;
-        msg.style.color = 'var(--verde-escuro)';
-      } else {
-        msg.textContent = `⚠️ CNPJ válido, mas o nome digitado não parece bater com a Receita Federal (lá consta: "${data.razao_social}")`;
-        msg.style.color = '#a4402f';
-      }
-    } catch(e){
-      console.error(e);
-      msg.textContent = '⚠️ Não conseguimos consultar a Receita Federal agora — confira os números manualmente';
-      msg.style.color = '#a4402f';
-    }
-    return;
-  }
-
-  msg.textContent = digitos.length > 0 ? '⚠️ CPF tem 11 números, CNPJ tem 14 — confira a quantidade' : '';
-  msg.style.color = '#a4402f';
-}
-
 function mascaraCep(event){
   let v = event.target.value.replace(/\D/g, '').slice(0, 8);
   if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
@@ -3672,4 +3680,179 @@ async function ativarNotificacoesPush(){
     console.error(e);
     alert('Erro ao ativar notificações. Tente de novo.');
   }
+}
+
+// ---------- MODO VOZ (MÃOS LIVRES) NA PÁGINA PRINCIPAL ----------
+// Igual ao motor de voz da Vitrine, adaptado pra busca de empresas — não
+// exige login, já que buscar é uma ação pública.
+
+let _vozIndexReconhecimento = null;
+let _vozIndexAtiva = false;
+let _vozIndexFalando = false;
+const _vozIndexSynth = window.speechSynthesis;
+
+function toggleModoVozIndex(){
+  if(_vozIndexAtiva){
+    pararModoVozIndex();
+  } else {
+    iniciarModoVozIndex();
+  }
+}
+
+function iniciarModoVozIndex(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
+    return;
+  }
+
+  _vozIndexAtiva = true;
+  document.getElementById('btn-modo-voz-index').style.background = '#a4402f';
+  document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
+  document.getElementById('painel-modo-voz-index').style.display = 'block';
+
+  _vozIndexReconhecimento = new SpeechRecognitionApi();
+  _vozIndexReconhecimento.lang = 'pt-BR';
+  _vozIndexReconhecimento.continuous = true;
+  _vozIndexReconhecimento.interimResults = false;
+
+  _vozIndexReconhecimento.onresult = (event) => {
+    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarComandoVozIndex(transcricao);
+  };
+
+  _vozIndexReconhecimento.onend = () => {
+    if(_vozIndexAtiva && !_vozIndexFalando){
+      try{ _vozIndexReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozIndexReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      pararModoVozIndex();
+    }
+  };
+
+  try{ _vozIndexReconhecimento.start(); } catch(e){}
+  falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+}
+
+function pararModoVozIndex(){
+  _vozIndexAtiva = false;
+  if(_vozIndexReconhecimento){
+    try{ _vozIndexReconhecimento.stop(); } catch(e){}
+  }
+  _vozIndexSynth.cancel();
+  document.getElementById('btn-modo-voz-index').style.background = '#6b46c1';
+  document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Ativar modo voz, buscar empresas sem tocar na tela');
+  document.getElementById('painel-modo-voz-index').style.display = 'none';
+}
+
+function falarVozIndex(texto){
+  _vozIndexFalando = true;
+  if(_vozIndexReconhecimento){ try{ _vozIndexReconhecimento.stop(); } catch(e){} }
+  _vozIndexSynth.cancel();
+
+  document.getElementById('voz-index-status').textContent = '🔊 ' + texto;
+  document.getElementById('voz-index-indicador').style.background = '#4fc3a1';
+
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+
+  fala.onend = () => {
+    document.getElementById('voz-index-indicador').style.background = '#6b46c1';
+    document.getElementById('voz-index-status').textContent = '🎙️ Pode falar';
+    _vozIndexFalando = false;
+    if(_vozIndexAtiva){
+      try{ _vozIndexReconhecimento.start(); } catch(e){}
+    }
+  };
+
+  _vozIndexSynth.speak(fala);
+}
+
+async function processarComandoVozIndex(transcricao){
+  const textoNormalizado = normalizarTexto(transcricao);
+
+  // Comandos locais instantâneos
+  if(textoNormalizado.includes('limpar busca') || textoNormalizado.includes('nova busca')){
+    document.getElementById('search').value = '';
+    render();
+    falarVozIndex('Busca limpa.');
+    return;
+  }
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar')){
+    falarVozIndex('Modo voz desativado.');
+    setTimeout(pararModoVozIndex, 1500);
+    return;
+  }
+
+  document.getElementById('voz-index-status').textContent = '🤔 Pensando...';
+  document.getElementById('voz-index-indicador').style.background = '#e91e63';
+
+  try{
+    // Manda só as primeiras 30 empresas visíveis na tela agora, pra IA
+    // conseguir identificar qual abrir/ligar se a pessoa pedir isso
+    const empresasVisiveis = entries.filter(e => e.status_pagamento === 'ativo').slice(0, 30).map(e => ({ id: e.id, name: e.name, cat: e.cat, cidade: e.cidade }));
+
+    const resp = await fetch('/.netlify/functions/interpretar-comando-voz-index', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: transcricao, empresasVisiveis })
+    });
+    const resultado = await resp.json();
+
+    if(!resp.ok){
+      falarVozIndex(resultado.error || 'Tive um problema ao entender. Pode repetir?');
+      return;
+    }
+
+    executarAcaoVozIndex(resultado);
+  } catch(e){
+    console.error(e);
+    falarVozIndex('Não consegui processar agora. Pode repetir?');
+  }
+}
+
+function executarAcaoVozIndex(resultado){
+  const { action, params, voice_response } = resultado;
+
+  if(action === 'BUSCAR' && params && params.termo){
+    document.getElementById('search').value = params.termo;
+    render();
+    const totalResultados = document.getElementById('count').textContent.match(/\d+/);
+    const respostaComContagem = totalResultados ? `${voice_response} Encontrei ${totalResultados[0]} resultados.` : voice_response;
+    falarVozIndex(respostaComContagem || 'Busca feita.');
+    return;
+  }
+
+  if(action === 'FILTRAR_CIDADE' && params && params.cidade){
+    document.getElementById('gz-localidade-busca').value = params.cidade;
+    onCidadeFiltroChange();
+  }
+
+  if(action === 'ABRIR_WHATSAPP' && params && params.id){
+    const empresa = entries.find(e => e.id === params.id);
+    if(empresa){
+      falarVozIndex(voice_response || `Abrindo o WhatsApp de ${empresa.name}.`);
+      setTimeout(() => {
+        window.open(`https://wa.me/55${(empresa.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}`, '_blank');
+      }, 1200);
+      return;
+    }
+  }
+
+  if(action === 'ABRIR_CHAT' && params && params.id){
+    const empresa = entries.find(e => e.id === params.id);
+    if(empresa){
+      falarVozIndex(voice_response || `Abrindo o Papo com ${empresa.name}.`);
+      setTimeout(() => { window.location.href = `chat.html?empresa=${empresa.id}`; }, 1200);
+      return;
+    }
+  }
+
+  falarVozIndex(voice_response || 'Feito.');
 }

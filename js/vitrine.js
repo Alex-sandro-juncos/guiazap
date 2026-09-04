@@ -2494,6 +2494,68 @@ async function salvarProdutosExtraidosIA(){
 // REAIS do carrinho — a IA nunca mexe direto no carrinho ou finaliza pedido
 // sozinha, só decide QUAL ação chamar.
 
+// ---------- CADASTRO DE CARTÃO (pra pagamento por voz) ----------
+// Usa o SDK oficial do Mercado Pago — o número do cartão nunca passa pelo
+// nosso servidor, só um token seguro gerado direto no navegador da pessoa.
+
+const MP_PUBLIC_KEY_VITRINE = 'APP_USR-f76cdce7-5905-4f0f-9102-e664d5f6fa1c';
+let _mpCardForm = null;
+
+function abrirCadastroCartaoVoz(){
+  if(!currentUserV){ alert('Você precisa estar logado.'); return; }
+  document.getElementById('overlay-cadastro-cartao').style.display = 'flex';
+  document.getElementById('cadastro-cartao-msg').textContent = '';
+
+  if(_mpCardForm) return; // já inicializado antes, não precisa de novo
+
+  const mp = new MercadoPago(MP_PUBLIC_KEY_VITRINE);
+  _mpCardForm = mp.cardForm({
+    amount: '1.00', // valor simbólico — esse formulário só GERA o token pra salvar, não cobra nada aqui
+    iframe: true,
+    form: {
+      id: 'form-cadastro-cartao',
+      cardNumber: { id: 'cardNumberContainer', placeholder: 'Número do cartão' },
+      expirationDate: { id: 'expirationDateContainer', placeholder: 'MM/AA' },
+      securityCode: { id: 'securityCodeContainer', placeholder: 'CVV' },
+      cardholderName: { id: 'form-cartao-nome', placeholder: 'Nome no cartão' },
+      identificationNumber: { id: 'form-cartao-cpf', placeholder: 'CPF' }
+    },
+    callbacks: {
+      onFormMounted: (error) => { if(error) console.error('erro ao montar formulário de cartão', error); },
+      onSubmit: async (event) => {
+        event.preventDefault();
+        const msg = document.getElementById('cadastro-cartao-msg');
+        msg.textContent = 'salvando cartão...';
+
+        const dados = _mpCardForm.getCardFormData();
+        if(!dados.token){ msg.textContent = 'Não consegui gerar o token do cartão. Confere os dados.'; return; }
+
+        try{
+          const { data: { session } } = await supabaseClientV.auth.getSession();
+          const resp = await fetch('/.netlify/functions/salvar-cartao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ cardToken: dados.token })
+          });
+          const respData = await resp.json();
+
+          if(!resp.ok){ msg.textContent = respData.error || 'Erro ao salvar o cartão.'; return; }
+
+          msg.textContent = `✓ Cartão salvo! Terminando em ${respData.ultimosDigitos}.`;
+          setTimeout(fecharCadastroCartaoVoz, 1800);
+        } catch(e){
+          console.error(e);
+          msg.textContent = 'Erro ao salvar o cartão. Tenta de novo.';
+        }
+      }
+    }
+  });
+}
+
+function fecharCadastroCartaoVoz(){
+  document.getElementById('overlay-cadastro-cartao').style.display = 'none';
+}
+
 let _vozVitrineReconhecimento = null;
 let _vozVitrineAtiva = false;
 let _vozVitrineFalando = false;
@@ -2520,6 +2582,7 @@ function iniciarModoVozVitrine(){
 
   _vozVitrineAtiva = true;
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
+  document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
 
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
@@ -2561,6 +2624,7 @@ function pararModoVozVitrine(){
   }
   _vozVitrineSynth.cancel();
   document.getElementById('btn-modo-voz-vitrine').style.background = '#6b46c1';
+  document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Ativar modo voz, comprar sem tocar na tela');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'none';
 }
 
@@ -2591,11 +2655,23 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  // Se estamos no meio do fluxo de finalizar pedido (retirada/entrega,
+  // endereço, PIN ou CVV), essa fala pertence a essa etapa — não passa
+  // pelos comandos normais nem pela IA
+  if(_estadoFinalizacaoVoz){
+    await processarEtapaFinalizacaoVoz(transcricao);
+    return;
+  }
+
   const textoNormalizado = normalizarTextoV(transcricao);
 
   // Comandos locais instantâneos — resolvidos na hora, sem esperar a IA
   if(textoNormalizado.includes('meu carrinho') || textoNormalizado.includes('ver carrinho') || (textoNormalizado.includes('carrinho') && textoNormalizado.length < 20)){
     lerCarrinhoEmVozAlta();
+    return;
+  }
+  if(textoNormalizado.includes('configurar pin') || textoNormalizado.includes('criar pin') || textoNormalizado.includes('cadastrar pin')){
+    configurarPinVozPorVoz();
     return;
   }
   if(textoNormalizado.includes('finalizar') || textoNormalizado.includes('fechar pedido') || textoNormalizado.includes('fechar a conta')){
@@ -2674,13 +2750,258 @@ function lerCarrinhoEmVozAlta(){
   falarVozVitrine(`No seu carrinho: ${itensFalados}. Total de ${total.toFixed(2).replace('.', ',')} reais. Quer finalizar o pedido?`);
 }
 
-function dispararFinalizarPorVoz(){
+let _aguardandoPinVozParaFinalizar = null; // não usada mais — mantida só pra não quebrar nada que ainda referencie
+
+// Converte fala tipo "um dois três quatro" ou "1234" num PIN só de dígitos —
+// o reconhecimento de voz às vezes escreve os números por extenso
+function extrairDigitosDaFala(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTextoV(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
+}
+
+let _estadoFinalizacaoVoz = null;
+// formato: { etapa: 'retirada_entrega' | 'endereco' | 'pin' | 'cvv', profissionalId, itensPayload, subtotal, taxaEntrega, enderecoEntrega, latitudeEntrega, longitudeEntrega }
+
+async function dispararFinalizarPorVoz(){
   if(carrinhoV.length === 0){
     falarVozVitrine('Seu carrinho está vazio, não tem o que finalizar.');
     return;
   }
-  abrirCarrinho();
-  falarVozVitrine('Abri seu carrinho na tela. Confirma os itens e toca em finalizar pedido pra continuar — por segurança, essa última parte precisa ser confirmada na tela.');
+
+  const profissionaisNoCarrinho = [...new Set(carrinhoV.map(i => i.profissionalId))];
+  if(profissionaisNoCarrinho.length > 1){
+    abrirCarrinho();
+    falarVozVitrine('Você tem itens de mais de uma empresa no carrinho. Por segurança, finaliza cada uma separadamente tocando na tela dessa vez.');
+    return;
+  }
+
+  const profissionalId = profissionaisNoCarrinho[0];
+  const itensDaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
+  const itensPayload = itensDaEmpresa.map(i => ({ id: i.produtoId, nome: i.nome, preco: i.preco }));
+  const subtotal = itensDaEmpresa.reduce((soma, i) => soma + precoTextoParaNumeroV(i.preco) * i.quantidade, 0);
+
+  _estadoFinalizacaoVoz = { etapa: null, profissionalId, itensPayload, subtotal, taxaEntrega: 0, enderecoEntrega: null, latitudeEntrega: null, longitudeEntrega: null };
+
+  const { data: config } = await supabaseClientV.from('atendimento_config').select('faz_entrega').eq('profissional_id', profissionalId).maybeSingle();
+
+  if(config && config.faz_entrega){
+    _estadoFinalizacaoVoz.etapa = 'retirada_entrega';
+    falarVozVitrine('Você quer retirar no local, ou receber em casa?');
+  } else {
+    _estadoFinalizacaoVoz.etapa = 'pin';
+    falarVozVitrine(`Seu pedido é de ${subtotal.toFixed(2).replace('.', ',')} reais, retirada no local. Fala seu PIN de voz pra confirmar o pagamento.`);
+  }
+}
+
+async function processarEtapaFinalizacaoVoz(transcricao){
+  const estado = _estadoFinalizacaoVoz;
+  const textoNorm = normalizarTextoV(transcricao);
+
+  if(estado.etapa === 'retirada_entrega'){
+    const querEntrega = textoNorm.includes('entrega') || textoNorm.includes('casa') || textoNorm.includes('receber');
+    const querRetirar = textoNorm.includes('retirar') || textoNorm.includes('retirada') || textoNorm.includes('local') || textoNorm.includes('buscar');
+
+    if(querEntrega && !querRetirar){
+      // Confere se já tem endereço padrão salvo
+      const { data: { user } } = await supabaseClientV.auth.getUser();
+      const { data: perfil } = await supabaseClientV.from('perfis_usuario').select('endereco_padrao_texto, endereco_padrao_latitude, endereco_padrao_longitude').eq('user_id', user.id).maybeSingle();
+
+      if(perfil && perfil.endereco_padrao_texto){
+        await calcularFreteEAvancarParaPin(perfil.endereco_padrao_texto, perfil.endereco_padrao_latitude, perfil.endereco_padrao_longitude);
+      } else {
+        estado.etapa = 'endereco';
+        falarVozVitrine('Ainda não tenho seu endereço salvo. Fala seu endereço completo: rua, número, bairro e cidade.');
+      }
+      return;
+    }
+
+    if(querRetirar && !querEntrega){
+      estado.etapa = 'pin';
+      falarVozVitrine(`Beleza, retirada no local. Seu pedido é de ${estado.subtotal.toFixed(2).replace('.', ',')} reais. Fala seu PIN de voz pra confirmar.`);
+      return;
+    }
+
+    falarVozVitrine('Não entendi. Fala "retirar" ou "entrega".');
+    return;
+  }
+
+  if(estado.etapa === 'endereco'){
+    document.getElementById('voz-vitrine-status').textContent = '📍 Calculando frete...';
+    await calcularFreteEAvancarParaPin(transcricao, null, null);
+
+    // Salva esse endereço como padrão pra próxima vez, se deu certo
+    if(estado.enderecoEntrega){
+      const { data: { user } } = await supabaseClientV.auth.getUser();
+      await supabaseClientV.from('perfis_usuario').update({
+        endereco_padrao_texto: estado.enderecoEntrega,
+        endereco_padrao_latitude: estado.latitudeEntrega,
+        endereco_padrao_longitude: estado.longitudeEntrega
+      }).eq('user_id', user.id);
+    }
+    return;
+  }
+
+  if(estado.etapa === 'pin'){
+    await processarConfirmacaoPinVoz(transcricao);
+    return;
+  }
+
+  if(estado.etapa === 'cvv'){
+    await processarConfirmacaoCvvVoz(transcricao);
+    return;
+  }
+}
+
+async function calcularFreteEAvancarParaPin(endereco, latitude, longitude){
+  const estado = _estadoFinalizacaoVoz;
+  try{
+    const resp = await fetch('/.netlify/functions/calcular-frete-carrinho', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profissionalId: estado.profissionalId, endereco, latitude, longitude })
+    });
+    const dados = await resp.json();
+
+    if(!dados.encontrado){
+      falarVozVitrine('Não consegui localizar esse endereço. Fala de novo, com rua, número, bairro e cidade.');
+      estado.etapa = 'endereco';
+      return;
+    }
+
+    estado.taxaEntrega = dados.valorFrete;
+    estado.enderecoEntrega = endereco;
+    estado.latitudeEntrega = dados.latitudeCliente;
+    estado.longitudeEntrega = dados.longitudeCliente;
+    estado.etapa = 'pin';
+
+    const total = estado.subtotal + estado.taxaEntrega;
+    falarVozVitrine(`Frete de ${estado.taxaEntrega.toFixed(2).replace('.', ',')} reais. Total do pedido: ${total.toFixed(2).replace('.', ',')} reais. Fala seu PIN de voz pra confirmar.`);
+  } catch(e){
+    console.error(e);
+    falarVozVitrine('Deu erro ao calcular o frete. Tenta de novo.');
+    estado.etapa = 'endereco';
+  }
+}
+
+async function processarConfirmacaoPinVoz(transcricao){
+  const pinFalado = extrairDigitosDaFala(transcricao);
+  const estado = _estadoFinalizacaoVoz;
+
+  if(!pinFalado || pinFalado.length < 4){
+    falarVozVitrine('Não entendi o PIN direito. Fala os números de novo, um por um.');
+    return;
+  }
+
+  document.getElementById('voz-vitrine-status').textContent = '🔐 Conferindo PIN...';
+
+  try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
+    const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pin: pinFalado })
+    });
+    const data = await resp.json();
+
+    if(data.motivo === 'sem_pin_cadastrado'){
+      _estadoFinalizacaoVoz = null;
+      falarVozVitrine('Você ainda não configurou um PIN de voz. Toca no botão de configurar PIN no painel de voz pra criar um, e depois tenta finalizar de novo.');
+      return;
+    }
+
+    if(!data.valido){
+      falarVozVitrine('PIN incorreto. Fala de novo, com calma.');
+      return;
+    }
+
+    // PIN certo — agora pede o CVV do cartão salvo pra cobrar de verdade
+    estado.etapa = 'cvv';
+    falarVozVitrine('PIN confirmado! Agora fala o código de segurança (CVV) do seu cartão salvo.');
+  } catch(e){
+    console.error(e);
+    falarVozVitrine('Deu um erro ao conferir o PIN. Tenta de novo.');
+  }
+}
+
+async function processarConfirmacaoCvvVoz(transcricao){
+  const cvvFalado = extrairDigitosDaFala(transcricao);
+  const estado = _estadoFinalizacaoVoz;
+
+  if(!cvvFalado || cvvFalado.length < 3){
+    falarVozVitrine('Não entendi o código de segurança. Fala os números do CVV de novo.');
+    return;
+  }
+
+  document.getElementById('voz-vitrine-status').textContent = '💳 Processando pagamento...';
+  falarVozVitrine('Processando seu pagamento, aguarde um instante.');
+
+  try{
+    const { data: { session } } = await supabaseClientV.auth.getSession();
+    const resp = await fetch('/.netlify/functions/cobrar-cartao-salvo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        cvv: cvvFalado,
+        profissionalId: estado.profissionalId,
+        itens: estado.itensPayload,
+        subtotal: estado.subtotal,
+        taxaEntrega: estado.taxaEntrega,
+        enderecoEntrega: estado.enderecoEntrega,
+        latitudeEntrega: estado.latitudeEntrega,
+        longitudeEntrega: estado.longitudeEntrega
+      })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok){
+      if(data.semCartao){
+        falarVozVitrine('Você ainda não tem um cartão salvo. Toca no botão de cadastrar cartão no painel de voz.');
+      } else {
+        falarVozVitrine(data.error || 'Não consegui processar o pagamento. Tenta de novo.');
+      }
+      _estadoFinalizacaoVoz = null;
+      return;
+    }
+
+    // Sucesso! Limpa o carrinho dessa empresa
+    carrinhoV = carrinhoV.filter(i => i.profissionalId !== estado.profissionalId);
+    salvarCarrinhoV();
+    renderProdutos();
+    _estadoFinalizacaoVoz = null;
+
+    falarVozVitrine(`Pagamento aprovado! Seu código de confirmação é ${data.codigoConfirmacao}. O pedido já foi enviado.`);
+  } catch(e){
+    console.error(e);
+    falarVozVitrine('Deu um erro ao processar o pagamento. Tenta de novo.');
+    _estadoFinalizacaoVoz = null;
+  }
+}
+
+async function configurarPinVozPorVoz(){
+  const pin = prompt('Escolhe um PIN de voz de 4 números (usado pra confirmar pagamentos por voz):');
+  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+
+  const { data: { session } } = await supabaseClientV.auth.getSession();
+  try{
+    const resp = await fetch('/.netlify/functions/definir-pin-voz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ pin })
+    });
+    const data = await resp.json();
+    if(!resp.ok){ alert('Erro ao configurar: ' + (data.error || 'tenta de novo')); return; }
+    alert('✓ PIN de voz configurado! Você pode usar ele pra confirmar pagamentos pelo modo voz.');
+  } catch(e){
+    console.error(e);
+    alert('Erro ao configurar PIN de voz.');
+  }
 }
 
 atualizarBadgeCarrinho();

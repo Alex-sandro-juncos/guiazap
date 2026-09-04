@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://sdk.mercadopago.com/js/v2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
@@ -261,7 +262,7 @@
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
     <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
-    <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
+    <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" aria-label="Ativar modo voz, comprar sem tocar na tela" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
   </div>
   <div class="vitrine-filtros">
     <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>
@@ -328,10 +329,33 @@
   <div style="display:flex; align-items:center; gap:10px;">
     <div id="voz-vitrine-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
     <div style="flex:1; min-width:0;">
-      <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-vitrine-status">🎙️ Modo voz ativado — pode falar</div>
+      <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-vitrine-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
       <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-vitrine-transcricao"></div>
     </div>
     <button type="button" onclick="toggleModoVozVitrine()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
+  </div>
+  <button type="button" onclick="configurarPinVozPorVoz()" aria-label="Configurar PIN de voz pra confirmar pagamentos" style="width:100%; margin-top:10px; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.25); background:none; color:#ccc; font-size:0.75rem; cursor:pointer;">🔐 Configurar PIN de voz</button>
+  <button type="button" onclick="abrirCadastroCartaoVoz()" aria-label="Cadastrar cartão pra pagar por voz" style="width:100%; margin-top:6px; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.25); background:none; color:#ccc; font-size:0.75rem; cursor:pointer;">💳 Cadastrar cartão pra pagar por voz</button>
+</div>
+
+<div id="overlay-cadastro-cartao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1700; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; width:100%; max-width:420px; border-radius:16px; padding:20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <b style="font-size:1rem;">💳 Cadastrar cartão</b>
+      <button type="button" onclick="fecharCadastroCartaoVoz()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+    </div>
+    <p style="font-size:0.8rem; color:#666; margin-bottom:14px;">Esse cartão fica salvo com segurança direto no Mercado Pago — o GuiaZap nunca vê o número completo. Depois de cadastrado, você paga pelos próximos pedidos só falando o PIN de voz e o CVV.</p>
+    <form id="form-cadastro-cartao">
+      <div id="cardNumberContainer" style="border:1px solid #ddd; border-radius:8px; padding:10px; margin-bottom:8px; height:20px;"></div>
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <div id="expirationDateContainer" style="flex:1; border:1px solid #ddd; border-radius:8px; padding:10px; height:20px;"></div>
+        <div id="securityCodeContainer" style="flex:1; border:1px solid #ddd; border-radius:8px; padding:10px; height:20px;"></div>
+      </div>
+      <input type="text" id="form-cartao-nome" placeholder="Nome impresso no cartão" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:8px;">
+      <input type="text" id="form-cartao-cpf" placeholder="CPF do titular (só números)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:12px;">
+      <button type="submit" style="width:100%; padding:12px; border-radius:8px; border:none; background:#0f766e; color:white; font-weight:700; cursor:pointer;">Salvar cartão</button>
+      <span id="cadastro-cartao-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+    </form>
   </div>
 </div>
 
