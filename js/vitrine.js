@@ -98,7 +98,7 @@ let produtoFiltroId = null;
 async function loadProdutos(){
   const { data, error } = await supabaseClientV
     .from('produtos')
-    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id, plano, cidade, bairro, estado, cat))'
+    .select('*, profissionais(id, name, whatsapp, status_pagamento, user_id, plano, cidade, bairro, estado, cat)')
     .order('created_at', { ascending: false });
 
   if(error){ console.error(error); return; }
