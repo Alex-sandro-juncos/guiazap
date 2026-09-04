@@ -3786,6 +3786,152 @@ function falarVozIndex(texto){
 let _modoSomenteVozAtivoIndex = false;
 let _aguardandoPinParaDestravarIndex = false;
 
+// ---------- CADASTRO DE EMPRESA POR VOZ ----------
+
+let _estadoCadastroVoz = null;
+// formato: { etapa: 'nome' | 'documento' | 'categoria' | 'cep' | 'estado' | 'cidade' | 'bairro' | 'whatsapp' | 'confirmar' }
+
+function iniciarCadastroPorVoz(){
+  if(!currentUser){
+    falarVozIndex('Você precisa estar logado pra cadastrar uma empresa. Faz login primeiro, com a tela normal.');
+    return;
+  }
+  openForm();
+  _estadoCadastroVoz = { etapa: 'nome' };
+  falarVozIndex('Vamos cadastrar sua empresa por voz. Qual o nome dela?');
+}
+
+async function processarEtapaCadastroVoz(transcricao){
+  const estado = _estadoCadastroVoz;
+
+  if(estado.etapa === 'nome'){
+    document.getElementById('f-name').value = transcricao.trim();
+    estado.etapa = 'documento';
+    falarVozIndex('Certo. Agora fala seu CPF ou CNPJ, número por número.');
+    return;
+  }
+
+  if(estado.etapa === 'documento'){
+    const digitos = extrairDigitosDaFalaIndex(transcricao);
+    if(digitos.length !== 11 && digitos.length !== 14){
+      falarVozIndex(`Entendi ${digitos.length} números, mas CPF tem 11 e CNPJ tem 14. Fala de novo, número por número.`);
+      return;
+    }
+    document.getElementById('f-documento').value = digitos;
+    const valido = digitos.length === 11 ? validarCPF(digitos) : validarCNPJ(digitos);
+    if(!valido){
+      falarVozIndex('Esse número não parece válido. Fala de novo, com calma.');
+      document.getElementById('f-documento').value = '';
+      return;
+    }
+    estado.etapa = 'categoria';
+    falarVozIndex('Documento certo. Qual a categoria principal? Tipo dentista, padaria, oficina...');
+    return;
+  }
+
+  if(estado.etapa === 'categoria'){
+    document.getElementById('f-cat').value = transcricao.trim();
+    estado.etapa = 'cep';
+    falarVozIndex('Você sabe o CEP do endereço? Se souber, fala os números. Se não souber, fala "não sei".');
+    return;
+  }
+
+  if(estado.etapa === 'cep'){
+    const textoNorm = normalizarTexto(transcricao);
+    if(textoNorm.includes('nao sei') || textoNorm.includes('nao tenho')){
+      estado.etapa = 'estado';
+      falarVozIndex('Sem problema. Qual o estado? Fala a sigla, tipo Paraná ou PR.');
+      return;
+    }
+
+    const digitosCep = extrairDigitosDaFalaIndex(transcricao);
+    if(digitosCep.length !== 8){
+      falarVozIndex('Não entendi o CEP direito, precisa ter 8 números. Fala de novo, ou fala "não sei".');
+      return;
+    }
+
+    document.getElementById('f-cep').value = digitosCep;
+    falarVozIndex('Buscando o endereço...');
+    await buscarCep();
+
+    // Confere se o CEP preencheu tudo sozinho
+    if(document.getElementById('f-cidade').value && document.getElementById('f-bairro').value){
+      estado.etapa = 'whatsapp';
+      falarVozIndex(`Endereço encontrado: ${document.getElementById('f-cidade').value}, ${document.getElementById('f-bairro').value}. Agora fala seu WhatsApp com DDD, número por número.`);
+    } else {
+      estado.etapa = 'estado';
+      falarVozIndex('Não achei esse CEP. Vamos preencher manualmente. Qual o estado?');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'estado'){
+    const sigla = extrairSiglaEstadoDaFala(transcricao);
+    if(!sigla){
+      falarVozIndex('Não reconheci esse estado. Fala só a sigla, tipo PR, SP, RJ.');
+      return;
+    }
+    document.getElementById('f-estado').value = sigla;
+    onEstadoCadastroChange();
+    estado.etapa = 'cidade';
+    falarVozIndex('Qual a cidade?');
+    return;
+  }
+
+  if(estado.etapa === 'cidade'){
+    document.getElementById('f-cidade').value = transcricao.trim();
+    estado.etapa = 'bairro';
+    falarVozIndex('Qual o bairro?');
+    return;
+  }
+
+  if(estado.etapa === 'bairro'){
+    document.getElementById('f-bairro').value = transcricao.trim();
+    estado.etapa = 'whatsapp';
+    falarVozIndex('Agora fala seu WhatsApp com DDD, número por número.');
+    return;
+  }
+
+  if(estado.etapa === 'whatsapp'){
+    const digitosWpp = extrairDigitosDaFalaIndex(transcricao);
+    if(digitosWpp.length < 10){
+      falarVozIndex('Não entendi o WhatsApp direito, precisa ter DDD e o número completo. Fala de novo.');
+      return;
+    }
+    document.getElementById('f-whatsapp').value = digitosWpp;
+    estado.etapa = 'confirmar';
+
+    const resumo = `Nome: ${document.getElementById('f-name').value}. Categoria: ${document.getElementById('f-cat').value}. Cidade: ${document.getElementById('f-cidade').value}. WhatsApp: ${digitosWpp}.`;
+    falarVozIndex(`${resumo} Tá tudo certo? Fala "sim" pra salvar, ou "não" pra cancelar.`);
+    return;
+  }
+
+  if(estado.etapa === 'confirmar'){
+    const textoNorm = normalizarTexto(transcricao);
+    if(textoNorm.includes('sim') || textoNorm.includes('confirma') || textoNorm.includes('salvar')){
+      _estadoCadastroVoz = null;
+      falarVozIndex('Salvando seu cadastro...');
+      document.getElementById('cadastro-form').requestSubmit();
+    } else {
+      _estadoCadastroVoz = null;
+      falarVozIndex('Cadastro cancelado. Fala "cadastrar empresa" de novo quando quiser tentar.');
+      closeForm();
+    }
+    return;
+  }
+}
+
+function extrairSiglaEstadoDaFala(texto){
+  const normalizado = normalizarTexto(texto);
+  const mapaEstados = { acre:'AC', alagoas:'AL', amapa:'AP', amazonas:'AM', bahia:'BA', ceara:'CE', 'distrito federal':'DF', 'espirito santo':'ES', goias:'GO', maranhao:'MA', 'mato grosso do sul':'MS', 'mato grosso':'MT', 'minas gerais':'MG', para:'PA', paraiba:'PB', parana:'PR', pernambuco:'PE', piaui:'PI', 'rio de janeiro':'RJ', 'rio grande do norte':'RN', 'rio grande do sul':'RS', rondonia:'RO', roraima:'RR', 'santa catarina':'SC', 'sao paulo':'SP', sergipe:'SE', tocantins:'TO' };
+  for(const nome in mapaEstados){
+    if(normalizado.includes(nome)) return mapaEstados[nome];
+  }
+  const siglaDireta = normalizado.trim().toUpperCase();
+  if(siglaDireta.length === 2 && UFS.some(u => u.sigla === siglaDireta)) return siglaDireta;
+  return null;
+}
+
 function ativarModoSomenteVozIndex(){
   if(!currentUser){
     alert('Você precisa estar logado (e ter configurado um PIN de voz na Vitrine) pra usar o modo somente voz — sem isso, não teria como destravar depois.');
@@ -3860,8 +4006,25 @@ async function processarComandoVozIndex(transcricao){
 
   const textoNormalizado = normalizarTexto(transcricao);
 
+  // Se estamos no meio do cadastro de empresa por voz, essa fala pertence
+  // a essa etapa — não passa pelos comandos normais
+  if(_estadoCadastroVoz){
+    await processarEtapaCadastroVoz(transcricao);
+    return;
+  }
+
+  if(textoNormalizado.includes('cadastrar empresa') || textoNormalizado.includes('criar empresa') || textoNormalizado.includes('cadastrar minha empresa')){
+    iniciarCadastroPorVoz();
+    return;
+  }
+
   if(textoNormalizado.includes('modo somente voz') || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
     ativarModoSomenteVozIndex();
+    return;
+  }
+
+  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são')){
+    falarVozIndex(lerResultadosBuscaIndex());
     return;
   }
 
@@ -3905,15 +4068,30 @@ async function processarComandoVozIndex(transcricao){
   }
 }
 
+function lerResultadosBuscaIndex(){
+  const cards = document.querySelectorAll('#list .card-profissional .info h3');
+  const nomes = Array.from(cards).slice(0, 5).map(h3 => {
+    // Pega só o primeiro texto (o nome em si), ignorando os selinhos (✅ Verificada, 👑 Premium etc) que vêm depois
+    const primeiroNo = h3.childNodes[0];
+    return primeiroNo ? primeiroNo.textContent.trim() : '';
+  }).filter(Boolean);
+
+  if(nomes.length === 0) return 'Nenhum resultado encontrado.';
+
+  const listaFalada = nomes.join(', ');
+  const sobrando = cards.length - nomes.length;
+  return sobrando > 0
+    ? `Encontrei ${cards.length} resultados. Os primeiros são: ${listaFalada}, e mais ${sobrando}.`
+    : `Encontrei ${cards.length} resultado${cards.length !== 1 ? 's' : ''}: ${listaFalada}.`;
+}
+
 function executarAcaoVozIndex(resultado){
   const { action, params, voice_response } = resultado;
 
   if(action === 'BUSCAR' && params && params.termo){
     document.getElementById('search').value = params.termo;
     render();
-    const totalResultados = document.getElementById('count').textContent.match(/\d+/);
-    const respostaComContagem = totalResultados ? `${voice_response} Encontrei ${totalResultados[0]} resultados.` : voice_response;
-    falarVozIndex(respostaComContagem || 'Busca feita.');
+    falarVozIndex(lerResultadosBuscaIndex());
     return;
   }
 

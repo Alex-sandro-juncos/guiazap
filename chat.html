@@ -565,6 +565,7 @@
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
+        <button type="button" class="btn-ferramenta-chat" id="btn-falar-mensagem" onclick="falarMensagemParaTexto()" aria-label="Falar mensagem, transforma sua fala em texto pra enviar" title="Falar mensagem (vira texto, diferente do áudio)">🗣️</button>
       </div>
       <button type="button" class="btn-enviar-msg" id="btn-microfone" onclick="acaoBotaoEnviarOuMic()" title="Gravar áudio">🎤</button>
     </div>
@@ -2204,6 +2205,69 @@ function acaoBotaoEnviarOuMic(){
   const temTexto = document.getElementById('chat-input-texto').value.trim().length > 0;
   if(temTexto) enviarMensagemChat();
   else alternarGravacaoAudio();
+}
+
+// ---------- FALAR MENSAGEM (transforma fala em TEXTO de verdade) ----------
+// Diferente do 🎤 (que grava um áudio) — isso vira TEXTO, então funciona
+// pra quem é surdo do outro lado (não precisa "ouvir" nada, só ler) e
+// também ajuda quem é cego a mandar mensagem sem precisar digitar.
+
+let _reconhecimentoFalarMensagem = null;
+
+function falarMensagemParaTexto(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta reconhecimento de voz. Tenta pelo Chrome.');
+    return;
+  }
+  if(!conversaAtual) return;
+
+  const btn = document.getElementById('btn-falar-mensagem');
+  btn.textContent = '🔴';
+  btn.setAttribute('aria-label', 'Gravando... fala agora');
+
+  _reconhecimentoFalarMensagem = new SpeechRecognitionApi();
+  _reconhecimentoFalarMensagem.lang = 'pt-BR';
+  _reconhecimentoFalarMensagem.continuous = false;
+  _reconhecimentoFalarMensagem.interimResults = false;
+
+  _reconhecimentoFalarMensagem.onresult = async (event) => {
+    const transcricao = event.results[0][0].transcript.trim();
+    btn.textContent = '🗣️';
+    btn.setAttribute('aria-label', 'Falar mensagem, transforma sua fala em texto pra enviar');
+
+    if(!transcricao) return;
+
+    // Mostra o texto no campo antes de mandar (pra quem enxerga conferir)
+    document.getElementById('chat-input-texto').value = transcricao;
+
+    await enviarQualquerMensagem({ tipo: 'texto', texto: transcricao });
+    document.getElementById('chat-input-texto').value = '';
+    atualizarBotaoEnviarOuMic();
+
+    // Confirma em voz alta o que foi entendido e mandado — importante pra
+    // quem é cego, já que não dá pra "ver" o texto que apareceu na tela
+    if('speechSynthesis' in window){
+      const confirmacao = new SpeechSynthesisUtterance(`Você disse: ${transcricao}. Mensagem enviada.`);
+      confirmacao.lang = 'pt-BR';
+      speechSynthesis.speak(confirmacao);
+    }
+  };
+
+  _reconhecimentoFalarMensagem.onerror = (event) => {
+    btn.textContent = '🗣️';
+    btn.setAttribute('aria-label', 'Falar mensagem, transforma sua fala em texto pra enviar');
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone.');
+    }
+  };
+
+  _reconhecimentoFalarMensagem.onend = () => {
+    btn.textContent = '🗣️';
+    btn.setAttribute('aria-label', 'Falar mensagem, transforma sua fala em texto pra enviar');
+  };
+
+  try{ _reconhecimentoFalarMensagem.start(); } catch(e){ console.error(e); }
 }
 
 async function enviarMensagemChat(){

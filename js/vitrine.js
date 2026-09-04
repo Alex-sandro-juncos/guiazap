@@ -2693,6 +2693,11 @@ async function processarComandoVozVitrine(transcricao){
   }
 
   // Comandos locais instantâneos — resolvidos na hora, sem esperar a IA
+  if(textoNormalizado.includes('ler resultados') || textoNormalizado.includes('quais sao') || textoNormalizado.includes('quais são')){
+    falarVozVitrine(lerResultadosBuscaVitrine());
+    return;
+  }
+
   if(textoNormalizado.includes('meu carrinho') || textoNormalizado.includes('ver carrinho') || (textoNormalizado.includes('carrinho') && textoNormalizado.length < 20)){
     lerCarrinhoEmVozAlta();
     return;
@@ -2742,12 +2747,34 @@ async function processarComandoVozVitrine(transcricao){
   }
 }
 
+function lerResultadosBuscaVitrine(){
+  const todosCards = document.querySelectorAll('.card-produto');
+
+  const itensFalados = Array.from(todosCards).slice(0, 5).map(card => {
+    const nome = card.querySelector('.nome');
+    const preco = card.querySelector('.preco');
+    if(!nome) return '';
+    const nomeTexto = nome.childNodes[0] ? nome.childNodes[0].textContent.trim() : '';
+    return preco ? `${nomeTexto}, ${preco.textContent.trim()}` : nomeTexto;
+  }).filter(Boolean);
+
+  if(itensFalados.length === 0) return 'Nenhum produto encontrado.';
+
+  const listaFalada = itensFalados.join('; ');
+  const sobrando = todosCards.length - itensFalados.length;
+  return sobrando > 0
+    ? `Encontrei ${todosCards.length} produtos. Os primeiros são: ${listaFalada}, e mais ${sobrando}.`
+    : `Encontrei ${todosCards.length} produto${todosCards.length !== 1 ? 's' : ''}: ${listaFalada}.`;
+}
+
 function executarAcaoVozVitrine(resultado){
   const { action, params, voice_response } = resultado;
 
   if(action === 'BUSCAR' && params && params.termo){
     document.getElementById('v-search').value = params.termo;
     renderProdutos();
+    falarVozVitrine(lerResultadosBuscaVitrine());
+    return;
   } else if(action === 'ADICIONAR_CARRINHO' && params && params.produto_id){
     const qtd = params.quantidade || 1;
     for(let i = 0; i < qtd; i++) adicionarAoCarrinho(params.produto_id);
