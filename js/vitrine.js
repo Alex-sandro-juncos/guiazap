@@ -2501,16 +2501,35 @@ async function salvarProdutosExtraidosIA(){
 const MP_PUBLIC_KEY_VITRINE = 'APP_USR-f76cdce7-5905-4f0f-9102-e664d5f6fa1c';
 let _mpCardForm = null;
 
+async function pegarSessaoVitrineValida(){
+  if(!supabaseClientV) return null;
+  let { data: { session } } = await supabaseClientV.auth.getSession();
+  if(!session){
+    const { data } = await supabaseClientV.auth.refreshSession();
+    session = data && data.session;
+  }
+  return session || null;
+}
+
 function abrirCadastroCartaoVoz(){
-  if(!currentUserV){ alert('Você precisa estar logado.'); return; }
+  if(!currentUserV){ alert('Você precisa estar logado. Volta na página inicial, entra na conta e tenta de novo.'); return; }
   document.getElementById('overlay-cadastro-cartao').style.display = 'flex';
   document.getElementById('cadastro-cartao-msg').textContent = '';
 
-  if(_mpCardForm) return; // já inicializado antes, não precisa de novo
+  if(typeof MercadoPago === 'undefined'){
+    document.getElementById('cadastro-cartao-msg').textContent = 'Não carregou o Mercado Pago. Atualiza a página e tenta de novo.';
+    return;
+  }
+
+  // Se tentou montar antes e os campos ficaram vazios, monta de novo
+  if(_mpCardForm){
+    try{ if(typeof _mpCardForm.unmount === 'function') _mpCardForm.unmount(); } catch(e){}
+    _mpCardForm = null;
+  }
 
   const mp = new MercadoPago(MP_PUBLIC_KEY_VITRINE);
   _mpCardForm = mp.cardForm({
-    amount: '1.00', // valor simbólico — esse formulário só GERA o token pra salvar, não cobra nada aqui
+    amount: '1.00',
     iframe: true,
     form: {
       id: 'form-cadastro-cartao',
@@ -2764,15 +2783,12 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
-  // Busca / adicionar produto LOCAL
-  const STOP_VOZ_VITRINE = ['comprar','compra','quero','queria','queria','me','ve','vê','ver','mostra','mostrar','busca','buscar','procurar','procura','pede','pedir','um','uma','uns','umas','o','a','os','as','de','do','da','dos','das','pra','para','pro','no','na','com','por','favor','ai','aí','esse','essa','aquele','aquela'];
+  const STOP_VOZ_VITRINE = ['comprar','compra','quero','queria','me','ve','ver','mostra','mostrar','busca','buscar','procurar','procura','pede','pedir','um','uma','uns','umas','o','a','os','as','de','do','da','dos','das','pra','para','pro','no','na','com','por','favor','ai','esse','essa','aquele','aquela','cardapio','cardápio','menu'];
 
   const querAdicionar = (
     textoNormalizado.includes('adicionar') ||
     textoNormalizado.includes('coloca') ||
     textoNormalizado.includes('colocar') ||
-    textoNormalizado.startsWith('poe ') ||
-    textoNormalizado.startsWith('põe ') ||
     textoNormalizado.includes('pro carrinho') ||
     textoNormalizado.includes('no carrinho') ||
     textoNormalizado.startsWith('comprar ') ||
@@ -2781,24 +2797,102 @@ async function processarComandoVozVitrine(transcricao){
     textoNormalizado.includes('quero comprar')
   );
 
-  const palavrasBusca = textoNormalizado
+  // "pastel do alex" / "comprar x da maria"
+  let nomeEmpresaFalada = '';
+  const matchEmpresa = textoNormalizado.match(/\b(?:do|da|de|no|na)\s+([a-z0-9][a-z0-9\s]{1,40})$/);
+  if(matchEmpresa) nomeEmpresaFalada = matchEmpresa[1].trim();
+
+  const textoSemEmpresa = nomeEmpresaFalada
+    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|no|na)\\s+' + nomeEmpresaFalada.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), '').trim()
+    : textoNormalizado;
+
+  const palavrasBusca = textoSemEmpresa
     .split(/\s+/)
     .map(w => w.replace(/[^\wáéíóúâêôãõç]/gi, ''))
     .filter(w => w.length > 1 && !STOP_VOZ_VITRINE.includes(w));
 
   const termoLimpo = palavrasBusca.join(' ');
 
+  function acharEmpresaPorNomeVoz(nome){
+    const n = normalizarTextoV(nome);
+    if(!n) return null;
+    const nomes = {};
+    (produtos || []).forEach(p => {
+      if(p.profissionais && p.profissionais.name){
+        nomes[p.profissionais.id] = p.profissionais.name;
+      }
+    });
+    const lista = Object.entries(nomes).map(([id, name]) => ({ id, name, nn: normalizarTextoV(name) }));
+    return lista.find(e => e.nn.includes(n) || n.includes(e.nn) || n.split(' ').some(w => w.length > 2 && e.nn.includes(w))) || null;
+  }
+
+  function abrirMenuEmpresaVoz(empresa, produtoAlvo){
+    empresaFiltroId = empresa.id;
+    produtoFiltroId = produtoAlvo ? produtoAlvo.id : null;
+    const campo = document.getElementById('v-search');
+    if(campo) campo.value = produtoAlvo ? (produtoAlvo.nome || termoLimpo) : '';
+    renderProdutos();
+    const url = produtoAlvo
+      ? ('vitrine.html?empresa=' + encodeURIComponent(empresa.id) + '&produto=' + encodeURIComponent(produtoAlvo.id))
+      : ('vitrine.html?empresa=' + encodeURIComponent(empresa.id));
+    try{ history.replaceState({}, '', url); } catch(e){}
+    const card = document.querySelector('.card-produto');
+    if(card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function descreverProdutoVoz(p){
+    const preco = p.preco ? (' por ' + String(p.preco).replace('.', ',') + ' reais') : ' sem preço';
+    const empresa = (p.profissionais && p.profissionais.name) ? (', na ' + p.profissionais.name) : '';
+    return (p.nome || 'produto') + preco + empresa;
+  }
+
+  // Empresa citada: "comprar pastel do alex" → menu do Alex
+  if(nomeEmpresaFalada){
+    const empresa = acharEmpresaPorNomeVoz(nomeEmpresaFalada);
+    if(!empresa){
+      falarVozVitrine('Não achei a empresa ' + nomeEmpresaFalada + '. Tenta falar o nome de novo.');
+      return;
+    }
+    const daEmpresa = (produtos || []).filter(p => p.profissionais && p.profissionais.id === empresa.id);
+    let produtoAlvo = null;
+    if(termoLimpo){
+      produtoAlvo = daEmpresa.find(p => {
+        const nome = normalizarTextoV(p.nome);
+        return palavrasBusca.every(w => nome.includes(w)) || nome.includes(termoLimpo);
+      }) || daEmpresa.find(p => palavrasBusca.some(w => normalizarTextoV(p.nome).includes(w))) || null;
+    }
+    abrirMenuEmpresaVoz(empresa, produtoAlvo);
+    if(produtoAlvo){
+      if(querAdicionar) adicionarAoCarrinho(produtoAlvo.id);
+      falarVozVitrine('Menu de ' + empresa.name + '. ' + descreverProdutoVoz(produtoAlvo) + (querAdicionar ? '. Coloquei no carrinho.' : '. Você está no cardápio dele.'));
+    } else {
+      falarVozVitrine('Abrindo o menu de ' + empresa.name + '. ' + lerResultadosBuscaVitrine());
+    }
+    return;
+  }
+
+  const PROFISSOES_VOZ = ['dentista','dentistas','medico','medico','medica','barbeiro','cabeleireiro','cabelereiro','eletricista','encanador','pedreiro','advogado','advogada','psicologo','fisioterapeuta','veterinario','mecanico','funeraria','arquiteto','contador','fotografo','professor','motorista','diarista','faxineira','cuidador','enfermeiro','nutricionista','manicure','pedicure','esteticista','massagista','pintor','chaveiro','vidraceiro','pediatra','cardiologista','ortopedista'];
+  const ehProfissao = (palavrasBusca.some(w => PROFISSOES_VOZ.includes(w)) || PROFISSOES_VOZ.includes(termoLimpo));
+  if(ehProfissao){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    localStorage.setItem('guiazap_quer_voz', '1');
+    falarVozVitrine('Isso fica nos contatos do GuiaZap. Levando você até ' + (termoLimpo || 'os profissionais') + '.');
+    setTimeout(() => { window.location.href = 'index.html?q=' + encodeURIComponent(termoLimpo || textoNormalizado); }, 1100);
+    return;
+  }
+
   function pontuarProdutoVoz(p){
     const nome = normalizarTextoV(p.nome);
     const marca = normalizarTextoV(p.marca);
     const cat = normalizarTextoV(p.categoria);
     const desc = normalizarTextoV(p.descricao);
-    const blob = (nome + ' ' + marca + ' ' + cat + ' ' + desc).trim();
+    const emp = p.profissionais ? normalizarTextoV(p.profissionais.name) : '';
+    const blob = (nome + ' ' + marca + ' ' + cat + ' ' + desc + ' ' + emp).trim();
     if(!palavrasBusca.length) return 0;
-    let pts = 0;
-    let acertos = 0;
+    let pts = 0, acertos = 0;
     palavrasBusca.forEach(w => {
       if(nome.includes(w)){ pts += 5; acertos++; }
+      else if(emp.includes(w)){ pts += 4; acertos++; }
       else if(marca.includes(w) || cat.includes(w)){ pts += 3; acertos++; }
       else if(blob.includes(w)){ pts += 1; acertos++; }
     });
@@ -2815,17 +2909,16 @@ async function processarComandoVozVitrine(transcricao){
 
     if(ranqueados.length > 0){
       const melhor = ranqueados[0].p;
-      document.getElementById('v-search').value = termoLimpo;
-      renderProdutos();
-
-      if(querAdicionar && ranqueados[0].pts >= 5){
-        adicionarAoCarrinho(melhor.id);
+      const empresaDoMelhor = melhor.profissionais ? { id: melhor.profissionais.id || melhor.profissional_id, name: melhor.profissionais.name } : null;
+      if(empresaDoMelhor && empresaDoMelhor.id){
+        abrirMenuEmpresaVoz(empresaDoMelhor, melhor);
+      } else {
+        produtoFiltroId = melhor.id;
+        document.getElementById('v-search').value = melhor.nome || termoLimpo;
         renderProdutos();
-        falarVozVitrine(melhor.nome + ' adicionado ao carrinho. ' + lerResultadosBuscaVitrine());
-        return;
       }
-
-      falarVozVitrine(lerResultadosBuscaVitrine());
+      if(querAdicionar) adicionarAoCarrinho(melhor.id);
+      falarVozVitrine(descreverProdutoVoz(melhor) + (querAdicionar ? '. Coloquei no carrinho.' : '. Abri o cardápio dessa empresa.'));
       return;
     }
   }
@@ -3432,24 +3525,29 @@ async function processarConfirmacaoCvvVoz(transcricao){
 }
 
 async function configurarPinVozPorVoz(){
-  const pin = prompt('Escolhe um PIN de voz de 4 números (usado pra confirmar pagamentos por voz):');
+  const pin = prompt('Escolhe um PIN de voz de 4 a 6 números (usado pra confirmar pagamentos por voz):');
   if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
 
-  const { data: { session } } = await supabaseClientV.auth.getSession();
+  const session = await pegarSessaoVitrineValida();
+  if(!session || !session.access_token){
+    alert('Sessão expirada. Volta na página inicial, entra de novo na conta e tenta configurar o PIN.');
+    return;
+  }
   try{
     const resp = await fetch('/.netlify/functions/definir-pin-voz', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
       body: JSON.stringify({ pin })
     });
     const data = await resp.json();
     if(!resp.ok){ alert('Erro ao configurar: ' + (data.error || 'tenta de novo')); return; }
-    alert('✓ PIN de voz configurado! Você pode usar ele pra confirmar pagamentos pelo modo voz.');
+    alert('PIN de voz configurado. Agora você confirma pagamento falando o PIN.');
   } catch(e){
     console.error(e);
     alert('Erro ao configurar PIN de voz.');
   }
 }
+
 
 atualizarBadgeCarrinho();
 
