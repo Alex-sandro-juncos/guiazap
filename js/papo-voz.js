@@ -13,9 +13,7 @@ function toggleModoVozPapo(){
   else iniciarModoVozPapo();
 }
 
-let _aguardandoAtivacaoPapo = false;
-
-function iniciarModoVozPapo(retomandoAutomaticamente){
+function iniciarModoVozPapo(){
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Api){
     alert('Use o Chrome para o modo voz.');
@@ -24,7 +22,6 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   _vozPapoAtiva = true;
   window._vozPapoAtiva = true;
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
-  _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
   const painel = document.getElementById('painel-modo-voz-papo');
   if(painel) painel.style.display = 'block';
   const btn = document.getElementById('btn-modo-voz-papo');
@@ -41,16 +38,6 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
     if(!texto) return;
     const trans = document.getElementById('voz-papo-transcricao');
     if(trans) trans.textContent = '"' + texto + '"';
-
-    if(_aguardandoAtivacaoPapo){
-      const t = normalizarVozPapo(texto);
-      if(t.includes('ativar') || t.includes('guiazap')){
-        _aguardandoAtivacaoPapo = false;
-        falarVozPapo('Modo voz ativado.');
-      }
-      return;
-    }
-
     processarComandoVozPapo(texto);
   };
   _vozPapoReconhecimento.onend = () => {
@@ -70,9 +57,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
 
-  if(_aguardandoAtivacaoPapo){
-    falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
-  } else if(conversaAtual){
+  if(conversaAtual){
     falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga falar para mandar mensagem, ouvir para ler, ligar, ou voltar.');
   } else {
     const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
@@ -144,7 +129,34 @@ async function processarComandoVozPapo(transcricao){
   _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
 
-  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
+  if(t.includes('viva voz') || t.includes('viva-voz') || t.includes('vivavoz') || t.includes('alto falante') || t.includes('alto-falante')){
+    if(typeof toggleVivaVoz !== 'function'){
+      falarVozPapo('Viva-voz não está disponível.');
+      return;
+    }
+    const querLigar = t.includes('ligar') || t.includes('ativar') || t.includes('abrir');
+    const querDesligar = t.includes('desligar') || t.includes('desativar') || t.includes('parar');
+    const videoRemoto = document.getElementById('video-remoto');
+    if(!videoRemoto || !videoRemoto.srcObject){
+      falarVozPapo('Entra na chamada primeiro pra ligar ou desligar o viva-voz.');
+      return;
+    }
+    const ligado = !!window._vivaVozAtivo || (typeof _vivaVozAtivo !== 'undefined' && _vivaVozAtivo);
+    if(querDesligar && ligado){ toggleVivaVoz(); falarVozPapo('Viva-voz desligado.'); return; }
+    if(querDesligar && !ligado){ falarVozPapo('Viva-voz já está desligado.'); return; }
+    if(querLigar && !ligado){ toggleVivaVoz(); falarVozPapo('Viva-voz ligado.'); return; }
+    if(querLigar && ligado){ falarVozPapo('Viva-voz já está ligado.'); return; }
+    toggleVivaVoz();
+    falarVozPapo('Viva-voz alternado.');
+    return;
+  }
+
+  if(t === 'mudo' || t.includes('desligar microfone') || t.includes('mutar')){
+    if(typeof alternarMudo === 'function'){ alternarMudo(); falarVozPapo('Microfone alterado.'); }
+    return;
+  }
+
+  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t === 'desligar modo voz' || t === 'desativar modo voz'){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;
@@ -154,6 +166,36 @@ async function processarComandoVozPapo(transcricao){
     falarVozPapo('Voltando ao GuiaZap.');
     setTimeout(() => { window.location.href = 'index.html'; }, 1000);
     return;
+  }
+
+  async function enviarTextoPapoVoz(txt){
+    if(typeof enviarQualquerMensagem !== 'function' || !conversaAtual){
+      falarVozPapo('Abra a conversa da empresa primeiro.');
+      return false;
+    }
+    await enviarQualquerMensagem({ tipo: 'texto', texto: txt });
+    falarVozPapo('Enviei: ' + txt);
+    return true;
+  }
+
+  // Pedido no chat: 1, 2, pix, menu, endereço...
+  if(conversaAtual && _estadoVozPapo.etapa !== 'lista'){
+    if(/^(1|um|uma|primeiro)$/.test(t) || t.includes('pagar agora') || t.includes('pagar online') || t === 'pix' || t.includes('cartao') || t.includes('cartão')){
+      await enviarTextoPapoVoz('1');
+      return;
+    }
+    if(/^(2|dois|segunda|segundo)$/.test(t) || t.includes('pagar na entrega') || t.includes('na entrega') || t.includes('dinheiro')){
+      await enviarTextoPapoVoz('2');
+      return;
+    }
+    if(t === 'menu' || t.includes('voltar ao menu') || t === 'asterisco menu' || t === '*menu*'){
+      await enviarTextoPapoVoz('menu');
+      return;
+    }
+    if(t.includes('confirmar') || t === 'sim' || t === 'ok' || t === 'pode'){
+      await enviarTextoPapoVoz('sim');
+      return;
+    }
   }
 
   if(_estadoVozPapo.etapa === 'ditando'){
