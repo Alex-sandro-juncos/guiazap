@@ -3086,13 +3086,20 @@ async function processarComandoDesativarSomenteVoz(transcricao){
   }
 
   try{
-    const { data: { session } } = await supabaseClientV.auth.getSession();
-    const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ pin: pinFalado })
-    });
-    const data = await resp.json();
+    const session = await pegarSessaoVitrineValida();
+    let data = {};
+    if(session && session.access_token){
+      const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ pin: pinFalado })
+      });
+      data = await resp.json().catch(() => ({}));
+    }
+    if((!session || data.error || data.motivo === 'sem_pin_cadastrado') && typeof pinLocalConfereVitrine === 'function'){
+      const localOk = await pinLocalConfereVitrine(pinFalado);
+      if(localOk) data = { valido: true };
+    }
 
     if(!data.valido){
       falarVozVitrine('PIN incorreto. Fala de novo.');
@@ -3546,28 +3553,56 @@ async function processarConfirmacaoCvvVoz(transcricao){
   }
 }
 
-async function configurarPinVozPorVoz(){
-  const pin = prompt('Escolhe um PIN de voz de 4 a 6 números (usado pra confirmar pagamentos por voz):');
-  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+async function hashPinLocalVitrine(pin, userId){
+  const data = new TextEncoder().encode(String(pin) + ':' + String(userId));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  const session = await pegarSessaoVitrineValida();
-  if(!session || !session.access_token){
-    alert('Sessão expirada. Volta na página inicial, entra de novo na conta e tenta configurar o PIN.');
+async function salvarPinLocalVitrine(pin){
+  const uid = currentUserV && currentUserV.id;
+  if(!uid) return false;
+  const hash = await hashPinLocalVitrine(pin, uid);
+  localStorage.setItem('guiazap_pin_hash_' + uid, hash);
+  return true;
+}
+
+async function pinLocalConfereVitrine(pin){
+  const uid = currentUserV && currentUserV.id;
+  if(!uid) return false;
+  const salvo = localStorage.getItem('guiazap_pin_hash_' + uid);
+  if(!salvo) return false;
+  const hash = await hashPinLocalVitrine(pin, uid);
+  return hash === salvo;
+}
+
+async function configurarPinVozPorVoz(){
+  if(!currentUserV){
+    alert('Entra na conta na página inicial antes de criar o PIN.');
     return;
   }
-  try{
-    const resp = await fetch('/.netlify/functions/definir-pin-voz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ pin })
-    });
-    const data = await resp.json();
-    if(!resp.ok){ alert('Erro ao configurar: ' + (data.error || 'tenta de novo')); return; }
-    alert('PIN de voz configurado. Agora você confirma pagamento falando o PIN.');
-  } catch(e){
-    console.error(e);
-    alert('Erro ao configurar PIN de voz.');
+  const pin = prompt('Escolhe um PIN de 4 a 6 números:');
+  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+
+  await salvarPinLocalVitrine(pin);
+
+  const session = await pegarSessaoVitrineValida();
+  if(session && session.access_token){
+    try{
+      const resp = await fetch('/.netlify/functions/definir-pin-voz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ pin, access_token: session.access_token })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if(resp.ok){
+        alert('PIN configurado no servidor e neste aparelho.');
+        return;
+      }
+      console.warn('PIN servidor', data);
+    } catch(e){ console.warn(e); }
   }
+  alert('PIN salvo neste aparelho. Se o servidor recusar a sessão, o pagamento por voz ainda usa este PIN daqui.');
 }
 
 
