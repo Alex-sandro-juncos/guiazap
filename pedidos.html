@@ -705,5 +705,15 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   setTimeout(iniciarModoVozPedidos, 800);
 }
 </script>
+
+<script src="js/voz-acesso-cego.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(typeof prepararAcessoVozCego === 'function'){
+    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozPedidos === 'function') iniciarModoVozPedidos(); });
+  }
+});
+</script>
+
 </body>
 </html>
