@@ -3170,15 +3170,7 @@ function render(){
       if(normalizarTexto(e.cidade).includes(query)) return true;
       if(normalizarTexto(e.bairro).includes(query)) return true;
       if(normalizarTexto(e.estado).includes(query)) return true;
-      // Também acha a empresa pela marca/categoria de algum produto dela
-      return produtosParaBuscaPrincipal.some(p =>
-        p.profissional_id === e.id && (
-          normalizarTexto(p.nome).includes(query) ||
-          normalizarTexto(p.marca).includes(query) ||
-          normalizarTexto(p.categoria).includes(query) ||
-          normalizarTexto(p.categorias_extra).includes(query)
-        )
-      );
+      return false;
     })
     .filter(e => !estado || e.estado === estado)
     .filter(e => !cidadeBusca || normalizarTexto(e.cidade).includes(cidadeBusca))
@@ -4479,11 +4471,40 @@ async function processarComandoVozIndex(transcricao){
     }
   }
 
+
+  function classificarPedidoVoz(termo){
+    const q = normalizarTexto(termo);
+    if(!q) return 'nada';
+    const palavrasContato = ['empresa','contato','profissional','dentista','medico','medica','barbeiro','manicure','eletricista','advogado','mecanico','oficina','padaria','farmacia','igreja','escola'];
+    if(palavrasContato.some(w => q.includes(w))) return 'contato';
+    if(q.includes('comprar') || q.includes('lanche') || q.includes('cardapio') || q.includes('cardápio') || q.includes('menu') || q.includes('vitrine') || q.includes('produto')) return 'produto';
+    const nContato = (entries || []).filter(e => e.status_pagamento === 'ativo' && (
+      normalizarTexto(e.name).includes(q) || normalizarTexto(e.cat).includes(q) ||
+      normalizarTexto(e.cidade).includes(q) || normalizarTexto(e.bairro).includes(q)
+    )).length;
+    const nProd = (produtosParaBuscaPrincipal || []).filter(p =>
+      normalizarTexto(p.nome).includes(q) || normalizarTexto(p.marca).includes(q) || normalizarTexto(p.categoria).includes(q)
+    ).length;
+    if(nContato > 0 && nProd === 0) return 'contato';
+    if(nProd > 0 && nContato === 0) return 'produto';
+    if(nContato > 0) return 'contato';
+    if(nProd > 0) return 'produto';
+    return 'contato';
+  }
+
   const palavrasComandoComplexo = ['chamar', 'ligar', 'whatsapp', 'conversar', 'falar com', 'manda mensagem', 'filtrar cidade', 'na cidade'];
   const pareceComandoComplexo = palavrasComandoComplexo.some(p => textoNormalizado.includes(p));
   const termoBuscaLocal = termoPedido || transcricao.trim();
 
   if(!pareceComandoComplexo && termoBuscaLocal.length >= 2 && termoBuscaLocal.length <= 60){
+    const tipoPedido = classificarPedidoVoz(termoPedido || termoBuscaLocal);
+    if(tipoPedido === 'produto'){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      localStorage.setItem('guiazap_busca_vitrine', termoPedido || termoBuscaLocal);
+      falarVozIndex('Isso é produto. Abrindo a vitrine.');
+      setTimeout(() => { window.location.href = 'vitrine.html'; }, 900);
+      return;
+    }
     cadastroCompartilhadoId = null;
     try{ history.replaceState({}, '', 'index.html'); } catch(e){}
     document.getElementById('search').value = termoBuscaLocal;
