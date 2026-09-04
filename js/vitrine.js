@@ -2509,7 +2509,7 @@ function concluirCompraPorVoz(termo, comprar){
   const palavras = q.split(/\s+/).filter(w => w.length > 1);
   const achados = (produtos || []).filter(p => {
     const nome = normalizarTextoV(p.nome);
-    return nome.includes(q) || (palavras.length && palavras.every(w => nome.includes(w)));
+    return palavras.length ? palavras.every(w => nome.includes(w)) : nome.includes(q);
   });
   if(!achados.length){
     if(typeof falarVozVitrine === 'function') falarVozVitrine('Não achei ' + termo + ' na vitrine.');
@@ -2550,6 +2550,7 @@ function concluirCompraPorVoz(termo, comprar){
 
 const MP_PUBLIC_KEY_VITRINE = 'APP_USR-f76cdce7-5905-4f0f-9102-e664d5f6fa1c';
 let _mpCardForm = null;
+let _estadoCartaoVoz = null;
 
 async function pegarSessaoVitrineValida(){
   if(!supabaseClientV) return null;
@@ -2619,9 +2620,12 @@ function abrirCadastroCartaoVoz(){
       }
     }
   });
+  _estadoCartaoVoz = { etapa: 'nome' };
+  falarVozVitrine('Cadastro de cartão. Primeiro fala o nome impresso no cartão.');
 }
 
 function fecharCadastroCartaoVoz(){
+  _estadoCartaoVoz = null;
   document.getElementById('overlay-cadastro-cartao').style.display = 'none';
 }
 
@@ -2739,6 +2743,38 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  if(_estadoCartaoVoz){
+    const etapa = _estadoCartaoVoz.etapa;
+    const t = (transcricao||'').trim();
+    const tn = normalizarTextoV(t);
+    if(tn.includes('cancelar') || tn.includes('fechar cartao') || tn.includes('fechar cartão')){
+      fecharCadastroCartaoVoz();
+      falarVozVitrine('Cadastro de cartão cancelado.');
+      return;
+    }
+    if(etapa === 'nome'){
+      const nomeEl = document.getElementById('form-cartao-nome');
+      if(nomeEl) nomeEl.value = t;
+      _estadoCartaoVoz.etapa = 'cpf';
+      falarVozVitrine('Nome preenchido. Agora fala o CPF, só os números.');
+      return;
+    }
+    if(etapa === 'cpf'){
+      const dig = t.replace(/\D/g,'');
+      const cpfEl = document.getElementById('form-cartao-cpf');
+      if(cpfEl) cpfEl.value = dig || t;
+      _estadoCartaoVoz.etapa = 'numero';
+      falarVozVitrine('CPF preenchido. O número, a validade e o CVV o Mercado Pago não deixa preencher por voz, por segurança. Toca nesses três campos, preenche, e fala salvar cartão.');
+      return;
+    }
+    if(etapa === 'numero' && (tn.includes('salvar') || tn.includes('pronto') || tn.includes('enviar'))){
+      const form = document.getElementById('form-cadastro-cartao');
+      if(form) form.requestSubmit();
+      falarVozVitrine('Tentando salvar o cartão.');
+      return;
+    }
+  }
+
   const _tCmd = (transcricao||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   if(/\b(desligar|desativar|parar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd) || _tCmd === 'desligar' || _tCmd === 'parar' || _tCmd === 'sair'){
     try{ speechSynthesis.cancel(); }catch(e){}
@@ -2827,6 +2863,19 @@ async function processarComandoVozVitrine(transcricao){
   }
   if(textoNormalizado.includes('configurar pin') || textoNormalizado.includes('criar pin') || textoNormalizado.includes('cadastrar pin')){
     configurarPinVozPorVoz();
+    return;
+  }
+  if(textoNormalizado.includes('cadastrar cartao') || textoNormalizado.includes('cadastrar cartão') ||
+     textoNormalizado.includes('salvar cartao') || textoNormalizado.includes('salvar cartão') ||
+     textoNormalizado.includes('cartao pra pagar') || textoNormalizado.includes('cartão pra pagar') ||
+     textoNormalizado.includes('cartao para pagar') || textoNormalizado.includes('cartão para pagar') ||
+     textoNormalizado.includes('pagar por voz')){
+    if(typeof abrirCadastroCartaoVoz === 'function'){
+      falarVozVitrine('Abrindo o cadastro de cartão.');
+      abrirCadastroCartaoVoz();
+    } else {
+      falarVozVitrine('Não achei a tela de cartão.');
+    }
     return;
   }
   if(textoNormalizado.includes('finalizar') || textoNormalizado.includes('fechar pedido') || textoNormalizado.includes('fechar a conta')){
@@ -2978,24 +3027,28 @@ async function processarComandoVozVitrine(transcricao){
       .sort((a, b) => b.pts - a.pts);
 
     if(ranqueados.length > 0){
+      const palavrasObrigatorias = palavrasBusca.filter(w => w.length > 2);
+      let escolhidos = ranqueados.filter(x => {
+        const nome = normalizarTextoV(x.p.nome);
+        return palavrasObrigatorias.length === 0 || palavrasObrigatorias.every(w => nome.includes(w));
+      });
+      if(escolhidos.length === 0) escolhidos = [ranqueados[0]];
+      const melhor = escolhidos[0].p;
+
       produtoFiltroId = null;
-      empresaFiltroId = null;
-      try{ history.replaceState({}, '', 'vitrine.html'); } catch(e){}
-      const h1 = document.querySelector('.vitrine-header h1');
-      if(h1) h1.textContent = 'GuiaZap Vitrine';
-      document.getElementById('v-search').value = termoLimpo;
+      empresaFiltroId = melhor.profissionais ? (melhor.profissionais.id || null) : null;
+      try{ history.replaceState({}, '', empresaFiltroId ? ('vitrine.html?empresa=' + empresaFiltroId) : 'vitrine.html'); } catch(e){}
+      document.getElementById('v-search').value = melhor.nome;
       renderProdutos();
-      const lista = ranqueados.slice(0, 8).map(x => descreverProdutoVoz(x.p));
-      const extra = ranqueados.length - lista.length;
-      let fala = 'Encontrei ' + ranqueados.length + ' opções: ' + lista.join('; ');
-      if(extra > 0) fala += ', e mais ' + extra;
-      if(querAdicionar && ranqueados.length === 1){
-        adicionarAoCarrinho(ranqueados[0].p.id);
-        fala += '. Coloquei no carrinho.';
-      } else if(querAdicionar){
-        fala += '. Tem mais de um. Fala o nome da empresa pra eu escolher.';
+
+      if(querAdicionar || textoNormalizado.includes('comprar') || textoNormalizado.includes('quero')){
+        adicionarAoCarrinho(melhor.id);
+        falarVozVitrine(descreverProdutoVoz(melhor) + '. Coloquei no carrinho. Diga finalizar para pagar, ou o nome de outra empresa se quiser outro.');
+        return;
       }
-      falarVozVitrine(fala);
+
+      const lista = escolhidos.slice(0, 6).map(x => descreverProdutoVoz(x.p));
+      falarVozVitrine('Encontrei ' + escolhidos.length + ': ' + lista.join('; ') + '. Diga comprar para colocar no carrinho.');
       return;
     }
   }
