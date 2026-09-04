@@ -261,7 +261,7 @@
 <div class="vitrine-busca">
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
-    <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." oninput="renderProdutos()">
+    <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." aria-label="Buscar produto por nome, marca ou código" oninput="renderProdutos()">
     <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" aria-label="Ativar modo voz, comprar sem tocar na tela" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
   </div>
   <div class="vitrine-filtros">
@@ -469,11 +469,11 @@ Content-Type: application/json
   <input type="hidden" id="p-id">
   <input type="hidden" id="p-codigo-barras">
   <div class="field">
-    <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
+    <label for="p-profissional">Empresa/cadastro (do seu perfil GuiaZap)</label>
     <select id="p-profissional" required></select>
   </div>
   <div class="field">
-    <label>Nome do produto</label>
+    <label for="p-nome">Nome do produto</label>
     <input id="p-nome" required placeholder="Ex: Bolo de chocolate">
   </div>
   <div class="aviso-compartilhar">
@@ -486,22 +486,22 @@ Content-Type: application/json
       <button type="button" class="btn-cancelar" style="margin-top:6px;" onclick="fecharScanner()">Cancelar leitura</button>
     </div>
     <span class="foto-msg" id="scanner-msg"></span>
-    <label class="foto-ou">ou digite o código de barras / código de peça manualmente (útil quando um mecânico ou fornecedor passou só o código)</label>
+    <label class="foto-ou" for="p-codigo-barras-manual">ou digite o código de barras / código de peça manualmente (útil quando um mecânico ou fornecedor passou só o código)</label>
     <div style="display:flex; gap:6px;">
       <input id="p-codigo-barras-manual" placeholder="Ex: 7891000100103 ou código do fabricante da peça" oninput="onCodigoBarrasManualChange()" style="flex:1;">
       <button type="button" class="btn-cancelar" onclick="buscarInfoCodigoManual()">Buscar</button>
     </div>
   </div>
   <div class="field">
-    <label>Marca (opcional)</label>
+    <label for="p-marca">Marca (opcional)</label>
     <input id="p-marca" placeholder="Ex: Nestlé, marca própria...">
   </div>
   <div class="field">
-    <label>Descrição (opcional)</label>
+    <label for="p-descricao">Descrição (opcional)</label>
     <textarea id="p-descricao" rows="2" placeholder="Detalhes do produto"></textarea>
   </div>
   <div class="field">
-    <label>Categoria (opcional)</label>
+    <label for="p-categoria">Categoria (opcional)</label>
     <input id="p-categoria" list="categorias-produto-list" placeholder="Ex: Bebidas, Alimentos, Peças...">
     <datalist id="categorias-produto-list"></datalist>
     <label class="foto-ou">Essa é a categoria principal, usada pra organizar o cardápio do robô.</label>
@@ -514,7 +514,7 @@ Content-Type: application/json
   </div>
   <div class="row2">
     <div class="field">
-      <label>Medido em</label>
+      <label for="p-unidade-medida">Medido em</label>
       <select id="p-unidade-medida">
         <option value="unidade">Unidade</option>
         <option value="peso">Peso (kg)</option>
@@ -522,12 +522,12 @@ Content-Type: application/json
       </select>
     </div>
     <div class="field">
-      <label>Quantidade</label>
+      <label for="p-quantidade">Quantidade</label>
       <input id="p-quantidade" type="number" min="0" step="0.01" value="1">
     </div>
   </div>
   <div class="field">
-    <label>Valor (R$) — usado se o produto não tiver variações de tamanho</label>
+    <label for="p-preco">Valor (R$) — usado se o produto não tiver variações de tamanho</label>
     <div class="campo-com-prefixo">
       <span class="prefixo-rs">R$</span>
       <input id="p-preco" placeholder="0,00" inputmode="numeric" oninput="formatarValorProduto(event)">
@@ -573,7 +573,7 @@ Content-Type: application/json
     <span class="foto-msg" id="p-midia-extra-msg"></span>
   </div>
   <div class="field">
-    <label>Link externo de compra (opcional)</label>
+    <label for="p-link-externo">Link externo de compra (opcional)</label>
     <input id="p-link-externo" placeholder="https://... (Amazon, Shopee, Mercado Livre, seu link de afiliado, etc)" onblur="buscarInfoLinkExterno()">
     <span class="foto-msg" id="p-link-externo-msg"></span>
     <label class="foto-ou">Se preenchido, aparece um botão extra "Comprar" que leva direto pra esse link — útil pra representantes de marca que precisam garantir sua comissão.</label>

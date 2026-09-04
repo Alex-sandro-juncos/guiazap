@@ -136,7 +136,7 @@
     <div class="busca-row">
       <div class="busca-com-icone">
         <span class="icone-lupa" onclick="render()">🔍</span>
-        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." oninput="render(); atualizarBotoesLimpar();">
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." aria-label="Buscar profissionais e empresas" oninput="render(); atualizarBotoesLimpar();">
         <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
         <button type="button" id="btn-modo-voz-index" onclick="toggleModoVozIndex()" title="Buscar por voz, mãos livres" aria-label="Ativar modo voz, buscar empresas sem tocar na tela" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
       </div>
@@ -249,16 +249,16 @@
   <form id="cadastro-form" onsubmit="return saveEntry(event)">
     <input type="hidden" id="edit-id">
     <div class="field">
-      <label>Nome</label>
+      <label for="f-name">Nome</label>
       <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão" autocomplete="off">
     </div>
     <div class="field">
-      <label>CNPJ ou CPF</label>
+      <label for="f-documento">CNPJ ou CPF</label>
       <input id="f-documento" required placeholder="Só números" autocomplete="off" oninput="mascaraDocumento(event)" onblur="conferirDocumentoAoSair()">
       <span class="cep-msg" id="f-documento-msg"></span>
     </div>
     <div class="field">
-      <label>Categoria principal</label>
+      <label for="f-cat">Categoria principal</label>
       <input id="f-cat" required placeholder="Ex: Dentista" autocomplete="off">
     </div>
     <div class="field">
@@ -267,32 +267,32 @@
       <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
     </div>
     <div class="field">
-      <label>CEP</label>
+      <label for="f-cep">CEP</label>
       <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" oninput="mascaraCep(event)" onblur="buscarCep()">
       <span class="cep-msg" id="cep-msg"></span>
     </div>
     <div class="row2">
       <div class="field" style="flex:2;">
-        <label>Rua</label>
+        <label for="f-rua">Rua</label>
         <input id="f-rua" placeholder="Ex: Av. Paulista" autocomplete="off">
       </div>
       <div class="field">
-        <label>Número</label>
+        <label for="f-numero">Número</label>
         <input id="f-numero" placeholder="Ex: 1000" autocomplete="off">
       </div>
     </div>
     <div class="row2">
       <div class="field">
-        <label>Estado</label>
+        <label for="f-estado">Estado</label>
         <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
       </div>
       <div class="field">
-        <label>Cidade</label>
+        <label for="f-cidade">Cidade</label>
         <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" autocomplete="address-level2">
         <datalist id="cidades-cadastro-list"></datalist>
       </div>
       <div class="field">
-        <label>Bairro</label>
+        <label for="f-bairro">Bairro</label>
         <input id="f-bairro" required placeholder="Ex: Vila Mariana" autocomplete="off">
       </div>
     </div>
@@ -305,13 +305,13 @@
       <input type="hidden" id="f-longitude-manual">
     </div>
     <div class="field">
-      <label>WhatsApp (com DDD, só números)</label>
+      <label for="f-whatsapp">WhatsApp (com DDD, só números)</label>
       <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
     </div>
     <div class="field" id="campo-veiculo-entregador" style="display:none;">
-      <label>🛵 Modelo da moto</label>
+      <label for="f-veiculo-modelo">🛵 Modelo da moto</label>
       <input id="f-veiculo-modelo" placeholder="Ex: Honda CG 160">
-      <label style="margin-top:8px;">🔖 Placa</label>
+      <label for="f-veiculo-placa" style="margin-top:8px;">🔖 Placa</label>
       <input id="f-veiculo-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
       <p style="font-size:0.72rem; color:#8a8270; margin-top:4px;">Esses dados ficam visíveis pra quem for te contratar — é uma camada de segurança pra evitar golpe.</p>
     </div>
@@ -328,11 +328,11 @@
       </div>
       <div class="row2" style="margin-top:8px;">
         <div class="field">
-          <label class="foto-ou">Abre às</label>
+          <label class="foto-ou" for="f-horario-abre">Abre às</label>
           <input id="f-horario-abre" type="time">
         </div>
         <div class="field">
-          <label class="foto-ou">Fecha às</label>
+          <label class="foto-ou" for="f-horario-fecha">Fecha às</label>
           <input id="f-horario-fecha" type="time">
         </div>
       </div>
@@ -357,7 +357,7 @@
       </div>
       <span class="foto-msg" id="foto-msg"></span>
       <img id="foto-preview" class="foto-preview" style="display:none;">
-      <label class="foto-ou">ou cole um link de foto já existente</label>
+      <label class="foto-ou" for="f-foto">ou cole um link de foto já existente</label>
       <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
     </div>
     <div class="form-actions">
