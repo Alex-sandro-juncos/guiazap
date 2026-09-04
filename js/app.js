@@ -443,8 +443,9 @@ async function loadEntries(){
   // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
   // pra permitir encontrar uma empresa pela marca/categoria dos produtos
   // dela, mesmo sem abrir a Vitrine
-  supabaseClient.from('produtos').select('profissional_id, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
+  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
     produtosParaBuscaPrincipal = produtosLeves || [];
+    render();
   });
 
   // Carrega o status de conexão do Mercado Pago só pras empresas do
@@ -3172,6 +3173,7 @@ function render(){
       // Também acha a empresa pela marca/categoria de algum produto dela
       return produtosParaBuscaPrincipal.some(p =>
         p.profissional_id === e.id && (
+          normalizarTexto(p.nome).includes(query) ||
           normalizarTexto(p.marca).includes(query) ||
           normalizarTexto(p.categoria).includes(query) ||
           normalizarTexto(p.categorias_extra).includes(query)
@@ -4500,6 +4502,13 @@ async function processarComandoVozIndex(transcricao){
         irAoProfissionalVoz(unicos[0], 'Só achei um resultado:');
         return;
       }
+    }
+    if(cards.length === 0){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      localStorage.setItem('guiazap_busca_vitrine', termoBuscaLocal);
+      falarVozIndex('Isso parece produto. Levando você pra vitrine, procurar ' + termoBuscaLocal + '.');
+      setTimeout(() => { window.location.href = 'vitrine.html'; }, 1100);
+      return;
     }
     if(cards[0]) cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     falarVozIndex(lerResultadosBuscaIndex());

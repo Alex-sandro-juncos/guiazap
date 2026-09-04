@@ -11,6 +11,14 @@ function toggleFavoritoProduto(id, event){
   if(favoritosProdutos.has(id)) favoritosProdutos.delete(id);
   else favoritosProdutos.add(id);
   localStorage.setItem('favoritos_produtos', JSON.stringify([...favoritosProdutos]));
+  const buscaTrazida = localStorage.getItem('guiazap_busca_vitrine');
+  if(buscaTrazida){
+    localStorage.removeItem('guiazap_busca_vitrine');
+    produtoFiltroId = null;
+    empresaFiltroId = null;
+    const campo = document.getElementById('v-search');
+    if(campo) campo.value = buscaTrazida;
+  }
   renderProdutos();
 }
 
