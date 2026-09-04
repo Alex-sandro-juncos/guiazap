@@ -2589,6 +2589,16 @@ function toggleModoVozVitrine(){
 }
 
 function iniciarModoVozVitrine(){
+  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
+    cadastrarVozPrimeiroAcesso().then(ok => {
+      if(ok && typeof iniciarMonitorVozDono === 'function'){
+        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+      }
+    });
+  } else if(typeof iniciarMonitorVozDono === 'function'){
+    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+  }
+
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -2683,6 +2693,7 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  if(typeof autorizarComandoPorVoz === "function" && !autorizarComandoPorVoz()) return;
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
   // somente voz, essa fala é sobre isso — nada mais é processado
   if(_aguardandoPinParaDestravarVitrine){

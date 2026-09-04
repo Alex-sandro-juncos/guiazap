@@ -499,6 +499,19 @@ async function loadEntries(){
   abrirStorySeVindoDoProduto();
   loadContagemSeguidores().then(render);
   render();
+
+  const buscaVoz = params.get('q') || params.get('busca');
+  if(buscaVoz){
+    const campo = document.getElementById('search');
+    if(campo) campo.value = buscaVoz;
+    render();
+    if(typeof falarVozIndex === 'function' && (localStorage.getItem('guiazap_quer_voz') === '1' || localStorage.getItem('retomarModoVozAoCarregar') === '1')){
+      setTimeout(() => {
+        if(typeof lerResultadosBuscaIndex === 'function') falarVozIndex(lerResultadosBuscaIndex());
+      }, 1800);
+    }
+  }
+
   tentarIniciarNotificacoes();
   atualizarVisibilidadeBotaoPush();
 
@@ -3715,6 +3728,16 @@ function toggleModoVozIndex(){
 }
 
 function iniciarModoVozIndex(){
+  if(typeof cadastrarVozPrimeiroAcesso === 'function' && !perfilVozSalvo()){
+    cadastrarVozPrimeiroAcesso().then(ok => {
+      if(ok && typeof iniciarMonitorVozDono === 'function'){
+        navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+      }
+    });
+  } else if(typeof iniciarMonitorVozDono === 'function'){
+    navigator.mediaDevices.getUserMedia({audio:true}).then(iniciarMonitorVozDono).catch(()=>{});
+  }
+
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -4199,6 +4222,7 @@ function extrairDigitosDaFalaIndex(texto){
 }
 
 async function processarComandoVozIndex(transcricao){
+  if(typeof autorizarComandoPorVoz === "function" && !autorizarComandoPorVoz()) return;
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
@@ -4370,17 +4394,107 @@ async function processarComandoVozIndex(transcricao){
     return;
   }
 
-  // Busca local primeiro: frases simples tipo "dentista", "eletricista",
-  // "pizza" não precisam de IA — evita "não entendi" quando a API falha.
+  const STOP_VOZ_INDEX = ['quero','queria','comprar','compra','ver','abrir','ir','pra','para','pro','no','na','com','um','uma','o','a','os','as','de','do','da','dos','das','empresa','contato','profissional','procura','procurar','busca','buscar','me','mostra','mostrar'];
+
+  function acharProfissionalPorNomeVoz(nome){
+    const n = normalizarTexto(nome);
+    if(!n || n.length < 2) return null;
+    const ativos = (entries || []).filter(e => e.status_pagamento === 'ativo');
+    const exact = ativos.find(e => normalizarTexto(e.name) === n);
+    if(exact) return exact;
+    const contem = ativos.filter(e => {
+      const nn = normalizarTexto(e.name);
+      return nn.includes(n) || n.includes(nn);
+    });
+    if(contem.length === 1) return contem[0];
+    const porPalavra = ativos.filter(e => {
+      const nn = normalizarTexto(e.name);
+      return n.split(/\s+/).filter(w => w.length > 2).some(w => nn.includes(w));
+    });
+    return porPalavra[0] || contem[0] || null;
+  }
+
+  function irAoProfissionalVoz(e, falaExtra){
+    cadastroCompartilhadoId = e.id;
+    const campo = document.getElementById('search');
+    if(campo) campo.value = e.name;
+    render();
+    try{ history.replaceState({}, '', 'index.html?p=' + encodeURIComponent(e.id)); } catch(err){}
+    const card = document.querySelector('#list .card-profissional');
+    if(card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const cat = e.cat ? (', ' + e.cat) : '';
+    const cidade = e.cidade ? (', em ' + e.cidade) : '';
+    falarVozIndex((falaExtra ? falaExtra + ' ' : '') + e.name + cat + cidade + '. Você está no contato dele.');
+  }
+
+  function irAoMenuEmpresaVoz(e, termoProduto){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    localStorage.setItem('guiazap_quer_voz', '1');
+    let url = 'vitrine.html?empresa=' + encodeURIComponent(e.id);
+    falarVozIndex('Abrindo o cardápio de ' + e.name + (termoProduto ? (', procurando ' + termoProduto) : '') + '.');
+    setTimeout(() => { window.location.href = url; }, 1100);
+  }
+
+  // "manicure da maria", "lanche do alex", "empresa y"
+  let nomeAlvo = '';
+  const matchDe = textoNormalizado.match(/\b(?:do|da|de|no|na)\s+([a-z0-9][a-z0-9\s]{1,40})$/);
+  if(matchDe) nomeAlvo = matchDe[1].trim();
+
+  const textoSemAlvo = nomeAlvo
+    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|no|na)\\s+' + nomeAlvo.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '$'), '').trim()
+    : textoNormalizado;
+
+  const palavrasPedido = textoSemAlvo.split(/\s+/).map(w => w.replace(/[^\wáéíóúâêôãõç]/gi,'')).filter(w => w.length > 1 && !STOP_VOZ_INDEX.includes(w));
+  const termoPedido = palavrasPedido.join(' ');
+
+  const ehPedidoCardapio = textoNormalizado.includes('comprar') || textoNormalizado.includes('lanche') || textoNormalizado.includes('pastel') || textoNormalizado.includes('pizza') || textoNormalizado.includes('dog') || textoNormalizado.includes('cardapio') || textoNormalizado.includes('cardápio') || textoNormalizado.includes('menu') || textoNormalizado.includes('vitrine');
+
+  if(nomeAlvo){
+    const empresa = acharProfissionalPorNomeVoz(nomeAlvo);
+    if(empresa){
+      if(ehPedidoCardapio || (empresa.plano === 'vendas' && (textoNormalizado.includes('comprar') || textoNormalizado.includes('lanche') || textoNormalizado.includes('pedido')))){
+        irAoMenuEmpresaVoz(empresa, termoPedido);
+        return;
+      }
+      irAoProfissionalVoz(empresa, termoPedido ? ('Achei ' + termoPedido + ' em') : 'Achei');
+      return;
+    }
+  }
+
+  // Nome de empresa/pessoa falado direto: "quero a maria", "empresa alex"
+  if(termoPedido){
+    const empresaDireta = acharProfissionalPorNomeVoz(termoPedido);
+    if(empresaDireta && (normalizarTexto(empresaDireta.name).includes(termoPedido) || termoPedido.includes(normalizarTexto(empresaDireta.name).split(' ')[0]))){
+      if(ehPedidoCardapio && empresaDireta.plano === 'vendas'){
+        irAoMenuEmpresaVoz(empresaDireta, '');
+        return;
+      }
+      irAoProfissionalVoz(empresaDireta, 'Achei');
+      return;
+    }
+  }
+
   const palavrasComandoComplexo = ['chamar', 'ligar', 'whatsapp', 'conversar', 'falar com', 'manda mensagem', 'filtrar cidade', 'na cidade'];
   const pareceComandoComplexo = palavrasComandoComplexo.some(p => textoNormalizado.includes(p));
-  const termoBuscaLocal = transcricao.trim();
+  const termoBuscaLocal = termoPedido || transcricao.trim();
 
   if(!pareceComandoComplexo && termoBuscaLocal.length >= 2 && termoBuscaLocal.length <= 60){
+    cadastroCompartilhadoId = null;
     document.getElementById('search').value = termoBuscaLocal;
     render();
-    const resumo = lerResultadosBuscaIndex();
-    falarVozIndex(resumo);
+    const cards = document.querySelectorAll('#list .card-profissional');
+    if(cards.length === 1){
+      const unicos = (entries || []).filter(e => e.status_pagamento === 'ativo' && (
+        normalizarTexto(e.name).includes(normalizarTexto(termoBuscaLocal)) ||
+        normalizarTexto(e.cat).includes(normalizarTexto(termoBuscaLocal))
+      ));
+      if(unicos.length === 1){
+        irAoProfissionalVoz(unicos[0], 'Só achei um resultado:');
+        return;
+      }
+    }
+    if(cards[0]) cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    falarVozIndex(lerResultadosBuscaIndex());
     return;
   }
 
