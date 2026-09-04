@@ -149,18 +149,31 @@
   <button type="button" class="btn-add-vaga" id="v-add-vaga-btn" style="display:none;" onclick="abrirFormVaga()">+ Publicar vaga</button>
 </div>
 
+<button type="button" id="btn-modo-voz-vagas" onclick="toggleModoVozVagas()" aria-label="Publicar vaga por voz, sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Publicar vaga por voz</button>
+
+<div id="painel-modo-voz-vagas" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div id="voz-vagas-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+    <div style="flex:1; min-width:0;">
+      <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-vagas-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
+      <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-vagas-transcricao"></div>
+    </div>
+    <button type="button" onclick="toggleModoVozVagas()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
+  </div>
+</div>
+
 <form id="vaga-form" onsubmit="return salvarVaga(event)">
   <input type="hidden" id="vg-id">
   <div class="field">
-    <label>Empresa/cadastro (do seu perfil GuiaZap)</label>
+    <label for="vg-profissional">Empresa/cadastro (do seu perfil GuiaZap)</label>
     <select id="vg-profissional" required></select>
   </div>
   <div class="field">
-    <label>Cargo/título da vaga</label>
+    <label for="vg-titulo">Cargo/título da vaga</label>
     <input id="vg-titulo" required placeholder="Ex: Atendente de balcão">
   </div>
   <div class="field">
-    <label>Tipo</label>
+    <label for="vg-tipo">Tipo</label>
     <select id="vg-tipo">
       <option value="CLT">CLT</option>
       <option value="PJ">PJ</option>
@@ -182,15 +195,15 @@
     </label>
   </div>
   <div class="field">
-    <label>Descrição da vaga</label>
+    <label for="vg-descricao">Descrição da vaga</label>
     <textarea id="vg-descricao" rows="3" placeholder="O que a pessoa vai fazer no dia a dia"></textarea>
   </div>
   <div class="field">
-    <label>O que procuramos (requisitos)</label>
+    <label for="vg-requisitos">O que procuramos (requisitos)</label>
     <textarea id="vg-requisitos" rows="2" placeholder="Ex: experiência anterior, disponibilidade de horário..."></textarea>
   </div>
   <div class="field">
-    <label>Salário (opcional)</label>
+    <label for="vg-salario">Salário (opcional)</label>
     <div class="campo-com-prefixo">
       <span class="prefixo-rs">R$</span>
       <input id="vg-salario" placeholder="1.500,00 (ou 'A combinar')" oninput="formatarValorVaga(event)">

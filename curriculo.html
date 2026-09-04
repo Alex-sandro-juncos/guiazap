@@ -106,53 +106,70 @@
       </div>
     </div>
 
+    <button type="button" id="btn-modo-voz-cv" onclick="toggleModoVozCv()" aria-label="Preencher currículo por voz, sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Preencher currículo por voz</button>
+
+    <div id="painel-modo-voz-cv" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div id="voz-cv-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+        <div style="flex:1; min-width:0;">
+          <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-cv-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
+          <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-cv-transcricao"></div>
+        </div>
+        <button type="button" onclick="toggleModoVozCv()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
+      </div>
+    </div>
+
     <div class="field">
-      <label>Nome completo</label>
+      <label for="cv-input-nome">Nome completo</label>
       <input id="cv-input-nome" oninput="atualizarPreviewCv()" placeholder="Seu nome completo">
     </div>
     <div class="field">
-      <label>Telefone/WhatsApp</label>
+      <label for="cv-input-telefone">Telefone/WhatsApp</label>
       <input id="cv-input-telefone" oninput="atualizarPreviewCv()" placeholder="(46) 99999-9999">
     </div>
     <div class="field">
-      <label>E-mail (opcional)</label>
+      <label for="cv-input-email">E-mail (opcional)</label>
       <input id="cv-input-email" oninput="atualizarPreviewCv()" placeholder="seuemail@gmail.com">
     </div>
     <div class="field">
-      <label>CEP</label>
+      <label for="cv-input-cep">CEP</label>
       <input id="cv-input-cep" placeholder="00000-000" oninput="mascaraCep(event)" onblur="buscarCepCv()">
       <span id="cv-cep-msg" style="font-size:0.72rem; color:#888;"></span>
     </div>
     <div class="field">
-      <label>Estado</label>
+      <label for="cv-input-estado">Estado</label>
       <select id="cv-input-estado" onchange="atualizarPreviewCv()"></select>
     </div>
     <div class="field">
-      <label>Cidade</label>
+      <label for="cv-input-cidade">Cidade</label>
       <input id="cv-input-cidade" oninput="atualizarPreviewCv()" placeholder="Sua cidade">
     </div>
     <div class="field">
-      <label>Bairro</label>
+      <label for="cv-input-bairro">Bairro</label>
       <input id="cv-input-bairro" oninput="atualizarPreviewCv()" placeholder="Seu bairro">
     </div>
 
     <div class="cv-secao-titulo">Objetivo</div>
     <div class="field">
+      <label for="cv-input-objetivo" class="sr-only" style="position:absolute; left:-9999px;">Objetivo profissional</label>
       <textarea id="cv-input-objetivo" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Busco oportunidade na área de vendas, com foco em atendimento ao cliente."></textarea>
     </div>
 
     <div class="cv-secao-titulo">Experiência profissional</div>
     <div class="field">
+      <label for="cv-input-experiencia" class="sr-only" style="position:absolute; left:-9999px;">Experiência profissional</label>
       <textarea id="cv-input-experiencia" rows="4" oninput="atualizarPreviewCv()" placeholder="Ex: Atendente de loja — Mercado São José (2022-2024)&#10;Responsável pelo caixa e atendimento ao público."></textarea>
     </div>
 
     <div class="cv-secao-titulo">Formação/Escolaridade</div>
     <div class="field">
+      <label for="cv-input-formacao" class="sr-only" style="position:absolute; left:-9999px;">Formação e escolaridade</label>
       <textarea id="cv-input-formacao" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Ensino Médio completo — Colégio Estadual X, 2021"></textarea>
     </div>
 
     <div class="cv-secao-titulo">Habilidades e cursos</div>
     <div class="field">
+      <label for="cv-input-habilidades" class="sr-only" style="position:absolute; left:-9999px;">Habilidades e cursos</label>
       <textarea id="cv-input-habilidades" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Pacote Office, CNH categoria B, atendimento ao cliente"></textarea>
     </div>
 
@@ -531,6 +548,189 @@ async function excluirMeuCurriculo(){
   document.getElementById('cv-btn-excluir').style.display = 'none';
   msg.textContent = 'Currículo excluído do banco.';
   msg.style.color = 'var(--verde-escuro)';
+}
+
+// ---------- MODO VOZ NO CURRÍCULO ----------
+
+let _vozCvReconhecimento = null;
+let _vozCvAtiva = false;
+let _vozCvFalando = false;
+const _vozCvSynth = window.speechSynthesis;
+let _estadoPreenchimentoCv = null;
+
+function toggleModoVozCv(){
+  if(_vozCvAtiva) pararModoVozCv();
+  else iniciarModoVozCv();
+}
+
+function iniciarModoVozCv(){
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionApi){
+    alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
+    return;
+  }
+
+  _vozCvAtiva = true;
+  document.getElementById('btn-modo-voz-cv').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-cv').style.display = 'block';
+
+  _vozCvReconhecimento = new SpeechRecognitionApi();
+  _vozCvReconhecimento.lang = 'pt-BR';
+  _vozCvReconhecimento.continuous = true;
+  _vozCvReconhecimento.interimResults = false;
+
+  _vozCvReconhecimento.onresult = (event) => {
+    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-cv-transcricao').textContent = '🗣️ "' + transcricao + '"';
+    processarEtapaPreenchimentoCv(transcricao);
+  };
+
+  _vozCvReconhecimento.onend = () => {
+    if(_vozCvAtiva && !_vozCvFalando){ try{ _vozCvReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozCvReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      alert('Você precisa permitir o uso do microfone.');
+      pararModoVozCv();
+    }
+  };
+
+  try{ _vozCvReconhecimento.start(); } catch(e){}
+
+  _estadoPreenchimentoCv = { etapa: 'nome' };
+  falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
+}
+
+function pararModoVozCv(){
+  _vozCvAtiva = false;
+  if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.stop(); } catch(e){} }
+  _vozCvSynth.cancel();
+  document.getElementById('btn-modo-voz-cv').style.background = '#6b46c1';
+  document.getElementById('painel-modo-voz-cv').style.display = 'none';
+}
+
+function falarVozCv(texto){
+  _vozCvFalando = true;
+  if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.stop(); } catch(e){} }
+  _vozCvSynth.cancel();
+
+  document.getElementById('voz-cv-status').textContent = '🔊 ' + texto;
+  document.getElementById('voz-cv-indicador').style.background = '#4fc3a1';
+
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.rate = 1;
+
+  fala.onend = () => {
+    document.getElementById('voz-cv-indicador').style.background = '#6b46c1';
+    document.getElementById('voz-cv-status').textContent = '🎙️ Pode falar';
+    _vozCvFalando = false;
+    if(_vozCvAtiva){ try{ _vozCvReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozCvSynth.speak(fala);
+}
+
+function normalizarTextoCv(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+async function processarEtapaPreenchimentoCv(transcricao){
+  const estado = _estadoPreenchimentoCv;
+  if(!estado) return;
+  const textoNorm = normalizarTextoCv(transcricao);
+  const pulou = textoNorm.includes('pular') || textoNorm.includes('pula');
+
+  if(estado.etapa === 'nome'){
+    document.getElementById('cv-input-nome').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'telefone';
+    falarVozCv('Qual seu telefone com WhatsApp? Fala número por número, com DDD.');
+    return;
+  }
+
+  if(estado.etapa === 'telefone'){
+    const digitos = extrairDigitosDaFalaCv(transcricao);
+    if(digitos.length < 10){ falarVozCv('Não entendi o telefone direito, precisa ter DDD e o número completo. Fala de novo.'); return; }
+    document.getElementById('cv-input-telefone').value = digitos;
+    atualizarPreviewCv();
+    estado.etapa = 'cidade';
+    falarVozCv('Qual sua cidade?');
+    return;
+  }
+
+  if(estado.etapa === 'cidade'){
+    document.getElementById('cv-input-cidade').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'bairro';
+    falarVozCv('Qual seu bairro? Ou fala "pular".');
+    return;
+  }
+
+  if(estado.etapa === 'bairro'){
+    if(!pulou) document.getElementById('cv-input-bairro').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'objetivo';
+    falarVozCv('Qual seu objetivo profissional? Tipo "busco vaga na área de vendas". Ou fala "pular".');
+    return;
+  }
+
+  if(estado.etapa === 'objetivo'){
+    if(!pulou) document.getElementById('cv-input-objetivo').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'experiencia';
+    falarVozCv('Fala sua experiência profissional — os empregos anteriores. Ou fala "pular".');
+    return;
+  }
+
+  if(estado.etapa === 'experiencia'){
+    if(!pulou) document.getElementById('cv-input-experiencia').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'formacao';
+    falarVozCv('Qual sua formação ou escolaridade? Ou fala "pular".');
+    return;
+  }
+
+  if(estado.etapa === 'formacao'){
+    if(!pulou) document.getElementById('cv-input-formacao').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'habilidades';
+    falarVozCv('Quais suas habilidades ou cursos? Ou fala "pular".');
+    return;
+  }
+
+  if(estado.etapa === 'habilidades'){
+    if(!pulou) document.getElementById('cv-input-habilidades').value = transcricao.trim();
+    atualizarPreviewCv();
+    estado.etapa = 'confirmar';
+    falarVozCv('Currículo preenchido! Quer enviar pro Banco de Talentos agora? Fala "sim" ou "não".');
+    return;
+  }
+
+  if(estado.etapa === 'confirmar'){
+    _estadoPreenchimentoCv = null;
+    if(textoNorm.includes('sim') || textoNorm.includes('confirma') || textoNorm.includes('enviar')){
+      falarVozCv('Enviando...');
+      await enviarParaBancoTalentos();
+      falarVozCv('Currículo enviado pro Banco de Talentos!');
+    } else {
+      falarVozCv('Tudo bem, o currículo ficou preenchido na tela mas não foi enviado ainda. Você pode revisar e enviar quando quiser.');
+    }
+    return;
+  }
+}
+
+function extrairDigitosDaFalaCv(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTextoCv(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
 }
 
 if(supabaseClientCv) initAuthCv();

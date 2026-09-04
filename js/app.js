@@ -2126,6 +2126,14 @@ async function removerMotoboy(motoboyId, profissionalId){
   await carregarListaMotoboys(profissionalId);
 }
 
+// Versão pro modo voz — sem confirm(). O "fala remover" já é a confirmação.
+async function removerMotoboyPorVoz(motoboyId, profissionalId){
+  const { error } = await supabaseClient.from('motoboys').delete().eq('id', motoboyId);
+  if(error) return { ok: false };
+  await carregarListaMotoboys(profissionalId);
+  return { ok: true };
+}
+
 async function carregarRepassesPendentes(profissionalId){
   const container = document.getElementById('lista-repasses');
   container.innerHTML = 'Carregando...';
@@ -3574,6 +3582,11 @@ if(initSupabase()){
   setTimeout(tentarIniciarNotificacoes, 3000);
 }
 
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(iniciarModoVozIndex, 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
+}
+
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
 
 if('serviceWorker' in navigator){
@@ -3921,6 +3934,198 @@ async function processarEtapaCadastroVoz(transcricao){
   }
 }
 
+// ---------- CONFIGURAR ATENDIMENTO AUTOMÁTICO POR VOZ ----------
+
+let _estadoAtendimentoVoz = null;
+// formato: { etapa: 'empresa' | 'ativar' | 'boasvindas' | 'entrega' | 'taxabase' | 'valorkm' | 'confirmar', profissionalId, ... }
+
+function minhasEmpresasVendasParaVoz(){
+  if(!currentUser) return [];
+  return entries.filter(e => e.user_id === currentUser.id && e.plano === 'vendas');
+}
+
+async function iniciarConfigAtendimentoPorVoz(){
+  if(!currentUser){ falarVozIndex('Você precisa estar logado.'); return; }
+  const minhas = minhasEmpresasVendasParaVoz();
+
+  if(minhas.length === 0){ falarVozIndex('Você não tem uma empresa com Pacote Vendas — esse recurso é só pra esse plano.'); return; }
+
+  if(minhas.length === 1){
+    _estadoAtendimentoVoz = { etapa: 'ativar', profissionalId: minhas[0].id };
+    await abrirConfigAtendimento(minhas[0].id);
+    falarVozIndex(`Configurando o atendimento automático de ${minhas[0].name}. Quer ativar o atendimento automático? Fala "sim" ou "não".`);
+  } else {
+    _estadoAtendimentoVoz = { etapa: 'empresa' };
+    const nomes = minhas.map(e => e.name).join(', ');
+    falarVozIndex(`Você tem mais de uma empresa com Pacote Vendas: ${nomes}. Qual delas?`);
+  }
+}
+
+async function processarEtapaAtendimentoVoz(transcricao){
+  const estado = _estadoAtendimentoVoz;
+  const textoNorm = normalizarTexto(transcricao);
+
+  if(estado.etapa === 'empresa'){
+    const minhas = minhasEmpresasVendasParaVoz();
+    const encontrada = minhas.find(e => normalizarTexto(e.name).includes(textoNorm) || textoNorm.includes(normalizarTexto(e.name)));
+    if(!encontrada){ falarVozIndex('Não achei essa empresa. Fala o nome de novo.'); return; }
+
+    estado.profissionalId = encontrada.id;
+    estado.etapa = 'ativar';
+    await abrirConfigAtendimento(encontrada.id);
+    falarVozIndex('Quer ativar o atendimento automático? Fala "sim" ou "não".');
+    return;
+  }
+
+  if(estado.etapa === 'ativar'){
+    document.getElementById('atendimento-ativo').checked = textoNorm.includes('sim');
+    estado.etapa = 'boasvindas';
+    falarVozIndex('Qual a mensagem de boas-vindas? Fala como quer que o robô cumprimente o cliente.');
+    return;
+  }
+
+  if(estado.etapa === 'boasvindas'){
+    document.getElementById('atendimento-boas-vindas').value = transcricao.trim();
+    estado.etapa = 'entrega';
+    falarVozIndex('Sua empresa faz entrega? Fala "sim" ou "não".');
+    return;
+  }
+
+  if(estado.etapa === 'entrega'){
+    const fazEntrega = textoNorm.includes('sim');
+    document.getElementById('atendimento-faz-entrega').checked = fazEntrega;
+    document.getElementById('atendimento-taxa-campo').style.display = fazEntrega ? 'block' : 'none';
+
+    if(fazEntrega){
+      estado.etapa = 'taxabase';
+      falarVozIndex('Qual a taxa fixa de entrega? Fala tipo "seis reais e cinquenta".');
+    } else {
+      estado.etapa = 'confirmar';
+      falarVozIndex('Confirma salvar essa configuração? Fala "sim" ou "não".');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'taxabase'){
+    const valor = extrairValorMonetarioDaFalaIndex(transcricao);
+    if(valor === null){ falarVozIndex('Não entendi o valor. Fala de novo, tipo "seis reais e cinquenta".'); return; }
+    document.getElementById('atendimento-taxa-base').value = valor;
+    estado.etapa = 'valorkm';
+    falarVozIndex('E o valor por quilômetro rodado? Fala tipo "um real e cinquenta".');
+    return;
+  }
+
+  if(estado.etapa === 'valorkm'){
+    const valor = extrairValorMonetarioDaFalaIndex(transcricao);
+    if(valor === null){ falarVozIndex('Não entendi o valor. Fala de novo.'); return; }
+    document.getElementById('atendimento-valor-km').value = valor;
+    estado.etapa = 'confirmar';
+    falarVozIndex('Confirma salvar essa configuração? Fala "sim" ou "não".');
+    return;
+  }
+
+  if(estado.etapa === 'confirmar'){
+    if(textoNorm.includes('sim') || textoNorm.includes('confirma')){
+      _estadoAtendimentoVoz = null;
+      falarVozIndex('Salvando...');
+      document.getElementById('atendimento-form').requestSubmit();
+    } else {
+      _estadoAtendimentoVoz = null;
+      falarVozIndex('Cancelado, nada foi salvo.');
+      fecharConfigAtendimento();
+    }
+    return;
+  }
+}
+
+// ---------- GERENCIAR MOTOBOYS POR VOZ ----------
+
+let _estadoMotoboysVoz = null;
+// formato: { etapa: 'empresa' | 'aguardando_comando', profissionalId }
+
+async function iniciarGerenciarMotoboysPorVoz(){
+  if(!currentUser){ falarVozIndex('Você precisa estar logado.'); return; }
+  const minhas = entries.filter(e => e.user_id === currentUser.id && e.plano === 'vendas');
+
+  if(minhas.length === 0){ falarVozIndex('Você não tem uma empresa com Pacote Vendas.'); return; }
+
+  if(minhas.length === 1){
+    _estadoMotoboysVoz = { etapa: 'aguardando_comando', profissionalId: minhas[0].id };
+    falarVozIndex(`Gerenciando motoboys de ${minhas[0].name}. Fala "ler motoboys" ou "repasses pendentes".`);
+  } else {
+    _estadoMotoboysVoz = { etapa: 'empresa' };
+    const nomes = minhas.map(e => e.name).join(', ');
+    falarVozIndex(`Você tem mais de uma empresa: ${nomes}. Qual delas?`);
+  }
+}
+
+async function processarComandoMotoboysVoz(transcricao){
+  const estado = _estadoMotoboysVoz;
+  const textoNorm = normalizarTexto(transcricao);
+
+  if(estado.etapa === 'empresa'){
+    const minhas = entries.filter(e => e.user_id === currentUser.id && e.plano === 'vendas');
+    const encontrada = minhas.find(e => normalizarTexto(e.name).includes(textoNorm) || textoNorm.includes(normalizarTexto(e.name)));
+    if(!encontrada){ falarVozIndex('Não achei essa empresa. Fala o nome de novo.'); return; }
+    estado.profissionalId = encontrada.id;
+    estado.etapa = 'aguardando_comando';
+    falarVozIndex('Fala "ler motoboys" ou "repasses pendentes".');
+    return;
+  }
+
+  if(textoNorm.includes('sair') || textoNorm.includes('terminar') || textoNorm.includes('fechar')){
+    _estadoMotoboysVoz = null;
+    falarVozIndex('Saindo do gerenciamento de motoboys.');
+    return;
+  }
+
+  if(textoNorm.includes('ler motoboys') || textoNorm.includes('meus motoboys') || textoNorm === 'motoboys'){
+    const { data } = await supabaseClient.from('motoboys').select('id, nome_exibicao, preferido, ativo').eq('profissional_id', estado.profissionalId);
+    if(!data || data.length === 0){ falarVozIndex('Nenhum motoboy cadastrado ainda.'); return; }
+    const lista = data.map(m => `${m.nome_exibicao || 'Motoboy'}${m.preferido ? ', preferido' : ''}`).join('; ');
+    falarVozIndex(`Você tem ${data.length} motoboy${data.length > 1 ? 's' : ''}: ${lista}.`);
+    return;
+  }
+
+  if(textoNorm.includes('repasses pendentes') || textoNorm.includes('repasses')){
+    const { data } = await supabaseClient.from('repasses_motoboy').select('valor, status, motoboy_user_id').eq('profissional_id', estado.profissionalId).eq('status', 'pendente');
+    if(!data || data.length === 0){ falarVozIndex('Nenhum repasse pendente.'); return; }
+    const total = data.reduce((soma, r) => soma + Number(r.valor), 0);
+    falarVozIndex(`Você tem ${data.length} repasse${data.length > 1 ? 's' : ''} pendente${data.length > 1 ? 's' : ''}, totalizando ${total.toFixed(2).replace('.', ',')} reais. Veja os detalhes na tela pra marcar como pago, com o nome de cada motoboy.`);
+    return;
+  }
+
+  const matchPreferido = textoNorm.match(/marcar (.+) como preferido/);
+  if(matchPreferido){
+    const { data } = await supabaseClient.from('motoboys').select('id, nome_exibicao, preferido').eq('profissional_id', estado.profissionalId);
+    const encontrado = (data || []).find(m => normalizarTexto(m.nome_exibicao || '').includes(matchPreferido[1].trim()));
+    if(!encontrado){ falarVozIndex('Não achei esse motoboy.'); return; }
+    await toggleMotoboyPreferido(encontrado.id, !encontrado.preferido, estado.profissionalId);
+    falarVozIndex(`${encontrado.nome_exibicao} marcado como preferido.`);
+    return;
+  }
+
+  const matchRemover = textoNorm.match(/remover (.+)/);
+  if(matchRemover){
+    const { data } = await supabaseClient.from('motoboys').select('id, nome_exibicao').eq('profissional_id', estado.profissionalId);
+    const encontrado = (data || []).find(m => normalizarTexto(m.nome_exibicao || '').includes(matchRemover[1].trim()));
+    if(!encontrado){ falarVozIndex('Não achei esse motoboy.'); return; }
+    await removerMotoboyPorVoz(encontrado.id, estado.profissionalId);
+    falarVozIndex(`${encontrado.nome_exibicao} removido.`);
+    return;
+  }
+
+  falarVozIndex('Não entendi. Fala "ler motoboys", "repasses pendentes", "marcar [nome] como preferido", ou "remover [nome]".');
+}
+
+function extrairValorMonetarioDaFalaIndex(texto){
+  const comDecimal = texto.match(/(\d+)[.,](\d{1,2})/);
+  if(comDecimal) return parseFloat(`${comDecimal[1]}.${comDecimal[2]}`);
+  const inteiro = texto.match(/\d+/);
+  if(inteiro) return parseFloat(inteiro[0]);
+  return null;
+}
+
 function extrairSiglaEstadoDaFala(texto){
   const normalizado = normalizarTexto(texto);
   const mapaEstados = { acre:'AC', alagoas:'AL', amapa:'AP', amazonas:'AM', bahia:'BA', ceara:'CE', 'distrito federal':'DF', 'espirito santo':'ES', goias:'GO', maranhao:'MA', 'mato grosso do sul':'MS', 'mato grosso':'MT', 'minas gerais':'MG', para:'PA', paraiba:'PB', parana:'PR', pernambuco:'PE', piaui:'PI', 'rio de janeiro':'RJ', 'rio grande do norte':'RN', 'rio grande do sul':'RS', rondonia:'RO', roraima:'RR', 'santa catarina':'SC', 'sao paulo':'SP', sergipe:'SE', tocantins:'TO' };
@@ -4010,6 +4215,58 @@ async function processarComandoVozIndex(transcricao){
   // a essa etapa — não passa pelos comandos normais
   if(_estadoCadastroVoz){
     await processarEtapaCadastroVoz(transcricao);
+    return;
+  }
+
+  if(_estadoAtendimentoVoz){
+    await processarEtapaAtendimentoVoz(transcricao);
+    return;
+  }
+
+  if(_estadoMotoboysVoz){
+    await processarComandoMotoboysVoz(transcricao);
+    return;
+  }
+
+  const matchFazerPedido = textoNormalizado.match(/fazer pedido (com|na|no) (.+)/) || textoNormalizado.match(/comprar (com|na|no) (.+)/);
+  if(matchFazerPedido){
+    const nomeEmpresa = matchFazerPedido[2].trim();
+    const empresa = entries.find(e => e.status_pagamento === 'ativo' && e.plano === 'vendas' && (normalizarTexto(e.name).includes(nomeEmpresa) || nomeEmpresa.includes(normalizarTexto(e.name))));
+    if(!empresa){ falarVozIndex('Não achei essa empresa com Vitrine ativa. Fala o nome de novo.'); return; }
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozIndex(`Indo pra Vitrine de ${empresa.name}...`);
+    setTimeout(() => { window.location.href = `vitrine.html?empresa=${empresa.id}`; }, 1200);
+    return;
+  }
+
+  if(textoNormalizado.includes('ir para vitrine') || textoNormalizado.includes('ver vitrine') || textoNormalizado.includes('ir pra vitrine')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozIndex('Indo pra Vitrine...');
+    setTimeout(() => { window.location.href = 'vitrine.html'; }, 1200);
+    return;
+  }
+
+  if(textoNormalizado.includes('ir para pedidos') || textoNormalizado.includes('meus pedidos')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozIndex('Indo pra tela de pedidos...');
+    setTimeout(() => { window.location.href = 'pedidos.html'; }, 1200);
+    return;
+  }
+
+  if(textoNormalizado.includes('ir para curriculo') || textoNormalizado.includes('meu curriculo') || textoNormalizado.includes('fazer curriculo')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozIndex('Indo pra tela de currículo...');
+    setTimeout(() => { window.location.href = 'curriculo.html'; }, 1200);
+    return;
+  }
+
+  if(textoNormalizado.includes('gerenciar motoboys') || textoNormalizado.includes('meus motoboys') || textoNormalizado.includes('gerenciar entregadores')){
+    await iniciarGerenciarMotoboysPorVoz();
+    return;
+  }
+
+  if(textoNormalizado.includes('configurar atendimento') || textoNormalizado.includes('atendimento automatico')){
+    await iniciarConfigAtendimentoPorVoz();
     return;
   }
 

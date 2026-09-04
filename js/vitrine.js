@@ -2690,7 +2690,31 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
+  if(_estadoEdicaoProdutoVoz){
+    await processarEtapaEdicaoProdutoVoz(transcricao);
+    return;
+  }
+
   const textoNormalizado = normalizarTextoV(transcricao);
+
+  if(textoNormalizado.includes('editar produto')){
+    iniciarEdicaoProdutoPorVoz();
+    return;
+  }
+
+  if(textoNormalizado.includes('ir para pedidos') || textoNormalizado.includes('ver meus pedidos') || textoNormalizado.includes('meus pedidos')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozVitrine('Indo pra tela de pedidos...');
+    setTimeout(() => { window.location.href = 'pedidos.html'; }, 1200);
+    return;
+  }
+
+  if(textoNormalizado.includes('ir para pagina inicial') || textoNormalizado.includes('voltar pro guiazap') || textoNormalizado.includes('ir pro guiazap')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozVitrine('Voltando pra página inicial...');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    return;
+  }
 
   if(textoNormalizado.includes('cadastrar produto') || textoNormalizado.includes('novo produto') || textoNormalizado.includes('adicionar produto')){
     iniciarCadastroProdutoPorVoz();
@@ -2879,6 +2903,116 @@ async function processarComandoDesativarSomenteVoz(transcricao){
 }
 
 // ---------- CADASTRO DE PRODUTO POR VOZ ----------
+
+// ---------- EDITAR PRODUTO POR VOZ ----------
+
+let _estadoEdicaoProdutoVoz = null;
+// formato: { etapa: 'buscar' | 'campo' | 'valor' | 'confirmar', produtoId, campo, valorNovo }
+
+function meusProdutosParaVoz(){
+  if(!currentUserV) return [];
+  return produtos.filter(p => p.profissionais && p.profissionais.user_id === currentUserV.id);
+}
+
+function iniciarEdicaoProdutoPorVoz(){
+  if(!currentUserV){ falarVozVitrine('Você precisa estar logado.'); return; }
+  const meus = meusProdutosParaVoz();
+  if(meus.length === 0){ falarVozVitrine('Você ainda não tem produtos cadastrados.'); return; }
+
+  _estadoEdicaoProdutoVoz = { etapa: 'buscar' };
+  falarVozVitrine('Qual produto você quer editar?');
+}
+
+async function processarEtapaEdicaoProdutoVoz(transcricao){
+  const estado = _estadoEdicaoProdutoVoz;
+
+  if(estado.etapa === 'buscar'){
+    const meus = meusProdutosParaVoz();
+    const termoBusca = normalizarTextoV(transcricao);
+    const encontrados = meus.filter(p => normalizarTextoV(p.nome).includes(termoBusca) || termoBusca.includes(normalizarTextoV(p.nome)));
+
+    if(encontrados.length === 0){
+      falarVozVitrine('Não achei esse produto entre os seus. Fala o nome de novo.');
+      return;
+    }
+    if(encontrados.length > 1){
+      const nomes = encontrados.slice(0, 5).map(p => p.nome).join(', ');
+      falarVozVitrine(`Achei mais de um: ${nomes}. Fala o nome completo pra eu saber qual.`);
+      return;
+    }
+
+    estado.produtoId = encontrados[0].id;
+    estado.etapa = 'campo';
+    falarVozVitrine(`Achei "${encontrados[0].nome}". O que você quer mudar? Fala "preço", "nome", "categoria", ou "disponibilidade".`);
+    return;
+  }
+
+  if(estado.etapa === 'campo'){
+    const textoNorm = normalizarTextoV(transcricao);
+    if(textoNorm.includes('preco') || textoNorm.includes('preço') || textoNorm.includes('valor')){
+      estado.campo = 'preco';
+      estado.etapa = 'valor';
+      falarVozVitrine('Qual o novo valor? Fala tipo "trinta reais".');
+    } else if(textoNorm.includes('nome')){
+      estado.campo = 'nome';
+      estado.etapa = 'valor';
+      falarVozVitrine('Qual o novo nome?');
+    } else if(textoNorm.includes('categoria')){
+      estado.campo = 'categoria';
+      estado.etapa = 'valor';
+      falarVozVitrine('Qual a nova categoria?');
+    } else if(textoNorm.includes('disponibilidade') || textoNorm.includes('disponivel')){
+      estado.campo = 'disponivel_venda';
+      estado.etapa = 'valor';
+      falarVozVitrine('Fica disponível pra venda, ou fica indisponível?');
+    } else {
+      falarVozVitrine('Não entendi. Fala "preço", "nome", "categoria", ou "disponibilidade".');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'valor'){
+    let valorFinal = transcricao.trim();
+
+    if(estado.campo === 'preco'){
+      const valor = extrairValorMonetarioDaFala(transcricao);
+      if(valor === null){ falarVozVitrine('Não entendi o valor. Fala de novo, tipo "trinta reais".'); return; }
+      valorFinal = valor.toFixed(2).replace('.', ',');
+    }
+
+    if(estado.campo === 'disponivel_venda'){
+      const textoNorm = normalizarTextoV(transcricao);
+      if(textoNorm.includes('indisponivel') || textoNorm.includes('nao') || textoNorm.includes('não')){
+        valorFinal = false;
+      } else {
+        valorFinal = true;
+      }
+    }
+
+    estado.valorNovo = valorFinal;
+    estado.etapa = 'confirmar';
+
+    const nomeCampoFalado = { preco: 'valor', nome: 'nome', categoria: 'categoria', disponivel_venda: 'disponibilidade' }[estado.campo];
+    const valorFalado = estado.campo === 'disponivel_venda' ? (valorFinal ? 'disponível' : 'indisponível') : valorFinal;
+    falarVozVitrine(`Vou mudar o ${nomeCampoFalado} pra "${valorFalado}". Confirma? Fala "sim" ou "não".`);
+    return;
+  }
+
+  if(estado.etapa === 'confirmar'){
+    const textoNorm = normalizarTextoV(transcricao);
+    if(textoNorm.includes('sim') || textoNorm.includes('confirma')){
+      const { error } = await supabaseClientV.from('produtos').update({ [estado.campo]: estado.valorNovo }).eq('id', estado.produtoId);
+      _estadoEdicaoProdutoVoz = null;
+      if(error){ console.error(error); falarVozVitrine('Erro ao salvar. Tenta de novo.'); return; }
+      falarVozVitrine('Produto atualizado!');
+      loadProdutos();
+    } else {
+      _estadoEdicaoProdutoVoz = null;
+      falarVozVitrine('Edição cancelada.');
+    }
+    return;
+  }
+}
 
 let _estadoCadastroProdutoVoz = null;
 // formato: { etapa: 'empresa' | 'nome' | 'preco' | 'categoria' | 'confirmar' }
@@ -3229,4 +3363,9 @@ atualizarBadgeCarrinho();
 
 if(initSupabaseV()){
   initAuthV().then(loadProdutos);
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(iniciarModoVozVitrine, 800);
 }

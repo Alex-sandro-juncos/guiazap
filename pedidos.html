@@ -536,6 +536,20 @@ async function processarComandoVozPedidos(transcricao){
   const textoNorm = normalizarTextoPedidos(transcricao);
 
   // Comandos locais instantâneos
+  if(textoNorm.includes('ir para vitrine') || textoNorm.includes('ver produtos') || textoNorm.includes('ir pra vitrine')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozPedidos('Indo pra Vitrine...');
+    setTimeout(() => { window.location.href = 'vitrine.html'; }, 1200);
+    return;
+  }
+
+  if(textoNorm.includes('ir para pagina inicial') || textoNorm.includes('voltar pro guiazap') || textoNorm.includes('ir pro guiazap')){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozPedidos('Voltando pra página inicial...');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    return;
+  }
+
   if(textoNorm.includes('pedidos novos') || textoNorm.includes('pedido novo') || textoNorm.includes('o que tem')){
     lerPedidosNovosEmVoz();
     return;
@@ -685,6 +699,11 @@ function normalizarTextoPedidos(str){
 }
 
 initPedidos();
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(iniciarModoVozPedidos, 800);
+}
 </script>
 </body>
 </html>
