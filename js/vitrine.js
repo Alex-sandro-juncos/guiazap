@@ -2959,6 +2959,78 @@ async function processarComandoVozVitrine(transcricao){
     if(tratou) return;
   }
 
+  // Prioridade máxima: se acabamos de mostrar várias opções parecidas
+  // (mais barato/mais caro) e a pessoa está respondendo qual quer
+  // Prioridade máxima: se acabamos de achar um "vencedor claro" numa busca
+  // simples (sem pedir compra ainda) e a pessoa fala "comprar" separado
+  // depois, completa a compra desse item lembrado
+  if(_ultimoVencedorClaroVozVitrine){
+    const t = normalizarTextoV(transcricao);
+    const pareceConfirmarCompra = t === 'comprar' || t === 'compra' || t === 'quero' || t === 'sim' || t.includes('quero esse') || t.includes('coloca no carrinho') || t.includes('adiciona');
+    if(pareceConfirmarCompra){
+      const produto = _ultimoVencedorClaroVozVitrine;
+      _ultimoVencedorClaroVozVitrine = null;
+      adicionarAoCarrinho(produto.id);
+      falarVozVitrine(descreverProdutoVoz(produto) + '. Coloquei no carrinho. Quer mais alguma coisa, ou fala "finalizar" pra fechar o pedido?');
+      return;
+    }
+    if(t.includes('ver outras') || t.includes('outras opcoes') || t.includes('outras opções')){
+      // Deixa cair pro processamento normal, que vai buscar de novo — o
+      // termo ainda está no campo de busca da tela
+      _ultimoVencedorClaroVozVitrine = null;
+    } else if(t !== 'nao' && t !== 'não' && !t.includes('cancelar')){
+      // Fala diferente — pode ser um assunto novo, então esquece o
+      // vencedor guardado pra não confundir uma busca futura
+      _ultimoVencedorClaroVozVitrine = null;
+    } else {
+      _ultimoVencedorClaroVozVitrine = null;
+      falarVozVitrine('Tudo bem, não comprei nada.');
+      return;
+    }
+  }
+
+  if(_ultimaBuscaVozVitrineComOpcoes){
+    const t = normalizarTextoV(transcricao);
+    const opcoes = _ultimaBuscaVozVitrineComOpcoes;
+    let escolhido = null;
+
+    if(t.includes('mais barato') || t.includes('mais barata')){
+      escolhido = opcoes.maisBarato;
+    } else if(t.includes('mais caro') || t.includes('mais cara')){
+      escolhido = opcoes.maisCaro;
+    } else {
+      // Tenta achar por VALOR falado (ex: "quero o de dez reais")
+      const matchNumero = t.match(/(\d+)([.,](\d{1,2}))?/);
+      if(matchNumero){
+        const valorNum = parseFloat(matchNumero[1] + '.' + (matchNumero[3] || '00'));
+        escolhido = (opcoes.ranqueados.find(x => Math.abs((parseFloat(x.p.preco) || 0) - valorNum) < 0.01) || {}).p || null;
+      }
+      // Tenta achar por NOME DA EMPRESA
+      if(!escolhido){
+        const achadaPorEmpresa = opcoes.ranqueados.find(x => {
+          const nomeEmp = x.p.profissionais ? normalizarTextoV(x.p.profissionais.name) : '';
+          return nomeEmp && (t.includes(nomeEmp) || nomeEmp.includes(t) || t.split(' ').some(w => w.length > 2 && nomeEmp.includes(w)));
+        });
+        if(achadaPorEmpresa) escolhido = achadaPorEmpresa.p;
+      }
+    }
+
+    if(escolhido){
+      _ultimaBuscaVozVitrineComOpcoes = null;
+      adicionarAoCarrinho(escolhido.id);
+      empresaFiltroId = escolhido.profissionais ? escolhido.profissionais.id : null;
+      produtoFiltroId = escolhido.id;
+      renderProdutos();
+      const card = document.querySelector('.card-produto');
+      if(card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      falarVozVitrine(descreverProdutoVoz(escolhido) + '. Coloquei no carrinho. Quer mais alguma coisa, ou fala "finalizar" pra fechar o pedido?');
+      return;
+    }
+    // Não conseguiu identificar a escolha — deixa cair pro processamento
+    // normal, sem travar (pode ser que a pessoa tenha mudado de assunto)
+    _ultimaBuscaVozVitrineComOpcoes = null;
+  }
+
   // Prioridade máxima: se acabamos de sugerir empresas pra um pedido com
   // vários itens e estamos esperando a pessoa escolher qual, essa fala é
   // sobre isso
@@ -3177,7 +3249,7 @@ async function processarComandoVozVitrine(transcricao){
     abrirMenuEmpresaVoz(empresa, produtoAlvo);
     if(produtoAlvo){
       if(querAdicionar) adicionarAoCarrinho(produtoAlvo.id);
-      falarVozVitrine('Menu de ' + empresa.name + '. ' + descreverProdutoVoz(produtoAlvo) + (querAdicionar ? '. Coloquei no carrinho.' : '. Você está no cardápio dele.'));
+      falarVozVitrine('Menu de ' + empresa.name + '. ' + descreverProdutoVoz(produtoAlvo) + (querAdicionar ? '. Coloquei no carrinho. Quer mais alguma coisa, ou fala "finalizar" pra fechar o pedido?' : '. Você está no cardápio dele.'));
     } else {
       falarVozVitrine('Abrindo o menu de ' + empresa.name + '. ' + lerResultadosBuscaVitrine());
     }
@@ -3318,9 +3390,21 @@ async function processarComandoVozVitrine(transcricao){
         return palavrasBusca.every(w => nome.includes(w));
       });
 
-      if(querAdicionar && vencedorClaro){
-        adicionarAoCarrinho(vencedorClaro.p.id);
-        falarVozVitrine(descreverProdutoVoz(vencedorClaro.p) + '. Coloquei no carrinho.');
+      if(vencedorClaro){
+        // Guarda o vencedor claro mesmo quando a pessoa só buscou (sem
+        // "comprar"/"quero") — assim, se ela falar "comprar" numa fala
+        // separada depois, a gente lembra qual produto era
+        _ultimoVencedorClaroVozVitrine = vencedorClaro.p;
+
+        if(querAdicionar){
+          adicionarAoCarrinho(vencedorClaro.p.id);
+          _ultimoVencedorClaroVozVitrine = null;
+          falarVozVitrine(descreverProdutoVoz(vencedorClaro.p) + '. Coloquei no carrinho. Quer mais alguma coisa, ou fala "finalizar" pra fechar o pedido?');
+          return;
+        }
+
+        const outrosParecidos = ranqueados.length - 1;
+        falarVozVitrine('Achei: ' + descreverProdutoVoz(vencedorClaro.p) + '. Fala "comprar" pra colocar no carrinho' + (outrosParecidos > 0 ? ', ou "ver outras opções" pra ouvir mais ' + outrosParecidos + ' parecidos' : '') + '.');
         return;
       }
 
@@ -3330,9 +3414,25 @@ async function processarComandoVozVitrine(transcricao){
       if(extra > 0) fala += ', e mais ' + extra;
       if(querAdicionar && ranqueados.length === 1){
         adicionarAoCarrinho(ranqueados[0].p.id);
-        fala += '. Coloquei no carrinho.';
+        fala += '. Coloquei no carrinho. Quer mais alguma coisa, ou fala "finalizar" pra fechar o pedido?';
       } else if(querAdicionar){
-        fala += '. Tem mais de um parecido. Fala o nome certinho, ou o nome da empresa pra eu escolher.';
+        // Mais de um parecido, sem vencedor claro — ajuda a decidir
+        // destacando o mais barato e o mais caro entre as opções
+        const porPreco = ranqueados.slice().sort((a, b) => (parseFloat(a.p.preco) || 0) - (parseFloat(b.p.preco) || 0));
+        const maisBarato = porPreco[0];
+        const maisCaro = porPreco[porPreco.length - 1];
+        _ultimaBuscaVozVitrineComOpcoes = { maisBarato: maisBarato.p, maisCaro: maisCaro.p, ranqueados };
+        if(maisBarato.p.id !== maisCaro.p.id){
+          fala += '. O mais barato é ' + descreverProdutoVoz(maisBarato.p) + ', e o mais caro é ' + descreverProdutoVoz(maisCaro.p) + '. Fala o nome da loja, "mais barato", "mais caro", ou o nome certinho pra eu escolher.';
+        } else {
+          fala += '. Tem mais de um parecido. Fala o nome certinho, ou o nome da empresa pra eu escolher.';
+        }
+      } else {
+        // Nem "vencedor claro" nem pedido de compra — mesmo assim guarda
+        // as opções, pra "mais barato"/"mais caro"/nome da empresa
+        // funcionarem se a pessoa decidir depois
+        const porPreco = ranqueados.slice().sort((a, b) => (parseFloat(a.p.preco) || 0) - (parseFloat(b.p.preco) || 0));
+        _ultimaBuscaVozVitrineComOpcoes = { maisBarato: porPreco[0].p, maisCaro: porPreco[porPreco.length - 1].p, ranqueados };
       }
       falarVozVitrine(fala);
       return;
@@ -3458,6 +3558,8 @@ function extrairDigitosDaFala(texto){
 // ---------- MODO SOMENTE VOZ (bloqueia toque na tela) ----------
 
 let _opcoesEmpresasPedidoMultiplo = null;
+let _ultimaBuscaVozVitrineComOpcoes = null;
+let _ultimoVencedorClaroVozVitrine = null;
 
 function _acharEmpresaEmOpcoesMultiplo(fala){
   const n = normalizarTextoV(fala);
