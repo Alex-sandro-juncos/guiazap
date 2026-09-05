@@ -520,7 +520,7 @@ async function loadEntries(){
     const campo = document.getElementById('search');
     if(campo) campo.value = buscaVoz;
     render();
-    if(typeof falarVozIndex === 'function' && (localStorage.getItem('guiazap_quer_voz') === '1' || localStorage.getItem('retomarModoVozAoCarregar') === '1')){
+    if(typeof falarVozIndex === 'function' && localStorage.getItem('retomarModoVozAoCarregar') === '1'){
       setTimeout(() => {
         if(typeof lerResultadosBuscaIndex === 'function') falarVozIndex(lerResultadosBuscaIndex());
       }, 1800);
