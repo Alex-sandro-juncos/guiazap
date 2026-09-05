@@ -606,6 +606,12 @@
 <script src="js/app.js"></script>
 <script src="js/voz-biometria.js"></script>
 <script src="js/voz-acesso-cego.js"></script>
+
+<!-- 🔧 TEMPORÁRIO — console de depuração pra achar o bug do microfone no
+     celular. Aparece uma bolinha flutuante na tela com um console de
+     erros. REMOVER esse bloco depois de resolver o problema. -->
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
 <script>document.addEventListener("DOMContentLoaded", function(){ if(typeof prepararAcessoVozCego==="function") prepararAcessoVozCego(function(){ if(typeof iniciarModoVozIndex==="function") iniciarModoVozIndex(true); }); });</script>
 <script>
   if(localStorage.getItem('pin_login_configurado_neste_aparelho')){
