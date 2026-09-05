@@ -326,7 +326,14 @@ let _biometriaTimeoutInicio = null;
 // (SpeechRecognition) está pedindo o dele — pedir os dois ao mesmo tempo
 // pode confundir o navegador em alguns celulares e travar os dois pedidos
 // de permissão, deixando o modo voz sem funcionar nem abrir.
+// 🔧 TESTE TEMPORÁRIO: a biometria de voz pega o microfone por baixo dos
+// panos, em paralelo com o reconhecimento de fala normal — suspeita de que
+// isso está deixando o reconhecimento instável nos dois aparelhos. Deixei
+// desligado (false) pra testar. Quando quiser reativar, é só trocar pra true.
+const BIOMETRIA_DE_VOZ_ATIVA = false;
+
 function iniciarBiometriaSeConfigurada(){
+  if(!BIOMETRIA_DE_VOZ_ATIVA) return;
   if(!perfilVozSalvo()) return;
   clearTimeout(_biometriaTimeoutInicio);
   _biometriaTimeoutInicio = setTimeout(async () => {
@@ -355,6 +362,7 @@ function pararBiometriaSeAtiva(){
 // deixa passar tudo normal (retorna true). Se tiver perfil, só deixa
 // passar se a voz de quem falou bater com o perfil salvo.
 function comandoDeVozAutorizado(){
+  if(!BIOMETRIA_DE_VOZ_ATIVA) return true;
   if(!perfilVozSalvo()) return true;
   return autorizarComandoPorVoz();
 }
