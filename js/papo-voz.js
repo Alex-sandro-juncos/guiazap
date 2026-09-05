@@ -265,6 +265,68 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
+  if(_estadoVozPapo.etapa === 'escolhendo_forma_endereco'){
+    if(t.includes('localizacao') || t.includes('gps') || t.includes('atual')){
+      await _usarLocalizacaoAtualPorVoz();
+      return;
+    }
+    if(t.includes('falar') || t.includes('endereco') || t.includes('digitar') || t.includes('escrever')){
+      _iniciarEnderecoPassoAPasso();
+      return;
+    }
+    falarVozPapo('Não entendi. Fala "localização atual" pra eu usar o GPS, ou "falar endereço" pra dizer parte por parte.');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_rua'){
+    if(transcricao.trim().length < 2){ falarVozPapo('Não entendi. Qual o nome da rua?'); return; }
+    _estadoVozPapo.enderecoPartes.rua = transcricao.trim();
+    _estadoVozPapo.etapa = 'endereco_numero';
+    falarVozPapo('Ok, ' + transcricao.trim() + '. Qual o número?');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_numero'){
+    const numero = converterEscolhaFaladaEmNumeros(transcricao) || transcricao.trim();
+    _estadoVozPapo.enderecoPartes.numero = numero;
+    _estadoVozPapo.etapa = 'endereco_bairro';
+    falarVozPapo('Ok, número ' + numero + '. Qual o bairro?');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_bairro'){
+    if(transcricao.trim().length < 2){ falarVozPapo('Não entendi. Qual o bairro?'); return; }
+    _estadoVozPapo.enderecoPartes.bairro = transcricao.trim();
+    _estadoVozPapo.etapa = 'endereco_cidade';
+    falarVozPapo('Ok, bairro ' + transcricao.trim() + '. Qual a cidade?');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_cidade'){
+    if(transcricao.trim().length < 2){ falarVozPapo('Não entendi. Qual a cidade?'); return; }
+    _estadoVozPapo.enderecoPartes.cidade = transcricao.trim();
+    _estadoVozPapo.etapa = 'endereco_estado';
+    falarVozPapo('Ok, ' + transcricao.trim() + '. Qual o estado? Fala a sigla, tipo Paraná ou PR.');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_estado'){
+    if(transcricao.trim().length < 2){ falarVozPapo('Não entendi. Qual o estado?'); return; }
+    _estadoVozPapo.enderecoPartes.estado = transcricao.trim();
+    _estadoVozPapo.etapa = 'endereco_referencia';
+    falarVozPapo('Ok. Tem algum ponto de referência? Fala qual é, ou fala "não" se não tiver.');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'endereco_referencia'){
+    if(!(t === 'nao' || t === 'não' || t.includes('sem referencia'))){
+      _estadoVozPapo.enderecoPartes.referencia = transcricao.trim();
+    }
+    falarVozPapo('Ok, endereço completo. Enviando.');
+    await _finalizarEnderecoPassoAPasso();
+    return;
+  }
+
   if(_estadoVozPapo.etapa === 'navegando_cardapio'){
     clearTimeout(_estadoVozPapo.timeoutAvancoCardapio);
 
@@ -619,6 +681,83 @@ function avancarNavegacaoCardapio(){
   falarItemCardapioAtualPorVoz();
 }
 
+// ---------- ENDEREÇO DE ENTREGA POR VOZ ----------
+// Quando chega o formulário de endereço do robô de atendimento, pergunta
+// se a pessoa quer usar a localização atual do GPS (mais rápido) ou
+// prefere falar o endereço com calma, campo por campo, com "ok" a cada um
+// — assim evita tentar entender uma frase inteira de uma vez só, que é
+// onde as coisas mais dão errado (número junto com nome de rua, etc).
+
+function iniciarEnderecoPorVoz(mensagem){
+  if(!_vozPapoAtiva) return false;
+  if(!_estadoVozPapo || (_estadoVozPapo.etapa !== 'atendimento' && _estadoVozPapo.etapa !== 'navegando_cardapio' && _estadoVozPapo.etapa !== 'escolhendo_direto_cardapio')) return false;
+
+  _estadoVozPapo.etapa = 'escolhendo_forma_endereco';
+  falarVozPapo('Chegou a hora do endereço. Quer usar sua localização atual, ou prefere falar o endereço com calma, parte por parte? Fala "localização atual" ou "falar endereço".');
+  return true;
+}
+
+function _iniciarEnderecoPassoAPasso(){
+  _estadoVozPapo.etapa = 'endereco_rua';
+  _estadoVozPapo.enderecoPartes = {};
+  falarVozPapo('Qual o nome da rua?');
+}
+
+async function _usarLocalizacaoAtualPorVoz(){
+  if(!navigator.geolocation){
+    falarVozPapo('Seu navegador não tem GPS disponível. Vamos falar o endereço então. Qual o nome da rua?');
+    _iniciarEnderecoPassoAPasso();
+    return;
+  }
+  falarVozPapo('Buscando sua localização, espera um instante.');
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    // Reaproveita a mesma variável que o chat.html já usa quando alguém
+    // marca a localização no mapa — assim o cálculo de frete usa essas
+    // coordenadas certinhas, sem precisar geocodificar um endereço falado.
+    // Importante: sem "window." na frente, pra acessar a MESMA variável
+    // que já existe no script do chat.html (os dois arquivos compartilham
+    // o mesmo escopo global da página, mas "let" não vira propriedade de
+    // window sozinho)
+    if(typeof _ultimaLocalizacaoManualChat !== 'undefined'){
+      _ultimaLocalizacaoManualChat = { latitude: lat, longitude: lng };
+    }
+    _estadoVozPapo.etapa = 'atendimento';
+
+    // Tenta transformar as coordenadas num endereço legível só pra
+    // aparecer bonito no histórico da conversa — se falhar, manda um
+    // texto genérico mesmo, já que quem importa pro frete é o lat/lng
+    let enderecoTexto = 'Localização atual (GPS)';
+    try{
+      const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+      const data = await resp.json();
+      if(data && data.display_name) enderecoTexto = data.display_name;
+    } catch(e){ console.warn('erro ao converter localização em endereço', e); }
+
+    if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
+      await enviarQualquerMensagem({ tipo: 'texto', texto: enderecoTexto });
+    }
+  }, (erro) => {
+    console.warn('erro ao pegar localização', erro);
+    falarVozPapo('Não consegui pegar sua localização. Precisa permitir o acesso ao GPS. Vamos falar o endereço então. Qual o nome da rua?');
+    _iniciarEnderecoPassoAPasso();
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+async function _finalizarEnderecoPassoAPasso(){
+  const p = _estadoVozPapo.enderecoPartes;
+  const enderecoTexto = p.rua + ', ' + p.numero + ', ' + p.bairro + ', ' + p.cidade + ' - ' + p.estado + (p.referencia ? ' (Referência: ' + p.referencia + ')' : '');
+  _estadoVozPapo.etapa = 'atendimento';
+  _estadoVozPapo.enderecoPartes = null;
+  if(typeof _ultimoEnderecoEstruturadoChat !== 'undefined'){
+    _ultimoEnderecoEstruturadoChat = { rua: p.rua, numero: p.numero, cidade: p.cidade, estado: p.estado };
+  }
+  if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
+    await enviarQualquerMensagem({ tipo: 'texto', texto: enderecoTexto });
+  }
+}
+
+window.iniciarEnderecoPorVoz = iniciarEnderecoPorVoz;
 window.iniciarNavegacaoCardapioPorVoz = iniciarNavegacaoCardapioPorVoz;
 window.iniciarModoVozPapo = iniciarModoVozPapo;
 window.toggleModoVozPapo = toggleModoVozPapo;

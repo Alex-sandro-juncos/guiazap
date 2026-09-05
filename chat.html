@@ -1707,6 +1707,9 @@ async function abrirConversa(conversaId){
         if(payload.new.tipo === 'menu_interativo' && typeof iniciarNavegacaoCardapioPorVoz === 'function' && iniciarNavegacaoCardapioPorVoz(payload.new)){
           // Cardápio virou navegação item-por-item por voz — não lê o
           // texto bruto também, pra não duplicar a fala
+        } else if(payload.new.tipo === 'formulario_endereco' && typeof iniciarEnderecoPorVoz === 'function' && iniciarEnderecoPorVoz(payload.new)){
+          // Formulário de endereço virou pergunta de localização por voz —
+          // não lê o texto bruto também
         } else {
           lerMensagemRecebidaSeAtivo(payload.new);
         }
