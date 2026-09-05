@@ -2791,7 +2791,8 @@ async function processarComandoVozVitrine(transcricao){
   }
 
   const textoNormalizadoDestravar = normalizarTextoV(transcricao);
-  if(_modoSomenteVozAtivoVitrine && (textoNormalizadoDestravar.includes('desativar modo somente voz') || textoNormalizadoDestravar.includes('destravar'))){
+  const pareceDesativarSomenteVoz = textoNormalizadoDestravar.includes('desativar') && textoNormalizadoDestravar.includes('voz');
+  if(_modoSomenteVozAtivoVitrine && (pareceDesativarSomenteVoz || textoNormalizadoDestravar.includes('destravar'))){
     await processarComandoDesativarSomenteVoz(transcricao);
     return;
   }
@@ -2840,7 +2841,7 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
-  if(textoNormalizado.includes('modo somente voz') || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
+  if((textoNormalizado.includes('somente') && textoNormalizado.includes('voz')) || textoNormalizado.includes('bloquear toque') || textoNormalizado.includes('travar tela')){
     ativarModoSomenteVozVitrine();
     return;
   }
