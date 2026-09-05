@@ -623,3 +623,30 @@ window.iniciarNavegacaoCardapioPorVoz = iniciarNavegacaoCardapioPorVoz;
 window.iniciarModoVozPapo = iniciarModoVozPapo;
 window.toggleModoVozPapo = toggleModoVozPapo;
 window.pararModoVozPapo = pararModoVozPapo;
+
+window.addEventListener('pagehide', function(){
+  if(_vozPapoAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozPapoReconhecimento){
+      try{
+        _vozPapoReconhecimento.onresult = null;
+        _vozPapoReconhecimento.onend = null;
+        _vozPapoReconhecimento.onerror = null;
+        _vozPapoReconhecimento.abort();
+      } catch(e){}
+      _vozPapoReconhecimento = null;
+    }
+    clearInterval(_vozPapoVigia);
+    _vozPapoAtiva = false;
+    window._vozPapoAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-papo');
+    if(btn) btn.style.background = '#6b46c1';
+    const painel = document.getElementById('painel-modo-voz-papo');
+    if(painel) painel.style.display = 'none';
+  }
+});

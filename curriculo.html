@@ -818,6 +818,32 @@ function extrairDigitosDaFalaCv(texto){
 }
 
 if(supabaseClientCv) initAuthCv();
+
+window.addEventListener('pagehide', function(){
+  if(_vozCvAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozCvReconhecimento){
+      try{
+        _vozCvReconhecimento.onresult = null;
+        _vozCvReconhecimento.onend = null;
+        _vozCvReconhecimento.onerror = null;
+        _vozCvReconhecimento.abort();
+      } catch(e){}
+      _vozCvReconhecimento = null;
+    }
+    clearInterval(_vozCvVigia);
+    _vozCvAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-cv');
+    if(btn) btn.style.background = '#6b46c1';
+    const painel = document.getElementById('painel-modo-voz-cv');
+    if(painel) painel.style.display = 'none';
+  }
+});
 </script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 <script src="js/modo-escuro.js"></script>

@@ -4737,3 +4737,44 @@ function executarAcaoVozIndex(resultado){
 
   falarVozIndex(voice_response || 'Feito.');
 }
+
+// Quando a pessoa usa o botão "voltar" do navegador, o celular às vezes
+// RESTAURA a página de um jeito especial (chamado "bfcache") sem rodar os
+// scripts de novo — a tela parece normal, mas o microfone pode ter ficado
+// num estado quebrado por dentro. Isso deixa tudo "resetado" de verdade
+// toda vez que a página volta desse jeito, garantindo que o botão sempre
+// funcione de novo.
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(typeof _vozIndexReconhecimento !== 'undefined' && _vozIndexReconhecimento){
+      try{
+        _vozIndexReconhecimento.onresult = null;
+        _vozIndexReconhecimento.onend = null;
+        _vozIndexReconhecimento.onerror = null;
+        _vozIndexReconhecimento.abort();
+      } catch(e){}
+      _vozIndexReconhecimento = null;
+    }
+    if(typeof _vozIndexVigia !== 'undefined') clearInterval(_vozIndexVigia);
+    _vozIndexAtiva = false;
+    window._vozIndexAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-index');
+    if(btn){
+      btn.style.background = '#6b46c1';
+      btn.setAttribute('aria-label', 'Ativar modo voz, buscar empresas sem tocar na tela');
+    }
+    const painel = document.getElementById('painel-modo-voz-index');
+    if(painel) painel.style.display = 'none';
+  }
+});
+
+// Salva-vidas: se a voz estava ativa e a pessoa sai dessa página (não
+// importa como — clicando num link, no botão voltar, ou por comando de
+// voz), guarda um aviso pra próxima página retomar sozinha. Como cada
+// página só carrega o PRÓPRIO motor de voz (nunca dois motores juntos na
+// mesma página), não tem risco de um sobrepor o outro.
+window.addEventListener('pagehide', function(){
+  if(_vozIndexAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});

@@ -4152,3 +4152,35 @@ if(localStorage.getItem('modo_somente_voz_ativo_vitrine') === '1'){
     setTimeout(() => iniciarModoVozVitrine(true), 800);
   }
 }
+
+window.addEventListener('pagehide', function(){
+  if(_vozVitrineAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+// Mesma proteção contra "cache de voltar" (bfcache) do navegador que
+// aplicamos no GuiaZap — evita o botão de voz ficar sem responder depois
+// de usar o botão "voltar" do celular/navegador
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozVitrineReconhecimento){
+      try{
+        _vozVitrineReconhecimento.onresult = null;
+        _vozVitrineReconhecimento.onend = null;
+        _vozVitrineReconhecimento.onerror = null;
+        _vozVitrineReconhecimento.abort();
+      } catch(e){}
+      _vozVitrineReconhecimento = null;
+    }
+    clearInterval(_vozVitrineVigia);
+    _vozVitrineAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-vitrine');
+    if(btn){
+      btn.style.background = '#6b46c1';
+      btn.setAttribute('aria-label', 'Ativar modo voz, comprar sem tocar na tela');
+    }
+    const painel = document.getElementById('painel-modo-voz-vitrine');
+    if(painel) painel.style.display = 'none';
+  }
+});

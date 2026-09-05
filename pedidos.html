@@ -784,6 +784,32 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
   setTimeout(() => iniciarModoVozPedidos(true), 800);
 }
+
+window.addEventListener('pagehide', function(){
+  if(_vozPedidosAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozPedidosReconhecimento){
+      try{
+        _vozPedidosReconhecimento.onresult = null;
+        _vozPedidosReconhecimento.onend = null;
+        _vozPedidosReconhecimento.onerror = null;
+        _vozPedidosReconhecimento.abort();
+      } catch(e){}
+      _vozPedidosReconhecimento = null;
+    }
+    clearInterval(_vozPedidosVigia);
+    _vozPedidosAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-pedidos');
+    if(btn) btn.style.background = '#6b46c1';
+    const painel = document.getElementById('painel-modo-voz-pedidos');
+    if(painel) painel.style.display = 'none';
+  }
+});
 </script>
 
 <script src="js/voz-biometria.js"></script>

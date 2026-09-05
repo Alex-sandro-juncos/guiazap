@@ -452,6 +452,32 @@ async function processarComandoVozBlog(transcricao){
   }
 }
 
+window.addEventListener('pagehide', function(){
+  if(_vozBlogAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozBlogReconhecimento){
+      try{
+        _vozBlogReconhecimento.onresult = null;
+        _vozBlogReconhecimento.onend = null;
+        _vozBlogReconhecimento.onerror = null;
+        _vozBlogReconhecimento.abort();
+      } catch(e){}
+      _vozBlogReconhecimento = null;
+    }
+    clearInterval(_vozBlogVigia);
+    _vozBlogAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-blog');
+    if(btn) btn.style.background = '#6b46c1';
+    const painel = document.getElementById('painel-modo-voz-blog');
+    if(painel) painel.style.display = 'none';
+  }
+});
+
 </script>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>

@@ -571,3 +571,29 @@ async function processarComandoVozVagas(transcricao){
     return;
   }
 }
+
+window.addEventListener('pagehide', function(){
+  if(_vozVagasAtiva){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+  }
+});
+
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){
+    if(_vozVagasReconhecimento){
+      try{
+        _vozVagasReconhecimento.onresult = null;
+        _vozVagasReconhecimento.onend = null;
+        _vozVagasReconhecimento.onerror = null;
+        _vozVagasReconhecimento.abort();
+      } catch(e){}
+      _vozVagasReconhecimento = null;
+    }
+    clearInterval(_vozVagasVigia);
+    _vozVagasAtiva = false;
+    const btn = document.getElementById('btn-modo-voz-vagas');
+    if(btn) btn.style.background = '#6b46c1';
+    const painel = document.getElementById('painel-modo-voz-vagas');
+    if(painel) painel.style.display = 'none';
+  }
+});
