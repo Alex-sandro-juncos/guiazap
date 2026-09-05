@@ -208,6 +208,63 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
+  if(_estadoVozPapo.etapa === 'escolhendo_direto_cardapio'){
+    if(t === 'sair do atendimento' || t === 'sair' || t === 'parar' || t === 'parar aqui'){
+      _estadoVozPapo.etapa = 'atendimento';
+      falarVozPapo('Saindo do cardápio. Fala atendimento por voz pra ver de novo, ou finalizar pra fechar o pedido.');
+      return;
+    }
+
+    if(t === 'finalizar'){
+      _estadoVozPapo.etapa = 'atendimento';
+      if(typeof enviarQualquerMensagem === 'function') await enviarQualquerMensagem({ tipo: 'texto', texto: 'finalizar' });
+      return;
+    }
+
+    // Escolheu ouvir o cardápio item por item
+    if(t.includes('ler') || t.includes('ouvir') || t === 'ler cardapio' || t === 'ouvir cardapio'){
+      _estadoVozPapo.etapa = 'navegando_cardapio';
+      _estadoVozPapo.indiceCardapio = 0;
+      falarVozPapo('Vou falar um item de cada vez.', () => falarItemCardapioAtualPorVoz());
+      return;
+    }
+
+    // Respondendo à sugestão de bebida com "não"
+    if(t === 'nao' || t === 'não' || t === 'nao quero' || t === 'não quero'){
+      falarVozPapo('Combinado. Mais alguma coisa? Fala outro item, ou finalizar.');
+      return;
+    }
+    if(t === 'sim'){
+      // "Sim" sozinho, sem dizer qual bebida — pede pra especificar
+      const bebidas = _estadoVozPapo.itensCardapio.filter(_itemPareceBebida);
+      if(bebidas.length === 1){
+        const indiceBebida = _estadoVozPapo.itensCardapio.indexOf(bebidas[0]);
+        await _adicionarItemCardapioPorVoz(indiceBebida, _estadoVozPapo.itensCardapio);
+        return;
+      }
+      _listarOpcoesCardapioPorVoz(bebidas.map((item, i) => ({ item, indice: _estadoVozPapo.itensCardapio.indexOf(item) })));
+      return;
+    }
+
+    // Tenta achar o que a pessoa falou no cardápio — por nome exato de um
+    // produto, ou por categoria (pizza, lanche, bebida, etc)
+    const busca = _buscarNoCardapioPorVoz(_estadoVozPapo.itensCardapio, transcricao);
+
+    if(busca.tipo === 'produto'){
+      const { indice } = busca.resultados[0];
+      await _adicionarItemCardapioPorVoz(indice, _estadoVozPapo.itensCardapio);
+      return;
+    }
+
+    if(busca.tipo === 'categoria'){
+      _listarOpcoesCardapioPorVoz(busca.resultados);
+      return;
+    }
+
+    falarVozPapo('Não achei isso no cardápio. Fala o nome do prato, o tipo (tipo "pizza"), ou "ler cardápio" pra eu ler tudo.');
+    return;
+  }
+
   if(_estadoVozPapo.etapa === 'navegando_cardapio'){
     clearTimeout(_estadoVozPapo.timeoutAvancoCardapio);
 
@@ -229,14 +286,7 @@ async function processarComandoVozPapo(transcricao){
     }
 
     if(t === 'quero' || t === 'sim' || t === 'esse' || t.includes('quero esse') || t.includes('adiciona') || t.includes('coloca')){
-      const item = _estadoVozPapo.itensCardapio[_estadoVozPapo.indiceCardapio];
-      const numero = String(_estadoVozPapo.indiceCardapio + 1);
-      if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
-        await enviarQualquerMensagem({ tipo: 'texto', texto: numero });
-      }
-      // Não fala a confirmação aqui de propósito — a resposta de verdade
-      // do robô ("✅ item adicionado!") já chega pelo tempo real e é lida
-      // sozinha, então só espera um pouco antes de seguir pro próximo item
+      await _adicionarItemCardapioPorVoz(_estadoVozPapo.indiceCardapio, _estadoVozPapo.itensCardapio);
       const indiceNoMomento = _estadoVozPapo.indiceCardapio;
       setTimeout(() => {
         if(_estadoVozPapo && _estadoVozPapo.etapa === 'navegando_cardapio' && _estadoVozPapo.indiceCardapio === indiceNoMomento){
@@ -368,6 +418,30 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
+  if(t === 'menu' || t.includes('fazer pedido') || t.includes('quero pedir')){
+    _estadoVozPapo.etapa = 'aguardando_empresa_para_pedido';
+    falarVozPapo('Qual empresa você quer fazer pedido?');
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'aguardando_empresa_para_pedido'){
+    if(t === 'cancelar' || t === 'sair'){
+      _estadoVozPapo.etapa = 'lista';
+      falarVozPapo('Ok, cancelado.');
+      return;
+    }
+    const achadaEmpresa = acharConversaPorNome(t);
+    if(!achadaEmpresa){
+      falarVozPapo('Não achei essa empresa nas suas conversas. Fala o nome de novo, ou "cancelar".');
+      return;
+    }
+    await abrirConversa(achadaEmpresa.id);
+    _estadoVozPapo.etapa = 'atendimento';
+    if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+    falarVozPapo('Conversa com ' + (achadaEmpresa.nomeExibido || 'contato') + '. Modo atendimento ativado — fala o que você quer, tipo "quero uma pizza calabresa".');
+    return;
+  }
+
   const nomeLimpo = t.replace(/^(abrir|conversa com|falar com|chamar)\s+/, '').trim();
   const achada = acharConversaPorNome(nomeLimpo);
   if(achada && typeof abrirConversa === 'function'){
@@ -407,6 +481,113 @@ function converterEscolhaFaladaEmNumeros(transcricao){
 
 // ---------- NAVEGAÇÃO DO CARDÁPIO ITEM POR ITEM (pausa de ~2,5s pra "quero") ----------
 
+// Chamada pelo listener de mensagens em tempo real do chat.html quando
+// chega um cardápio interativo — só assume a leitura se o atendimento por
+// voz estiver ativo (senão, deixa a leitura normal de mensagem cuidar disso)
+function iniciarNavegacaoCardapioPorVoz(mensagem){
+  if(!_vozPapoAtiva) return false;
+  if(!_estadoVozPapo || (_estadoVozPapo.etapa !== 'atendimento' && _estadoVozPapo.etapa !== 'navegando_cardapio' && _estadoVozPapo.etapa !== 'escolhendo_direto_cardapio')) return false;
+
+  let itens;
+  try{ itens = JSON.parse(mensagem.texto); } catch(e){ return false; }
+  if(!Array.isArray(itens) || itens.length === 0) return false;
+
+  _estadoVozPapo.etapa = 'escolhendo_direto_cardapio';
+  _estadoVozPapo.itensCardapio = itens;
+  _estadoVozPapo.indiceCardapio = 0;
+  _estadoVozPapo.jaSugeriuBebida = false;
+  falarVozPapo('Cardápio com ' + itens.length + ' itens. Quer que eu leia um por um, ou já sabe o que quer? Pode falar o nome do prato, ou o tipo, tipo "pizza" ou "refrigerante".');
+  return true;
+}
+
+// Acha itens do cardápio cujo nome ou categoria batam com o que a pessoa
+// falou — usado tanto pra achar um produto específico (ex: "pizza
+// calabresa") quanto uma categoria inteira (ex: só "pizza")
+function _normalizarPapoCardapio(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function _buscarNoCardapioPorVoz(itens, falado){
+  const termo = _normalizarPapoCardapio(falado);
+  if(!termo) return { tipo: 'nada', resultados: [] };
+
+  // 1) Tenta achar um produto específico cujo NOME bate com tudo que foi
+  // falado — esse é o caso "quero pizza calabresa"
+  const palavras = termo.split(/\s+/).filter(Boolean);
+  const porNomeExato = itens.map((item, indice) => ({ item, indice })).filter(({ item }) => {
+    const nome = _normalizarPapoCardapio(item.nome);
+    return palavras.every(p => nome.includes(p));
+  });
+  if(porNomeExato.length === 1){
+    return { tipo: 'produto', resultados: porNomeExato };
+  }
+
+  // 2) Senão, tenta como CATEGORIA — bate com a categoria do produto, ou
+  // com o começo do nome (ex: "pizza" acha "Pizza Calabresa", "Pizza Marguerita")
+  const porCategoria = itens.map((item, indice) => ({ item, indice })).filter(({ item }) => {
+    const categoria = _normalizarPapoCardapio(item.categoria || '');
+    const nome = _normalizarPapoCardapio(item.nome);
+    return (categoria && categoria.includes(termo)) || nome.startsWith(termo) || nome.includes(' ' + termo);
+  });
+  if(porCategoria.length > 0){
+    return { tipo: 'categoria', resultados: porCategoria };
+  }
+
+  // 3) Se achou mais de um por nome exato (ex: "pizza" bateu em vários
+  // nomes parecidos), trata igual categoria — lista as opções
+  if(porNomeExato.length > 1){
+    return { tipo: 'categoria', resultados: porNomeExato };
+  }
+
+  return { tipo: 'nada', resultados: [] };
+}
+
+// Categorias de bebida "conhecidas", pra decidir quando vale a pena
+// sugerir uma bebida junto do pedido
+const _CATEGORIAS_BEBIDA_PAPO = ['bebida', 'bebidas', 'refrigerante', 'suco', 'refri', 'agua', 'água', 'cerveja'];
+
+function _itemPareceComida(item){
+  const cat = _normalizarPapoCardapio(item.categoria || '');
+  return !_CATEGORIAS_BEBIDA_PAPO.some(b => cat.includes(_normalizarPapoCardapio(b)));
+}
+
+function _itemPareceBebida(item){
+  const cat = _normalizarPapoCardapio(item.categoria || '');
+  return _CATEGORIAS_BEBIDA_PAPO.some(b => cat.includes(_normalizarPapoCardapio(b)));
+}
+
+async function _adicionarItemCardapioPorVoz(indice, itens){
+  const item = itens[indice];
+  const numero = String(indice + 1);
+  if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
+    await enviarQualquerMensagem({ tipo: 'texto', texto: numero });
+  }
+  // Não fala a confirmação aqui de propósito — a resposta de verdade do
+  // robô ("✅ item adicionado!") já chega pelo tempo real e é lida sozinha
+
+  // Depois de adicionar algo que parece comida, sugere uma bebida — só uma
+  // vez por pedido, pra não ficar repetitivo
+  if(_itemPareceComida(item) && !_estadoVozPapo.jaSugeriuBebida){
+    const bebidas = itens.filter(_itemPareceBebida);
+    if(bebidas.length > 0){
+      _estadoVozPapo.jaSugeriuBebida = true;
+      setTimeout(() => {
+        if(_estadoVozPapo && (_estadoVozPapo.etapa === 'escolhendo_direto_cardapio' || _estadoVozPapo.etapa === 'navegando_cardapio')){
+          falarVozPapo('Quer uma bebida também? Fala sim, ou o nome da bebida, ou não.');
+        }
+      }, 3500);
+      return;
+    }
+  }
+}
+
+function _listarOpcoesCardapioPorVoz(resultados){
+  const falados = resultados.slice(0, 6).map(({ item }) => (item.nome || 'produto') + ' por ' + (item.preco ? String(item.preco).replace('.', ',') + ' reais' : 'preço a combinar'));
+  const extra = resultados.length - falados.length;
+  let fala = 'Temos: ' + falados.join(', ') + (extra > 0 ? ', e mais ' + extra : '') + '. Fala o nome do que você quer.';
+  falarVozPapo(fala);
+}
+
 function falarItemCardapioAtualPorVoz(){
   const estado = _estadoVozPapo;
   const itens = estado.itensCardapio || [];
@@ -436,26 +617,6 @@ function avancarNavegacaoCardapio(){
   clearTimeout(_estadoVozPapo.timeoutAvancoCardapio);
   _estadoVozPapo.indiceCardapio++;
   falarItemCardapioAtualPorVoz();
-}
-
-// Chamada pelo listener de mensagens em tempo real do chat.html quando
-// chega um cardápio interativo — só assume a leitura se o atendimento por
-// voz estiver ativo (senão, deixa a leitura normal de mensagem cuidar disso)
-function iniciarNavegacaoCardapioPorVoz(mensagem){
-  if(!_vozPapoAtiva) return false;
-  if(!_estadoVozPapo || (_estadoVozPapo.etapa !== 'atendimento' && _estadoVozPapo.etapa !== 'navegando_cardapio')) return false;
-
-  let itens;
-  try{ itens = JSON.parse(mensagem.texto); } catch(e){ return false; }
-  if(!Array.isArray(itens) || itens.length === 0) return false;
-
-  _estadoVozPapo.etapa = 'navegando_cardapio';
-  _estadoVozPapo.itensCardapio = itens;
-  _estadoVozPapo.indiceCardapio = 0;
-  falarVozPapo('Cardápio com ' + itens.length + ' itens. Vou falar um de cada vez.', () => {
-    falarItemCardapioAtualPorVoz();
-  });
-  return true;
 }
 
 window.iniciarNavegacaoCardapioPorVoz = iniciarNavegacaoCardapioPorVoz;
