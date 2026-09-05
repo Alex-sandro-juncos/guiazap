@@ -303,10 +303,15 @@ async function signIn(){
 }
 
 async function oferecerConfigurarPinLogin(){
+  // Marca que já perguntou nesse aparelho ANTES de qualquer coisa — assim,
+  // mesmo que a pessoa cancele ou feche sem completar, não fica perguntando
+  // de novo toda vez que ela entra
+  localStorage.setItem('pin_login_configurado_neste_aparelho', '1');
+
   if(!confirm('Quer configurar um PIN de 4 números pra entrar mais rápido nesse mesmo aparelho da próxima vez (sem digitar e-mail/senha de novo)?')) return;
 
   const pin = prompt('Escolhe um PIN de 4 números:');
-  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números. Você pode configurar depois, se quiser.'); return; }
 
   const { data: { session } } = await supabaseClient.auth.getSession();
   const deviceToken = obterDeviceTokenPin();
@@ -320,8 +325,17 @@ async function oferecerConfigurarPinLogin(){
     const data = await resp.json();
     if(!resp.ok){ alert('Erro ao configurar PIN: ' + (data.error || 'tenta de novo')); return; }
 
-    localStorage.setItem('pin_login_configurado_neste_aparelho', '1');
-    alert('✓ PIN configurado! Da próxima vez, é só usar o botão "Entrar com PIN" nesse mesmo aparelho.');
+    // Salva o mesmo PIN também como PIN de voz — assim um cadastro só serve
+    // pra entrar rápido nesse aparelho E pra confirmar pagamento por voz
+    try{
+      await fetch('/.netlify/functions/definir-pin-voz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ pin, access_token: session.access_token })
+      });
+    } catch(e){ console.warn('erro ao salvar PIN de voz junto', e); }
+
+    alert('✓ PIN configurado! Da próxima vez, é só usar o botão "Entrar com PIN" nesse mesmo aparelho — e o mesmo PIN também confirma pagamentos por voz.');
   } catch(e){
     console.error(e);
   }
@@ -443,7 +457,7 @@ async function loadEntries(){
   // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
   // pra permitir encontrar uma empresa pela marca/categoria dos produtos
   // dela, mesmo sem abrir a Vitrine
-  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra, preco').then(({ data: produtosLeves }) => {
+  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
     produtosParaBuscaPrincipal = produtosLeves || [];
     render();
   });
@@ -3594,7 +3608,7 @@ if(initSupabase()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(iniciarModoVozIndex, 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
+  setTimeout(() => iniciarModoVozIndex(true), 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
 }
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
@@ -3724,7 +3738,7 @@ function toggleModoVozIndex(){
   }
 }
 
-function iniciarModoVozIndex(){
+function iniciarModoVozIndex(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -3737,15 +3751,29 @@ function iniciarModoVozIndex(){
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
 
+  // Se o microfone está voltando SOZINHO (ao trocar de página, por
+  // exemplo), começa em "modo de espera" — só reage à palavra de ativação,
+  // pra não confundir qualquer fala do ambiente com um comando de verdade
+  _aguardandoAtivacaoIndex = !!retomandoAutomaticamente;
+
   _vozIndexReconhecimento = new SpeechRecognitionApi();
   _vozIndexReconhecimento.lang = 'pt-BR';
-  const ehCelularVoz = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  _vozIndexReconhecimento.continuous = !!ehCelularVoz;
+  _vozIndexReconhecimento.continuous = true;
   _vozIndexReconhecimento.interimResults = false;
 
   _vozIndexReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoIndex){
+      const textoNorm = normalizarTexto(transcricao);
+      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
+        _aguardandoAtivacaoIndex = false;
+        falarVozIndex('Modo voz ativado. Fala o que você procura.');
+      }
+      return; // ignora qualquer outra fala enquanto está em espera
+    }
+
     processarComandoVozIndex(transcricao);
   };
 
@@ -3767,8 +3795,15 @@ function iniciarModoVozIndex(){
   };
 
   try{ _vozIndexReconhecimento.start(); } catch(e){}
-  falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+
+  if(_aguardandoAtivacaoIndex){
+    falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+  }
 }
+
+let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
@@ -3824,7 +3859,6 @@ let _aguardandoPinParaDestravarIndex = false;
 // ---------- CADASTRO DE EMPRESA POR VOZ ----------
 
 let _estadoCadastroVoz = null;
-let _estadoCompraVoz = null;
 // formato: { etapa: 'nome' | 'documento' | 'categoria' | 'cep' | 'estado' | 'cidade' | 'bairro' | 'whatsapp' | 'confirmar' }
 
 function iniciarCadastroPorVoz(){
@@ -4220,48 +4254,8 @@ function extrairDigitosDaFalaIndex(texto){
 }
 
 async function processarComandoVozIndex(transcricao){
-  const _tCmd = (transcricao||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  if(/\b(desligar|desativar|parar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd) || _tCmd === 'desligar' || _tCmd === 'parar' || _tCmd === 'sair'){
-    try{ speechSynthesis.cancel(); }catch(e){}
-    setTimeout(pararModoVozIndex, 400);
-    return;
-  }
-  if(/\b(ligar|ativar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd)){
-    if(typeof falarVozIndex === 'function' && 'processarComandoVozIndex'==='processarComandoVozIndex') falarVozIndex('Modo voz já está ligado.');
-    if(typeof falarVozVitrine === 'function' && 'processarComandoVozIndex'==='processarComandoVozVitrine') falarVozVitrine('Modo voz já está ligado.');
-    return;
-  }
-
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
-  try {
-  if(_estadoCompraVoz && _estadoCompraVoz.opcoes){
-    const tt = normalizarTexto(transcricao);
-    const nums = (transcricao.match(/\d+(?:[.,]\d+)?/g) || []).map(n => n.replace(',', '.'));
-    let escolhido = null;
-    if(nums.length){
-      escolhido = _estadoCompraVoz.opcoes.find(o => {
-        const pr = String(o.preco||'').replace(',', '.');
-        return nums.some(n => pr === n || pr.startsWith(n) || pr.includes(n));
-      });
-    }
-    if(!escolhido){
-      escolhido = _estadoCompraVoz.opcoes.find(o => tt.includes(normalizarTexto(o.empresa)) || normalizarTexto(o.empresa).includes(tt));
-    }
-    if(!escolhido && (tt === 'primeiro' || tt === 'um' || tt === '1')) escolhido = _estadoCompraVoz.opcoes[0];
-    if(!escolhido){
-      falarVozIndex('Não achei essa opção. Fala o nome da empresa ou o valor, tipo dez reais.');
-      return;
-    }
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    localStorage.setItem('guiazap_busca_vitrine', escolhido.nome);
-    localStorage.setItem('guiazap_comprar_agora', '1');
-    localStorage.setItem('guiazap_empresa_compra', escolhido.empresaId);
-    _estadoCompraVoz = null;
-    falarVozIndex('Comprando ' + escolhido.nome + ' na ' + escolhido.empresa + ', ' + (escolhido.preco || '') + ' reais.');
-    setTimeout(() => { window.location.href = 'vitrine.html?empresa=' + encodeURIComponent(escolhido.empresaId); }, 900);
-    return;
-  }
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
@@ -4427,7 +4421,7 @@ async function processarComandoVozIndex(transcricao){
     falarVozIndex('Busca limpa.');
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
     falarVozIndex('Modo voz desativado.');
     setTimeout(pararModoVozIndex, 1500);
     return;
@@ -4480,7 +4474,7 @@ async function processarComandoVozIndex(transcricao){
   if(matchDe) nomeAlvo = matchDe[1].trim();
 
   const textoSemAlvo = nomeAlvo
-    ? textoNormalizado.replace(nomeAlvo, '').replace(/\b(do|da|de|no|na)\s*$/,'').trim()
+    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|no|na)\\s+' + nomeAlvo.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '$'), '').trim()
     : textoNormalizado;
 
   const palavrasPedido = textoSemAlvo.split(/\s+/).map(w => w.replace(/[^\wáéíóúâêôãõç]/gi,'')).filter(w => w.length > 1 && !STOP_VOZ_INDEX.includes(w));
@@ -4539,37 +4533,12 @@ async function processarComandoVozIndex(transcricao){
   const termoBuscaLocal = termoPedido || transcricao.trim();
 
   if(!pareceComandoComplexo && termoBuscaLocal.length >= 2 && termoBuscaLocal.length <= 60){
-    const tipoPedido = classificarPedidoVoz(termoBuscaLocal);
+    const tipoPedido = classificarPedidoVoz(termoPedido || termoBuscaLocal);
     if(tipoPedido === 'produto'){
-      const querComprar = /comprar|compra|quero|adicionar|carrinho/.test(normalizarTexto(transcricao));
-      const termoLimpoVitrine = normalizarTexto(transcricao)
-        .replace(/\b(quero|queria|comprar|compra|adicionar|colocar|pedir|um|uma|de|do|da|pra|para|o|a)\b/g, ' ')
-        .replace(/\s+/g, ' ').trim() || termoBuscaLocal;
-      const palavras = termoLimpoVitrine.split(/\s+/).filter(w => w.length > 2);
-      const opcoes = (produtosParaBuscaPrincipal || []).filter(pr => {
-        const nome = normalizarTexto(pr.nome);
-        return palavras.length ? palavras.every(w => nome.includes(w)) : nome.includes(termoLimpoVitrine);
-      }).map(pr => {
-        const emp = (entries || []).find(e => e.id === pr.profissional_id);
-        return {
-          nome: pr.nome,
-          preco: pr.preco,
-          empresaId: pr.profissional_id,
-          empresa: emp ? emp.name : 'empresa'
-        };
-      });
-      if(querComprar && opcoes.length > 1){
-        _estadoCompraVoz = { opcoes };
-        const fala = opcoes.slice(0, 6).map(o => o.nome + ' na ' + o.empresa + (o.preco ? (', ' + o.preco + ' reais') : '')).join('; ');
-        falarVozIndex('Achei ' + opcoes.length + ' opções: ' + fala + '. Fala a empresa ou o valor, tipo dez reais.');
-        return;
-      }
       localStorage.setItem('retomarModoVozAoCarregar', '1');
-      localStorage.setItem('guiazap_busca_vitrine', termoLimpoVitrine);
-      if(querComprar) localStorage.setItem('guiazap_comprar_agora', '1');
-      if(opcoes.length === 1) localStorage.setItem('guiazap_empresa_compra', opcoes[0].empresaId);
-      falarVozIndex(querComprar ? ('Indo comprar ' + termoLimpoVitrine + '.') : ('Abrindo a vitrine em ' + termoLimpoVitrine + '.'));
-      setTimeout(() => { window.location.href = 'vitrine.html' + (opcoes.length===1 && opcoes[0].empresaId ? ('?empresa='+opcoes[0].empresaId) : ''); }, 900);
+      localStorage.setItem('guiazap_busca_vitrine', termoPedido || termoBuscaLocal);
+      falarVozIndex('Isso é produto. Abrindo a vitrine.');
+      setTimeout(() => { window.location.href = 'vitrine.html'; }, 900);
       return;
     }
     cadastroCompartilhadoId = null;
@@ -4641,10 +4610,6 @@ async function processarComandoVozIndex(transcricao){
     document.getElementById('search').value = termoBuscaLocal;
     render();
     falarVozIndex(lerResultadosBuscaIndex());
-  }
-  } catch(e){
-    console.error('voz index', e);
-    try{ falarVozIndex('Entendi ' + (transcricao||'') + '. Tenta falar de novo.'); } catch(err){}
   }
 }
 

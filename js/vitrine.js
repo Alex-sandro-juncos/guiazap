@@ -3634,24 +3634,46 @@ function extrairDigitosDaFalaVitrine(texto){
   return digitos;
 }
 
+function obterDeviceTokenPinV(){
+  let token = localStorage.getItem('device_token_pin');
+  if(!token){
+    token = 'dev_' + Array.from(crypto.getRandomValues(new Uint8Array(20))).map(b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('device_token_pin', token);
+  }
+  return token;
+}
+
 async function salvarPinVozConfirmado(pin){
   await salvarPinLocalVitrine(pin);
 
   const session = await pegarSessaoVitrineValida();
   if(session && session.access_token){
-    try{
-      const resp = await fetch('/.netlify/functions/definir-pin-voz', {
+    // Salva nos DOIS lugares com o mesmo PIN — assim funciona tanto pra
+    // confirmar pagamento por voz quanto pra entrar rápido nesse aparelho
+    const resultados = await Promise.allSettled([
+      fetch('/.netlify/functions/definir-pin-voz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
         body: JSON.stringify({ pin, access_token: session.access_token })
-      });
-      const data = await resp.json().catch(() => ({}));
-      if(resp.ok){
-        falarVozVitrine('PIN configurado com sucesso.');
-        return;
-      }
-      console.warn('PIN servidor', data);
-    } catch(e){ console.warn(e); }
+      }),
+      fetch('/.netlify/functions/definir-pin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ pin, deviceToken: obterDeviceTokenPinV() })
+      })
+    ]);
+
+    const vozOk = resultados[0].status === 'fulfilled' && resultados[0].value.ok;
+    const loginOk = resultados[1].status === 'fulfilled' && resultados[1].value.ok;
+
+    if(vozOk){
+      localStorage.setItem('pin_login_configurado_neste_aparelho', '1');
+      falarVozVitrine(loginOk
+        ? 'PIN configurado. Serve tanto pra pagar por voz quanto pra entrar mais rápido nesse aparelho.'
+        : 'PIN de voz configurado. O PIN de login rápido não deu certo agora, mas o de voz já funciona.');
+      return;
+    }
+    console.warn('PIN servidor', resultados);
   }
   falarVozVitrine('PIN salvo neste aparelho.');
 }
