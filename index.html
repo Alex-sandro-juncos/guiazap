@@ -30,6 +30,15 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- Tarja de acessibilidade — o PRIMEIRO elemento da página, de propósito.
+     Quem usa leitor de tela (TalkBack/VoiceOver) sempre começa a explorar
+     a página do topo, então colocar aqui garante que essa pessoa encontra
+     isso antes de qualquer outra coisa, sem precisar eu falar sozinho.
+     Pra quem enxerga, é discreta (quase transparente) e não atrapalha. -->
+<button type="button" onclick="toggleModoVozIndex()" aria-label="Ativar modo de voz do GuiaZap, pra navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="display:block; width:100%; min-height:64px; padding:20px 16px; border:none; background:rgba(107,70,193,0.06); color:transparent; text-align:left; cursor:pointer; font-size:0.01px; line-height:1;">
+  Ativar modo de voz do GuiaZap, pra navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga
+</button>
+
 <!-- Campo "isca", escondido fora da tela — tentativa de desviar a atenção do
      Chrome, que insiste em sugerir contas Google no campo de busca real. -->
 <input type="email" name="email" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; pointer-events:none;">
