@@ -13,7 +13,9 @@ function toggleModoVozPapo(){
   else iniciarModoVozPapo();
 }
 
-function iniciarModoVozPapo(){
+let _aguardandoAtivacaoPapo = false;
+
+function iniciarModoVozPapo(retomandoAutomaticamente){
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Api){
     alert('Use o Chrome para o modo voz.');
@@ -22,6 +24,7 @@ function iniciarModoVozPapo(){
   _vozPapoAtiva = true;
   window._vozPapoAtiva = true;
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
+  _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
   const painel = document.getElementById('painel-modo-voz-papo');
   if(painel) painel.style.display = 'block';
   const btn = document.getElementById('btn-modo-voz-papo');
@@ -38,6 +41,16 @@ function iniciarModoVozPapo(){
     if(!texto) return;
     const trans = document.getElementById('voz-papo-transcricao');
     if(trans) trans.textContent = '"' + texto + '"';
+
+    if(_aguardandoAtivacaoPapo){
+      const t = normalizarVozPapo(texto);
+      if(t.includes('ativar') || t.includes('guiazap')){
+        _aguardandoAtivacaoPapo = false;
+        falarVozPapo('Modo voz ativado.');
+      }
+      return;
+    }
+
     processarComandoVozPapo(texto);
   };
   _vozPapoReconhecimento.onend = () => {
@@ -57,8 +70,10 @@ function iniciarModoVozPapo(){
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
 
-  if(conversaAtual){
-    falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga falar para mandar mensagem, ouvir para ler, ligar, ou voltar.');
+  if(_aguardandoAtivacaoPapo){
+    falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
+  } else if(conversaAtual){
+    falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
   } else {
     const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
     falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Diga papo para voltar ao GuiaZap.');
@@ -79,7 +94,7 @@ function pararModoVozPapo(){
   if(btn) btn.style.background = '#6b46c1';
 }
 
-function falarVozPapo(texto){
+function falarVozPapo(texto, aoTerminar){
   if(!_vozPapoSynth) return;
   _vozPapoFalando = true;
   const status = document.getElementById('voz-papo-status');
@@ -94,6 +109,7 @@ function falarVozPapo(texto){
     if(_vozPapoAtiva && _vozPapoReconhecimento){
       try{ _vozPapoReconhecimento.start(); } catch(e){}
     }
+    if(typeof aoTerminar === 'function') aoTerminar();
   };
   fala.onerror = () => { _vozPapoFalando = false; };
   _vozPapoSynth.speak(fala);
@@ -129,34 +145,7 @@ async function processarComandoVozPapo(transcricao){
   _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
 
-  if(t.includes('viva voz') || t.includes('viva-voz') || t.includes('vivavoz') || t.includes('alto falante') || t.includes('alto-falante')){
-    if(typeof toggleVivaVoz !== 'function'){
-      falarVozPapo('Viva-voz não está disponível.');
-      return;
-    }
-    const querLigar = t.includes('ligar') || t.includes('ativar') || t.includes('abrir');
-    const querDesligar = t.includes('desligar') || t.includes('desativar') || t.includes('parar');
-    const videoRemoto = document.getElementById('video-remoto');
-    if(!videoRemoto || !videoRemoto.srcObject){
-      falarVozPapo('Entra na chamada primeiro pra ligar ou desligar o viva-voz.');
-      return;
-    }
-    const ligado = !!window._vivaVozAtivo || (typeof _vivaVozAtivo !== 'undefined' && _vivaVozAtivo);
-    if(querDesligar && ligado){ toggleVivaVoz(); falarVozPapo('Viva-voz desligado.'); return; }
-    if(querDesligar && !ligado){ falarVozPapo('Viva-voz já está desligado.'); return; }
-    if(querLigar && !ligado){ toggleVivaVoz(); falarVozPapo('Viva-voz ligado.'); return; }
-    if(querLigar && ligado){ falarVozPapo('Viva-voz já está ligado.'); return; }
-    toggleVivaVoz();
-    falarVozPapo('Viva-voz alternado.');
-    return;
-  }
-
-  if(t === 'mudo' || t.includes('desligar microfone') || t.includes('mutar')){
-    if(typeof alternarMudo === 'function'){ alternarMudo(); falarVozPapo('Microfone alterado.'); }
-    return;
-  }
-
-  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t === 'desligar modo voz' || t === 'desativar modo voz'){
+  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;
@@ -168,34 +157,67 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  async function enviarTextoPapoVoz(txt){
-    if(typeof enviarQualquerMensagem !== 'function' || !conversaAtual){
-      falarVozPapo('Abra a conversa da empresa primeiro.');
-      return false;
+  if(_estadoVozPapo.etapa === 'navegando_cardapio'){
+    clearTimeout(_estadoVozPapo.timeoutAvancoCardapio);
+
+    if(t === 'sair do atendimento' || t === 'sair' || t === 'parar' || t === 'parar aqui'){
+      _estadoVozPapo.etapa = 'atendimento';
+      falarVozPapo('Saindo da navegação do cardápio. Fala atendimento por voz pra ver de novo, ou finalizar pra fechar o pedido.');
+      return;
     }
-    await enviarQualquerMensagem({ tipo: 'texto', texto: txt });
-    falarVozPapo('Enviei: ' + txt);
-    return true;
+
+    if(t === 'finalizar'){
+      _estadoVozPapo.etapa = 'atendimento';
+      if(typeof enviarQualquerMensagem === 'function') await enviarQualquerMensagem({ tipo: 'texto', texto: 'finalizar' });
+      return;
+    }
+
+    if(t === 'proximo' || t === 'próximo' || t === 'pular' || t === 'nao' || t === 'não'){
+      avancarNavegacaoCardapio();
+      return;
+    }
+
+    if(t === 'quero' || t === 'sim' || t === 'esse' || t.includes('quero esse') || t.includes('adiciona') || t.includes('coloca')){
+      const item = _estadoVozPapo.itensCardapio[_estadoVozPapo.indiceCardapio];
+      const numero = String(_estadoVozPapo.indiceCardapio + 1);
+      if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
+        await enviarQualquerMensagem({ tipo: 'texto', texto: numero });
+      }
+      // Não fala a confirmação aqui de propósito — a resposta de verdade
+      // do robô ("✅ item adicionado!") já chega pelo tempo real e é lida
+      // sozinha, então só espera um pouco antes de seguir pro próximo item
+      const indiceNoMomento = _estadoVozPapo.indiceCardapio;
+      setTimeout(() => {
+        if(_estadoVozPapo && _estadoVozPapo.etapa === 'navegando_cardapio' && _estadoVozPapo.indiceCardapio === indiceNoMomento){
+          avancarNavegacaoCardapio();
+        }
+      }, 3500);
+      return;
+    }
+
+    // Fala não reconhecida durante a navegação — avança mesmo assim, pra
+    // não travar esperando algo que não vai vir
+    avancarNavegacaoCardapio();
+    return;
   }
 
-  // Pedido no chat: 1, 2, pix, menu, endereço...
-  if(conversaAtual && _estadoVozPapo.etapa !== 'lista'){
-    if(/^(1|um|uma|primeiro)$/.test(t) || t.includes('pagar agora') || t.includes('pagar online') || t === 'pix' || t.includes('cartao') || t.includes('cartão')){
-      await enviarTextoPapoVoz('1');
+  if(_estadoVozPapo.etapa === 'atendimento'){
+    if(t === 'sair do atendimento' || t === 'sair' || t === 'parar atendimento' || t === 'voltar'){
+      _estadoVozPapo.etapa = 'conversa';
+      falarVozPapo('Saindo do atendimento por voz. Diga falar, ouvir, ligar, ou voltar.');
       return;
     }
-    if(/^(2|dois|segunda|segundo)$/.test(t) || t.includes('pagar na entrega') || t.includes('na entrega') || t.includes('dinheiro')){
-      await enviarTextoPapoVoz('2');
-      return;
+    if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
+      const textoParaEnviar = converterEscolhaFaladaEmNumeros(transcricao) || transcricao.trim();
+      await enviarQualquerMensagem({ tipo: 'texto', texto: textoParaEnviar });
+      // Não fala nada aqui de propósito — a resposta da empresa (bot ou
+      // pessoa) chega pelo tempo real e já é lida sozinha, porque a
+      // leitura automática vem ligada por padrão. Falar aqui também
+      // ia duplicar e atrapalhar.
+    } else {
+      falarVozPapo('Não consegui enviar. Tente de novo.');
     }
-    if(t === 'menu' || t.includes('voltar ao menu') || t === 'asterisco menu' || t === '*menu*'){
-      await enviarTextoPapoVoz('menu');
-      return;
-    }
-    if(t.includes('confirmar') || t === 'sim' || t === 'ok' || t === 'pode'){
-      await enviarTextoPapoVoz('sim');
-      return;
-    }
+    return;
   }
 
   if(_estadoVozPapo.etapa === 'ditando'){
@@ -211,6 +233,19 @@ async function processarComandoVozPapo(transcricao){
     } else {
       falarVozPapo('Não consegui enviar. Tente de novo.');
     }
+    return;
+  }
+
+  if(t.includes('atendimento por voz') || t.includes('fazer pedido por voz') || t.includes('modo atendimento') || t === 'atendimento'){
+    if(!conversaAtual){
+      falarVozPapo('Abra uma conversa primeiro. Diga o nome da empresa.');
+      return;
+    }
+    if(typeof lerAutomaticoPapoAtivo === 'function' && !lerAutomaticoPapoAtivo() && typeof toggleLerAutomaticoPapo === 'function'){
+      toggleLerAutomaticoPapo();
+    }
+    _estadoVozPapo.etapa = 'atendimento';
+    falarVozPapo('Modo atendimento ativado. Agora é só falar seu pedido naturalmente, tipo "quero um pastel doce" ou "quero retirar no local". Pra sair, diga sair do atendimento.');
     return;
   }
 
@@ -294,6 +329,85 @@ async function processarComandoVozPapo(transcricao){
   falarVozPapo('Não achei esse comando. Diga listar, o nome da pessoa, falar, ouvir, ligar ou voltar.');
 }
 
+// Converte fala tipo "quero o número dois", "escolho o três e o cinco",
+// "dois, quatro" em "2,4" — o formato que o robô de atendimento entende
+// pra marcar itens do cardápio. Só converte quando a fala PARECE mesmo uma
+// escolha de número (senão devolve null e manda o texto original, pra não
+// atrapalhar respostas de texto livre como "quero pagar com pix").
+function converterEscolhaFaladaEmNumeros(transcricao){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9', dez:'10' };
+  const t = normalizarVozPapo(transcricao);
+
+  // Remove palavras de "enfeite" pra sobrar só os números — se sobrar
+  // qualquer outra palavra que não seja número, não é uma escolha simples
+  const palavras = t.split(/\s+/).filter(p => p && !['quero','o','a','os','as','numero','número','item','escolho','e','ou','por','favor','também','tambem'].includes(p));
+
+  if(palavras.length === 0) return null;
+
+  const numeros = [];
+  for(const p of palavras){
+    if(/^\d+$/.test(p)) numeros.push(p);
+    else if(mapaNumeros[p] !== undefined) numeros.push(mapaNumeros[p]);
+    else return null; // achou uma palavra que não é número — não é uma escolha simples, manda o texto original
+  }
+
+  return numeros.length ? numeros.join(',') : null;
+}
+
+// ---------- NAVEGAÇÃO DO CARDÁPIO ITEM POR ITEM (pausa de ~2,5s pra "quero") ----------
+
+function falarItemCardapioAtualPorVoz(){
+  const estado = _estadoVozPapo;
+  const itens = estado.itensCardapio || [];
+
+  if(estado.indiceCardapio >= itens.length){
+    estado.etapa = 'atendimento';
+    falarVozPapo('Isso é tudo do cardápio. Fala finalizar pra fechar o pedido, ou atendimento por voz pra ouvir de novo.');
+    return;
+  }
+
+  const item = itens[estado.indiceCardapio];
+  const preco = item.preco ? (String(item.preco).replace('.', ',') + ' reais') : 'preço a combinar';
+  const texto = (estado.indiceCardapio + 1) + ': ' + (item.nome || 'produto') + ', ' + preco + '. Diga quero, ou espera pra pular.';
+
+  falarVozPapo(texto, () => {
+    clearTimeout(estado.timeoutAvancoCardapio);
+    const indiceNoMomento = estado.indiceCardapio;
+    estado.timeoutAvancoCardapio = setTimeout(() => {
+      if(_estadoVozPapo && _estadoVozPapo.etapa === 'navegando_cardapio' && _estadoVozPapo.indiceCardapio === indiceNoMomento){
+        avancarNavegacaoCardapio();
+      }
+    }, 2500);
+  });
+}
+
+function avancarNavegacaoCardapio(){
+  clearTimeout(_estadoVozPapo.timeoutAvancoCardapio);
+  _estadoVozPapo.indiceCardapio++;
+  falarItemCardapioAtualPorVoz();
+}
+
+// Chamada pelo listener de mensagens em tempo real do chat.html quando
+// chega um cardápio interativo — só assume a leitura se o atendimento por
+// voz estiver ativo (senão, deixa a leitura normal de mensagem cuidar disso)
+function iniciarNavegacaoCardapioPorVoz(mensagem){
+  if(!_vozPapoAtiva) return false;
+  if(!_estadoVozPapo || (_estadoVozPapo.etapa !== 'atendimento' && _estadoVozPapo.etapa !== 'navegando_cardapio')) return false;
+
+  let itens;
+  try{ itens = JSON.parse(mensagem.texto); } catch(e){ return false; }
+  if(!Array.isArray(itens) || itens.length === 0) return false;
+
+  _estadoVozPapo.etapa = 'navegando_cardapio';
+  _estadoVozPapo.itensCardapio = itens;
+  _estadoVozPapo.indiceCardapio = 0;
+  falarVozPapo('Cardápio com ' + itens.length + ' itens. Vou falar um de cada vez.', () => {
+    falarItemCardapioAtualPorVoz();
+  });
+  return true;
+}
+
+window.iniciarNavegacaoCardapioPorVoz = iniciarNavegacaoCardapioPorVoz;
 window.iniciarModoVozPapo = iniciarModoVozPapo;
 window.toggleModoVozPapo = toggleModoVozPapo;
 window.pararModoVozPapo = pararModoVozPapo;

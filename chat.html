@@ -1704,7 +1704,12 @@ async function abrirConversa(conversaId){
       document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
       if(payload.new.remetente_user_id !== currentUserChat.id){
         tocarSomNotificacao();
-        lerMensagemRecebidaSeAtivo(payload.new);
+        if(payload.new.tipo === 'menu_interativo' && typeof iniciarNavegacaoCardapioPorVoz === 'function' && iniciarNavegacaoCardapioPorVoz(payload.new)){
+          // Cardápio virou navegação item-por-item por voz — não lê o
+          // texto bruto também, pra não duplicar a fala
+        } else {
+          lerMensagemRecebidaSeAtivo(payload.new);
+        }
       }
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
@@ -2235,6 +2240,16 @@ function lerMensagemRecebidaSeAtivo(m){
   else if(m.tipo === 'sticker') texto = 'Chegou uma figurinha.';
   else if(m.tipo === 'chamada_perdida') texto = 'Chamada não atendida.';
   else if(m.tipo === 'chamada_atendida') texto = 'Chamada no histórico.';
+  else if(m.tipo === 'menu_interativo'){
+    // Quando o atendimento por voz está ativo, isso vira uma navegação
+    // item-por-item (ver iniciarNavegacaoCardapioPorVoz em papo-voz.js) —
+    // aqui só cai nesse texto genérico se, por algum motivo, essa função
+    // não tratou a mensagem (ex: modo voz desligado)
+    texto = 'Chegou o cardápio. Toque na tela pra ver as opções, ou ative o modo atendimento por voz.';
+  }
+  else if(m.tipo === 'formulario_endereco'){
+    texto = 'A empresa pediu seu endereço de entrega. Isso precisa ser preenchido tocando na tela, com CEP, rua e número — não dá pra fazer só por voz ainda.';
+  }
   if(!texto) return;
 
   speechSynthesis.cancel();

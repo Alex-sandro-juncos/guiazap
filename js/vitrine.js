@@ -2601,6 +2601,9 @@ function toggleModoVozVitrine(){
 }
 
 let _aguardandoAtivacaoVitrine = false;
+let _vozVitrineUltimoSinalDeVida = 0;
+let _vozVitrineVigia = null;
+let _vozVitrineTentativasReconexao = 0;
 
 function iniciarModoVozVitrine(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2618,13 +2621,33 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
   _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente;
+  _vozVitrineTentativasReconexao = 0;
 
+  _criarReconhecimentoVitrine(SpeechRecognitionApi);
+  _iniciarVigiaVozVitrine(SpeechRecognitionApi);
+
+  if(_aguardandoAtivacaoVitrine){
+    falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+  }
+}
+
+function _criarReconhecimentoVitrine(SpeechRecognitionApi){
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
   _vozVitrineReconhecimento.lang = 'pt-BR';
   _vozVitrineReconhecimento.continuous = true;
   _vozVitrineReconhecimento.interimResults = false;
 
+  _vozVitrineReconhecimento.onstart = () => {
+    _vozVitrineUltimoSinalDeVida = Date.now();
+    _vozVitrineTentativasReconexao = 0;
+    const indicador = document.getElementById('voz-vitrine-indicador');
+    if(indicador) indicador.style.background = '';
+  };
+
   _vozVitrineReconhecimento.onresult = (event) => {
+    _vozVitrineUltimoSinalDeVida = Date.now();
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
 
@@ -2641,11 +2664,19 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   };
 
   _vozVitrineReconhecimento.onend = () => {
+    _vozVitrineUltimoSinalDeVida = Date.now();
     // Reinicia sozinho pra manter a escuta contínua — só não reinicia se
     // o usuário desligou de propósito, ou se estamos no meio de uma fala
     // (nesse caso, quem reinicia é o próprio callback de "terminei de falar")
     if(_vozVitrineAtiva && !_vozVitrineFalando){
-      try{ _vozVitrineReconhecimento.start(); } catch(e){}
+      try{
+        _vozVitrineReconhecimento.start();
+      } catch(e){
+        // Se nem tentar reiniciar deu certo, o vigia (rodando a cada
+        // poucos segundos) vai perceber que o microfone está "morto" e
+        // recria tudo do zero sozinho
+        console.warn('não deu pra reiniciar o reconhecimento de voz, o vigia vai tentar recriar', e);
+      }
     }
   };
 
@@ -2653,21 +2684,44 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
       pararModoVozVitrine();
+      return;
     }
     // outros erros (ex: "no-speech") são normais e o onend() já reinicia sozinho
+    _vozVitrineUltimoSinalDeVida = Date.now();
   };
 
   try{ _vozVitrineReconhecimento.start(); } catch(e){}
+  _vozVitrineUltimoSinalDeVida = Date.now();
+}
 
-  if(_aguardandoAtivacaoVitrine){
-    falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
-  } else {
-    falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
-  }
+// Confere de tempos em tempos se o reconhecimento ainda está "vivo" — se
+// ficar muito tempo sem nenhum sinal (nem começar, nem terminar, nem ouvir
+// nada), o microfone travou silenciosamente e precisa ser recriado do zero
+function _iniciarVigiaVozVitrine(SpeechRecognitionApi){
+  clearInterval(_vozVitrineVigia);
+  _vozVitrineVigia = setInterval(() => {
+    if(!_vozVitrineAtiva){ clearInterval(_vozVitrineVigia); return; }
+    if(_vozVitrineFalando) return; // durante a fala é normal não ter sinal de vida
+
+    const semSinalHa = Date.now() - _vozVitrineUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozVitrineTentativasReconexao++;
+      console.warn('modo voz da Vitrine parece ter travado, recriando (tentativa ' + _vozVitrineTentativasReconexao + ')');
+      try{ _vozVitrineReconhecimento.onend = null; _vozVitrineReconhecimento.onerror = null; _vozVitrineReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoVitrine(SpeechRecognitionApi);
+
+      if(_vozVitrineTentativasReconexao === 2){
+        // Depois de duas tentativas automáticas, avisa a pessoa — pode ser
+        // que o navegador tenha revogado a permissão do microfone
+        falarVozVitrine('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozVitrine(){
   _vozVitrineAtiva = false;
+  clearInterval(_vozVitrineVigia);
   if(_vozVitrineReconhecimento){
     try{ _vozVitrineReconhecimento.stop(); } catch(e){}
   }
@@ -3693,6 +3747,14 @@ async function configurarPinVozPorVoz(){
     await new Promise(r => setTimeout(r, 300));
   }
 
+  const jaTemPin = !!localStorage.getItem('guiazap_pin_hash_' + currentUserV.id);
+
+  if(jaTemPin){
+    _estadoConfigurarPinVoz = { etapa: 'confirmar_trocar', primeiroPin: null };
+    falarVozVitrine('Você já tem um PIN configurado. Quer trocar por um novo? Fala sim ou não.');
+    return;
+  }
+
   _estadoConfigurarPinVoz = { etapa: 'pedir_pin', primeiroPin: null };
   falarVozVitrine('Vamos configurar seu PIN de voz. Fale de 4 a 6 números, um de cada vez ou seguidos. Por exemplo: um dois três quatro.');
 }
@@ -3702,6 +3764,18 @@ async function configurarPinVozPorVoz(){
 async function processarEtapaConfigurarPinVoz(transcricao){
   const estado = _estadoConfigurarPinVoz;
   if(!estado) return false;
+
+  if(estado.etapa === 'confirmar_trocar'){
+    const t = normalizarTextoV(transcricao);
+    if(t.includes('sim') || t.includes('trocar') || t.includes('quero')){
+      estado.etapa = 'pedir_pin';
+      falarVozVitrine('Fale de 4 a 6 números pro novo PIN. Por exemplo: um dois três quatro.');
+    } else {
+      _estadoConfigurarPinVoz = null;
+      falarVozVitrine('Tudo bem, mantendo o PIN atual.');
+    }
+    return true;
+  }
 
   const digitos = extrairDigitosDaFalaVitrine(transcricao);
 
