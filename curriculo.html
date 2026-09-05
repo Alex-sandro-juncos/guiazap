@@ -564,6 +564,9 @@ function toggleModoVozCv(){
 }
 
 let _aguardandoAtivacaoCv = false;
+let _vozCvUltimoSinalDeVida = 0;
+let _vozCvVigia = null;
+let _vozCvTentativasReconexao = 0;
 
 function iniciarModoVozCv(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -576,13 +579,33 @@ function iniciarModoVozCv(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-cv').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-cv').style.display = 'block';
   _aguardandoAtivacaoCv = !!retomandoAutomaticamente;
+  _vozCvTentativasReconexao = 0;
 
+  _criarReconhecimentoCv(SpeechRecognitionApi);
+  _iniciarVigiaVozCv(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+
+  if(_aguardandoAtivacaoCv){
+    falarVozCv('Modo voz em espera. Fala "ativar" pra preencher o currículo.');
+  } else {
+    _estadoPreenchimentoCv = { etapa: 'nome' };
+    falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
+  }
+}
+
+function _criarReconhecimentoCv(SpeechRecognitionApi){
   _vozCvReconhecimento = new SpeechRecognitionApi();
   _vozCvReconhecimento.lang = 'pt-BR';
   _vozCvReconhecimento.continuous = true;
   _vozCvReconhecimento.interimResults = false;
 
+  _vozCvReconhecimento.onstart = () => {
+    _vozCvUltimoSinalDeVida = Date.now();
+    _vozCvTentativasReconexao = 0;
+  };
+
   _vozCvReconhecimento.onresult = (event) => {
+    _vozCvUltimoSinalDeVida = Date.now();
     if(!_vozCvAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-cv-transcricao').textContent = '🗣️ "' + transcricao + '"';
@@ -601,6 +624,7 @@ function iniciarModoVozCv(retomandoAutomaticamente){
   };
 
   _vozCvReconhecimento.onend = () => {
+    _vozCvUltimoSinalDeVida = Date.now();
     if(_vozCvAtiva && !_vozCvFalando){ try{ _vozCvReconhecimento.start(); } catch(e){} }
   };
 
@@ -608,22 +632,38 @@ function iniciarModoVozCv(retomandoAutomaticamente){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone.');
       pararModoVozCv();
+      return;
     }
+    _vozCvUltimoSinalDeVida = Date.now();
   };
 
   try{ _vozCvReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  _vozCvUltimoSinalDeVida = Date.now();
+}
 
-  if(_aguardandoAtivacaoCv){
-    falarVozCv('Modo voz em espera. Fala "ativar" pra preencher o currículo.');
-  } else {
-    _estadoPreenchimentoCv = { etapa: 'nome' };
-    falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
-  }
+function _iniciarVigiaVozCv(SpeechRecognitionApi){
+  clearInterval(_vozCvVigia);
+  _vozCvVigia = setInterval(() => {
+    if(!_vozCvAtiva){ clearInterval(_vozCvVigia); return; }
+    if(_vozCvFalando) return;
+
+    const semSinalHa = Date.now() - _vozCvUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozCvTentativasReconexao++;
+      console.warn('modo voz do Currículo parece ter travado, recriando (tentativa ' + _vozCvTentativasReconexao + ')');
+      try{ _vozCvReconhecimento.onend = null; _vozCvReconhecimento.onerror = null; _vozCvReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoCv(SpeechRecognitionApi);
+
+      if(_vozCvTentativasReconexao === 2){
+        falarVozCv('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozCv(){
   _vozCvAtiva = false;
+  clearInterval(_vozCvVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozCvReconhecimento){
     _vozCvReconhecimento.onresult = null;

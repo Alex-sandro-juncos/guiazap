@@ -14,6 +14,9 @@ function toggleModoVozPapo(){
 }
 
 let _aguardandoAtivacaoPapo = false;
+let _vozPapoUltimoSinalDeVida = 0;
+let _vozPapoVigia = null;
+let _vozPapoTentativasReconexao = 0;
 
 function iniciarModoVozPapo(retomandoAutomaticamente){
   const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -25,16 +28,39 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   window._vozPapoAtiva = true;
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
   _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
+  _vozPapoTentativasReconexao = 0;
   const painel = document.getElementById('painel-modo-voz-papo');
   if(painel) painel.style.display = 'block';
   const btn = document.getElementById('btn-modo-voz-papo');
   if(btn) btn.style.background = '#a4402f';
 
+  _criarReconhecimentoPapo(Api);
+  _iniciarVigiaVozPapo(Api);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+
+  if(_aguardandoAtivacaoPapo){
+    falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
+  } else if(conversaAtual){
+    falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
+  } else {
+    const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
+    falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Diga papo para voltar ao GuiaZap.');
+  }
+}
+
+function _criarReconhecimentoPapo(Api){
   _vozPapoReconhecimento = new Api();
   _vozPapoReconhecimento.lang = 'pt-BR';
   _vozPapoReconhecimento.continuous = true;
   _vozPapoReconhecimento.interimResults = false;
+
+  _vozPapoReconhecimento.onstart = () => {
+    _vozPapoUltimoSinalDeVida = Date.now();
+    _vozPapoTentativasReconexao = 0;
+  };
+
   _vozPapoReconhecimento.onresult = (event) => {
+    _vozPapoUltimoSinalDeVida = Date.now();
     if(!_vozPapoAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
@@ -55,6 +81,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
     processarComandoVozPapo(texto);
   };
   _vozPapoReconhecimento.onend = () => {
+    _vozPapoUltimoSinalDeVida = Date.now();
     if(_vozPapoAtiva && !_vozPapoFalando){
       try{ _vozPapoReconhecimento.start(); } catch(e){}
     }
@@ -65,26 +92,39 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
       pararModoVozPapo();
       return;
     }
+    _vozPapoUltimoSinalDeVida = Date.now();
     if(_vozPapoAtiva && (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network')){
       setTimeout(() => { try{ _vozPapoReconhecimento.start(); } catch(e){} }, 400);
     }
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  _vozPapoUltimoSinalDeVida = Date.now();
+}
 
-  if(_aguardandoAtivacaoPapo){
-    falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
-  } else if(conversaAtual){
-    falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
-  } else {
-    const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
-    falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Diga papo para voltar ao GuiaZap.');
-  }
+function _iniciarVigiaVozPapo(Api){
+  clearInterval(_vozPapoVigia);
+  _vozPapoVigia = setInterval(() => {
+    if(!_vozPapoAtiva){ clearInterval(_vozPapoVigia); return; }
+    if(_vozPapoFalando) return;
+
+    const semSinalHa = Date.now() - _vozPapoUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozPapoTentativasReconexao++;
+      console.warn('modo voz do Papo parece ter travado, recriando (tentativa ' + _vozPapoTentativasReconexao + ')');
+      try{ _vozPapoReconhecimento.onend = null; _vozPapoReconhecimento.onerror = null; _vozPapoReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoPapo(Api);
+
+      if(_vozPapoTentativasReconexao === 2){
+        falarVozPapo('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozPapo(){
   _vozPapoAtiva = false;
   window._vozPapoAtiva = false;
+  clearInterval(_vozPapoVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPapoReconhecimento){
     _vozPapoReconhecimento.onresult = null;

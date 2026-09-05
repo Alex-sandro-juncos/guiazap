@@ -194,6 +194,9 @@ function toggleModoVozBlog(){
 }
 
 let _aguardandoAtivacaoBlog = false;
+let _vozBlogUltimoSinalDeVida = 0;
+let _vozBlogVigia = null;
+let _vozBlogTentativasReconexao = 0;
 
 function iniciarModoVozBlog(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -208,6 +211,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   document.getElementById('painel-modo-voz-blog').style.display = 'block';
   document.getElementById('voz-blog-transcricao').textContent = '';
   _aguardandoAtivacaoBlog = !!retomandoAutomaticamente;
+  _vozBlogTentativasReconexao = 0;
 
   if(_aguardandoAtivacaoBlog){
     document.getElementById('voz-blog-status').textContent = '🎙️ Modo voz em espera';
@@ -216,12 +220,29 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
     document.getElementById('voz-blog-status').textContent = '🎙️ Modo voz ativado — pode falar';
   }
 
+  _criarReconhecimentoBlog(SpeechRecognitionApi);
+  _iniciarVigiaVozBlog(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  if(_aguardandoAtivacaoBlog){
+    falarVozBlog('Modo voz em espera. Fala "ativar" pra escrever um artigo.');
+  } else {
+    falarVozBlog('Modo voz ativado. Qual o seu nome de autor?');
+  }
+}
+
+function _criarReconhecimentoBlog(SpeechRecognitionApi){
   _vozBlogReconhecimento = new SpeechRecognitionApi();
   _vozBlogReconhecimento.lang = 'pt-BR';
   _vozBlogReconhecimento.continuous = true;
   _vozBlogReconhecimento.interimResults = false;
 
+  _vozBlogReconhecimento.onstart = () => {
+    _vozBlogUltimoSinalDeVida = Date.now();
+    _vozBlogTentativasReconexao = 0;
+  };
+
   _vozBlogReconhecimento.onresult = (event) => {
+    _vozBlogUltimoSinalDeVida = Date.now();
     if(!_vozBlogAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
@@ -243,6 +264,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   };
 
   _vozBlogReconhecimento.onend = () => {
+    _vozBlogUltimoSinalDeVida = Date.now();
     if(_vozBlogAtiva && !_vozBlogFalando){
       try{ _vozBlogReconhecimento.start(); } catch(e){}
     }
@@ -252,21 +274,39 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
       pararModoVozBlog();
+      return;
     }
+    _vozBlogUltimoSinalDeVida = Date.now();
   };
 
   try{ _vozBlogReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
-  if(_aguardandoAtivacaoBlog){
-    falarVozBlog('Modo voz em espera. Fala "ativar" pra escrever um artigo.');
-  } else {
-    falarVozBlog('Modo voz ativado. Qual o seu nome de autor?');
-  }
+  _vozBlogUltimoSinalDeVida = Date.now();
+}
+
+function _iniciarVigiaVozBlog(SpeechRecognitionApi){
+  clearInterval(_vozBlogVigia);
+  _vozBlogVigia = setInterval(() => {
+    if(!_vozBlogAtiva){ clearInterval(_vozBlogVigia); return; }
+    if(_vozBlogFalando) return;
+
+    const semSinalHa = Date.now() - _vozBlogUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozBlogTentativasReconexao++;
+      console.warn('modo voz do Blog parece ter travado, recriando (tentativa ' + _vozBlogTentativasReconexao + ')');
+      try{ _vozBlogReconhecimento.onend = null; _vozBlogReconhecimento.onerror = null; _vozBlogReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoBlog(SpeechRecognitionApi);
+
+      if(_vozBlogTentativasReconexao === 2){
+        falarVozBlog('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozBlog(){
   _vozBlogAtiva = false;
   _estadoRedacaoBlog = null;
+  clearInterval(_vozBlogVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozBlogReconhecimento){
     _vozBlogReconhecimento.onresult = null;

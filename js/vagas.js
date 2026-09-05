@@ -235,6 +235,9 @@ function toggleModoVozVagas(){
 }
 
 let _aguardandoAtivacaoVagas = false;
+let _vozVagasUltimoSinalDeVida = 0;
+let _vozVagasVigia = null;
+let _vozVagasTentativasReconexao = 0;
 
 function iniciarModoVozVagas(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -257,6 +260,7 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
   document.getElementById('painel-modo-voz-vagas').style.display = 'block';
   document.getElementById('voz-vagas-transcricao').textContent = '';
   _aguardandoAtivacaoVagas = !!retomandoAutomaticamente;
+  _vozVagasTentativasReconexao = 0;
 
   if(_aguardandoAtivacaoVagas){
     // Não abre o formulário nem começa a perguntar nada até ouvir a
@@ -268,12 +272,29 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
     abrirFormVaga();
   }
 
+  _criarReconhecimentoVagas(SpeechRecognitionApi);
+  _iniciarVigiaVozVagas(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  if(_aguardandoAtivacaoVagas){
+    falarVozVagas('Modo voz em espera. Fala "ativar" pra publicar uma vaga.');
+  } else {
+    falarVozVagas('Modo voz ativado. Vamos publicar uma vaga juntos. Qual o cargo ou título da vaga?');
+  }
+}
+
+function _criarReconhecimentoVagas(SpeechRecognitionApi){
   _vozVagasReconhecimento = new SpeechRecognitionApi();
   _vozVagasReconhecimento.lang = 'pt-BR';
   _vozVagasReconhecimento.continuous = true;
   _vozVagasReconhecimento.interimResults = false;
 
+  _vozVagasReconhecimento.onstart = () => {
+    _vozVagasUltimoSinalDeVida = Date.now();
+    _vozVagasTentativasReconexao = 0;
+  };
+
   _vozVagasReconhecimento.onresult = (event) => {
+    _vozVagasUltimoSinalDeVida = Date.now();
     if(!_vozVagasAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
@@ -296,6 +317,7 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
   };
 
   _vozVagasReconhecimento.onend = () => {
+    _vozVagasUltimoSinalDeVida = Date.now();
     if(_vozVagasAtiva && !_vozVagasFalando){
       try{ _vozVagasReconhecimento.start(); } catch(e){}
     }
@@ -305,21 +327,39 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
       pararModoVozVagas();
+      return;
     }
+    _vozVagasUltimoSinalDeVida = Date.now();
   };
 
   try{ _vozVagasReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
-  if(_aguardandoAtivacaoVagas){
-    falarVozVagas('Modo voz em espera. Fala "ativar" pra publicar uma vaga.');
-  } else {
-    falarVozVagas('Modo voz ativado. Vamos publicar uma vaga juntos. Qual o cargo ou título da vaga?');
-  }
+  _vozVagasUltimoSinalDeVida = Date.now();
+}
+
+function _iniciarVigiaVozVagas(SpeechRecognitionApi){
+  clearInterval(_vozVagasVigia);
+  _vozVagasVigia = setInterval(() => {
+    if(!_vozVagasAtiva){ clearInterval(_vozVagasVigia); return; }
+    if(_vozVagasFalando) return;
+
+    const semSinalHa = Date.now() - _vozVagasUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozVagasTentativasReconexao++;
+      console.warn('modo voz de Vagas parece ter travado, recriando (tentativa ' + _vozVagasTentativasReconexao + ')');
+      try{ _vozVagasReconhecimento.onend = null; _vozVagasReconhecimento.onerror = null; _vozVagasReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoVagas(SpeechRecognitionApi);
+
+      if(_vozVagasTentativasReconexao === 2){
+        falarVozVagas('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozVagas(){
   _vozVagasAtiva = false;
   _estadoVozVagas = null;
+  clearInterval(_vozVagasVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozVagasReconhecimento){
     _vozVagasReconhecimento.onresult = null;

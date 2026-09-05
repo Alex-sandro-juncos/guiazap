@@ -3749,6 +3749,10 @@ function toggleModoVozIndex(){
   }
 }
 
+let _vozIndexUltimoSinalDeVida = 0;
+let _vozIndexVigia = null;
+let _vozIndexTentativasReconexao = 0;
+
 function iniciarModoVozIndex(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
@@ -3761,18 +3765,33 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-index').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
-
-  // Se o microfone está voltando SOZINHO (ao trocar de página, por
-  // exemplo), começa em "modo de espera" — só reage à palavra de ativação,
-  // pra não confundir qualquer fala do ambiente com um comando de verdade
   _aguardandoAtivacaoIndex = !!retomandoAutomaticamente;
+  _vozIndexTentativasReconexao = 0;
 
+  _criarReconhecimentoIndex(SpeechRecognitionApi);
+  _iniciarVigiaVozIndex(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+
+  if(_aguardandoAtivacaoIndex){
+    falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
+  }
+}
+
+function _criarReconhecimentoIndex(SpeechRecognitionApi){
   _vozIndexReconhecimento = new SpeechRecognitionApi();
   _vozIndexReconhecimento.lang = 'pt-BR';
   _vozIndexReconhecimento.continuous = true;
   _vozIndexReconhecimento.interimResults = false;
 
+  _vozIndexReconhecimento.onstart = () => {
+    _vozIndexUltimoSinalDeVida = Date.now();
+    _vozIndexTentativasReconexao = 0;
+  };
+
   _vozIndexReconhecimento.onresult = (event) => {
+    _vozIndexUltimoSinalDeVida = Date.now();
     if(!_vozIndexAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
@@ -3790,8 +3809,11 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   };
 
   _vozIndexReconhecimento.onend = () => {
+    _vozIndexUltimoSinalDeVida = Date.now();
     if(_vozIndexAtiva){
-      setTimeout(() => { try{ _vozIndexReconhecimento.start(); } catch(e){} }, 250);
+      setTimeout(() => { try{ _vozIndexReconhecimento.start(); } catch(e){
+        console.warn('não deu pra reiniciar o reconhecimento de voz do Index, o vigia vai tentar recriar', e);
+      } }, 250);
     }
   };
 
@@ -3801,25 +3823,44 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
       pararModoVozIndex();
       return;
     }
+    _vozIndexUltimoSinalDeVida = Date.now();
     if(_vozIndexAtiva){
       setTimeout(() => { try{ _vozIndexReconhecimento.start(); } catch(e){} }, 300);
     }
   };
 
   try{ _vozIndexReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  _vozIndexUltimoSinalDeVida = Date.now();
+}
 
-  if(_aguardandoAtivacaoIndex){
-    falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
-  } else {
-    falarVozIndex('Modo voz ativado. Fala o que você procura, tipo "dentista" ou "barbeiro perto de mim".');
-  }
+// Confere de tempos em tempos se o reconhecimento ainda está "vivo" — se
+// ficar muito tempo sem nenhum sinal, o microfone travou silenciosamente e
+// precisa ser recriado do zero
+function _iniciarVigiaVozIndex(SpeechRecognitionApi){
+  clearInterval(_vozIndexVigia);
+  _vozIndexVigia = setInterval(() => {
+    if(!_vozIndexAtiva){ clearInterval(_vozIndexVigia); return; }
+    if(_vozIndexFalando) return; // durante a fala é normal não ter sinal de vida
+
+    const semSinalHa = Date.now() - _vozIndexUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozIndexTentativasReconexao++;
+      console.warn('modo voz do Index parece ter travado, recriando (tentativa ' + _vozIndexTentativasReconexao + ')');
+      try{ _vozIndexReconhecimento.onend = null; _vozIndexReconhecimento.onerror = null; _vozIndexReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoIndex(SpeechRecognitionApi);
+
+      if(_vozIndexTentativasReconexao === 2){
+        falarVozIndex('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
+  clearInterval(_vozIndexVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozIndexReconhecimento){
     _vozIndexReconhecimento.onresult = null;

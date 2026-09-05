@@ -442,6 +442,9 @@ function toggleModoVozPedidos(){
 }
 
 let _aguardandoAtivacaoPedidos = false;
+let _vozPedidosUltimoSinalDeVida = 0;
+let _vozPedidosVigia = null;
+let _vozPedidosTentativasReconexao = 0;
 
 function iniciarModoVozPedidos(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -454,13 +457,32 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-pedidos').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-pedidos').style.display = 'block';
   _aguardandoAtivacaoPedidos = !!retomandoAutomaticamente;
+  _vozPedidosTentativasReconexao = 0;
 
+  _criarReconhecimentoPedidos(SpeechRecognitionApi);
+  _iniciarVigiaVozPedidos(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+
+  if(_aguardandoAtivacaoPedidos){
+    falarVozPedidos('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozPedidos('Modo voz ativado pra gerenciar pedidos. Fala "pedidos novos" pra ouvir o que está esperando.');
+  }
+}
+
+function _criarReconhecimentoPedidos(SpeechRecognitionApi){
   _vozPedidosReconhecimento = new SpeechRecognitionApi();
   _vozPedidosReconhecimento.lang = 'pt-BR';
   _vozPedidosReconhecimento.continuous = true;
   _vozPedidosReconhecimento.interimResults = false;
 
+  _vozPedidosReconhecimento.onstart = () => {
+    _vozPedidosUltimoSinalDeVida = Date.now();
+    _vozPedidosTentativasReconexao = 0;
+  };
+
   _vozPedidosReconhecimento.onresult = (event) => {
+    _vozPedidosUltimoSinalDeVida = Date.now();
     if(!_vozPedidosAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-pedidos-transcricao').textContent = '🗣️ "' + transcricao + '"';
@@ -478,6 +500,7 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
   };
 
   _vozPedidosReconhecimento.onend = () => {
+    _vozPedidosUltimoSinalDeVida = Date.now();
     if(_vozPedidosAtiva && !_vozPedidosFalando){
       try{ _vozPedidosReconhecimento.start(); } catch(e){}
     }
@@ -487,21 +510,38 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
     if(event.error === 'not-allowed'){
       alert('Você precisa permitir o uso do microfone.');
       pararModoVozPedidos();
+      return;
     }
+    _vozPedidosUltimoSinalDeVida = Date.now();
   };
 
   try{ _vozPedidosReconhecimento.start(); } catch(e){}
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
+  _vozPedidosUltimoSinalDeVida = Date.now();
+}
 
-  if(_aguardandoAtivacaoPedidos){
-    falarVozPedidos('Modo voz em espera. Fala "ativar" pra começar.');
-  } else {
-    falarVozPedidos('Modo voz ativado pra gerenciar pedidos. Fala "pedidos novos" pra ouvir o que está esperando.');
-  }
+function _iniciarVigiaVozPedidos(SpeechRecognitionApi){
+  clearInterval(_vozPedidosVigia);
+  _vozPedidosVigia = setInterval(() => {
+    if(!_vozPedidosAtiva){ clearInterval(_vozPedidosVigia); return; }
+    if(_vozPedidosFalando) return;
+
+    const semSinalHa = Date.now() - _vozPedidosUltimoSinalDeVida;
+    if(semSinalHa > 8000){
+      _vozPedidosTentativasReconexao++;
+      console.warn('modo voz de Pedidos parece ter travado, recriando (tentativa ' + _vozPedidosTentativasReconexao + ')');
+      try{ _vozPedidosReconhecimento.onend = null; _vozPedidosReconhecimento.onerror = null; _vozPedidosReconhecimento.stop(); } catch(e){}
+      _criarReconhecimentoPedidos(SpeechRecognitionApi);
+
+      if(_vozPedidosTentativasReconexao === 2){
+        falarVozPedidos('O microfone parou de responder. Reconectando...');
+      }
+    }
+  }, 4000);
 }
 
 function pararModoVozPedidos(){
   _vozPedidosAtiva = false;
+  clearInterval(_vozPedidosVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPedidosReconhecimento){
     _vozPedidosReconhecimento.onresult = null;
