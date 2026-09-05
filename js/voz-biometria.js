@@ -330,7 +330,7 @@ let _biometriaTimeoutInicio = null;
 // panos, em paralelo com o reconhecimento de fala normal — suspeita de que
 // isso está deixando o reconhecimento instável nos dois aparelhos. Deixei
 // desligado (false) pra testar. Quando quiser reativar, é só trocar pra true.
-const BIOMETRIA_DE_VOZ_ATIVA = false;
+const BIOMETRIA_DE_VOZ_ATIVA = true;
 
 function iniciarBiometriaSeConfigurada(){
   if(!BIOMETRIA_DE_VOZ_ATIVA) return;
