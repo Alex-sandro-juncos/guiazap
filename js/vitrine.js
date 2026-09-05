@@ -2720,6 +2720,14 @@ function falarVozVitrine(texto){
 async function processarComandoVozVitrine(transcricao){
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
+
+  // Prioridade máxima: se está no meio do cadastro do PIN de voz, essa
+  // fala é sobre isso — nada mais é processado
+  if(_estadoConfigurarPinVoz){
+    await processarEtapaConfigurarPinVoz(transcricao);
+    return;
+  }
+
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
   // somente voz, essa fala é sobre isso — nada mais é processado
   if(_aguardandoPinParaDestravarVitrine){
@@ -3614,14 +3622,19 @@ async function pinLocalConfereVitrine(pin){
   return hash === salvo;
 }
 
-async function configurarPinVozPorVoz(){
-  if(!currentUserV){
-    alert('Entra na conta na página inicial antes de criar o PIN.');
-    return;
-  }
-  const pin = prompt('Escolhe um PIN de 4 a 6 números:');
-  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
+function extrairDigitosDaFalaVitrine(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTextoV(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
+}
 
+async function salvarPinVozConfirmado(pin){
   await salvarPinLocalVitrine(pin);
 
   const session = await pegarSessaoVitrineValida();
@@ -3634,13 +3647,67 @@ async function configurarPinVozPorVoz(){
       });
       const data = await resp.json().catch(() => ({}));
       if(resp.ok){
-        alert('PIN configurado no servidor e neste aparelho.');
+        falarVozVitrine('PIN configurado com sucesso.');
         return;
       }
       console.warn('PIN servidor', data);
     } catch(e){ console.warn(e); }
   }
-  alert('PIN salvo neste aparelho. Se o servidor recusar a sessão, o pagamento por voz ainda usa este PIN daqui.');
+  falarVozVitrine('PIN salvo neste aparelho.');
+}
+
+let _estadoConfigurarPinVoz = null;
+
+async function configurarPinVozPorVoz(){
+  if(!currentUserV){
+    alert('Entra na conta na página inicial antes de criar o PIN.');
+    return;
+  }
+
+  // Se o modo voz não estiver ativo ainda, liga ele — sem microfone
+  // ouvindo, não tem como a pessoa FALAR o PIN
+  if(!_vozVitrineAtiva){
+    iniciarModoVozVitrine();
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  _estadoConfigurarPinVoz = { etapa: 'pedir_pin', primeiroPin: null };
+  falarVozVitrine('Vamos configurar seu PIN de voz. Fale de 4 a 6 números, um de cada vez ou seguidos. Por exemplo: um dois três quatro.');
+}
+
+// Chamado pelo roteador principal de comandos de voz quando existe um
+// cadastro de PIN em andamento — tem prioridade sobre os outros comandos
+async function processarEtapaConfigurarPinVoz(transcricao){
+  const estado = _estadoConfigurarPinVoz;
+  if(!estado) return false;
+
+  const digitos = extrairDigitosDaFalaVitrine(transcricao);
+
+  if(!digitos || digitos.length < 4 || digitos.length > 6){
+    falarVozVitrine('Não entendi um PIN válido. Fala de 4 a 6 números, tipo um dois três quatro.');
+    return true;
+  }
+
+  if(estado.etapa === 'pedir_pin'){
+    estado.primeiroPin = digitos;
+    estado.etapa = 'confirmar_pin';
+    falarVozVitrine('Repete o PIN de novo, pra confirmar.');
+    return true;
+  }
+
+  if(estado.etapa === 'confirmar_pin'){
+    if(digitos !== estado.primeiroPin){
+      falarVozVitrine('Os números não bateram. Vamos começar de novo. Fala o PIN.');
+      estado.etapa = 'pedir_pin';
+      estado.primeiroPin = null;
+      return true;
+    }
+    _estadoConfigurarPinVoz = null;
+    await salvarPinVozConfirmado(digitos);
+    return true;
+  }
+
+  return true;
 }
 
 
