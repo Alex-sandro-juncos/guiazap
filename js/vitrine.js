@@ -2587,6 +2587,159 @@ function fecharCadastroCartaoVoz(){
   document.getElementById('overlay-cadastro-cartao').style.display = 'none';
 }
 
+// ---------- CADASTRO DE CARTÃO GUIADO POR VOZ ----------
+// Nome e CPF a gente preenche sozinho, falando. Número, validade e CVV
+// ficam dentro de "quadrinhos seguros" do Mercado Pago (iframes) que nem
+// o código do GuiaZap consegue preencher — existem assim de propósito,
+// pra proteger o cartão. Por isso, pra esses três campos, a gente GUIA a
+// pessoa com calma, um de cada vez, esperando confirmação, pra ela usar o
+// leitor de tela do próprio celular (TalkBack/VoiceOver) e digitar.
+
+let _estadoCadastroCartaoVoz = null;
+
+function iniciarCadastroCartaoPorVoz(){
+  if(!currentUserV){
+    falarVozVitrine('Você precisa estar logado pra cadastrar um cartão.');
+    return;
+  }
+
+  // Se o modo voz não estiver ativo ainda, liga ele — sem microfone
+  // ouvindo, a pessoa não consegue responder as perguntas
+  const jaEstavaAtivo = _vozVitrineAtiva;
+  if(!jaEstavaAtivo){
+    iniciarModoVozVitrine();
+  }
+
+  abrirCadastroCartaoVoz();
+  _estadoCadastroCartaoVoz = { etapa: 'nome' };
+
+  setTimeout(() => {
+    falarVozVitrine('Vamos cadastrar seu cartão. Primeiro, o nome e o CPF eu preencho sozinho, falando com você. Depois eu te guio pra digitar o número, a validade e o código de segurança, que são campos protegidos e precisam ser digitados na tela, com a ajuda do leitor de tela do seu celular. Qual o nome impresso no cartão?');
+  }, jaEstavaAtivo ? 0 : 800);
+}
+
+function extrairNumerosDaFalaCartao(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarTextoV(texto);
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(p => {
+    if(/^\d+$/.test(p)) digitos += p;
+    else if(mapaNumeros[p] !== undefined) digitos += mapaNumeros[p];
+  });
+  return digitos;
+}
+
+async function processarEtapaCadastroCartaoVoz(transcricao){
+  const estado = _estadoCadastroCartaoVoz;
+  if(!estado) return false;
+
+  const t = normalizarTextoV(transcricao);
+
+  if(t.includes('cancelar') || t.includes('sair') || t.includes('esquece') || t.includes('deixa pra la') || t.includes('deixa pra lá')){
+    _estadoCadastroCartaoVoz = null;
+    fecharCadastroCartaoVoz();
+    falarVozVitrine('Cadastro de cartão cancelado.');
+    return true;
+  }
+
+  if(t.includes('repetir') || t === 'oi' || t === 'como assim' || t.includes('nao entendi') || t.includes('não entendi')){
+    falarInstrucaoEtapaCartao(estado.etapa, true);
+    return true;
+  }
+
+  if(estado.etapa === 'nome'){
+    if(transcricao.trim().length < 2){
+      falarVozVitrine('Não entendi o nome. Fala de novo, o nome completo impresso no cartão.');
+      return true;
+    }
+    document.getElementById('form-cartao-nome').value = transcricao.trim();
+    estado.etapa = 'cpf';
+    falarVozVitrine('Nome guardado: ' + transcricao.trim() + '. Agora fala o CPF do titular, número por número.');
+    return true;
+  }
+
+  if(estado.etapa === 'cpf'){
+    const digitos = extrairNumerosDaFalaCartao(transcricao);
+    if(digitos.length !== 11){
+      falarVozVitrine('O CPF precisa ter 11 números. Você falou ' + digitos.length + '. Fala de novo, número por número.');
+      return true;
+    }
+    document.getElementById('form-cartao-cpf').value = digitos;
+    estado.etapa = 'guiar_numero';
+    falarInstrucaoEtapaCartao('guiar_numero', false);
+    return true;
+  }
+
+  const ehProntoOuOk = t === 'pronto' || t === 'ok' || t === 'ja digitei' || t === 'já digitei' || t.includes('terminei') || t.includes('digitei');
+
+  if(estado.etapa === 'guiar_numero' && ehProntoOuOk){
+    estado.etapa = 'guiar_validade';
+    falarInstrucaoEtapaCartao('guiar_validade', false);
+    return true;
+  }
+
+  if(estado.etapa === 'guiar_validade' && ehProntoOuOk){
+    estado.etapa = 'guiar_cvv';
+    falarInstrucaoEtapaCartao('guiar_cvv', false);
+    return true;
+  }
+
+  if(estado.etapa === 'guiar_cvv' && ehProntoOuOk){
+    estado.etapa = 'enviando';
+    falarVozVitrine('Perfeito. Vou tentar salvar o cartão agora. Espera um instante.');
+    const form = document.getElementById('form-cadastro-cartao');
+    if(form && typeof form.requestSubmit === 'function') form.requestSubmit();
+    else if(form) form.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    // Fica de olho na mensagem de resultado (sucesso ou erro) que aparece
+    // na tela depois do envio, pra ler ela em voz alta pra quem não vê
+    aguardarResultadoCadastroCartaoVoz();
+    return true;
+  }
+
+  if(['guiar_numero', 'guiar_validade', 'guiar_cvv'].includes(estado.etapa)){
+    // Fala qualquer coisa que não seja "pronto" durante essas etapas —
+    // repete a instrução da etapa atual, com calma, em vez de ignorar
+    falarInstrucaoEtapaCartao(estado.etapa, true);
+    return true;
+  }
+
+  return true;
+}
+
+function falarInstrucaoEtapaCartao(etapa, repetindo){
+  const prefixo = repetindo ? 'De novo: ' : '';
+  if(etapa === 'guiar_numero'){
+    falarVozVitrine(prefixo + 'Agora preciso que você digite o número do cartão, 16 números. Esse campo é o primeiro do formulário na tela, logo no topo. Se você usa leitor de tela, deslize o dedo a partir do topo da tela até ouvir "número do cartão", toque duas vezes e digite. Quando terminar, fala "pronto".');
+  } else if(etapa === 'guiar_validade'){
+    falarVozVitrine(prefixo + 'Agora a validade do cartão, mês e ano. Esse campo vem logo depois do número, do lado esquerdo. Fala "pronto" quando terminar.');
+  } else if(etapa === 'guiar_cvv'){
+    falarVozVitrine(prefixo + 'Agora o código de segurança, o CVV, os 3 números que ficam atrás do cartão. Esse campo fica do lado direito, ao lado da validade. Fala "pronto" quando terminar.');
+  }
+}
+
+function aguardarResultadoCadastroCartaoVoz(){
+  const msgEl = document.getElementById('cadastro-cartao-msg');
+  if(!msgEl) return;
+  let tentativas = 0;
+  const checar = setInterval(() => {
+    tentativas++;
+    const texto = (msgEl.textContent || '').trim();
+    if(texto && !texto.includes('salvando')){
+      clearInterval(checar);
+      _estadoCadastroCartaoVoz = null;
+      falarVozVitrine(texto.replace('✓', 'Sucesso!'));
+      return;
+    }
+    if(tentativas > 20){ // ~10 segundos esperando, desiste de ficar escutando
+      clearInterval(checar);
+      _estadoCadastroCartaoVoz = null;
+      falarVozVitrine('Não consegui confirmar se o cartão foi salvo. Confere a tela, ou tenta de novo falando cadastrar cartão.');
+    }
+  }, 500);
+}
+
 let _vozVitrineReconhecimento = null;
 let _vozVitrineAtiva = false;
 let _vozVitrineFalando = false;
@@ -2775,6 +2928,13 @@ async function processarComandoVozVitrine(transcricao){
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
 
+  // Prioridade máxima: se está no meio do cadastro de cartão por voz, essa
+  // fala é sobre isso — a não ser que não pareça nada relacionado
+  if(_estadoCadastroCartaoVoz){
+    const tratou = await processarEtapaCadastroCartaoVoz(transcricao);
+    if(tratou) return;
+  }
+
   // Prioridade máxima: se está no meio do cadastro do PIN de voz, essa
   // fala é sobre isso — a não ser que a função devolva false, dizendo que
   // a fala não parecia nada relacionado a PIN (aí cai pro resto normal)
@@ -2838,6 +2998,11 @@ async function processarComandoVozVitrine(transcricao){
 
   if(textoNormalizado.includes('cadastrar produto') || textoNormalizado.includes('novo produto') || textoNormalizado.includes('adicionar produto')){
     iniciarCadastroProdutoPorVoz();
+    return;
+  }
+
+  if((textoNormalizado.includes('cadastrar') || textoNormalizado.includes('salvar')) && textoNormalizado.includes('cartao')){
+    iniciarCadastroCartaoPorVoz();
     return;
   }
 
