@@ -12,19 +12,14 @@ function toggleFavoritoProduto(id, event){
   else favoritosProdutos.add(id);
   localStorage.setItem('favoritos_produtos', JSON.stringify([...favoritosProdutos]));
   const buscaTrazida = localStorage.getItem('guiazap_busca_vitrine');
-  const comprarAgora = localStorage.getItem('guiazap_comprar_agora') === '1';
   if(buscaTrazida){
     localStorage.removeItem('guiazap_busca_vitrine');
-    localStorage.removeItem('guiazap_comprar_agora');
     produtoFiltroId = null;
     empresaFiltroId = null;
     const campo = document.getElementById('v-search');
     if(campo) campo.value = buscaTrazida;
   }
   renderProdutos();
-  if(buscaTrazida){
-    setTimeout(() => concluirCompraPorVoz(buscaTrazida, comprarAgora), 600);
-  }
 }
 
 function toggleFiltroFavoritosProdutos(){
@@ -2502,39 +2497,6 @@ async function salvarProdutosExtraidosIA(){
   }, 1500);
 }
 
-
-function concluirCompraPorVoz(termo, comprar){
-  const q = normalizarTextoV(termo || '');
-  if(!q) return;
-  const palavras = q.split(/\s+/).filter(w => w.length > 1);
-  const achados = (produtos || []).filter(p => {
-    const nome = normalizarTextoV(p.nome);
-    return palavras.length ? palavras.every(w => nome.includes(w)) : nome.includes(q);
-  });
-  if(!achados.length){
-    if(typeof falarVozVitrine === 'function') falarVozVitrine('Não achei ' + termo + ' na vitrine.');
-    return;
-  }
-  const p0 = achados[0];
-  produtoFiltroId = null;
-  empresaFiltroId = p0.profissionais ? p0.profissionais.id : null;
-  const campo = document.getElementById('v-search');
-  if(campo) campo.value = p0.nome;
-  renderProdutos();
-  const preco = p0.preco ? (' por ' + String(p0.preco).replace('.', ',') + ' reais') : '';
-  const emp = p0.profissionais && p0.profissionais.name ? (', na ' + p0.profissionais.name) : '';
-  if(comprar){
-    if(typeof adicionarAoCarrinho === 'function') adicionarAoCarrinho(p0.id);
-    if(achados.length === 1){
-      if(typeof falarVozVitrine === 'function') falarVozVitrine(p0.nome + preco + emp + '. Coloquei no carrinho. Diga finalizar pra pagar.');
-    } else {
-      if(typeof falarVozVitrine === 'function') falarVozVitrine('Achei ' + achados.length + ' opções. Coloquei ' + p0.nome + preco + emp + '. Se quiser outro, fala o nome da empresa.');
-    }
-  } else if(typeof falarVozVitrine === 'function'){
-    falarVozVitrine('Achei ' + achados.length + ' opções de ' + termo + '. A primeira é ' + p0.nome + preco + emp + '.');
-  }
-}
-
 // ---------- MODO VOZ (MÃOS LIVRES) NA VITRINE ----------
 // Fluxo: usuário toca no botão (isso conta como "gesto do usuário", exigido
 // pelo navegador pra liberar o microfone) -> escuta contínua ativa ->
@@ -2550,7 +2512,6 @@ function concluirCompraPorVoz(termo, comprar){
 
 const MP_PUBLIC_KEY_VITRINE = 'APP_USR-f76cdce7-5905-4f0f-9102-e664d5f6fa1c';
 let _mpCardForm = null;
-let _estadoCartaoVoz = null;
 
 async function pegarSessaoVitrineValida(){
   if(!supabaseClientV) return null;
@@ -2620,12 +2581,9 @@ function abrirCadastroCartaoVoz(){
       }
     }
   });
-  _estadoCartaoVoz = { etapa: 'nome' };
-  falarVozVitrine('Cadastro de cartão. Primeiro fala o nome impresso no cartão.');
 }
 
 function fecharCadastroCartaoVoz(){
-  _estadoCartaoVoz = null;
   document.getElementById('overlay-cadastro-cartao').style.display = 'none';
 }
 
@@ -2642,7 +2600,9 @@ function toggleModoVozVitrine(){
   }
 }
 
-function iniciarModoVozVitrine(){
+let _aguardandoAtivacaoVitrine = false;
+
+function iniciarModoVozVitrine(retomandoAutomaticamente){
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionApi){
     alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
@@ -2657,16 +2617,26 @@ function iniciarModoVozVitrine(){
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
+  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente;
 
   _vozVitrineReconhecimento = new SpeechRecognitionApi();
   _vozVitrineReconhecimento.lang = 'pt-BR';
-  const ehCelularVoz = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  _vozVitrineReconhecimento.continuous = !!ehCelularVoz;
+  _vozVitrineReconhecimento.continuous = true;
   _vozVitrineReconhecimento.interimResults = false;
 
   _vozVitrineReconhecimento.onresult = (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
+
+    if(_aguardandoAtivacaoVitrine){
+      const textoNorm = normalizarTextoV(transcricao);
+      if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
+        _aguardandoAtivacaoVitrine = false;
+        falarVozVitrine('Modo voz ativado.');
+      }
+      return;
+    }
+
     processarComandoVozVitrine(transcricao);
   };
 
@@ -2688,7 +2658,12 @@ function iniciarModoVozVitrine(){
   };
 
   try{ _vozVitrineReconhecimento.start(); } catch(e){}
-  falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+
+  if(_aguardandoAtivacaoVitrine){
+    falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
+  } else {
+    falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
+  }
 }
 
 function pararModoVozVitrine(){
@@ -2743,91 +2718,6 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
-  if(_estadoPinVoz){
-    const tn = normalizarTextoV(transcricao);
-    if(tn.includes('cancelar')){
-      _estadoPinVoz = null;
-      falarVozVitrine('Cadastro de PIN cancelado.');
-      return;
-    }
-    const dig = (typeof extrairDigitosDaFala === 'function') ? extrairDigitosDaFala(transcricao) : String(transcricao).replace(/\D/g,'');
-    if(dig) _estadoPinVoz.pin = (_estadoPinVoz.pin + dig).slice(0, 6);
-    const ehOk = tn === 'ok' || tn === 'okay' || tn === 'confirmar' || tn === 'pronto' || tn.includes('proximo') || tn.includes('próximo');
-    if(ehOk || (_estadoPinVoz.pin.length >= 4 && _estadoPinVoz.etapa === 'confirmar' && ehOk)){
-      if(_estadoPinVoz.pin.length < 4){
-        falarVozVitrine('Ainda faltam números. Fala o PIN de novo.');
-        return;
-      }
-      if(_estadoPinVoz.etapa === 'pedir'){
-        _estadoPinVoz.etapa = 'confirmar';
-        _estadoPinVoz.primeiro = _estadoPinVoz.pin;
-        _estadoPinVoz.pin = '';
-        falarVozVitrine('Ouvi ' + _estadoPinVoz.primeiro.split('').join(' ') + '. Fala de novo pra confirmar, e depois ok.');
-        return;
-      }
-      if(_estadoPinVoz.etapa === 'confirmar'){
-        if(_estadoPinVoz.pin !== _estadoPinVoz.primeiro){
-          _estadoPinVoz = { etapa: 'pedir', pin: '' };
-          falarVozVitrine('Os números não bateram. Vamos de novo. Fala o PIN.');
-          return;
-        }
-        const pinFinal = _estadoPinVoz.primeiro;
-        _estadoPinVoz = null;
-        salvarPinCompletoVitrine(pinFinal);
-        return;
-      }
-    }
-    if(_estadoPinVoz.pin.length >= 4 && _estadoPinVoz.etapa === 'pedir'){
-      falarVozVitrine('Ouvi ' + _estadoPinVoz.pin.split('').join(' ') + '. Fala ok pra confirmar, ou fala os números de novo.');
-      return;
-    }
-    falarVozVitrine('PIN até agora: ' + (_estadoPinVoz.pin ? _estadoPinVoz.pin.split('').join(' ') : 'nenhum número') + '. Continua ditando ou fala ok.');
-    return;
-  }
-  if(_estadoCartaoVoz){
-    const etapa = _estadoCartaoVoz.etapa;
-    const t = (transcricao||'').trim();
-    const tn = normalizarTextoV(t);
-    if(tn.includes('cancelar') || tn.includes('fechar cartao') || tn.includes('fechar cartão')){
-      fecharCadastroCartaoVoz();
-      falarVozVitrine('Cadastro de cartão cancelado.');
-      return;
-    }
-    if(etapa === 'nome'){
-      const nomeEl = document.getElementById('form-cartao-nome');
-      if(nomeEl) nomeEl.value = t;
-      _estadoCartaoVoz.etapa = 'cpf';
-      falarVozVitrine('Nome preenchido. Agora fala o CPF, só os números.');
-      return;
-    }
-    if(etapa === 'cpf'){
-      const dig = t.replace(/\D/g,'');
-      const cpfEl = document.getElementById('form-cartao-cpf');
-      if(cpfEl) cpfEl.value = dig || t;
-      _estadoCartaoVoz.etapa = 'numero';
-      falarVozVitrine('CPF preenchido. O número, a validade e o CVV o Mercado Pago não deixa preencher por voz, por segurança. Toca nesses três campos, preenche, e fala salvar cartão.');
-      return;
-    }
-    if(etapa === 'numero' && (tn.includes('salvar') || tn.includes('pronto') || tn.includes('enviar'))){
-      const form = document.getElementById('form-cadastro-cartao');
-      if(form) form.requestSubmit();
-      falarVozVitrine('Tentando salvar o cartão.');
-      return;
-    }
-  }
-
-  const _tCmd = (transcricao||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  if(/\b(desligar|desativar|parar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd) || _tCmd === 'desligar' || _tCmd === 'parar' || _tCmd === 'sair'){
-    try{ speechSynthesis.cancel(); }catch(e){}
-    setTimeout(pararModoVozVitrine, 400);
-    return;
-  }
-  if(/\b(ligar|ativar)\b/.test(_tCmd) && /\b(voz|modo voz|microfone)\b/.test(_tCmd)){
-    if(typeof falarVozIndex === 'function' && 'processarComandoVozVitrine'==='processarComandoVozIndex') falarVozIndex('Modo voz já está ligado.');
-    if(typeof falarVozVitrine === 'function' && 'processarComandoVozVitrine'==='processarComandoVozVitrine') falarVozVitrine('Modo voz já está ligado.');
-    return;
-  }
-
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
@@ -2906,24 +2796,11 @@ async function processarComandoVozVitrine(transcricao){
     configurarPinVozPorVoz();
     return;
   }
-  if(textoNormalizado.includes('cadastrar cartao') || textoNormalizado.includes('cadastrar cartão') ||
-     textoNormalizado.includes('salvar cartao') || textoNormalizado.includes('salvar cartão') ||
-     textoNormalizado.includes('cartao pra pagar') || textoNormalizado.includes('cartão pra pagar') ||
-     textoNormalizado.includes('cartao para pagar') || textoNormalizado.includes('cartão para pagar') ||
-     textoNormalizado.includes('pagar por voz')){
-    if(typeof abrirCadastroCartaoVoz === 'function'){
-      falarVozVitrine('Abrindo o cadastro de cartão.');
-      abrirCadastroCartaoVoz();
-    } else {
-      falarVozVitrine('Não achei a tela de cartão.');
-    }
-    return;
-  }
   if(textoNormalizado.includes('finalizar') || textoNormalizado.includes('fechar pedido') || textoNormalizado.includes('fechar a conta')){
     dispararFinalizarPorVoz();
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair'){
+  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
     falarVozVitrine('Modo voz desativado.');
     setTimeout(pararModoVozVitrine, 1500);
     return;
@@ -3068,28 +2945,40 @@ async function processarComandoVozVitrine(transcricao){
       .sort((a, b) => b.pts - a.pts);
 
     if(ranqueados.length > 0){
-      const palavrasObrigatorias = palavrasBusca.filter(w => w.length > 2);
-      let escolhidos = ranqueados.filter(x => {
-        const nome = normalizarTextoV(x.p.nome);
-        return palavrasObrigatorias.length === 0 || palavrasObrigatorias.every(w => nome.includes(w));
-      });
-      if(escolhidos.length === 0) escolhidos = [ranqueados[0]];
-      const melhor = escolhidos[0].p;
-
       produtoFiltroId = null;
-      empresaFiltroId = melhor.profissionais ? (melhor.profissionais.id || null) : null;
-      try{ history.replaceState({}, '', empresaFiltroId ? ('vitrine.html?empresa=' + empresaFiltroId) : 'vitrine.html'); } catch(e){}
-      document.getElementById('v-search').value = melhor.nome;
+      empresaFiltroId = null;
+      try{ history.replaceState({}, '', 'vitrine.html'); } catch(e){}
+      const h1 = document.querySelector('.vitrine-header h1');
+      if(h1) h1.textContent = 'GuiaZap Vitrine';
+      document.getElementById('v-search').value = termoLimpo;
       renderProdutos();
 
-      if(querAdicionar || textoNormalizado.includes('comprar') || textoNormalizado.includes('quero')){
-        adicionarAoCarrinho(melhor.id);
-        falarVozVitrine(descreverProdutoVoz(melhor) + '. Coloquei no carrinho. Diga finalizar para pagar, ou o nome de outra empresa se quiser outro.');
+      // Um "vencedor claro" é um produto cujo NOME bate com todas as
+      // palavras faladas (não só a descrição ou categoria) — nesse caso,
+      // adiciona ele direto em vez de ler a lista toda e confundir com
+      // resultados fracos (tipo "Paçoca" quando a pessoa falou "pastel doce")
+      const vencedorClaro = ranqueados.find(x => {
+        const nome = normalizarTextoV(x.p.nome);
+        return palavrasBusca.every(w => nome.includes(w));
+      });
+
+      if(querAdicionar && vencedorClaro){
+        adicionarAoCarrinho(vencedorClaro.p.id);
+        falarVozVitrine(descreverProdutoVoz(vencedorClaro.p) + '. Coloquei no carrinho.');
         return;
       }
 
-      const lista = escolhidos.slice(0, 6).map(x => descreverProdutoVoz(x.p));
-      falarVozVitrine('Encontrei ' + escolhidos.length + ': ' + lista.join('; ') + '. Diga comprar para colocar no carrinho.');
+      const lista = ranqueados.slice(0, 8).map(x => descreverProdutoVoz(x.p));
+      const extra = ranqueados.length - lista.length;
+      let fala = 'Encontrei ' + ranqueados.length + ' opções: ' + lista.join('; ');
+      if(extra > 0) fala += ', e mais ' + extra;
+      if(querAdicionar && ranqueados.length === 1){
+        adicionarAoCarrinho(ranqueados[0].p.id);
+        fala += '. Coloquei no carrinho.';
+      } else if(querAdicionar){
+        fala += '. Tem mais de um parecido. Fala o nome certinho, ou o nome da empresa pra eu escolher.';
+      }
+      falarVozVitrine(fala);
       return;
     }
   }
@@ -3725,10 +3614,16 @@ async function pinLocalConfereVitrine(pin){
   return hash === salvo;
 }
 
-let _estadoPinVoz = null;
+async function configurarPinVozPorVoz(){
+  if(!currentUserV){
+    alert('Entra na conta na página inicial antes de criar o PIN.');
+    return;
+  }
+  const pin = prompt('Escolhe um PIN de 4 a 6 números:');
+  if(!pin || !/^\d{4,6}$/.test(pin)){ alert('PIN precisa ter de 4 a 6 números.'); return; }
 
-async function salvarPinCompletoVitrine(pin){
   await salvarPinLocalVitrine(pin);
+
   const session = await pegarSessaoVitrineValida();
   if(session && session.access_token){
     try{
@@ -3737,22 +3632,15 @@ async function salvarPinCompletoVitrine(pin){
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
         body: JSON.stringify({ pin, access_token: session.access_token })
       });
+      const data = await resp.json().catch(() => ({}));
       if(resp.ok){
-        falarVozVitrine('PIN configurado no servidor e neste aparelho.');
+        alert('PIN configurado no servidor e neste aparelho.');
         return;
       }
+      console.warn('PIN servidor', data);
     } catch(e){ console.warn(e); }
   }
-  falarVozVitrine('PIN salvo neste aparelho.');
-}
-
-function configurarPinVozPorVoz(){
-  if(!currentUserV){
-    falarVozVitrine('Entra na conta na página inicial antes de criar o PIN.');
-    return;
-  }
-  _estadoPinVoz = { etapa: 'pedir', pin: '' };
-  falarVozVitrine('Fala o PIN, de 4 a 6 números, um por um. Depois fala ok.');
+  alert('PIN salvo neste aparelho. Se o servidor recusar a sessão, o pagamento por voz ainda usa este PIN daqui.');
 }
 
 
@@ -3764,5 +3652,5 @@ if(initSupabaseV()){
 
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(iniciarModoVozVitrine, 800);
+  setTimeout(() => iniciarModoVozVitrine(true), 800);
 }
