@@ -35,6 +35,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   _vozPapoReconhecimento.continuous = true;
   _vozPapoReconhecimento.interimResults = false;
   _vozPapoReconhecimento.onresult = (event) => {
+    if(!_vozPapoAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
     const texto = (ultimo[0] && ultimo[0].transcript || '').trim();
@@ -69,6 +70,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
     }
   };
   try{ _vozPapoReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
 
   if(_aguardandoAtivacaoPapo){
     falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
@@ -83,8 +85,12 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
 function pararModoVozPapo(){
   _vozPapoAtiva = false;
   window._vozPapoAtiva = false;
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPapoReconhecimento){
-    try{ _vozPapoReconhecimento.stop(); } catch(e){}
+    _vozPapoReconhecimento.onresult = null;
+    _vozPapoReconhecimento.onend = null;
+    _vozPapoReconhecimento.onerror = null;
+    try{ _vozPapoReconhecimento.abort(); } catch(e){}
     _vozPapoReconhecimento = null;
   }
   if(_vozPapoSynth) _vozPapoSynth.cancel();
@@ -144,6 +150,11 @@ async function processarComandoVozPapo(transcricao){
   if(_vozPapoSynth) try{ _vozPapoSynth.cancel(); } catch(e){}
   _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
+
+  const _ehPararP = t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
+  if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
 
   if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');

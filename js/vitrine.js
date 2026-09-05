@@ -2778,6 +2778,7 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
 
   _criarReconhecimentoVitrine(SpeechRecognitionApi);
   _iniciarVigiaVozVitrine(SpeechRecognitionApi);
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
 
   if(_aguardandoAtivacaoVitrine){
     falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
@@ -2801,6 +2802,11 @@ function _criarReconhecimentoVitrine(SpeechRecognitionApi){
 
   _vozVitrineReconhecimento.onresult = (event) => {
     _vozVitrineUltimoSinalDeVida = Date.now();
+    // Blindagem: em alguns navegadores de computador, o reconhecimento não
+    // para na hora exata do .stop() e pode disparar um resultado "atrasado"
+    // — se o modo já foi desligado nesse meio tempo, ignora completamente
+    if(!_vozVitrineAtiva) return;
+
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-vitrine-transcricao').textContent = '🗣️ "' + transcricao + '"';
 
@@ -2875,8 +2881,16 @@ function _iniciarVigiaVozVitrine(SpeechRecognitionApi){
 function pararModoVozVitrine(){
   _vozVitrineAtiva = false;
   clearInterval(_vozVitrineVigia);
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozVitrineReconhecimento){
-    try{ _vozVitrineReconhecimento.stop(); } catch(e){}
+    // Tira os "ouvidos" antes de parar — assim, mesmo se o navegador
+    // disparar algum evento atrasado depois do stop/abort (comum em
+    // computador), não sobra ninguém escutando pra processar aquilo
+    _vozVitrineReconhecimento.onresult = null;
+    _vozVitrineReconhecimento.onend = null;
+    _vozVitrineReconhecimento.onerror = null;
+    try{ _vozVitrineReconhecimento.abort(); } catch(e){}
+    _vozVitrineReconhecimento = null;
   }
   _vozVitrineSynth.cancel();
   document.getElementById('btn-modo-voz-vitrine').style.background = '#6b46c1';
@@ -2889,6 +2903,7 @@ function pararModoVozVitrine(){
   if(_modoSomenteVozAtivoVitrine){
     _modoSomenteVozAtivoVitrine = false;
     _aguardandoPinParaDestravarVitrine = false;
+    localStorage.removeItem('modo_somente_voz_ativo_vitrine');
     document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'none';
   }
 }
@@ -2927,6 +2942,15 @@ function falarVozVitrine(texto){
 async function processarComandoVozVitrine(transcricao){
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
+
+  // A biometria de voz nunca bloqueia o comando de desligar — travar
+  // justamente a saída de emergência seria pior do que não ter proteção
+  // nenhuma
+  const _textoBiometriaV = normalizarTextoV(transcricao);
+  const _ehPararV = _textoBiometriaV.includes('parar') || _textoBiometriaV.includes('desativar modo voz') || _textoBiometriaV.includes('desligar') || _textoBiometriaV === 'sair' || _textoBiometriaV.includes('cala boca') || _textoBiometriaV.includes('fica quieto') || _textoBiometriaV.includes('fique quieto');
+  if(!_ehPararV && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return; // a função de biometria já avisa em voz alta que não reconheceu
+  }
 
   // Prioridade máxima: se está no meio do cadastro de cartão por voz, essa
   // fala é sobre isso — a não ser que não pareça nada relacionado
@@ -3335,6 +3359,7 @@ let _aguardandoPinParaDestravarVitrine = false;
 
 function ativarModoSomenteVozVitrine(){
   _modoSomenteVozAtivoVitrine = true;
+  localStorage.setItem('modo_somente_voz_ativo_vitrine', '1');
   document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'block';
   falarVozVitrine('Modo somente voz ativado. Agora só comandos de voz funcionam. Pra desativar, fala "desativar modo somente voz" e depois o seu PIN.');
 }
@@ -3375,6 +3400,7 @@ async function processarComandoDesativarSomenteVoz(transcricao){
 
     _modoSomenteVozAtivoVitrine = false;
     _aguardandoPinParaDestravarVitrine = false;
+    localStorage.removeItem('modo_somente_voz_ativo_vitrine');
     document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'none';
     falarVozVitrine('Modo somente voz desativado. Você já pode tocar na tela de novo.');
   } catch(e){
@@ -3999,4 +4025,16 @@ if(initSupabaseV()){
 if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   localStorage.removeItem('retomarModoVozAoCarregar');
   setTimeout(() => iniciarModoVozVitrine(true), 800);
+}
+
+// Se a pessoa tinha ativado o modo somente voz (bloqueia toque) antes de
+// recarregar a página ou fechar o navegador, o bloqueio PRECISA continuar
+// valendo — senão, bastaria recarregar a página pra escapar da trava, o
+// que anularia a própria ideia de segurança dela.
+if(localStorage.getItem('modo_somente_voz_ativo_vitrine') === '1'){
+  _modoSomenteVozAtivoVitrine = true;
+  document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'block';
+  if(!_vozVitrineAtiva){
+    setTimeout(() => iniciarModoVozVitrine(true), 800);
+  }
 }

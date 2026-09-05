@@ -461,6 +461,7 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
   _vozPedidosReconhecimento.interimResults = false;
 
   _vozPedidosReconhecimento.onresult = (event) => {
+    if(!_vozPedidosAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-pedidos-transcricao').textContent = '🗣️ "' + transcricao + '"';
 
@@ -490,6 +491,7 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
   };
 
   try{ _vozPedidosReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
 
   if(_aguardandoAtivacaoPedidos){
     falarVozPedidos('Modo voz em espera. Fala "ativar" pra começar.');
@@ -500,7 +502,14 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
 
 function pararModoVozPedidos(){
   _vozPedidosAtiva = false;
-  if(_vozPedidosReconhecimento){ try{ _vozPedidosReconhecimento.stop(); } catch(e){} }
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
+  if(_vozPedidosReconhecimento){
+    _vozPedidosReconhecimento.onresult = null;
+    _vozPedidosReconhecimento.onend = null;
+    _vozPedidosReconhecimento.onerror = null;
+    try{ _vozPedidosReconhecimento.abort(); } catch(e){}
+    _vozPedidosReconhecimento = null;
+  }
   _vozPedidosSynth.cancel();
   document.getElementById('btn-modo-voz-pedidos').style.background = '#6b46c1';
   document.getElementById('painel-modo-voz-pedidos').style.display = 'none';
@@ -550,6 +559,13 @@ function lerPedidosNovosEmVoz(){
 async function processarComandoVozPedidos(transcricao){
   if(_vozPedidosSynth) try{ _vozPedidosSynth.cancel(); } catch(e){}
   _vozPedidosFalando = false;
+
+  const _textoBiometriaPd = normalizarTextoPedidos(transcricao);
+  const _ehPararPd = _textoBiometriaPd.includes('parar') || _textoBiometriaPd.includes('desativar modo voz') || _textoBiometriaPd.includes('cala boca') || _textoBiometriaPd.includes('fica quieto') || _textoBiometriaPd.includes('fique quieto');
+  if(!_ehPararPd && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
+
   // Prioridade máxima: se estamos esperando o código de confirmação de
   // entrega, essa fala é o código — nada mais é processado
   if(_aguardandoCodigoConfirmacaoVoz){
@@ -730,6 +746,7 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
 }
 </script>
 
+<script src="js/voz-biometria.js"></script>
 <script src="js/voz-acesso-cego.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){

@@ -274,6 +274,7 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
   _vozVagasReconhecimento.interimResults = false;
 
   _vozVagasReconhecimento.onresult = (event) => {
+    if(!_vozVagasAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
     const transcricao = (ultimo[0] && ultimo[0].transcript || '').trim();
@@ -308,6 +309,7 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
   };
 
   try{ _vozVagasReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
   if(_aguardandoAtivacaoVagas){
     falarVozVagas('Modo voz em espera. Fala "ativar" pra publicar uma vaga.');
   } else {
@@ -318,8 +320,12 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
 function pararModoVozVagas(){
   _vozVagasAtiva = false;
   _estadoVozVagas = null;
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozVagasReconhecimento){
-    try{ _vozVagasReconhecimento.stop(); } catch(e){}
+    _vozVagasReconhecimento.onresult = null;
+    _vozVagasReconhecimento.onend = null;
+    _vozVagasReconhecimento.onerror = null;
+    try{ _vozVagasReconhecimento.abort(); } catch(e){}
     _vozVagasReconhecimento = null;
   }
   if(_vozVagasSynth) _vozVagasSynth.cancel();
@@ -372,6 +378,11 @@ async function processarComandoVozVagas(transcricao){
   if(!_estadoVozVagas || _vozVagasFalando) return;
   const t = normalizarVozVagas(transcricao);
   const estado = _estadoVozVagas;
+
+  const _ehPararVg = t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
+  if(!_ehPararVg && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
 
   if(t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozVagas('Modo voz desligado.');

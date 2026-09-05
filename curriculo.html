@@ -583,6 +583,7 @@ function iniciarModoVozCv(retomandoAutomaticamente){
   _vozCvReconhecimento.interimResults = false;
 
   _vozCvReconhecimento.onresult = (event) => {
+    if(!_vozCvAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-cv-transcricao').textContent = '🗣️ "' + transcricao + '"';
 
@@ -611,6 +612,7 @@ function iniciarModoVozCv(retomandoAutomaticamente){
   };
 
   try{ _vozCvReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
 
   if(_aguardandoAtivacaoCv){
     falarVozCv('Modo voz em espera. Fala "ativar" pra preencher o currículo.');
@@ -622,7 +624,14 @@ function iniciarModoVozCv(retomandoAutomaticamente){
 
 function pararModoVozCv(){
   _vozCvAtiva = false;
-  if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.stop(); } catch(e){} }
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
+  if(_vozCvReconhecimento){
+    _vozCvReconhecimento.onresult = null;
+    _vozCvReconhecimento.onend = null;
+    _vozCvReconhecimento.onerror = null;
+    try{ _vozCvReconhecimento.abort(); } catch(e){}
+    _vozCvReconhecimento = null;
+  }
   _vozCvSynth.cancel();
   document.getElementById('btn-modo-voz-cv').style.background = '#6b46c1';
   document.getElementById('painel-modo-voz-cv').style.display = 'none';
@@ -665,6 +674,11 @@ async function processarEtapaPreenchimentoCv(transcricao){
   if(!estado) return;
   const textoNorm = normalizarTextoCv(transcricao);
   const pulou = textoNorm.includes('pular') || textoNorm.includes('pula');
+
+  const _ehPararCv = textoNorm.includes('parar') || textoNorm.includes('desligar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto');
+  if(!_ehPararCv && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
 
   if(textoNorm.includes('parar') || textoNorm.includes('desligar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
     falarVozCv('Modo voz desligado.');
@@ -768,6 +782,7 @@ if(supabaseClientCv) initAuthCv();
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 <script src="js/modo-escuro.js"></script>
 
+<script src="js/voz-biometria.js"></script>
 <script src="js/voz-acesso-cego.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){

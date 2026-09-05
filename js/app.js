@@ -3611,6 +3611,17 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
   setTimeout(() => iniciarModoVozIndex(true), 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
 }
 
+// Igual na Vitrine: se o modo somente voz estava ativo antes de recarregar,
+// o bloqueio precisa continuar valendo — senão bastaria recarregar a
+// página pra escapar da trava
+if(localStorage.getItem('modo_somente_voz_ativo_index') === '1'){
+  _modoSomenteVozAtivoIndex = true;
+  document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
+  if(!_vozIndexAtiva){
+    setTimeout(() => iniciarModoVozIndex(true), 1500);
+  }
+}
+
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
 
 if('serviceWorker' in navigator){
@@ -3762,6 +3773,7 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   _vozIndexReconhecimento.interimResults = false;
 
   _vozIndexReconhecimento.onresult = (event) => {
+    if(!_vozIndexAtiva) return;
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     document.getElementById('voz-index-transcricao').textContent = '🗣️ "' + transcricao + '"';
 
@@ -3795,6 +3807,7 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   };
 
   try{ _vozIndexReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
 
   if(_aguardandoAtivacaoIndex){
     falarVozIndex('Modo voz em espera. Fala "ativar" pra começar.');
@@ -3807,8 +3820,13 @@ let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozIndexReconhecimento){
-    try{ _vozIndexReconhecimento.stop(); } catch(e){}
+    _vozIndexReconhecimento.onresult = null;
+    _vozIndexReconhecimento.onend = null;
+    _vozIndexReconhecimento.onerror = null;
+    try{ _vozIndexReconhecimento.abort(); } catch(e){}
+    _vozIndexReconhecimento = null;
   }
   _vozIndexSynth.cancel();
   document.getElementById('btn-modo-voz-index').style.background = '#6b46c1';
@@ -3820,6 +3838,7 @@ function pararModoVozIndex(){
   if(_modoSomenteVozAtivoIndex){
     _modoSomenteVozAtivoIndex = false;
     _aguardandoPinParaDestravarIndex = false;
+    localStorage.removeItem('modo_somente_voz_ativo_index');
     document.getElementById('overlay-modo-somente-voz-index').style.display = 'none';
   }
 }
@@ -4200,6 +4219,7 @@ function ativarModoSomenteVozIndex(){
     return;
   }
   _modoSomenteVozAtivoIndex = true;
+  localStorage.setItem('modo_somente_voz_ativo_index', '1');
   document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
   falarVozIndex('Modo somente voz ativado. Pra desativar, fala "desativar modo somente voz" e depois o seu PIN.');
 }
@@ -4233,6 +4253,7 @@ async function processarComandoDesativarSomenteVozIndex(transcricao){
 
     _modoSomenteVozAtivoIndex = false;
     _aguardandoPinParaDestravarIndex = false;
+    localStorage.removeItem('modo_somente_voz_ativo_index');
     document.getElementById('overlay-modo-somente-voz-index').style.display = 'none';
     falarVozIndex('Modo somente voz desativado.');
   } catch(e){
@@ -4256,6 +4277,13 @@ function extrairDigitosDaFalaIndex(texto){
 async function processarComandoVozIndex(transcricao){
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
+
+  const _textoBiometriaI = normalizarTexto(transcricao);
+  const _ehPararI = _textoBiometriaI.includes('parar') || _textoBiometriaI.includes('desativar modo voz') || _textoBiometriaI.includes('desligar') || _textoBiometriaI === 'sair' || _textoBiometriaI.includes('cala boca') || _textoBiometriaI.includes('fica quieto') || _textoBiometriaI.includes('fique quieto');
+  if(!_ehPararI && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
+
   // Prioridade máxima: PIN de destravar
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);

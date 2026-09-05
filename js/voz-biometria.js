@@ -1,34 +1,10 @@
-// ============================================================
-// Biometria de voz — versão melhorada
-// ============================================================
-// A versão anterior só media o VOLUME da fala ao longo do tempo, o que é
-// fraco: duas pessoas diferentes falando no mesmo volume ficavam parecidas
-// demais. Essa versão usa duas características de verdade da voz de cada
-// pessoa:
-//
-//   1) TOM (pitch/frequência fundamental) — a "altura" da voz, calculada
-//      por autocorrelação. É uma das características mais pessoais da voz.
-//   2) FORMATO DO ESPECTRO — como a energia da voz se distribui entre
-//      graves/médios/agudos (parecido com o timbre), calculado com uma FFT
-//      simples e agrupado em faixas (parecido com o que sistemas de voz
-//      profissionais chamam de MFCC, só que numa versão bem mais simples).
-//
-// ⚠️ AVISO HONESTO: mesmo melhorado, isso continua sendo uma aproximação
-// caseira, rodando 100% no navegador da pessoa, sem nenhum serviço pago de
-// verdade por trás. É bem mais difícil de confundir do que a versão
-// anterior, mas não tem o mesmo nível de segurança de um sistema de
-// biometria de voz profissional (esses precisam de um serviço especializado
-// pago, tipo Azure Speaker Recognition). Pra qualquer coisa que envolva
-// dinheiro de verdade, o PIN de voz continua sendo a opção mais confiável.
-// ============================================================
-
 const FRASES_CADASTRO_VOZ = [
   'eu autorizo o guiazap',
   'abrir vitrine',
   'adicionar ao carrinho'
 ];
-const LIMIAR_VOZ_DONO = 0.80;
-const LIMIAR_LIVENESS_VARIANCIA_PITCH = 2; // fala real varia de tom; um som "morto" (gravação ruim, ruído) não varia
+const LIMIAR_VOZ_DONO = 0.78;
+const LIMIAR_LIVENESS = 0.012;
 
 let _bioAtiva = false;
 let _bioAmostras = [];
@@ -57,140 +33,35 @@ function _falarBio(t){
   } catch(e){}
 }
 
-// ---------- FFT simples (radix-2), só o necessário pra pegar o espectro ----------
-function _fft(reOriginal, imOriginal){
-  const n = reOriginal.length;
-  if(n <= 1) return [reOriginal, imOriginal];
-  const re = reOriginal.slice();
-  const im = imOriginal.slice();
-
-  // bit-reversal
-  for(let i = 1, j = 0; i < n; i++){
-    let bit = n >> 1;
-    for(; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if(i < j){ [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
-  }
-
-  for(let len = 2; len <= n; len <<= 1){
-    const ang = -2 * Math.PI / len;
-    const wRe = Math.cos(ang), wIm = Math.sin(ang);
-    for(let i = 0; i < n; i += len){
-      let curRe = 1, curIm = 0;
-      for(let k = 0; k < len / 2; k++){
-        const uRe = re[i + k], uIm = im[i + k];
-        const vRe = re[i + k + len/2] * curRe - im[i + k + len/2] * curIm;
-        const vIm = re[i + k + len/2] * curIm + im[i + k + len/2] * curRe;
-        re[i + k] = uRe + vRe; im[i + k] = uIm + vIm;
-        re[i + k + len/2] = uRe - vRe; im[i + k + len/2] = uIm - vIm;
-        const nextRe = curRe * wRe - curIm * wIm;
-        const nextIm = curRe * wIm + curIm * wRe;
-        curRe = nextRe; curIm = nextIm;
-      }
+function _embeddingDeAmostras(samples){
+  if(!samples || !samples.length) return [];
+  const n = 64;
+  const passo = Math.max(1, Math.floor(samples.length / n));
+  const vec = [];
+  for(let i = 0; i < n; i++){
+    let s = 0, c = 0;
+    for(let j = 0; j < passo; j++){
+      const idx = i * passo + j;
+      if(idx < samples.length){ s += Math.abs(samples[idx]); c++; }
     }
+    vec.push(c ? s / c : 0);
   }
-  return [re, im];
+  const max = Math.max.apply(null, vec) || 1;
+  return vec.map(v => v / max);
 }
 
-function _proximaPotenciaDe2(n){
-  let p = 1;
-  while(p < n) p <<= 1;
-  return p;
-}
-
-// Divide o espectro de frequência em 20 faixas (parecido com um "filtro
-// mel" simplificado) e devolve a energia de cada faixa — isso captura o
-// "timbre" da voz, bem diferente de pessoa pra pessoa
-function _espectroPorFaixas(samples, taxaAmostragem, numFaixas){
-  const tam = _proximaPotenciaDe2(samples.length);
-  const re = new Array(tam).fill(0);
-  const im = new Array(tam).fill(0);
-  // janela de Hann, pra suavizar as bordas e melhorar a FFT
-  for(let i = 0; i < samples.length; i++){
-    const janela = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (samples.length - 1));
-    re[i] = samples[i] * janela;
+function _varianciaEnergia(samples){
+  const janelas = 12;
+  const tam = Math.floor(samples.length / janelas);
+  if(tam < 8) return 0;
+  const medias = [];
+  for(let i = 0; i < janelas; i++){
+    let s = 0;
+    for(let j = 0; j < tam; j++) s += Math.abs(samples[i * tam + j] || 0);
+    medias.push(s / tam);
   }
-
-  const [reOut, imOut] = _fft(re, im);
-  const metade = tam / 2;
-  const magnitudes = new Array(metade);
-  for(let i = 0; i < metade; i++){
-    magnitudes[i] = Math.sqrt(reOut[i] * reOut[i] + imOut[i] * imOut[i]);
-  }
-
-  // Foca só na faixa de frequência da voz humana (80Hz a 4000Hz) —
-  // ignora graves e agudos demais que não ajudam a identificar a pessoa
-  const freqMin = 80, freqMax = 4000;
-  const binMin = Math.max(1, Math.floor(freqMin / (taxaAmostragem / tam)));
-  const binMax = Math.min(metade - 1, Math.ceil(freqMax / (taxaAmostragem / tam)));
-
-  const faixas = new Array(numFaixas).fill(0);
-  const largura = (binMax - binMin) / numFaixas;
-  for(let f = 0; f < numFaixas; f++){
-    const inicio = Math.floor(binMin + f * largura);
-    const fim = Math.floor(binMin + (f + 1) * largura);
-    let soma = 0, count = 0;
-    for(let b = inicio; b < fim && b <= binMax; b++){ soma += magnitudes[b]; count++; }
-    faixas[f] = count ? soma / count : 0;
-  }
-
-  const max = Math.max.apply(null, faixas) || 1;
-  return faixas.map(v => v / max);
-}
-
-// Estima o tom (pitch) da voz por autocorrelação — procura o "período" que
-// mais se repete no sinal, dentro da faixa de tom de voz humana
-function _estimarPitch(samples, taxaAmostragem){
-  const minLag = Math.floor(taxaAmostragem / 400); // ~400Hz (voz bem aguda)
-  const maxLag = Math.floor(taxaAmostragem / 70);  // ~70Hz (voz bem grave)
-  let melhorLag = -1, melhorCorrelacao = 0;
-
-  for(let lag = minLag; lag <= maxLag && lag < samples.length; lag++){
-    let soma = 0;
-    for(let i = 0; i < samples.length - lag; i++){
-      soma += samples[i] * samples[i + lag];
-    }
-    if(soma > melhorCorrelacao){ melhorCorrelacao = soma; melhorLag = lag; }
-  }
-
-  if(melhorLag <= 0) return 0;
-  return taxaAmostragem / melhorLag;
-}
-
-// Monta o "perfil" da voz: pitch médio/variação + formato do espectro em
-// várias janelinhas de tempo ao longo da gravação
-function _embeddingDeAmostras(samples, taxaAmostragem){
-  if(!samples || samples.length < 2048) return [];
-  taxaAmostragem = taxaAmostragem || 16000;
-
-  const tamJanela = 2048;
-  const passo = Math.floor(tamJanela / 2);
-  const pitches = [];
-  const espectros = [];
-
-  for(let inicio = 0; inicio + tamJanela <= samples.length; inicio += passo){
-    const janela = samples.slice(inicio, inicio + tamJanela);
-    const pitch = _estimarPitch(janela, taxaAmostragem);
-    if(pitch > 60 && pitch < 500) pitches.push(pitch); // só guarda se parecer tom de voz de verdade
-    espectros.push(_espectroPorFaixas(janela, taxaAmostragem, 16));
-  }
-
-  if(espectros.length === 0) return [];
-
-  // Espectro médio de todas as janelinhas
-  const espectroMedio = new Array(16).fill(0);
-  espectros.forEach(e => { e.forEach((v, i) => { espectroMedio[i] += v / espectros.length; }); });
-
-  const pitchMedio = pitches.length ? pitches.reduce((a,b)=>a+b,0) / pitches.length : 0;
-  const pitchNormalizado = Math.min(1, pitchMedio / 400); // normaliza pra ficar entre 0 e 1, igual o resto
-
-  return [...espectroMedio, pitchNormalizado];
-}
-
-function _varianciaPitch(pitches){
-  if(pitches.length < 2) return 0;
-  const m = pitches.reduce((a,b)=>a+b,0) / pitches.length;
-  return Math.sqrt(pitches.reduce((a,b)=>a+(b-m)*(b-m),0) / pitches.length);
+  const m = medias.reduce((a,b)=>a+b,0) / medias.length;
+  return Math.sqrt(medias.reduce((a,b)=>a+(b-m)*(b-m),0) / medias.length);
 }
 
 function _cosseno(a, b){
@@ -218,7 +89,6 @@ function iniciarMonitorVozDono(stream){
     proc.connect(ctx.destination);
     window._bioCtx = ctx;
     window._bioProc = proc;
-    window._bioTaxaAmostragem = ctx.sampleRate;
   } catch(e){ console.error('monitor voz', e); }
 }
 
@@ -231,38 +101,23 @@ function amostraAtualVoz(){
   return _bioAmostras.slice(-32000);
 }
 
-function vozPareceAoVivo(samples, taxaAmostragem){
-  // Divide em janelinhas e mede a VARIAÇÃO do tom ao longo do tempo — fala
-  // natural sempre varia um pouco o tom, um som "morto" ou ruído contínuo não
-  const tamJanela = 2048;
-  const pitches = [];
-  for(let inicio = 0; inicio + tamJanela <= samples.length; inicio += tamJanela){
-    const p = _estimarPitch(samples.slice(inicio, inicio + tamJanela), taxaAmostragem || 16000);
-    if(p > 60 && p < 500) pitches.push(p);
-  }
-  if(pitches.length < 2) return false;
-  return _varianciaPitch(pitches) >= LIMIAR_LIVENESS_VARIANCIA_PITCH;
+function vozPareceAoVivo(samples){
+  return _varianciaEnergia(samples) >= LIMIAR_LIVENESS;
 }
 
 function autorizarComandoPorVoz(){
   const perfil = perfilVozSalvo();
   if(!perfil || !perfil.embeddings || !perfil.embeddings.length) return true;
   const samples = amostraAtualVoz();
-  const taxaAmostragem = window._bioTaxaAmostragem || 16000;
-
   if(samples.length < 4000){
     _falarBio('Não captei a voz. Fala de novo.');
     return false;
   }
-  if(!vozPareceAoVivo(samples, taxaAmostragem)){
-    _falarBio('Isso parece uma gravação ou ruído. Só aceito fala ao vivo.');
+  if(!vozPareceAoVivo(samples)){
+    _falarBio('Isso parece uma gravação. Só aceito fala ao vivo.');
     return false;
   }
-  const atual = _embeddingDeAmostras(samples, taxaAmostragem);
-  if(!atual.length){
-    _falarBio('Não consegui analisar a voz. Fala de novo, mais perto do microfone.');
-    return false;
-  }
+  const atual = _embeddingDeAmostras(samples);
   let melhor = 0;
   perfil.embeddings.forEach(e => { melhor = Math.max(melhor, _cosseno(e, atual)); });
   if(melhor < LIMIAR_VOZ_DONO){
@@ -285,7 +140,7 @@ function gravarFraseCadastro(segundos){
           const blob = new Blob(chunks, { type: 'audio/webm' });
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
           const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-          resolve(_embeddingDeAmostras(Array.from(decoded.getChannelData(0)), decoded.sampleRate));
+          resolve(_embeddingDeAmostras(Array.from(decoded.getChannelData(0))));
         } catch(e){ reject(e); }
       };
       rec.start();
@@ -306,18 +161,13 @@ async function cadastrarVozPrimeiroAcesso(){
       const frase = FRASES_CADASTRO_VOZ[i];
       _falarBio('Fale agora: ' + frase);
       alert('Frase ' + (i+1) + ' de 3. Fale:\n\n"' + frase + '"');
-      const emb = await gravarFraseCadastro(3);
-      if(emb.length) embeddings.push(emb);
-    }
-    if(embeddings.length === 0){
-      alert('Não consegui captar sua voz direito. Tenta de novo, num lugar mais silencioso.');
-      return false;
+      embeddings.push(await gravarFraseCadastro(3));
     }
     localStorage.setItem(_chavePerfilVoz(), JSON.stringify({
-      embeddings, frases: FRASES_CADASTRO_VOZ, criado_em: new Date().toISOString(), versao: 2
+      embeddings, frases: FRASES_CADASTRO_VOZ, criado_em: new Date().toISOString()
     }));
     _falarBio('Voz cadastrada. A partir de agora só a sua voz executa comando.');
-    alert('Voz cadastrada. Outra pessoa falando não mexe no app.\n\n⚠️ Lembrete: isso é uma camada extra, não substitui o PIN de voz pra pagamentos.');
+    alert('Voz cadastrada. Outra pessoa falando não mexe no app.');
     return true;
   } catch(e){
     alert('Não deu pra cadastrar a voz. Permita o microfone.');
@@ -327,6 +177,47 @@ async function cadastrarVozPrimeiroAcesso(){
   }
 }
 
+// ---------- FUNÇÕES DE CONVENIÊNCIA — pra usar de forma simples em qualquer tela ----------
+
+let _biometriaStreamAtivo = null;
+
+// Chama isso quando QUALQUER modo voz começar a escutar. Se a pessoa já
+// tiver um perfil de voz cadastrado, liga o monitor de biometria por baixo
+// dos panos (rodando junto com o reconhecimento de fala normal). Se não
+// tiver perfil cadastrado ainda, não faz nada — a biometria é opcional,
+// só entra em ação depois que a pessoa cadastra a própria voz.
+async function iniciarBiometriaSeConfigurada(){
+  if(!perfilVozSalvo()) return;
+  if(_biometriaStreamAtivo) return; // já está rodando, não abre de novo
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _biometriaStreamAtivo = stream;
+    iniciarMonitorVozDono(stream);
+  } catch(e){
+    console.warn('não consegui ligar a biometria de voz (comandos vão funcionar normalmente, sem essa camada extra)', e);
+  }
+}
+
+function pararBiometriaSeAtiva(){
+  pararMonitorVozDono();
+  if(_biometriaStreamAtivo){
+    try{ _biometriaStreamAtivo.getTracks().forEach(t => t.stop()); } catch(e){}
+    _biometriaStreamAtivo = null;
+  }
+}
+
+// Chama isso no INÍCIO de qualquer função que processa um comando de voz,
+// ANTES de executar qualquer ação. Se não tiver perfil de voz cadastrado,
+// deixa passar tudo normal (retorna true). Se tiver perfil, só deixa
+// passar se a voz de quem falou bater com o perfil salvo.
+function comandoDeVozAutorizado(){
+  if(!perfilVozSalvo()) return true;
+  return autorizarComandoPorVoz();
+}
+
+window.iniciarBiometriaSeConfigurada = iniciarBiometriaSeConfigurada;
+window.pararBiometriaSeAtiva = pararBiometriaSeAtiva;
+window.comandoDeVozAutorizado = comandoDeVozAutorizado;
 window.cadastrarVozPrimeiroAcesso = cadastrarVozPrimeiroAcesso;
 window.autorizarComandoPorVoz = autorizarComandoPorVoz;
 window.iniciarMonitorVozDono = iniciarMonitorVozDono;

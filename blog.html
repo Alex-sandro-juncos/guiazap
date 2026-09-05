@@ -222,6 +222,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   _vozBlogReconhecimento.interimResults = false;
 
   _vozBlogReconhecimento.onresult = (event) => {
+    if(!_vozBlogAtiva) return;
     const ultimo = event.results[event.results.length - 1];
     if(!ultimo || !ultimo.isFinal) return;
     const transcricao = (ultimo[0] && ultimo[0].transcript || '').trim();
@@ -255,6 +256,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   };
 
   try{ _vozBlogReconhecimento.start(); } catch(e){}
+  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
   if(_aguardandoAtivacaoBlog){
     falarVozBlog('Modo voz em espera. Fala "ativar" pra escrever um artigo.');
   } else {
@@ -265,8 +267,12 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
 function pararModoVozBlog(){
   _vozBlogAtiva = false;
   _estadoRedacaoBlog = null;
+  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozBlogReconhecimento){
-    try{ _vozBlogReconhecimento.stop(); } catch(e){}
+    _vozBlogReconhecimento.onresult = null;
+    _vozBlogReconhecimento.onend = null;
+    _vozBlogReconhecimento.onerror = null;
+    try{ _vozBlogReconhecimento.abort(); } catch(e){}
     _vozBlogReconhecimento = null;
   }
   if(_vozBlogSynth) _vozBlogSynth.cancel();
@@ -319,6 +325,11 @@ async function processarComandoVozBlog(transcricao){
 
   const textoNorm = normalizarTextoBlog(transcricao);
   const estado = _estadoRedacaoBlog;
+
+  const _ehPararBl = textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar';
+  if(!_ehPararBl && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
+    return;
+  }
 
   // Comandos globais
   if(textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar'){
@@ -405,6 +416,7 @@ async function processarComandoVozBlog(transcricao){
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 
+<script src="js/voz-biometria.js"></script>
 <script src="js/voz-acesso-cego.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
