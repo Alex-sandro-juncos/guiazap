@@ -2959,6 +2959,29 @@ async function processarComandoVozVitrine(transcricao){
     if(tratou) return;
   }
 
+  // Prioridade máxima: se acabamos de sugerir empresas pra um pedido com
+  // vários itens e estamos esperando a pessoa escolher qual, essa fala é
+  // sobre isso
+  if(_opcoesEmpresasPedidoMultiplo && _opcoesEmpresasPedidoMultiplo.length > 0){
+    const escolhida = _acharEmpresaEmOpcoesMultiplo(transcricao);
+    if(escolhida){
+      escolhida.itens.forEach(p => adicionarAoCarrinho(p.id));
+      empresaFiltroId = escolhida.id;
+      _opcoesEmpresasPedidoMultiplo = null;
+      const nomesItens = escolhida.itens.map(p => p.nome).join(', ');
+      falarVozVitrine('Beleza, ' + nomesItens + ' na ' + escolhida.nome + ', total de ' + escolhida.total.toFixed(2).replace('.', ',') + ' reais. Quer finalizar o pedido, ou mais alguma coisa?');
+      return;
+    }
+    const t = normalizarTextoV(transcricao);
+    if(t.includes('cancelar') || t.includes('nenhuma')){
+      _opcoesEmpresasPedidoMultiplo = null;
+      falarVozVitrine('Ok, cancelado.');
+      return;
+    }
+    falarVozVitrine('Não entendi qual empresa. Fala o nome dela de novo, ou "cancelar".');
+    return;
+  }
+
   // Prioridade máxima: se está no meio do cadastro do PIN de voz, essa
   // fala é sobre isso — a não ser que a função devolva false, dizendo que
   // a fala não parecia nada relacionado a PIN (aí cai pro resto normal)
@@ -3171,6 +3194,86 @@ async function processarComandoVozVitrine(transcricao){
     return;
   }
 
+  // ---------- PEDIDO COM VÁRIOS ITENS DE UMA VEZ ----------
+  // Funciona pra qualquer tipo de produto (comida, casa, o que for) — se a
+  // pessoa falar "quero X e Y", a gente busca cada pedaço separado em
+  // TODAS as empresas, e vê se alguma empresa tem tudo junto (mais barato
+  // primeiro). Se mais de uma empresa tiver tudo, pergunta qual escolher.
+  function _palavrasDoSegmentoVoz(segmento){
+    return segmento
+      .split(/\s+/)
+      .map(w => w.replace(/[^\wáéíóúâêôãõç]/gi, ''))
+      .filter(w => w.length > 1 && !STOP_VOZ_VITRINE.includes(w));
+  }
+
+  const segmentosPedido = textoNormalizado.split(/\s+e\s+/).map(s => s.trim()).filter(Boolean);
+
+  if(querAdicionar && segmentosPedido.length >= 2 && !nomeEmpresaFalada){
+    const itensComCandidatos = segmentosPedido.map(segmento => {
+      const palavras = _palavrasDoSegmentoVoz(segmento);
+      const porEmpresa = {};
+      if(palavras.length){
+        (produtos || []).forEach(p => {
+          if(!p.profissionais || !p.profissionais.id) return;
+          const nome = normalizarTextoV(p.nome);
+          if(!palavras.every(w => nome.includes(w))) return;
+          const empId = p.profissionais.id;
+          if(!porEmpresa[empId] || (parseFloat(p.preco) || 0) < (parseFloat(porEmpresa[empId].preco) || 0)){
+            porEmpresa[empId] = p;
+          }
+        });
+      }
+      return { segmento, palavras, porEmpresa };
+    });
+
+    const todosComCandidato = itensComCandidatos.every(i => i.palavras.length && Object.keys(i.porEmpresa).length > 0);
+
+    if(todosComCandidato){
+      const empresasMapa = {};
+      itensComCandidatos.forEach(item => {
+        Object.values(item.porEmpresa).forEach(produto => {
+          const empId = produto.profissionais.id;
+          if(!empresasMapa[empId]) empresasMapa[empId] = { id: empId, nome: produto.profissionais.name, itens: [], total: 0 };
+          // Evita contar o mesmo produto duas vezes se dois pedaços da
+          // fala acabarem achando o mesmo item
+          if(!empresasMapa[empId].itens.some(p => p.id === produto.id)){
+            empresasMapa[empId].itens.push(produto);
+            empresasMapa[empId].total += (parseFloat(produto.preco) || 0);
+          }
+        });
+      });
+
+      const empresasCompletas = Object.values(empresasMapa)
+        .filter(info => info.itens.length === itensComCandidatos.length)
+        .sort((a, b) => a.total - b.total);
+
+      if(empresasCompletas.length === 1){
+        const empresa = empresasCompletas[0];
+        empresa.itens.forEach(p => adicionarAoCarrinho(p.id));
+        empresaFiltroId = empresa.id;
+        const nomesItens = empresa.itens.map(p => p.nome).join(', ');
+        falarVozVitrine('Achei tudo na ' + empresa.nome + ': ' + nomesItens + ', total de ' + empresa.total.toFixed(2).replace('.', ',') + ' reais. Quer finalizar o pedido, ou mais alguma coisa?');
+        return;
+      }
+
+      if(empresasCompletas.length > 1){
+        _opcoesEmpresasPedidoMultiplo = empresasCompletas;
+        const falado = empresasCompletas.slice(0, 4).map(e => e.nome + ' por ' + e.total.toFixed(2).replace('.', ',') + ' reais no total').join(', ou ');
+        falarVozVitrine('Achei em mais de uma empresa: ' + falado + '. Qual você quer?');
+        return;
+      }
+
+      // Nenhuma empresa tem TODOS os itens juntos — mostra a que tem mais
+      const parciais = Object.values(empresasMapa).sort((a, b) => b.itens.length - a.itens.length);
+      if(parciais.length > 0){
+        const melhor = parciais[0];
+        const nomesItens = melhor.itens.map(p => p.nome).join(', ');
+        falarVozVitrine('Não achei uma empresa com tudo junto. A que mais tem é a ' + melhor.nome + ', com ' + nomesItens + ', por ' + melhor.total.toFixed(2).replace('.', ',') + ' reais. Quer que eu adicione esses, ou prefere buscar separado?');
+        return;
+      }
+    }
+  }
+
   function pontuarProdutoVoz(p){
     const nome = normalizarTextoV(p.nome);
     const marca = normalizarTextoV(p.marca);
@@ -3353,6 +3456,17 @@ function extrairDigitosDaFala(texto){
 }
 
 // ---------- MODO SOMENTE VOZ (bloqueia toque na tela) ----------
+
+let _opcoesEmpresasPedidoMultiplo = null;
+
+function _acharEmpresaEmOpcoesMultiplo(fala){
+  const n = normalizarTextoV(fala);
+  if(!_opcoesEmpresasPedidoMultiplo) return null;
+  return _opcoesEmpresasPedidoMultiplo.find(e => {
+    const nn = normalizarTextoV(e.nome);
+    return nn.includes(n) || n.includes(nn) || n.split(' ').some(w => w.length > 2 && nn.includes(w));
+  }) || null;
+}
 
 let _modoSomenteVozAtivoVitrine = false;
 let _aguardandoPinParaDestravarVitrine = false;
