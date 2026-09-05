@@ -3819,7 +3819,7 @@ function _criarReconhecimentoIndex(SpeechRecognitionApi){
 
   _vozIndexReconhecimento.onerror = (event) => {
     if(event.error === 'not-allowed'){
-      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      falarVozIndex('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
       pararModoVozIndex();
       return;
     }
@@ -4266,6 +4266,13 @@ function ativarModoSomenteVozIndex(){
 }
 
 async function processarComandoDesativarSomenteVozIndex(transcricao){
+  const tCancelar = normalizarTexto(transcricao);
+  if(tCancelar.includes('cancelar') || tCancelar.includes('deixa pra la') || tCancelar.includes('deixa pra lá')){
+    _aguardandoPinParaDestravarIndex = false;
+    falarVozIndex('Ok, cancelado. O bloqueio continua ativo.');
+    return;
+  }
+
   if(!_aguardandoPinParaDestravarIndex){
     falarVozIndex('Pra desativar o bloqueio, fala seu PIN de voz.');
     _aguardandoPinParaDestravarIndex = true;
@@ -4274,7 +4281,7 @@ async function processarComandoDesativarSomenteVozIndex(transcricao){
 
   const pinFalado = extrairDigitosDaFalaIndex(transcricao);
   if(!pinFalado || pinFalado.length < 4){
-    falarVozIndex('Não entendi o PIN. Fala os números de novo.');
+    falarVozIndex('Não entendi o PIN. Fala os números de novo, ou fala "cancelar".');
     return;
   }
 
@@ -4326,6 +4333,9 @@ async function processarComandoVozIndex(transcricao){
   }
 
   // Prioridade máxima: PIN de destravar
+  if(_aguardandoPinParaDestravarIndex && !_modoSomenteVozAtivoIndex){
+    _aguardandoPinParaDestravarIndex = false;
+  }
   if(_aguardandoPinParaDestravarIndex){
     await processarComandoDesativarSomenteVozIndex(transcricao);
     return;

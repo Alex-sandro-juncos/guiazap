@@ -325,7 +325,7 @@ function _criarReconhecimentoVagas(SpeechRecognitionApi){
 
   _vozVagasReconhecimento.onerror = (event) => {
     if(event.error === 'not-allowed'){
-      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      falarVozVagas('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
       pararModoVozVagas();
       return;
     }

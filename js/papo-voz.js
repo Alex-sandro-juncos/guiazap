@@ -88,7 +88,7 @@ function _criarReconhecimentoPapo(Api){
   };
   _vozPapoReconhecimento.onerror = (event) => {
     if(event.error === 'not-allowed'){
-      alert('Permita o microfone para o modo voz.');
+      falarVozPapo('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
       pararModoVozPapo();
       return;
     }

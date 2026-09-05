@@ -630,7 +630,7 @@ function _criarReconhecimentoCv(SpeechRecognitionApi){
 
   _vozCvReconhecimento.onerror = (event) => {
     if(event.error === 'not-allowed'){
-      alert('Você precisa permitir o uso do microfone.');
+      falarVozCv('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
       pararModoVozCv();
       return;
     }

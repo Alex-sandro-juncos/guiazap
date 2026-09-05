@@ -2841,7 +2841,7 @@ function _criarReconhecimentoVitrine(SpeechRecognitionApi){
 
   _vozVitrineReconhecimento.onerror = (event) => {
     if(event.error === 'not-allowed'){
-      alert('Você precisa permitir o uso do microfone pra usar o modo voz.');
+      falarVozVitrine('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
       pararModoVozVitrine();
       return;
     }
@@ -3063,7 +3063,14 @@ async function processarComandoVozVitrine(transcricao){
   }
 
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
-  // somente voz, essa fala é sobre isso — nada mais é processado
+  // somente voz, essa fala é sobre isso — nada mais é processado.
+  // Proteção extra: se por algum motivo esse "esperando PIN" ficou ligado
+  // sem o bloqueio de tela estar realmente ativo, desliga sozinho aqui —
+  // sem isso, a pessoa ficava presa recebendo "PIN incorreto" pra sempre
+  // por um estado que nem deveria estar ativo.
+  if(_aguardandoPinParaDestravarVitrine && !_modoSomenteVozAtivoVitrine){
+    _aguardandoPinParaDestravarVitrine = false;
+  }
   if(_aguardandoPinParaDestravarVitrine){
     await processarComandoDesativarSomenteVoz(transcricao);
     return;
@@ -3581,6 +3588,13 @@ function ativarModoSomenteVozVitrine(){
 }
 
 async function processarComandoDesativarSomenteVoz(transcricao){
+  const tCancelar = normalizarTextoV(transcricao);
+  if(tCancelar.includes('cancelar') || tCancelar.includes('deixa pra la') || tCancelar.includes('deixa pra lá')){
+    _aguardandoPinParaDestravarVitrine = false;
+    falarVozVitrine('Ok, cancelado. O bloqueio continua ativo.');
+    return;
+  }
+
   if(!_aguardandoPinParaDestravarVitrine){
     falarVozVitrine('Pra desativar o bloqueio, fala seu PIN de voz.');
     _aguardandoPinParaDestravarVitrine = true;
@@ -3589,7 +3603,7 @@ async function processarComandoDesativarSomenteVoz(transcricao){
 
   const pinFalado = extrairDigitosDaFala(transcricao);
   if(!pinFalado || pinFalado.length < 4){
-    falarVozVitrine('Não entendi o PIN. Fala os números de novo.');
+    falarVozVitrine('Não entendi o PIN. Fala os números de novo, ou fala "cancelar".');
     return;
   }
 
