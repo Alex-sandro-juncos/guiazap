@@ -2776,10 +2776,11 @@ async function processarComandoVozVitrine(transcricao){
   _vozVitrineFalando = false;
 
   // Prioridade máxima: se está no meio do cadastro do PIN de voz, essa
-  // fala é sobre isso — nada mais é processado
+  // fala é sobre isso — a não ser que a função devolva false, dizendo que
+  // a fala não parecia nada relacionado a PIN (aí cai pro resto normal)
   if(_estadoConfigurarPinVoz){
-    await processarEtapaConfigurarPinVoz(transcricao);
-    return;
+    const tratouComoPin = await processarEtapaConfigurarPinVoz(transcricao);
+    if(tratouComoPin) return;
   }
 
   // Prioridade máxima: se estamos esperando o PIN pra destravar o modo
@@ -3765,6 +3766,13 @@ async function processarEtapaConfigurarPinVoz(transcricao){
   const estado = _estadoConfigurarPinVoz;
   if(!estado) return false;
 
+  const textoNormCancelar = normalizarTextoV(transcricao);
+  if(textoNormCancelar.includes('cancelar') || textoNormCancelar.includes('sair') || textoNormCancelar.includes('deixa pra la') || textoNormCancelar.includes('deixa pra lá') || textoNormCancelar.includes('esquece')){
+    _estadoConfigurarPinVoz = null;
+    falarVozVitrine('Ok, cancelado.');
+    return true;
+  }
+
   if(estado.etapa === 'confirmar_trocar'){
     const t = normalizarTextoV(transcricao);
     if(t.includes('sim') || t.includes('trocar') || t.includes('quero')){
@@ -3779,7 +3787,16 @@ async function processarEtapaConfigurarPinVoz(transcricao){
 
   const digitos = extrairDigitosDaFalaVitrine(transcricao);
 
-  if(!digitos || digitos.length < 4 || digitos.length > 6){
+  if(!digitos){
+    // Não achou NENHUM número na fala — provavelmente a pessoa mudou de
+    // ideia e falou outro comando (tipo "cadastrar cartão"). Sai do fluxo
+    // de PIN sozinho, sem travar esperando um número que não vai vir, e
+    // deixa o roteador principal de comandos cuidar do que foi dito.
+    _estadoConfigurarPinVoz = null;
+    return false;
+  }
+
+  if(digitos.length < 4 || digitos.length > 6){
     falarVozVitrine('Não entendi um PIN válido. Fala de 4 a 6 números, tipo um dois três quatro.');
     return true;
   }
