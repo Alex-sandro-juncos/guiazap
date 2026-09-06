@@ -372,8 +372,17 @@
            cartão (sem cobrança de verdade) — fica escondido, e o próprio
            SDK do Mercado Pago preenche as opções sozinho assim que o
            número do cartão é digitado -->
-      <select id="form-cartao-parcelas" aria-hidden="true" style="display:none;"></select>
-      <select id="form-cartao-issuer" aria-hidden="true" style="display:none;"></select>
+      <!-- IMPORTANTE: NUNCA usar display:none nesses dois campos — o SDK
+           do Mercado Pago mede o tamanho de TODOS os campos do formulário
+           (até os escondidos) pra montar os campos de número/validade/CVV
+           corretamente. Com display:none (tamanho zero), isso faz os
+           outros campos falharem em silêncio: a caixa aparece na tela mas
+           fica vazia por dentro, sem nenhum erro no console, e ao tocar
+           não abre teclado nenhum. Por isso escondemos com tamanho de
+           1px em vez de display:none — continua invisível pra quem vê a
+           tela, mas o SDK consegue medir e monta tudo certo. -->
+      <select id="form-cartao-parcelas" aria-hidden="true" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; pointer-events:none;"></select>
+      <select id="form-cartao-issuer" aria-hidden="true" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; pointer-events:none;"></select>
       <button type="submit" style="width:100%; padding:12px; border-radius:8px; border:none; background:#0f766e; color:white; font-weight:700; cursor:pointer;">Salvar cartão</button>
       <span id="cadastro-cartao-msg" role="status" aria-live="polite" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
     </form>
