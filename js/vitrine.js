@@ -4240,7 +4240,11 @@ async function processarEtapaConfigurarPinVoz(transcricao){
 
   if(estado.etapa === 'confirmar_trocar'){
     const t = normalizarTextoV(transcricao);
-    if(t.includes('sim') || t.includes('trocar') || t.includes('quero')){
+    // "sem" entra aqui de propósito — o reconhecimento de voz confunde
+    // "sim" com "sem" com bastante frequência (soam parecido), então
+    // trata os dois como confirmação. Só "não"/"nao" de verdade recusa.
+    const pareceNao = t === 'nao' || t === 'não' || t.includes('mantem') || t.includes('deixa como esta') || t.includes('deixa como está');
+    if(!pareceNao){
       estado.etapa = 'pedir_pin';
       falarVozVitrine('Fale de 4 a 6 números pro novo PIN. Por exemplo: um dois três quatro.');
     } else {
