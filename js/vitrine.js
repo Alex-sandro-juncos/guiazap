@@ -2559,7 +2559,8 @@ function abrirCadastroCartaoVoz(){
       securityCode: { id: 'securityCodeContainer', placeholder: 'CVV' },
       cardholderName: { id: 'form-cartao-nome', placeholder: 'Nome no cartão' },
       identificationNumber: { id: 'form-cartao-cpf', placeholder: 'CPF' },
-      installments: { id: 'form-cartao-parcelas' }
+      installments: { id: 'form-cartao-parcelas' },
+      issuer: { id: 'form-cartao-issuer' }
     },
     callbacks: {
       onFormMounted: (error) => { if(error) console.error('erro ao montar formulário de cartão', error); },
