@@ -56,31 +56,43 @@ exports.handler = async function (event) {
     const headers = {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates'
+      'Content-Type': 'application/json'
     };
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ user_id: usuario.id, pin_voz_hash: hash })
-    });
-    if (!resp.ok) {
-      // tenta update se o perfil já existe
-      const up = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
+    // Confere PRIMEIRO se já existe uma linha pra esse usuário, em vez de
+    // torcer pra um INSERT com "merge-duplicates" dar certo sozinho — isso
+    // só funciona direito se a coluna user_id tiver uma restrição de
+    // "único" configurada no banco, o que não dá pra garantir daqui. Assim
+    // fica à prova de erro, não importa como a tabela foi configurada.
+    const existeResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}&select=user_id`, { headers });
+    if (!existeResp.ok) {
+      const txt = await existeResp.text();
+      console.error('erro ao conferir perfil existente', existeResp.status, txt);
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'não deu pra checar o perfil no banco' }) };
+    }
+    const existentes = await existeResp.json();
+
+    let opResp;
+    if (existentes.length > 0) {
+      // Já existe — atualiza só o PIN, sem mexer no resto do perfil
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
         method: 'PATCH',
-        headers: {
-          apikey: SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ pin_voz_hash: hash })
       });
-      if (!up.ok) {
-        const txt = await up.text();
-        console.error('salvar pin', txt);
-        return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'não deu pra salvar o PIN no banco' }) };
-      }
+    } else {
+      // Não existe ainda — cria a linha
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: usuario.id, pin_voz_hash: hash })
+      });
+    }
+
+    if (!opResp.ok) {
+      const txt = await opResp.text();
+      console.error('salvar pin falhou', opResp.status, txt);
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'não deu pra salvar o PIN no banco: ' + txt }) };
     }
 
     return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true }) };

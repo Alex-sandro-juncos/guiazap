@@ -4151,8 +4151,14 @@ async function salvarPinVozConfirmado(pin){
       return;
     }
     console.warn('PIN servidor', resultados);
+    // O salvamento no servidor falhou de verdade — avisa isso claramente
+    // em vez de dizer só "salvo neste aparelho", que parece sucesso mas
+    // esconde que o PIN não vai funcionar em outro lugar nem sobreviver
+    // se o navegador limpar os dados salvos
+    falarVozVitrine('Atenção: não consegui salvar o PIN no servidor agora. Ele está funcionando só neste aparelho por enquanto, mas pode ser perdido. Tenta cadastrar de novo daqui a pouco, ou me avisa se continuar acontecendo.');
+    return;
   }
-  falarVozVitrine('PIN salvo neste aparelho.');
+  falarVozVitrine('PIN salvo neste aparelho. Não consegui confirmar login pra checar a conexão com o servidor — se puder, tenta de novo mais tarde pra garantir que ficou salvo com segurança.');
 }
 
 let _estadoConfigurarPinVoz = null;

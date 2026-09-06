@@ -42,21 +42,52 @@ exports.handler = async function (event) {
     const headers = {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates'
+      'Content-Type': 'application/json'
     };
 
-    await fetch(`${SUPABASE_URL}/rest/v1/pin_login_dispositivos?on_conflict=device_token`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        device_token: deviceToken,
-        user_id: usuario.id,
-        pin_hash: hashPin(pin, usuario.id),
-        tentativas_erradas: 0,
-        bloqueado_ate: null
-      })
-    });
+    // Confere PRIMEIRO se já existe um registro pra esse aparelho, em vez
+    // de confiar em "on_conflict"/"merge-duplicates" funcionar sozinho —
+    // isso só funciona se device_token tiver uma restrição de "único"
+    // configurada no banco, o que não dá pra garantir daqui
+    const existeResp = await fetch(`${SUPABASE_URL}/rest/v1/pin_login_dispositivos?device_token=eq.${encodeURIComponent(deviceToken)}&select=device_token`, { headers });
+    if (!existeResp.ok) {
+      const txt = await existeResp.text();
+      console.error('erro ao conferir dispositivo existente', existeResp.status, txt);
+      return { statusCode: 500, body: JSON.stringify({ error: 'não deu pra checar o dispositivo no banco' }) };
+    }
+    const existentes = await existeResp.json();
+
+    let opResp;
+    if (existentes.length > 0) {
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/pin_login_dispositivos?device_token=eq.${encodeURIComponent(deviceToken)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          user_id: usuario.id,
+          pin_hash: hashPin(pin, usuario.id),
+          tentativas_erradas: 0,
+          bloqueado_ate: null
+        })
+      });
+    } else {
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/pin_login_dispositivos`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          device_token: deviceToken,
+          user_id: usuario.id,
+          pin_hash: hashPin(pin, usuario.id),
+          tentativas_erradas: 0,
+          bloqueado_ate: null
+        })
+      });
+    }
+
+    if (!opResp.ok) {
+      const txt = await opResp.text();
+      console.error('salvar pin de login falhou', opResp.status, txt);
+      return { statusCode: 500, body: JSON.stringify({ error: 'não deu pra salvar o PIN no banco: ' + txt }) };
+    }
 
     return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {

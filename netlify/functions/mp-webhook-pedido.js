@@ -3,12 +3,47 @@
 // (nunca confia só no que chega no aviso), e se estiver aprovado, marca o
 // pedido como pago e avisa a empresa automaticamente no Papo.
 
+const crypto = require('crypto');
+
+// Confirma que o aviso realmente veio do Mercado Pago (mesma validação já
+// usada em mp-webhook.js — evita que alguém fique batendo nesse endereço à
+// toa fingindo ser o Mercado Pago, mesmo que o pagamento em si já seja
+// sempre reconferido direto na API deles antes de qualquer ação)
+function assinaturaValida(headers, dataId){
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  if(!secret){
+    console.warn('MP_WEBHOOK_SECRET não configurado — pulando verificação de assinatura (configure pra maior segurança)');
+    return true; // não trava o funcionamento enquanto a chave não é configurada
+  }
+
+  const xSignature = headers['x-signature'] || headers['X-Signature'];
+  const xRequestId = headers['x-request-id'] || headers['X-Request-Id'];
+  if(!xSignature || !xRequestId) return false;
+
+  let ts, v1;
+  xSignature.split(',').forEach(parte => {
+    const [chave, valor] = parte.split('=');
+    if(chave && chave.trim() === 'ts') ts = (valor || '').trim();
+    if(chave && chave.trim() === 'v1') v1 = (valor || '').trim();
+  });
+  if(!ts || !v1) return false;
+
+  const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+  const hashCalculado = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+  return hashCalculado === v1;
+}
+
 exports.handler = async function (event) {
   try {
     const body = JSON.parse(event.body || '{}');
     const paymentId = body.data && body.data.id;
     if (!paymentId) {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    }
+
+    if (!assinaturaValida(event.headers || {}, paymentId)) {
+      console.warn('assinatura inválida no webhook de pedido, ignorando');
+      return { statusCode: 200, body: JSON.stringify({ ok: true, motivo: 'assinatura inválida' }) };
     }
 
     const { profissionalId } = event.queryStringParameters || {};
