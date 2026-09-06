@@ -332,8 +332,21 @@ let _biometriaTimeoutInicio = null;
 // desligado (false) pra testar. Quando quiser reativar, é só trocar pra true.
 const BIOMETRIA_DE_VOZ_ATIVA = true;
 
+// A biometria estava dando falso positivo especificamente no computador
+// (rejeitando a própria voz do dono) — provavelmente por causa de
+// diferenças no microfone/processamento de áudio de notebooks/PCs.
+// Por enquanto, ativa só no celular, onde está funcionando bem, até
+// conseguirmos calibrar melhor pra computador também.
+function _pareceComputador(){
+  // Sem toque na tela + tela grande = bem provável que seja PC/notebook
+  const semToque = !('ontouchstart' in window) && navigator.maxTouchPoints === 0;
+  const telaGrande = window.innerWidth > 900;
+  return semToque && telaGrande;
+}
+
 function iniciarBiometriaSeConfigurada(){
   if(!BIOMETRIA_DE_VOZ_ATIVA) return;
+  if(_pareceComputador()) return; // pula em PC/notebook por enquanto (ver comentário acima)
   if(!perfilVozSalvo()) return;
   clearTimeout(_biometriaTimeoutInicio);
   _biometriaTimeoutInicio = setTimeout(async () => {
@@ -363,6 +376,7 @@ function pararBiometriaSeAtiva(){
 // passar se a voz de quem falou bater com o perfil salvo.
 function comandoDeVozAutorizado(){
   if(!BIOMETRIA_DE_VOZ_ATIVA) return true;
+  if(_pareceComputador()) return true; // pula em PC/notebook por enquanto
   if(!perfilVozSalvo()) return true;
   return autorizarComandoPorVoz();
 }
