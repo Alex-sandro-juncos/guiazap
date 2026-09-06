@@ -2692,6 +2692,11 @@ async function processarEtapaCadastroCartaoVoz(transcricao){
 
   if(estado.etapa === 'cpf'){
     const digitosFalados = extrairNumerosDaFalaCartao(transcricao);
+    // 🔧 log temporário de diagnóstico — mostra exatamente o que o
+    // reconhecimento de voz captou (transcricao) e quantos dígitos a
+    // função conseguiu tirar disso, pra ver se o problema é o
+    // reconhecimento entendendo errado, ou a extração de números
+    console.warn('CPF diagnóstico — texto bruto recebido:', JSON.stringify(transcricao), '| dígitos extraídos:', JSON.stringify(digitosFalados), '| quantidade:', digitosFalados.length);
 
     if(!digitosFalados || digitosFalados.length < 11){
       falarVozVitrine('Não peguei os 11 números direito. Fala o CPF completo de novo, os números seguidos, sem parar no meio.');
