@@ -2558,7 +2558,8 @@ function abrirCadastroCartaoVoz(){
       expirationDate: { id: 'expirationDateContainer', placeholder: 'MM/AA' },
       securityCode: { id: 'securityCodeContainer', placeholder: 'CVV' },
       cardholderName: { id: 'form-cartao-nome', placeholder: 'Nome no cartão' },
-      identificationNumber: { id: 'form-cartao-cpf', placeholder: 'CPF' }
+      identificationNumber: { id: 'form-cartao-cpf', placeholder: 'CPF' },
+      installments: { id: 'form-cartao-parcelas' }
     },
     callbacks: {
       onFormMounted: (error) => { if(error) console.error('erro ao montar formulário de cartão', error); },
@@ -2639,7 +2640,7 @@ function extrairNumerosDaFalaCartao(texto){
   // Remove vírgulas, pontos e outras pontuações que o reconhecimento de
   // voz costuma inserir nas pausas entre os números (ex: "zero, cinco,
   // três" vira "zero cinco três" antes de separar em palavras)
-  const semPontuacao = normalizado.replace(/[.,;!?]/g, ' ');
+  const semPontuacao = normalizado.replace(/[.,;!?\-]/g, ' ');
   const palavras = semPontuacao.split(/\s+/);
   let digitos = '';
   palavras.forEach(p => {
@@ -3614,7 +3615,7 @@ let _aguardandoPinVozParaFinalizar = null; // não usada mais — mantida só pr
 // o reconhecimento de voz às vezes escreve os números por extenso
 function extrairDigitosDaFala(texto){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
-  const normalizado = normalizarTextoV(texto).replace(/[.,;!?]/g, ' ');
+  const normalizado = normalizarTextoV(texto).replace(/[.,;!?\-]/g, ' ');
   const palavras = normalizado.split(/\s+/);
   let digitos = '';
   palavras.forEach(palavra => {
@@ -4175,7 +4176,7 @@ async function pinLocalConfereVitrine(pin){
 
 function extrairDigitosDaFalaVitrine(texto){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
-  const normalizado = normalizarTextoV(texto).replace(/[.,;!?]/g, ' ');
+  const normalizado = normalizarTextoV(texto).replace(/[.,;!?\-]/g, ' ');
   const palavras = normalizado.split(/\s+/);
   let digitos = '';
   palavras.forEach(palavra => {
