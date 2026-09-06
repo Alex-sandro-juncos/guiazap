@@ -2636,7 +2636,11 @@ function iniciarCadastroCartaoPorVoz(){
 function extrairNumerosDaFalaCartao(texto){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
   const normalizado = normalizarTextoV(texto);
-  const palavras = normalizado.split(/\s+/);
+  // Remove vírgulas, pontos e outras pontuações que o reconhecimento de
+  // voz costuma inserir nas pausas entre os números (ex: "zero, cinco,
+  // três" vira "zero cinco três" antes de separar em palavras)
+  const semPontuacao = normalizado.replace(/[.,;!?]/g, ' ');
+  const palavras = semPontuacao.split(/\s+/);
   let digitos = '';
   palavras.forEach(p => {
     if(/^\d+$/.test(p)) digitos += p;
@@ -3605,7 +3609,7 @@ let _aguardandoPinVozParaFinalizar = null; // não usada mais — mantida só pr
 // o reconhecimento de voz às vezes escreve os números por extenso
 function extrairDigitosDaFala(texto){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
-  const normalizado = normalizarTextoV(texto);
+  const normalizado = normalizarTextoV(texto).replace(/[.,;!?]/g, ' ');
   const palavras = normalizado.split(/\s+/);
   let digitos = '';
   palavras.forEach(palavra => {
@@ -4166,7 +4170,7 @@ async function pinLocalConfereVitrine(pin){
 
 function extrairDigitosDaFalaVitrine(texto){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
-  const normalizado = normalizarTextoV(texto);
+  const normalizado = normalizarTextoV(texto).replace(/[.,;!?]/g, ' ');
   const palavras = normalizado.split(/\s+/);
   let digitos = '';
   palavras.forEach(palavra => {

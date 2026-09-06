@@ -523,7 +523,7 @@ async function processarComandoVozPapo(transcricao){
 // atrapalhar respostas de texto livre como "quero pagar com pix").
 function converterEscolhaFaladaEmNumeros(transcricao){
   const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9', dez:'10' };
-  const t = normalizarVozPapo(transcricao);
+  const t = normalizarVozPapo(transcricao).replace(/[.,;!?]/g, ' ');
 
   // Remove palavras de "enfeite" pra sobrar só os números — se sobrar
   // qualquer outra palavra que não seja número, não é uma escolha simples
