@@ -2668,19 +2668,51 @@ async function processarEtapaCadastroCartaoVoz(transcricao){
       falarVozVitrine('Não entendi o nome. Fala de novo, o nome completo impresso no cartão.');
       return true;
     }
-    document.getElementById('form-cartao-nome').value = transcricao.trim();
+    estado.nomeCandidato = transcricao.trim();
+    estado.etapa = 'confirmar_nome';
+    falarVozVitrine('Entendi: ' + estado.nomeCandidato + '. Tá certo, ou quer corrigir? Fala "certo" ou "corrigir".');
+    return true;
+  }
+
+  if(estado.etapa === 'confirmar_nome'){
+    if(t.includes('corrig') || t === 'nao' || t === 'não' || t.includes('errado') || t.includes('de novo')){
+      estado.etapa = 'nome';
+      falarVozVitrine('Sem problema. Fala de novo o nome completo impresso no cartão.');
+      return true;
+    }
+    document.getElementById('form-cartao-nome').value = estado.nomeCandidato;
     estado.etapa = 'cpf';
-    falarVozVitrine('Nome guardado: ' + transcricao.trim() + '. Agora fala o CPF do titular, número por número.');
+    estado.cpfAcumulado = '';
+    falarVozVitrine('Nome guardado: ' + estado.nomeCandidato + '. Agora fala o CPF do titular, número por número. Pode ir aos pouquinhos, com pausas, que eu vou juntando.');
     return true;
   }
 
   if(estado.etapa === 'cpf'){
-    const digitos = extrairNumerosDaFalaCartao(transcricao);
-    if(digitos.length !== 11){
-      falarVozVitrine('O CPF precisa ter 11 números. Você falou ' + digitos.length + '. Fala de novo, número por número.');
+    const t2 = normalizarTextoV(transcricao);
+    if(t2.includes('cancelar') || t2.includes('recomecar') || t2.includes('recomeçar') || t2.includes('de novo do zero')){
+      estado.cpfAcumulado = '';
+      falarVozVitrine('Ok, vamos recomeçar o CPF do zero. Fala os números.');
       return true;
     }
-    document.getElementById('form-cartao-cpf').value = digitos;
+
+    const digitosFalados = extrairNumerosDaFalaCartao(transcricao);
+    estado.cpfAcumulado = (estado.cpfAcumulado || '') + digitosFalados;
+
+    if(estado.cpfAcumulado.length < 11){
+      // Ainda não chegou nos 11 — não avisa "errado", só confirma o que já
+      // tem e pede o resto, já que a pessoa provavelmente vai continuar
+      // falando aos poucos, um número de cada vez ou em pedacinhos
+      falarVozVitrine('Já tenho ' + estado.cpfAcumulado.length + ' números. Continua falando o resto do CPF.');
+      return true;
+    }
+
+    if(estado.cpfAcumulado.length > 11){
+      // Falou demais — corta só os primeiros 11 e avisa, em vez de travar
+      // pedindo pra recomeçar tudo de novo
+      estado.cpfAcumulado = estado.cpfAcumulado.slice(0, 11);
+    }
+
+    document.getElementById('form-cartao-cpf').value = estado.cpfAcumulado;
     estado.etapa = 'guiar_numero';
     falarInstrucaoEtapaCartao('guiar_numero', false);
     return true;
