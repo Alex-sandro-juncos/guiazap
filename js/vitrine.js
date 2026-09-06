@@ -2539,8 +2539,17 @@ function abrirCadastroCartaoVoz(){
     _mpCardForm = null;
   }
 
-  const mp = new MercadoPago(MP_PUBLIC_KEY_VITRINE);
-  _mpCardForm = mp.cardForm({
+  let mp;
+  try{
+    mp = new MercadoPago(MP_PUBLIC_KEY_VITRINE);
+  } catch(e){
+    console.error('erro ao inicializar o SDK do Mercado Pago', e);
+    document.getElementById('cadastro-cartao-msg').textContent = 'Não consegui iniciar o Mercado Pago. Atualiza a página e tenta de novo.';
+    return;
+  }
+
+  try{
+    _mpCardForm = mp.cardForm({
     amount: '1.00',
     iframe: true,
     form: {
@@ -2581,6 +2590,10 @@ function abrirCadastroCartaoVoz(){
       }
     }
   });
+  } catch(e){
+    console.error('erro ao montar o formulário de cartão do Mercado Pago', e);
+    document.getElementById('cadastro-cartao-msg').textContent = 'Não consegui abrir o formulário de cartão. Atualiza a página e tenta de novo.';
+  }
 }
 
 function fecharCadastroCartaoVoz(){
