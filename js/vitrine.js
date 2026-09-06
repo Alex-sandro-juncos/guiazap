@@ -2682,46 +2682,32 @@ async function processarEtapaCadastroCartaoVoz(transcricao){
     }
     document.getElementById('form-cartao-nome').value = estado.nomeCandidato;
     estado.etapa = 'cpf';
-    estado.cpfDigitos = [];
-    falarVozVitrine('Nome guardado: ' + estado.nomeCandidato + '. Agora vamos com o CPF, um número de cada vez. Fala o primeiro número.');
+    falarVozVitrine('Nome guardado: ' + estado.nomeCandidato + '. Agora fala o CPF completo, os 11 números seguidos, sem parar no meio. Por exemplo: zero um dois três quatro cinco seis sete oito nove zero.');
     return true;
   }
 
   if(estado.etapa === 'cpf'){
-    if(t.includes('cancelar') || t.includes('recomecar') || t.includes('recomeçar') || t.includes('de novo do zero')){
-      estado.cpfDigitos = [];
-      falarVozVitrine('Ok, vamos recomeçar o CPF do zero. Fala o primeiro número.');
-      return true;
-    }
-    if(t.includes('apagar') || t.includes('errei') || t.includes('voltar um')){
-      estado.cpfDigitos.pop();
-      falarVozVitrine('Tirei o último. Agora tenho ' + estado.cpfDigitos.length + ' números. Fala o número ' + (estado.cpfDigitos.length + 1) + '.');
-      return true;
-    }
-
     const digitosFalados = extrairNumerosDaFalaCartao(transcricao);
 
-    if(!digitosFalados){
-      falarVozVitrine('Não entendi um número aí. Fala só o número ' + (estado.cpfDigitos.length + 1) + ' do CPF.');
+    if(!digitosFalados || digitosFalados.length < 11){
+      falarVozVitrine('Não peguei os 11 números direito. Fala o CPF completo de novo, os números seguidos, sem parar no meio.');
       return true;
     }
 
-    // Normalmente a pessoa vai falar UM número de cada vez, mas se por
-    // acaso vier mais de um dígito numa fala só (também funciona), aceita
-    // igual — só não deixa passar de 11 no total
-    for(const d of digitosFalados.split('')){
-      if(estado.cpfDigitos.length < 11) estado.cpfDigitos.push(d);
-    }
+    estado.cpfCandidato = digitosFalados.slice(0, 11);
+    estado.etapa = 'confirmar_cpf';
+    falarVozVitrine('Entendi: ' + estado.cpfCandidato.split('').join(', ') + '. Tá certo, ou quer corrigir?');
+    return true;
+  }
 
-    if(estado.cpfDigitos.length < 11){
-      falarVozVitrine('Número ' + estado.cpfDigitos.length + ': ' + estado.cpfDigitos[estado.cpfDigitos.length - 1] + '. Fala o próximo.');
+  if(estado.etapa === 'confirmar_cpf'){
+    if(t.includes('corrig') || t === 'nao' || t === 'não' || t.includes('errado') || t.includes('de novo')){
+      estado.etapa = 'cpf';
+      falarVozVitrine('Sem problema. Fala o CPF completo de novo, os 11 números seguidos.');
       return true;
     }
-
-    const cpfCompleto = estado.cpfDigitos.join('');
-    document.getElementById('form-cartao-cpf').value = cpfCompleto;
+    document.getElementById('form-cartao-cpf').value = estado.cpfCandidato;
     estado.etapa = 'guiar_numero';
-    falarVozVitrine('CPF completo: ' + cpfCompleto.split('').join(', ') + '. ');
     falarInstrucaoEtapaCartao('guiar_numero', false);
     return true;
   }
