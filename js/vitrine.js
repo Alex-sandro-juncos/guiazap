@@ -2603,6 +2603,8 @@ function iniciarCadastroCartaoPorVoz(){
     return;
   }
 
+  limparEstadosConversaVoz();
+
   // Se o modo voz não estiver ativo ainda, liga ele — sem microfone
   // ouvindo, a pessoa não consegue responder as perguntas
   const jaEstavaAtivo = _vozVitrineAtiva;
@@ -2940,6 +2942,18 @@ function falarVozVitrine(texto){
 }
 
 async function processarComandoVozVitrine(transcricao){
+  // Blindagem geral: se qualquer erro inesperado acontecer em qualquer
+  // ponto do processamento do comando, avisa em voz em vez de ficar mudo
+  // silenciosamente (um erro sem tratamento antes travava sem nenhum aviso)
+  try{
+    await _processarComandoVozVitrineInterno(transcricao);
+  } catch(e){
+    console.error('erro inesperado ao processar comando de voz da Vitrine', e);
+    falarVozVitrine('Desculpa, deu um erro aqui. Pode repetir o que você falou?');
+  }
+}
+
+async function _processarComandoVozVitrineInterno(transcricao){
   if(_vozVitrineSynth) try{ _vozVitrineSynth.cancel(); } catch(e){}
   _vozVitrineFalando = false;
 
@@ -3568,6 +3582,18 @@ let _opcoesEmpresasPedidoMultiplo = null;
 let _ultimaBuscaVozVitrineComOpcoes = null;
 let _ultimoVencedorClaroVozVitrine = null;
 
+// Só pode existir UM fluxo de conversa "pendente" por vez (configurar PIN,
+// cadastrar cartão, escolher entre opções de busca, etc) — se mais de um
+// ficar ativo ao mesmo tempo (por exemplo, uma busca antiga esquecida),
+// uma fala como "sim" pode ser interceptada pelo fluxo ERRADO, causando
+// respostas estranhas ou travamentos silenciosos. Chama isso sempre que
+// for iniciar um novo fluxo, pra garantir que só ele fique esperando resposta.
+function limparEstadosConversaVoz(){
+  _ultimoVencedorClaroVozVitrine = null;
+  _ultimaBuscaVozVitrineComOpcoes = null;
+  _opcoesEmpresasPedidoMultiplo = null;
+}
+
 function _acharEmpresaEmOpcoesMultiplo(fala){
   const n = normalizarTextoV(fala);
   if(!_opcoesEmpresasPedidoMultiplo) return null;
@@ -4168,6 +4194,8 @@ async function configurarPinVozPorVoz(){
     alert('Entra na conta na página inicial antes de criar o PIN.');
     return;
   }
+
+  limparEstadosConversaVoz();
 
   // Se o modo voz não estiver ativo ainda, liga ele — sem microfone
   // ouvindo, não tem como a pessoa FALAR o PIN
