@@ -351,7 +351,7 @@
       <button type="button" onclick="fecharCadastroCartaoVoz()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
     </div>
     <p style="font-size:0.8rem; color:#666; margin-bottom:14px;">Esse cartão fica salvo com segurança direto no Mercado Pago — o GuiaZap nunca vê o número completo. Depois de cadastrado, você paga pelos próximos pedidos só falando o PIN de voz e o CVV.</p>
-    <form id="form-cadastro-cartao">
+    <form id="form-cadastro-cartao" onsubmit="return false;">
       <label for="cardNumberContainer" style="display:block; font-size:0.72rem; color:#888; margin-bottom:2px;">Número do cartão</label>
       <div id="cardNumberContainer" role="group" aria-label="Campo do número do cartão, 16 dígitos" style="border:1px solid #ddd; border-radius:8px; padding:4px 10px; margin-bottom:8px; min-height:48px; background:#fff;"></div>
       <div style="display:flex; gap:8px; margin-bottom:8px;">
