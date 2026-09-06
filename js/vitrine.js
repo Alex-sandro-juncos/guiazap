@@ -2682,38 +2682,46 @@ async function processarEtapaCadastroCartaoVoz(transcricao){
     }
     document.getElementById('form-cartao-nome').value = estado.nomeCandidato;
     estado.etapa = 'cpf';
-    estado.cpfAcumulado = '';
-    falarVozVitrine('Nome guardado: ' + estado.nomeCandidato + '. Agora fala o CPF do titular, número por número. Pode ir aos pouquinhos, com pausas, que eu vou juntando.');
+    estado.cpfDigitos = [];
+    falarVozVitrine('Nome guardado: ' + estado.nomeCandidato + '. Agora vamos com o CPF, um número de cada vez. Fala o primeiro número.');
     return true;
   }
 
   if(estado.etapa === 'cpf'){
-    const t2 = normalizarTextoV(transcricao);
-    if(t2.includes('cancelar') || t2.includes('recomecar') || t2.includes('recomeçar') || t2.includes('de novo do zero')){
-      estado.cpfAcumulado = '';
-      falarVozVitrine('Ok, vamos recomeçar o CPF do zero. Fala os números.');
+    if(t.includes('cancelar') || t.includes('recomecar') || t.includes('recomeçar') || t.includes('de novo do zero')){
+      estado.cpfDigitos = [];
+      falarVozVitrine('Ok, vamos recomeçar o CPF do zero. Fala o primeiro número.');
+      return true;
+    }
+    if(t.includes('apagar') || t.includes('errei') || t.includes('voltar um')){
+      estado.cpfDigitos.pop();
+      falarVozVitrine('Tirei o último. Agora tenho ' + estado.cpfDigitos.length + ' números. Fala o número ' + (estado.cpfDigitos.length + 1) + '.');
       return true;
     }
 
     const digitosFalados = extrairNumerosDaFalaCartao(transcricao);
-    estado.cpfAcumulado = (estado.cpfAcumulado || '') + digitosFalados;
 
-    if(estado.cpfAcumulado.length < 11){
-      // Ainda não chegou nos 11 — não avisa "errado", só confirma o que já
-      // tem e pede o resto, já que a pessoa provavelmente vai continuar
-      // falando aos poucos, um número de cada vez ou em pedacinhos
-      falarVozVitrine('Já tenho ' + estado.cpfAcumulado.length + ' números. Continua falando o resto do CPF.');
+    if(!digitosFalados){
+      falarVozVitrine('Não entendi um número aí. Fala só o número ' + (estado.cpfDigitos.length + 1) + ' do CPF.');
       return true;
     }
 
-    if(estado.cpfAcumulado.length > 11){
-      // Falou demais — corta só os primeiros 11 e avisa, em vez de travar
-      // pedindo pra recomeçar tudo de novo
-      estado.cpfAcumulado = estado.cpfAcumulado.slice(0, 11);
+    // Normalmente a pessoa vai falar UM número de cada vez, mas se por
+    // acaso vier mais de um dígito numa fala só (também funciona), aceita
+    // igual — só não deixa passar de 11 no total
+    for(const d of digitosFalados.split('')){
+      if(estado.cpfDigitos.length < 11) estado.cpfDigitos.push(d);
     }
 
-    document.getElementById('form-cartao-cpf').value = estado.cpfAcumulado;
+    if(estado.cpfDigitos.length < 11){
+      falarVozVitrine('Número ' + estado.cpfDigitos.length + ': ' + estado.cpfDigitos[estado.cpfDigitos.length - 1] + '. Fala o próximo.');
+      return true;
+    }
+
+    const cpfCompleto = estado.cpfDigitos.join('');
+    document.getElementById('form-cartao-cpf').value = cpfCompleto;
     estado.etapa = 'guiar_numero';
+    falarVozVitrine('CPF completo: ' + cpfCompleto.split('').join(', ') + '. ');
     falarInstrucaoEtapaCartao('guiar_numero', false);
     return true;
   }
