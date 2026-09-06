@@ -4176,7 +4176,16 @@ async function salvarPinVozConfirmado(pin){
         : 'PIN de voz configurado. O PIN de login rápido não deu certo agora, mas o de voz já funciona.');
       return;
     }
-    console.warn('PIN servidor', resultados);
+
+    // Lê o TEXTO real do erro que veio do servidor, não só o objeto
+    // Response cru (que sozinho não mostra a mensagem no console)
+    let textoErroVoz = 'motivo desconhecido';
+    if(resultados[0].status === 'fulfilled'){
+      try{ textoErroVoz = await resultados[0].value.clone().text(); } catch(e){}
+    } else {
+      textoErroVoz = String(resultados[0].reason);
+    }
+    console.warn('PIN servidor — erro de definir-pin-voz:', textoErroVoz);
     // O salvamento no servidor falhou de verdade — avisa isso claramente
     // em vez de dizer só "salvo neste aparelho", que parece sucesso mas
     // esconde que o PIN não vai funcionar em outro lugar nem sobreviver
