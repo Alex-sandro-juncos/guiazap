@@ -2741,8 +2741,15 @@ async function processarEtapaCadastroCartaoVoz(transcricao){
     estado.etapa = 'enviando';
     falarVozVitrine('Perfeito. Vou tentar salvar o cartão agora. Espera um instante.');
     const form = document.getElementById('form-cadastro-cartao');
-    if(form && typeof form.requestSubmit === 'function') form.requestSubmit();
-    else if(form) form.dispatchEvent(new Event('submit', { cancelable: true }));
+    // IMPORTANTE: usa dispatchEvent direto, NUNCA requestSubmit() aqui —
+    // requestSubmit() roda a validação nativa do HTML5 antes de disparar o
+    // evento, e os campos escondidos que o Mercado Pago exige (parcelas,
+    // banco emissor) às vezes ainda não têm opção selecionada nesse ponto
+    // do fluxo por voz. Como eles ficam com display:none, a validação
+    // bloqueia o envio SEM avisar nada na tela — trava silenciosa. O
+    // dispatchEvent pula essa validação (o onSubmit do Mercado Pago já
+    // faz preventDefault, então é seguro).
+    if(form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
     // Fica de olho na mensagem de resultado (sucesso ou erro) que aparece
     // na tela depois do envio, pra ler ela em voz alta pra quem não vê
