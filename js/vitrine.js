@@ -2629,7 +2629,7 @@ function iniciarCadastroCartaoPorVoz(){
   _estadoCadastroCartaoVoz = { etapa: 'nome' };
 
   setTimeout(() => {
-    falarVozVitrine('Vamos cadastrar seu cartão. Primeiro, o nome e o CPF eu preencho sozinho, falando com você. Depois eu te guio pra digitar o número, a validade e o código de segurança, que são campos protegidos e precisam ser digitados na tela, com a ajuda do leitor de tela do seu celular. Qual o nome impresso no cartão?');
+    falarVozVitrine('Vamos cadastrar seu cartão. Primeiro, o nome e o CPF eu preencho sozinho, falando com você. Depois eu te guio pra digitar o número, a validade e o código de segurança. Esses três campos são protegidos por lei, direto pelo Mercado Pago, e nem eu consigo preencher por voz — mas você não precisa de ajuda de ninguém pra isso. Se seu celular tiver o leitor de tela ativado, tipo TalkBack ou VoiceOver, você mesmo consegue achar e digitar nesses campos sozinho, do jeito que já faz no banco ou no WhatsApp. Qual o nome impresso no cartão?');
   }, jaEstavaAtivo ? 0 : 800);
 }
 
