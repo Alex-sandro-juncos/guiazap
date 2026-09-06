@@ -252,6 +252,9 @@
 </style>
 </head>
 <body>
+<button type="button" onclick="toggleModoVozVitrine()" aria-label="Ativar modo de voz do GuiaZap Vitrine, para navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="position:absolute; top:0; left:0; width:100%; height:64px; margin:0; padding:0; border:none; background:transparent; color:transparent; cursor:pointer; font-size:0.01px; line-height:1; z-index:10;">
+  Ativar modo de voz do GuiaZap Vitrine, para navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga
+</button>
 <header class="vitrine-header">
   <h1>GuiaZap Vitrine</h1>
   <p>Produtos de empresas da sua região, tudo num só lugar</p>
@@ -262,7 +265,7 @@
   <div class="busca-com-icone">
     <span class="icone-lupa" onclick="renderProdutos()">🔍</span>
     <input id="v-search" placeholder="Buscar por nome, marca, código de barras ou código de peça..." aria-label="Buscar produto por nome, marca ou código" oninput="renderProdutos()">
-    <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" aria-label="Ativar modo voz, comprar sem tocar na tela" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
+    <button type="button" id="btn-modo-voz-vitrine" onclick="toggleModoVozVitrine()" title="Comprar por voz, mãos livres" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
   </div>
   <div class="vitrine-filtros">
     <select id="v-filter-categoria" onchange="renderProdutos()"><option value="">Categoria</option></select>

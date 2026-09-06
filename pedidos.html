@@ -60,6 +60,9 @@
 </style>
 </head>
 <body>
+<button type="button" onclick="toggleModoVozPedidos()" aria-label="Ativar modo de voz do GuiaZap Pedidos, para gerenciar pedidos sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="position:absolute; top:0; left:0; width:100%; height:64px; margin:0; padding:0; border:none; background:transparent; color:transparent; cursor:pointer; font-size:0.01px; line-height:1; z-index:10;">
+  Ativar modo de voz do GuiaZap Pedidos, para gerenciar pedidos sem precisar ver ou tocar na tela, feito pra quem não enxerga
+</button>
 <header class="pedidos-header">
   <h1>📦 Meus Pedidos</h1>
 </header>
@@ -67,7 +70,7 @@
 <div class="pedidos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
-  <button type="button" id="btn-modo-voz-pedidos" onclick="toggleModoVozPedidos()" aria-label="Ativar modo voz, gerenciar pedidos sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Modo voz — gerenciar pedidos sem tocar</button>
+  <button type="button" id="btn-modo-voz-pedidos" onclick="toggleModoVozPedidos()" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Modo voz — gerenciar pedidos sem tocar</button>
 
   <div id="painel-modo-voz-pedidos" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
     <div style="display:flex; align-items:center; gap:10px;">

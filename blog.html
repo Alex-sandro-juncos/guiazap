@@ -32,6 +32,9 @@
 </style>
 </head>
 <body>
+<button type="button" onclick="toggleModoVozBlog()" aria-label="Ativar modo de voz do GuiaZap Blog, para escrever um artigo sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="position:absolute; top:0; left:0; width:100%; height:64px; margin:0; padding:0; border:none; background:transparent; color:transparent; cursor:pointer; font-size:0.01px; line-height:1; z-index:10;">
+  Ativar modo de voz do GuiaZap Blog, para escrever um artigo sem precisar ver ou tocar na tela, feito pra quem não enxerga
+</button>
 <header><div class="logo">GuiaZap</div><p>Blog — Dicas locais</p></header>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
 <div class="blog-wrap">
@@ -41,7 +44,7 @@
     <h2>✍️ Escreva um artigo</h2>
     <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Tem uma dica boa sobre um serviço, um bairro ou um assunto local? Envie seu artigo — ele passa por uma revisão antes de ser publicado.</p>
 
-    <button type="button" id="btn-modo-voz-blog" onclick="toggleModoVozBlog()" aria-label="Redigir artigo por voz, sem tocar na tela" style="background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Redigir artigo por voz</button>
+    <button type="button" id="btn-modo-voz-blog" onclick="toggleModoVozBlog()" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Redigir artigo por voz</button>
 
     <div id="painel-modo-voz-blog" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
       <div style="display:flex; align-items:center; gap:10px;">

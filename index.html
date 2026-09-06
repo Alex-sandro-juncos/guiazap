@@ -147,7 +147,7 @@
         <span class="icone-lupa" onclick="render()">🔍</span>
         <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." aria-label="Buscar profissionais e empresas" oninput="render(); atualizarBotoesLimpar();">
         <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
-        <button type="button" id="btn-modo-voz-index" onclick="toggleModoVozIndex()" title="Buscar por voz, mãos livres" aria-label="Ativar modo voz, buscar empresas sem tocar na tela" style="background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
+        <button type="button" id="btn-modo-voz-index" onclick="toggleModoVozIndex()" title="Buscar por voz, mãos livres" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
       </div>
     </div>
 
