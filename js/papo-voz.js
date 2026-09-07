@@ -157,7 +157,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
     falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
   } else {
     const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
-    falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Diga papo para voltar ao GuiaZap.');
+    falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Fala "guiazap" ou qualquer outro comando de navegação pra sair.');
   }
 }
 
@@ -610,14 +610,13 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  if(t === 'voltar' || t === 'lista'){
+  if(t === 'voltar' || t === 'lista' || t === 'papo'){
     if(conversaAtual && typeof fecharConversa === 'function'){
       fecharConversa();
       _estadoVozPapo.etapa = 'lista';
       falarVozPapo('Lista de conversas. ' + listarConversasEmVoz());
     } else {
-      localStorage.setItem('retomarModoVozAoCarregar', '1');
-      window.location.href = 'index.html';
+      falarVozPapo('Você já está na lista de conversas. Fala "guiazap" ou qualquer outro comando de navegação pra sair.');
     }
     return;
   }

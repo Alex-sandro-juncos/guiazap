@@ -3763,6 +3763,11 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   _vozIndexAtiva = true;
   window._vozIndexAtiva = true;
   if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  // Sempre começa do zero — sem isso, o resultado de uma busca por nome de
+  // uma ativação anterior podia "vazar" pra próxima e confundir o que a
+  // pessoa acabou de pedir agora
+  _estadoPessoaIndexVoz = null;
+  _estadoDesambiguacaoIndex = null;
   document.getElementById('btn-modo-voz-index').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
