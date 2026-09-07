@@ -2849,7 +2849,8 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
-  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente;
+  const vindoDireto = typeof consumirRetomarModoVozDireto === 'function' && consumirRetomarModoVozDireto();
+  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente && !vindoDireto;
   _vozVitrineTentativasReconexao = 0;
 
   _criarReconhecimentoVitrine(SpeechRecognitionApi);
@@ -2858,6 +2859,13 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
 
   if(_aguardandoAtivacaoVitrine){
     falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
+  } else if(vindoDireto && empresaFiltroId){
+    // Veio direto de um comando de voz que já tinha decidido "quero
+    // comprar" — continua a conversa sem pausa nenhuma, já falando sobre
+    // a empresa certa em vez do saudação genérica
+    const empresaAchada = (produtos || []).find(p => p.profissionais && p.profissionais.id === empresaFiltroId);
+    const nomeEmpresa = empresaAchada ? empresaAchada.profissionais.name : '';
+    falarVozVitrine((nomeEmpresa ? ('Esses são os produtos de ' + nomeEmpresa + '. ') : '') + 'Fala o nome do que você quer, ou "ver tudo" pra ouvir a lista.');
   } else {
     falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
   }

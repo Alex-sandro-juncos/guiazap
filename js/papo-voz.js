@@ -139,7 +139,8 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   window._vozPapoAtiva = true;
   if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
-  _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
+  const vindoDiretoPapo = typeof consumirRetomarModoVozDireto === 'function' && consumirRetomarModoVozDireto();
+  _aguardandoAtivacaoPapo = !!retomandoAutomaticamente && !vindoDiretoPapo;
   _vozPapoTentativasReconexao = 0;
   const painel = document.getElementById('painel-modo-voz-papo');
   if(painel) painel.style.display = 'block';

@@ -85,6 +85,25 @@ function desativarModoVozPermanente(){
   localStorage.removeItem(_CHAVE_MODO_VOZ_PERMANENTE);
 }
 
+// ---------- RETOMAR DIRETO (sem pausa de "ativar") ----------
+// O "retomarModoVozAoCarregar" sozinho sempre pausa esperando a pessoa
+// falar "ativar" antes de continuar — isso é bom quando é só reabrir uma
+// página fechada (modo voz permanente), mas é ruim quando a pessoa ACABOU
+// de pedir pra ir pra essa página no meio de uma conversa já em andamento
+// (ex: perguntou "quer comprar?", ela disse "sim", e aí precisar falar
+// "ativar" de novo faz a conversa "cair do script"). Essa flag marca que
+// é pra continuar direto, sem pausa nenhuma.
+const _CHAVE_RETOMAR_DIRETO = 'retomar_modo_voz_direto';
+
+function marcarRetomarModoVozDireto(){
+  localStorage.setItem(_CHAVE_RETOMAR_DIRETO, '1');
+}
+function consumirRetomarModoVozDireto(){
+  const v = localStorage.getItem(_CHAVE_RETOMAR_DIRETO) === '1';
+  localStorage.removeItem(_CHAVE_RETOMAR_DIRETO);
+  return v;
+}
+
 function verificarNavegacaoUniversalPorVoz(textoNormalizado, paginaAtual){
   if(!textoNormalizado) return null;
 

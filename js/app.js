@@ -4344,6 +4344,7 @@ function empresaTemProdutoNoIndex(empresaId){
 function abrirPapoIndexVoz(empresa, fala){
   localStorage.setItem('retomarModoVozAoCarregar', '1');
   localStorage.setItem('guiazap_quer_voz', '1');
+  if(typeof marcarRetomarModoVozDireto === 'function') marcarRetomarModoVozDireto();
   falarVozIndex(fala || ('Abrindo o Papo com ' + empresa.name + '.'));
   setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id; }, 1100);
 }
@@ -4364,6 +4365,7 @@ async function tratarPapoOuCompraNoIndex(transcricao, textoNormalizado){
       _estadoPessoaIndexVoz = null;
       localStorage.setItem('retomarModoVozAoCarregar', '1');
       localStorage.setItem('guiazap_quer_voz', '1');
+      if(typeof marcarRetomarModoVozDireto === 'function') marcarRetomarModoVozDireto();
       falarVozIndex('Abrindo o cardápio de ' + emp.name + '.');
       setTimeout(() => { window.location.href = 'vitrine.html?empresa=' + encodeURIComponent(emp.id); }, 1100);
       return true;
@@ -4513,6 +4515,7 @@ async function tratarDesambiguacaoNomeIndex(transcricao, textoNormalizado){
     if(emp){
       localStorage.setItem('retomarModoVozAoCarregar', '1');
       localStorage.setItem('guiazap_quer_voz', '1');
+      if(typeof marcarRetomarModoVozDireto === 'function') marcarRetomarModoVozDireto();
       let url = 'vitrine.html?empresa=' + encodeURIComponent(emp.id);
       falarVozIndex('Indo pra ' + escolhido.nomeEmp + (prod ? (', ' + prod.nome + ' por ' + normalizarPrecoFalaIndex(prod.preco)) : '') + '.');
       setTimeout(() => { window.location.href = url; }, 1100);
@@ -4642,6 +4645,7 @@ async function processarComandoVozIndex(transcricao){
     const empresa = entries.find(e => e.status_pagamento === 'ativo' && e.plano === 'vendas' && (normalizarTexto(e.name).includes(nomeEmpresa) || nomeEmpresa.includes(normalizarTexto(e.name))));
     if(!empresa){ falarVozIndex('Não achei essa empresa com Vitrine ativa. Fala o nome de novo.'); return; }
     localStorage.setItem('retomarModoVozAoCarregar', '1');
+    if(typeof marcarRetomarModoVozDireto === 'function') marcarRetomarModoVozDireto();
     falarVozIndex(`Indo pra Vitrine de ${empresa.name}...`);
     setTimeout(() => { window.location.href = `vitrine.html?empresa=${empresa.id}`; }, 1200);
     return;
