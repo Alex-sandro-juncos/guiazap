@@ -457,7 +457,7 @@ async function loadEntries(){
   // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
   // pra permitir encontrar uma empresa pela marca/categoria dos produtos
   // dela, mesmo sem abrir a Vitrine
-  supabaseClient.from('produtos').select('profissional_id, nome, marca, categoria, categorias_extra').then(({ data: produtosLeves }) => {
+  supabaseClient.from('produtos').select('id, profissional_id, nome, marca, categoria, categorias_extra, preco').then(({ data: produtosLeves }) => {
     produtosParaBuscaPrincipal = produtosLeves || [];
     render();
   });
@@ -4391,6 +4391,166 @@ async function tratarPapoOuCompraNoIndex(transcricao, textoNormalizado){
   return false;
 }
 
+let _estadoDesambiguacaoIndex = null;
+
+function normalizarPrecoFalaIndex(preco){
+  const n = parseFloat(String(preco || '0').replace(',', '.')) || 0;
+  return n.toFixed(2).replace('.', ',') + ' reais';
+}
+
+function buscarAmbiguidadesPorTermoIndex(termo){
+  const n = normalizarTexto(termo);
+  if(!n || n.length < 2) return { contatos: [], produtos: [], empresas: [] };
+  const ativos = (entries || []).filter(e => e.status_pagamento === 'ativo');
+  const contatos = ativos.filter(e => {
+    const nn = normalizarTexto(e.name);
+    return nn.includes(n) || n.includes(nn) || n.split(/\s+/).filter(w => w.length > 2).every(w => nn.includes(w));
+  });
+  const produtos = (produtosParaBuscaPrincipal || []).filter(p => {
+    const nn = normalizarTexto(p.nome);
+    const marca = normalizarTexto(p.marca);
+    return nn.includes(n) || n.includes(nn) || marca.includes(n);
+  });
+  const empresas = ativos.filter(e => {
+    const nn = normalizarTexto(e.name);
+    const cat = normalizarTexto(e.cat);
+    return nn.includes(n) || n.includes(nn) || cat.includes(n);
+  });
+  return { contatos, produtos, empresas };
+}
+
+function falarOpcoesProdutoPorEmpresaIndex(produtos){
+  const porEmpresa = {};
+  produtos.forEach(p => {
+    const emp = (entries || []).find(e => e.id === p.profissional_id);
+    const nomeEmp = emp ? emp.name : 'uma empresa';
+    const chave = p.profissional_id || nomeEmp;
+    if(!porEmpresa[chave]) porEmpresa[chave] = { empresa: emp, nomeEmp, produtos: [], menor: null };
+    porEmpresa[chave].produtos.push(p);
+    const val = parseFloat(String(p.preco || '0').replace(',', '.')) || 0;
+    if(porEmpresa[chave].menor === null || val < porEmpresa[chave].menor.val){
+      porEmpresa[chave].menor = { val, p };
+    }
+  });
+  const lista = Object.values(porEmpresa).sort((a, b) => (a.menor && a.menor.val || 0) - (b.menor && b.menor.val || 0));
+  const falas = lista.map(item => {
+    const preco = item.menor ? normalizarPrecoFalaIndex(item.menor.val) : 'sem preço';
+    return item.nomeEmp + ' está ' + preco;
+  });
+  _estadoDesambiguacaoIndex = { etapa: 'escolher_loja', lista, produtos };
+  falarVozIndex(falas.join('. ') + '. Fala "quero da empresa tal", "quero o mais barato", "quero o mais caro", ou "quero o de tanto".');
+}
+
+async function tratarDesambiguacaoNomeIndex(transcricao, textoNormalizado){
+  const t = textoNormalizado;
+
+  if(_estadoDesambiguacaoIndex && _estadoDesambiguacaoIndex.etapa === 'tipo'){
+    if(t.includes('contato') || t.includes('pessoa') || t.includes('profissional')){
+      const lista = _estadoDesambiguacaoIndex.contatos;
+      _estadoDesambiguacaoIndex = null;
+      if(lista.length === 1){
+        _ultimoContatoVozIndex = lista[0];
+        if(!empresaTemProdutoNoIndex(lista[0].id)){
+          abrirPapoIndexVoz(lista[0], lista[0].name + '. Não tem produto à venda. Abrindo o Papo.');
+        } else {
+          _estadoPessoaIndexVoz = { empresa: lista[0], etapa: 'compra_ou_conversar' };
+          falarVozIndex(lista[0].name + '. Quer comprar ou conversar no Papo?');
+        }
+      } else {
+        falarVozIndex('Achei ' + lista.map(e => e.name).join(', ') + '. Fala o nome certinho.');
+      }
+      return true;
+    }
+    if(t.includes('produto')){
+      const prods = _estadoDesambiguacaoIndex.produtos;
+      _estadoDesambiguacaoIndex = null;
+      falarOpcoesProdutoPorEmpresaIndex(prods);
+      return true;
+    }
+    if(t.includes('empresa') || t.includes('loja') || t.includes('vitrine')){
+      const lista = _estadoDesambiguacaoIndex.empresas;
+      _estadoDesambiguacaoIndex = null;
+      if(lista.length === 1){
+        if(empresaTemProdutoNoIndex(lista[0].id)){
+          _estadoPessoaIndexVoz = { empresa: lista[0], etapa: 'compra_ou_conversar' };
+          falarVozIndex(lista[0].name + ' tem produto. Quer comprar ou conversar?');
+        } else {
+          abrirPapoIndexVoz(lista[0]);
+        }
+      } else {
+        falarVozIndex('Achei as empresas ' + lista.map(e => e.name).join(', ') + '. Fala o nome certinho.');
+      }
+      return true;
+    }
+    falarVozIndex('Fala "contato", "produto" ou "empresa".');
+    return true;
+  }
+
+  if(_estadoDesambiguacaoIndex && _estadoDesambiguacaoIndex.etapa === 'escolher_loja'){
+    const lista = _estadoDesambiguacaoIndex.lista;
+    let escolhido = null;
+    if(t.includes('mais barato') || t.includes('mais barata')){
+      escolhido = lista[0];
+    } else if(t.includes('mais caro') || t.includes('mais cara')){
+      escolhido = lista[lista.length - 1];
+    } else {
+      const matchNumero = t.match(/(\d+)([.,](\d{1,2}))?/);
+      if(matchNumero){
+        const valorNum = parseFloat(matchNumero[1] + '.' + (matchNumero[3] || '00'));
+        escolhido = lista.find(item => item.menor && Math.abs(item.menor.val - valorNum) < 0.05) || null;
+      }
+      if(!escolhido){
+        escolhido = lista.find(item => t.includes(normalizarTexto(item.nomeEmp))) || null;
+      }
+    }
+    if(!escolhido){
+      falarVozIndex('Não achei essa opção. Fala o nome da empresa, mais barato, mais caro, ou o valor.');
+      return true;
+    }
+    const emp = escolhido.empresa;
+    const prod = escolhido.menor && escolhido.menor.p;
+    _estadoDesambiguacaoIndex = null;
+    if(emp){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      localStorage.setItem('guiazap_quer_voz', '1');
+      let url = 'vitrine.html?empresa=' + encodeURIComponent(emp.id);
+      falarVozIndex('Indo pra ' + escolhido.nomeEmp + (prod ? (', ' + prod.nome + ' por ' + normalizarPrecoFalaIndex(prod.preco)) : '') + '.');
+      setTimeout(() => { window.location.href = url; }, 1100);
+    }
+    return true;
+  }
+
+  const termo = t.replace(/quero|queria|ver|abrir|ir|pra|para|o|a|de|do|da/g, ' ').replace(/\s+/g, ' ').trim();
+  if(!termo || termo.length < 3) return false;
+  if(t.includes('papo') || t.includes('finalizar') || t.includes('pin')) return false;
+
+  const amb = buscarAmbiguidadesPorTermoIndex(termo);
+  const tipos = [];
+  if(amb.contatos.length) tipos.push('contato');
+  if(amb.produtos.length) tipos.push('produto');
+  const empresasSoNome = amb.empresas.filter(e => !amb.contatos.some(c => c.id === e.id));
+  if(empresasSoNome.length) tipos.push('empresa');
+  else if(amb.empresas.length && amb.produtos.length && amb.contatos.length) {
+    // contato e empresa são a mesma ficha; ainda pergunta se também tem produto
+  }
+
+  const temContato = amb.contatos.length > 0;
+  const temProduto = amb.produtos.length > 0;
+  if(temContato && temProduto){
+    _estadoDesambiguacaoIndex = { etapa: 'tipo', termo, contatos: amb.contatos, produtos: amb.produtos, empresas: amb.empresas };
+    falarVozIndex('Achei isso como contato e como produto' + (amb.empresas.length ? ' e empresa' : '') + '. É contato, produto ou empresa?');
+    return true;
+  }
+  if(temProduto && amb.produtos.length > 1){
+    const empresasDistintas = [...new Set(amb.produtos.map(p => p.profissional_id))];
+    if(empresasDistintas.length > 1){
+      falarOpcoesProdutoPorEmpresaIndex(amb.produtos);
+      return true;
+    }
+  }
+  return false;
+}
+
 function acharProfissionalPorNomeVozIndex(nome){
   const n = normalizarTexto(nome);
   if(!n || n.length < 2) return null;
@@ -4450,6 +4610,7 @@ async function processarComandoVozIndex(transcricao){
   }
 
   if(await tratarPapoOuCompraNoIndex(transcricao, textoNormalizado)) return;
+  if(await tratarDesambiguacaoNomeIndex(transcricao, textoNormalizado)) return;
 
   if(_estadoMotoboysVoz){
     await processarComandoMotoboysVoz(transcricao);
