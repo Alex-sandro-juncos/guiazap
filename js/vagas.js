@@ -430,6 +430,21 @@ async function processarComandoVozVagas(transcricao){
     return;
   }
 
+  // Comando de navegação universal — funciona igual em todas as páginas
+  // com modo voz. Só checa fora das etapas onde a fala é DADO sendo
+  // ditado (título, descrição, requisitos, salário) — senão uma vaga que
+  // mencione "vitrine" ou "pedidos" na descrição ia disparar navegação.
+  const _etapasDeDadosVg = ['titulo', 'descricao', 'requisitos', 'salario'];
+  if(!_etapasDeDadosVg.includes(estado.etapa) && typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destinoUniversal = verificarNavegacaoUniversalPorVoz(t, 'vagas.html');
+    if(destinoUniversal){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozVagas(destinoUniversal.fala);
+      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
+      return;
+    }
+  }
+
   if(estado.etapa === 'titulo'){
     estado.rascunho = transcricao.trim();
     estado.etapa = 'confirmar_titulo';

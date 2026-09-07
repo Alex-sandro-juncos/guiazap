@@ -87,6 +87,7 @@
   <div id="blog-lista">Carregando...</div>
 </div>
 
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
 <script>
 const supabaseClientBlog = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -516,6 +517,22 @@ async function processarComandoVozBlog(transcricao){
   const _ehPararBl = textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar';
   if(!_ehPararBl && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
+  }
+
+  // Comando de navegação universal — funciona igual em todas as páginas
+  // com modo voz. IMPORTANTE: só checa isso fora das etapas onde a fala
+  // é DADO sendo ditado (nome, email, título, tema, conteúdo) — senão um
+  // artigo que mencione "blog" ou "vagas" no meio do texto ia disparar
+  // uma navegação sem querer.
+  const _etapasDeDadosBlog = ['nome', 'email', 'titulo', 'tema', 'conteudo'];
+  if(!_etapasDeDadosBlog.includes(estado.etapa) && typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destinoUniversal = verificarNavegacaoUniversalPorVoz(textoNorm, 'blog.html');
+    if(destinoUniversal){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozBlog(destinoUniversal.fala);
+      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
+      return;
+    }
   }
 
   // Comandos globais

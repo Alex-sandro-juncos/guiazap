@@ -388,6 +388,7 @@ function normalizarTextoCv(str){
 
 atualizarPreviewCv();
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
 <script>
 let supabaseClientCv = null;
@@ -727,6 +728,21 @@ async function processarEtapaPreenchimentoCv(transcricao){
     falarVozCv('Modo voz desligado.');
     setTimeout(pararModoVozCv, 1200);
     return;
+  }
+
+  // Comando de navegação universal — funciona igual em todas as páginas
+  // com modo voz. Só checa na etapa de confirmação final — nas demais
+  // etapas a fala é DADO sendo ditado (nome, telefone, cidade, objetivo,
+  // experiência, etc), e uma menção a "vagas" ou "blog" no meio do texto
+  // não pode disparar navegação sem querer.
+  if(estado.etapa === 'confirmar' && typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destinoUniversal = verificarNavegacaoUniversalPorVoz(textoNorm, 'curriculo.html');
+    if(destinoUniversal){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozCv(destinoUniversal.fala);
+      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
+      return;
+    }
   }
 
   if(estado.etapa === 'nome'){

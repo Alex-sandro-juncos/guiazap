@@ -107,6 +107,7 @@
 <div id="cupom-impressao"></div>
 
 <script src="js/modo-escuro.js"></script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
 <script>
 const supabaseClientPedidos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -618,19 +619,16 @@ async function processarComandoVozPedidos(transcricao){
 
   const textoNorm = normalizarTextoPedidos(transcricao);
 
-  // Comandos locais instantâneos
-  if(textoNorm.includes('ir para vitrine') || textoNorm.includes('ver produtos') || textoNorm.includes('ir pra vitrine')){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozPedidos('Indo pra Vitrine...');
-    setTimeout(() => { window.location.href = 'vitrine.html'; }, 1200);
-    return;
-  }
-
-  if(textoNorm.includes('ir para pagina inicial') || textoNorm.includes('voltar pro guiazap') || textoNorm.includes('ir pro guiazap')){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozPedidos('Voltando pra página inicial...');
-    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
-    return;
+  // Comando de navegação universal — funciona igual em todas as páginas
+  // com modo voz (a lista fica em js/comandos-navegacao-voz.js)
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destinoUniversal = verificarNavegacaoUniversalPorVoz(textoNorm, 'pedidos.html');
+    if(destinoUniversal){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozPedidos(destinoUniversal.fala);
+      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
+      return;
+    }
   }
 
   if(textoNorm.includes('pedidos novos') || textoNorm.includes('pedido novo') || textoNorm.includes('o que tem')){
