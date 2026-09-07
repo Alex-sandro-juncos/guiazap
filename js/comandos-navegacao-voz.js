@@ -23,7 +23,7 @@ const _DESTINOS_NAVEGACAO_VOZ = [
   {
     arquivo: 'vitrine.html',
     fala: 'Indo pra Vitrine...',
-    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine', 'quero comprar', 'fazer compras', 'ver produtos']
+    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine', 'quero comprar', 'fazer compras', 'fazer uma compra', 'ir para compras', 'ir pra compras', 'quero ir para compras', 'quero ir pra compras', 'ir as compras', 'ir às compras', 'ver produtos']
   },
   {
     arquivo: 'blog.html',

@@ -4541,6 +4541,25 @@ async function tratarDesambiguacaoNomeIndex(transcricao, textoNormalizado){
     falarVozIndex('Achei isso como contato e como produto' + (amb.empresas.length ? ' e empresa' : '') + '. É contato, produto ou empresa?');
     return true;
   }
+
+  // Achou só como empresa/contato, sem ambiguidade com produto — não pode
+  // cair no silêncio (que fazia voltar pro comportamento antigo, sem
+  // perguntar nada, e ainda por cima navegava sem avisar)
+  if(temContato && !temProduto){
+    if(amb.contatos.length === 1){
+      const emp = amb.contatos[0];
+      if(!empresaTemProdutoNoIndex(emp.id)){
+        abrirPapoIndexVoz(emp, emp.name + '. Não tem produto à venda. Abrindo o Papo.');
+      } else {
+        _estadoPessoaIndexVoz = { empresa: emp, etapa: 'compra_ou_conversar' };
+        falarVozIndex(emp.name + '. Quer comprar ou conversar no Papo?');
+      }
+      return true;
+    }
+    falarVozIndex('Achei ' + amb.contatos.map(e => e.name).join(', ') + '. Fala o nome certinho.');
+    return true;
+  }
+
   if(temProduto && amb.produtos.length > 1){
     const empresasDistintas = [...new Set(amb.produtos.map(p => p.profissional_id))];
     if(empresasDistintas.length > 1){

@@ -11,7 +11,8 @@
 
 function prepararAcessoVozCego(iniciarFn){
   const retomar = localStorage.getItem('retomarModoVozAoCarregar') === '1';
-  if(!retomar) return;
+  const permanente = typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo();
+  if(!retomar && !permanente) return;
 
   localStorage.removeItem('retomarModoVozAoCarregar');
   if(typeof iniciarFn === 'function'){

@@ -300,6 +300,16 @@ function _criarReconhecimentoBlog(SpeechRecognitionApi){
 
     if(_aguardandoAtivacaoBlog){
       const t = normalizarTextoBlog(transcricao);
+      if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+        const destinoAgora = verificarNavegacaoUniversalPorVoz(t, 'blog.html');
+        if(destinoAgora && destinoAgora.url){
+          _aguardandoAtivacaoBlog = false;
+          localStorage.setItem('retomarModoVozAoCarregar', '1');
+          falarVozBlog(destinoAgora.fala);
+          setTimeout(() => { window.location.href = destinoAgora.url; }, 1200);
+          return;
+        }
+      }
       if(t.includes('ativar') || t.includes('guiazap')){
         _aguardandoAtivacaoBlog = false;
         _estadoRedacaoBlog = { etapa: 'escolher_ler_ou_escrever' };
