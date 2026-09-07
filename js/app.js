@@ -4457,7 +4457,8 @@ async function processarComandoVozIndex(transcricao){
     // O reconhecimento de voz às vezes entende "ler blog" errado, como se
     // fosse inglês — cobre essas variações também
     textoNormalizado.includes('learn blog') ||
-    textoNormalizado.includes('lair blog')
+    textoNormalizado.includes('lair blog') ||
+    textoNormalizado.includes('blair blog')
   ){
     irPara('blog.html', 'Indo pro blog...');
     return;

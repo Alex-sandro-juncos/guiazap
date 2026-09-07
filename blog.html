@@ -70,6 +70,11 @@
       <input id="blog-titulo" placeholder="Ex: Como escolher um eletricista de confiança">
     </div>
     <div class="field">
+      <label for="blog-tema">Tema</label>
+      <input id="blog-tema" list="blog-temas-sugeridos" placeholder="Ex: Dicas pra contratar, Empreendedorismo, Novidades...">
+      <datalist id="blog-temas-sugeridos"></datalist>
+    </div>
+    <div class="field">
       <label for="blog-conteudo">Conteúdo</label>
       <textarea id="blog-conteudo" rows="8" placeholder="Escreva seu artigo aqui..."></textarea>
     </div>
@@ -107,6 +112,7 @@ async function enviarArtigo(){
   const autor = document.getElementById('blog-autor').value.trim();
   const email = document.getElementById('blog-email').value.trim();
   const titulo = document.getElementById('blog-titulo').value.trim();
+  const tema = document.getElementById('blog-tema').value.trim();
   const conteudo = document.getElementById('blog-conteudo').value.trim();
   const msg = document.getElementById('blog-msg');
 
@@ -118,7 +124,7 @@ async function enviarArtigo(){
   const slugFinal = `${slugBase}-${Date.now().toString().slice(-5)}`;
 
   const { data, error } = await supabaseClientBlog.from('blog_posts').insert({
-    titulo, conteudo, autor_nome: autor, autor_email: email || null, slug: slugFinal
+    titulo, conteudo, autor_nome: autor, autor_email: email || null, tema: tema || null, slug: slugFinal
   }).select('id').single();
 
   if(error){ console.error(error); msg.textContent = 'Erro ao enviar. Tente de novo.'; msg.style.color = '#a4402f'; return; }
@@ -126,6 +132,7 @@ async function enviarArtigo(){
   document.getElementById('blog-autor').value = '';
   document.getElementById('blog-email').value = '';
   document.getElementById('blog-titulo').value = '';
+  document.getElementById('blog-tema').value = '';
   document.getElementById('blog-conteudo').value = '';
 
   // Manda pra revisão automática por IA — aprova ou exclui sozinha, sem
@@ -167,7 +174,7 @@ function normalizarBuscaBlog(str){
 
 async function loadArtigos(){
   const container = document.getElementById('blog-lista');
-  const { data, error } = await supabaseClientBlog.from('blog_posts').select('titulo, slug, autor_nome, conteudo, created_at').eq('aprovado', true).order('created_at', { ascending: false });
+  const { data, error } = await supabaseClientBlog.from('blog_posts').select('titulo, slug, autor_nome, tema, conteudo, created_at').eq('aprovado', true).order('created_at', { ascending: false });
 
   if(error || !data){
     container.innerHTML = '<p style="color:#999; font-size:0.85rem;">Ainda não temos artigos publicados. Seja o primeiro a escrever!</p>';
@@ -175,6 +182,14 @@ async function loadArtigos(){
   }
 
   artigosCarregados = data;
+
+  // Preenche as sugestões de tema no formulário de envio com os temas que
+  // já foram usados antes — assim quem for escrever vê o que já existe em
+  // vez de inventar um tema novo toda vez
+  const temasUnicos = [...new Set(data.map(p => p.tema).filter(Boolean))];
+  const datalist = document.getElementById('blog-temas-sugeridos');
+  if(datalist) datalist.innerHTML = temasUnicos.map(t => `<option value="${escapeHtmlBlog(t)}"></option>`).join('');
+
   renderArtigos();
 }
 
@@ -183,7 +198,7 @@ function renderArtigos(){
   const query = normalizarBuscaBlog(document.getElementById('blog-busca').value);
 
   const filtrados = artigosCarregados.filter(p =>
-    normalizarBuscaBlog(p.titulo).includes(query) || normalizarBuscaBlog(p.autor_nome).includes(query)
+    normalizarBuscaBlog(p.titulo).includes(query) || normalizarBuscaBlog(p.autor_nome).includes(query) || normalizarBuscaBlog(p.tema).includes(query)
   );
 
   if(artigosCarregados.length === 0){
@@ -199,7 +214,7 @@ function renderArtigos(){
   container.innerHTML = filtrados.map(p => `
     <a href="/blog/${p.slug}" class="card-post">
       <div class="titulo-post">${escapeHtmlBlog(p.titulo)}</div>
-      <div class="autor-post">Por ${escapeHtmlBlog(p.autor_nome)} · ${new Date(p.created_at).toLocaleDateString('pt-BR')}</div>
+      <div class="autor-post">Por ${escapeHtmlBlog(p.autor_nome)} · ${new Date(p.created_at).toLocaleDateString('pt-BR')}${p.tema ? ' · ' + escapeHtmlBlog(p.tema) : ''}</div>
       <div class="resumo-post">${escapeHtmlBlog(p.conteudo.slice(0, 140))}...</div>
     </a>
   `).join('');
@@ -247,7 +262,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   if(_aguardandoAtivacaoBlog){
     document.getElementById('voz-blog-status').textContent = '🎙️ Modo voz em espera';
   } else {
-    _estadoRedacaoBlog = { etapa: 'nome' };
+    _estadoRedacaoBlog = { etapa: 'escolher_ler_ou_escrever' };
     document.getElementById('voz-blog-status').textContent = '🎙️ Modo voz ativado — pode falar';
   }
 
@@ -255,9 +270,9 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   _iniciarVigiaVozBlog(SpeechRecognitionApi);
   if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
   if(_aguardandoAtivacaoBlog){
-    falarVozBlog('Modo voz em espera. Fala "ativar" pra escrever um artigo.');
+    falarVozBlog('Modo voz em espera. Fala "ativar" pra ler ou escrever um artigo.');
   } else {
-    falarVozBlog('Modo voz ativado. Qual o seu nome de autor?');
+    falarVozBlog('Modo voz ativado. Você quer ler um artigo ou escrever um novo? Fala "ler" ou "escrever".');
   }
 }
 
@@ -285,8 +300,8 @@ function _criarReconhecimentoBlog(SpeechRecognitionApi){
       const t = normalizarTextoBlog(transcricao);
       if(t.includes('ativar') || t.includes('guiazap')){
         _aguardandoAtivacaoBlog = false;
-        _estadoRedacaoBlog = { etapa: 'nome' };
-        falarVozBlog('Modo voz ativado. Qual o seu nome de autor?');
+        _estadoRedacaoBlog = { etapa: 'escolher_ler_ou_escrever' };
+        falarVozBlog('Modo voz ativado. Você quer ler um artigo ou escrever um novo? Fala "ler" ou "escrever".');
       }
       return;
     }
@@ -427,6 +442,69 @@ function falarVozBlog(texto){
   }, 6000);
 }
 
+function _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm){
+  if(encontrados.length === 0){
+    falarVozBlog('Não encontrei nenhum artigo com isso. Pode falar outra palavra?');
+    return;
+  }
+  if(encontrados.length === 1){
+    _lerArtigoEmVozAlta(encontrados[0], estado);
+    return;
+  }
+  estado.etapa = 'ler_escolher_qual';
+  estado.opcoes = encontrados;
+  const titulos = encontrados.map(p => p.titulo).join('. ');
+  falarVozBlog(`Encontrei ${encontrados.length} artigos: ${titulos}. Qual você quer ouvir? Fala uma palavra do título.`);
+}
+
+function _quebrarConteudoEmTrechosBlog(texto){
+  // Fala em pedaços de ~1 ou 2 frases — utterances muito longas às vezes
+  // são cortadas pela síntese de voz do navegador, principalmente no Android
+  const frases = texto.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [texto];
+  const trechos = [];
+  let atual = '';
+  for(const frase of frases){
+    if((atual + frase).length > 220 && atual){
+      trechos.push(atual.trim());
+      atual = frase;
+    } else {
+      atual += frase;
+    }
+  }
+  if(atual.trim()) trechos.push(atual.trim());
+  return trechos;
+}
+
+function _lerArtigoEmVozAlta(post, estado){
+  const trechos = [
+    `Lendo: ${post.titulo}, por ${post.autor_nome}${post.tema ? ', tema ' + post.tema : ''}.`,
+    ..._quebrarConteudoEmTrechosBlog(post.conteudo)
+  ];
+  estado.etapa = 'ler_depois_do_artigo';
+
+  const ind = document.getElementById('voz-blog-indicador');
+  const status = document.getElementById('voz-blog-status');
+  _vozBlogFalando = true;
+  if(ind) ind.style.background = '#e05d5d';
+
+  let indice = 0;
+  function proximoTrecho(){
+    if(indice >= trechos.length){
+      _vozBlogFalando = false;
+      falarVozBlog('Quer ler outro artigo, escrever um novo, ou parar?');
+      return;
+    }
+    if(status) status.textContent = '🔊 lendo artigo... (' + (indice + 1) + '/' + trechos.length + ')';
+    const fala = new SpeechSynthesisUtterance(trechos[indice]);
+    fala.lang = 'pt-BR';
+    fala.rate = 1.05;
+    fala.onend = () => { indice++; proximoTrecho(); };
+    fala.onerror = () => { indice++; proximoTrecho(); };
+    _vozBlogSynth.speak(fala);
+  }
+  proximoTrecho();
+}
+
 async function processarComandoVozBlog(transcricao){
   if(_vozBlogSynth) try{ _vozBlogSynth.cancel(); } catch(e){}
   _vozBlogFalando = false;
@@ -444,6 +522,109 @@ async function processarComandoVozBlog(transcricao){
   if(textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar'){
     falarVozBlog('Modo voz desligado.');
     setTimeout(pararModoVozBlog, 1200);
+    return;
+  }
+
+  if(estado.etapa === 'escolher_ler_ou_escrever'){
+    if(textoNorm.includes('ler') || textoNorm.includes('ouvir')){
+      estado.etapa = 'ler_escolher_busca';
+      falarVozBlog('Quer buscar por tema, título ou autor?');
+      return;
+    }
+    if(textoNorm.includes('escrever') || textoNorm.includes('escrita') || textoNorm.includes('novo artigo')){
+      estado.etapa = 'nome';
+      falarVozBlog('Vamos escrever um artigo novo. Qual o seu nome de autor?');
+      return;
+    }
+    falarVozBlog('Não entendi. Fala "ler" pra ouvir um artigo, ou "escrever" pra criar um novo.');
+    return;
+  }
+
+  if(estado.etapa === 'ler_escolher_busca'){
+    if(artigosCarregados.length === 0){
+      falarVozBlog('Ainda não tem nenhum artigo publicado no blog. Quer escrever o primeiro? Fala "sim" ou "não".');
+      estado.etapa = 'ler_oferecer_escrever_primeiro';
+      return;
+    }
+
+    if(textoNorm.includes('tema')){
+      const temas = [...new Set(artigosCarregados.map(p => p.tema).filter(Boolean))];
+      if(temas.length === 0){
+        falarVozBlog('Nenhum artigo tem tema definido ainda. Tenta buscar por título ou autor.');
+        return;
+      }
+      estado.etapa = 'ler_por_tema';
+      falarVozBlog('Os temas que temos são: ' + temas.join(', ') + '. Qual você quer?');
+      return;
+    }
+
+    if(textoNorm.includes('autor')){
+      const autores = [...new Set(artigosCarregados.map(p => p.autor_nome).filter(Boolean))];
+      estado.etapa = 'ler_por_autor';
+      falarVozBlog('Os autores que temos são: ' + autores.join(', ') + '. Qual você quer ouvir?');
+      return;
+    }
+
+    if(textoNorm.includes('titulo') || textoNorm.includes('título')){
+      estado.etapa = 'ler_por_titulo';
+      falarVozBlog('Fala uma palavra do título que você procura.');
+      return;
+    }
+
+    falarVozBlog('Não entendi. Fala "tema", "título" ou "autor".');
+    return;
+  }
+
+  if(estado.etapa === 'ler_oferecer_escrever_primeiro'){
+    if(textoNorm.includes('sim')){
+      estado.etapa = 'nome';
+      falarVozBlog('Vamos escrever! Qual o seu nome de autor?');
+    } else {
+      falarVozBlog('Tudo bem. Modo voz desligado.');
+      setTimeout(pararModoVozBlog, 1500);
+    }
+    return;
+  }
+
+  if(estado.etapa === 'ler_por_tema'){
+    const encontrados = artigosCarregados.filter(p => p.tema && normalizarTextoBlog(p.tema).includes(textoNorm));
+    _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm);
+    return;
+  }
+
+  if(estado.etapa === 'ler_por_autor'){
+    const encontrados = artigosCarregados.filter(p => p.autor_nome && normalizarTextoBlog(p.autor_nome).includes(textoNorm));
+    _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm);
+    return;
+  }
+
+  if(estado.etapa === 'ler_por_titulo'){
+    const encontrados = artigosCarregados.filter(p => normalizarTextoBlog(p.titulo).includes(textoNorm));
+    _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm);
+    return;
+  }
+
+  if(estado.etapa === 'ler_escolher_qual'){
+    const escolhido = estado.opcoes.find(p => normalizarTextoBlog(p.titulo).includes(textoNorm));
+    if(!escolhido){
+      falarVozBlog('Não achei esse título na lista. Pode repetir uma palavra do título que você quer?');
+      return;
+    }
+    _lerArtigoEmVozAlta(escolhido, estado);
+    return;
+  }
+
+  if(estado.etapa === 'ler_depois_do_artigo'){
+    if(textoNorm.includes('outro') || textoNorm.includes('ler mais') || textoNorm.includes('mais um')){
+      estado.etapa = 'ler_escolher_busca';
+      falarVozBlog('Quer buscar por tema, título ou autor?');
+    } else if(textoNorm.includes('escrever')){
+      estado.etapa = 'nome';
+      falarVozBlog('Vamos escrever um artigo novo. Qual o seu nome de autor?');
+    } else {
+      falarVozBlog('Modo voz desligado.');
+      setTimeout(pararModoVozBlog, 1500);
+    }
     return;
   }
 
@@ -474,9 +655,18 @@ async function processarComandoVozBlog(transcricao){
 
   if(estado.etapa === 'titulo'){
     document.getElementById('blog-titulo').value = transcricao.trim();
+    estado.etapa = 'tema';
+    falarVozBlog('Título anotado. Qual o tema do artigo? Por exemplo, dicas pra contratar, empreendedorismo, ou novidades. Pode falar "pular" se não quiser definir.');
+    return;
+  }
+
+  if(estado.etapa === 'tema'){
+    if(!(textoNorm === 'pular' || textoNorm === 'nenhum' || textoNorm === 'sem tema')){
+      document.getElementById('blog-tema').value = transcricao.trim();
+    }
     estado.etapa = 'conteudo';
     document.getElementById('blog-conteudo').value = '';
-    falarVozBlog('Título anotado. Agora dite o conteúdo do artigo. Quando terminar, fala "pronto" ou "terminei".');
+    falarVozBlog('Tema anotado. Agora dite o conteúdo do artigo. Quando terminar, fala "pronto" ou "terminei".');
     return;
   }
 

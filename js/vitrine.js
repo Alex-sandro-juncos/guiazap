@@ -2512,6 +2512,13 @@ async function salvarProdutosExtraidosIA(){
 
 const MP_PUBLIC_KEY_VITRINE = 'APP_USR-f76cdce7-5905-4f0f-9102-e664d5f6fa1c';
 let _mpCardForm = null;
+// Guarda se cada campo digitado dentro do iframe do Mercado Pago (número,
+// validade, CVV) já foi preenchido com algo válido em algum momento — o
+// SDK avisa isso sozinho pelo onValidityChange. Serve pra dar um aviso
+// específico ("você não digitou o número ainda") em vez de deixar o
+// cliente escutando "salvando..." por 10 segundos sem motivo nenhum
+// quando ele esqueceu de preencher algum campo.
+let _camposCartaoPreenchidos = { cardNumber: false, expirationDate: false, securityCode: false };
 
 async function pegarSessaoVitrineValida(){
   if(!supabaseClientV) return null;
@@ -2527,6 +2534,7 @@ function abrirCadastroCartaoVoz(){
   if(!currentUserV){ alert('Você precisa estar logado. Volta na página inicial, entra na conta e tenta de novo.'); return; }
   document.getElementById('overlay-cadastro-cartao').style.display = 'flex';
   document.getElementById('cadastro-cartao-msg').textContent = '';
+  _camposCartaoPreenchidos = { cardNumber: false, expirationDate: false, securityCode: false };
 
   if(typeof MercadoPago === 'undefined'){
     document.getElementById('cadastro-cartao-msg').textContent = 'Não carregou o Mercado Pago. Atualiza a página e tenta de novo.';
@@ -2564,6 +2572,14 @@ function abrirCadastroCartaoVoz(){
     },
     callbacks: {
       onFormMounted: (error) => { if(error) console.error('erro ao montar formulário de cartão', error); },
+      onValidityChange: (error, field) => {
+        // O Mercado Pago chama isso sempre que um campo do iframe passa a
+        // ser válido ou inválido. Um campo nunca tocado nunca dispara isso
+        // — por isso serve pra saber se a pessoa realmente digitou algo.
+        if(field in _camposCartaoPreenchidos){
+          _camposCartaoPreenchidos[field] = !error;
+        }
+      },
       onSubmit: async (event) => {
         event.preventDefault();
         const msg = document.getElementById('cadastro-cartao-msg');
@@ -3190,6 +3206,25 @@ async function _processarComandoVozVitrineInterno(transcricao){
     localStorage.setItem('retomarModoVozAoCarregar', '1');
     falarVozVitrine('Voltando pra página inicial...');
     setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    return;
+  }
+
+  if(
+    textoNormalizado === 'blog' ||
+    textoNormalizado.includes('ir para o blog') ||
+    textoNormalizado.includes('ir pro blog') ||
+    textoNormalizado.includes('abrir blog') ||
+    textoNormalizado.includes('ver blog') ||
+    textoNormalizado.includes('ler blog') ||
+    // O reconhecimento de voz às vezes entende "ler blog" errado, como se
+    // fosse inglês — cobre essas variações também
+    textoNormalizado.includes('learn blog') ||
+    textoNormalizado.includes('lair blog') ||
+    textoNormalizado.includes('blair blog')
+  ){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozVitrine('Indo pro blog...');
+    setTimeout(() => { window.location.href = 'blog.html'; }, 1200);
     return;
   }
 
