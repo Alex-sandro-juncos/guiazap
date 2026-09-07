@@ -24,10 +24,7 @@ exports.handler = async function (event) {
       return { statusCode: seguranca.statusCode, body: JSON.stringify({ error: seguranca.error }) };
     }
 
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada no Netlify' }) };
-    }
+    const { chamarIABarata } = require('./ia-barata-helper');
 
     const listaProdutos = (produtosAtuais || [])
       .map(p => `- id: ${p.id} | nome: ${p.nome} | preço: ${p.preco || 'sem preço'} | categoria: ${p.categoria || 'sem categoria'}`)
@@ -60,45 +57,11 @@ Regras importantes:
 - Se não conseguir entender o comando com confiança, devolva "acoes": [] e explique o motivo no "resumo".
 - Nunca invente um produto_id que não esteja na lista acima.`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 2048,
-        system: promptSistema,
-        messages: [{ role: 'user', content: comando }]
-      })
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      console.error('erro da API da Anthropic:', JSON.stringify(data));
-      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao consultar a IA: ' + JSON.stringify(data.error || data) }) };
+    const ia = await chamarIABarata(promptSistema, comando, 2048);
+    if (!ia.ok || !ia.json) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'a IA não devolveu um formato válido, tenta reformular o comando.' }) };
     }
-
-    const textoResposta = data.content && data.content[0] ? data.content[0].text : '';
-
-    let resultado;
-    try {
-      let textoLimpo = textoResposta.replace(/```json|```/g, '').trim();
-      // Se vier com algum texto explicativo antes/depois do JSON, pega só a
-      // parte entre a primeira { e a última } — mais tolerante a variações
-      const inicio = textoLimpo.indexOf('{');
-      const fim = textoLimpo.lastIndexOf('}');
-      if (inicio !== -1 && fim !== -1 && fim > inicio) {
-        textoLimpo = textoLimpo.slice(inicio, fim + 1);
-      }
-      resultado = JSON.parse(textoLimpo);
-    } catch (e) {
-      console.error('erro ao interpretar resposta da IA:', textoResposta);
-      return { statusCode: 500, body: JSON.stringify({ error: 'a IA não devolveu um formato válido, tenta reformular o comando. Resposta recebida: ' + textoResposta.slice(0, 200) }) };
-    }
+    const resultado = ia.json;
 
     return { statusCode: 200, body: JSON.stringify(resultado) };
   } catch (err) {

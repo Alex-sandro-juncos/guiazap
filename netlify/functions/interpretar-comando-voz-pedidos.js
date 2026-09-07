@@ -25,10 +25,15 @@ exports.handler = async function (event) {
       return { statusCode: 401, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
     }
 
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada' }) };
+    const { chamarIABarata } = require('./ia-barata-helper');
+    const { normalizarTexto, buscarCache, salvarPending, salvarAprovado } = require('./comandos-voz-cache');
+
+    const textoNorm = normalizarTexto(texto);
+    const cache = await buscarCache('pedidos', textoNorm);
+    if (cache) {
+      return { statusCode: 200, body: JSON.stringify(cache) };
     }
+    await salvarPending('pedidos', textoNorm, texto);
 
     const listaPedidos = (pedidosVisiveis || []).map(p => `- id:${p.id} | status:${p.status} | R$${p.total} | itens: ${p.itensResumo}`).join('\n');
 
@@ -49,38 +54,12 @@ Regras:
 Pedidos visíveis agora:
 ${listaPedidos || '(nenhum pedido no momento)'}`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 500,
-        system: promptSistema,
-        messages: [{ role: 'user', content: texto }]
-      })
-    });
+    const ia = await chamarIABarata(promptSistema, texto, 500);
+    const resultado = ia.ok
+      ? ia.json
+      : { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };
 
-    const data = await resp.json();
-    if (!resp.ok) {
-      console.error('erro da API da Anthropic:', JSON.stringify(data));
-      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao interpretar comando' }) };
-    }
-
-    const textoResposta = data.content && data.content[0] ? data.content[0].text : '';
-    let resultado;
-    try {
-      let textoLimpo = textoResposta.replace(/```json|```/g, '').trim();
-      const inicioJson = textoLimpo.indexOf('{');
-      const fimJson = textoLimpo.lastIndexOf('}');
-      if (inicioJson !== -1 && fimJson !== -1) textoLimpo = textoLimpo.slice(inicioJson, fimJson + 1);
-      resultado = JSON.parse(textoLimpo);
-    } catch (e) {
-      resultado = { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };
-    }
+    if (ia.ok) await salvarAprovado('pedidos', textoNorm, resultado);
 
     return { statusCode: 200, body: JSON.stringify(resultado) };
   } catch (err) {
