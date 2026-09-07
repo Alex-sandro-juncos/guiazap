@@ -4256,9 +4256,19 @@ function extrairSiglaEstadoDaFala(texto){
   return null;
 }
 
+function usuarioTemPinCadastradoIndex(){
+  const uid = currentUser && currentUser.id;
+  if(!uid) return false;
+  return !!localStorage.getItem('guiazap_pin_hash_' + uid);
+}
+
 function ativarModoSomenteVozIndex(){
   if(!currentUser){
     alert('Você precisa estar logado (e ter configurado um PIN de voz na Vitrine) pra usar o modo somente voz — sem isso, não teria como destravar depois.');
+    return;
+  }
+  if(!usuarioTemPinCadastradoIndex()){
+    falarVozIndex('Você ainda não cadastrou um PIN de voz. Vai na Vitrine, fala "cadastrar pin", e só depois ativa o modo somente voz. Sem PIN não dá pra destravar.');
     return;
   }
   _modoSomenteVozAtivoIndex = true;

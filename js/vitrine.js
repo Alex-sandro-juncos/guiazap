@@ -3697,7 +3697,22 @@ function _acharEmpresaEmOpcoesMultiplo(fala){
 let _modoSomenteVozAtivoVitrine = false;
 let _aguardandoPinParaDestravarVitrine = false;
 
+function usuarioTemPinCadastradoVitrine(){
+  const uid = currentUserV && currentUserV.id;
+  if(!uid) return false;
+  return !!localStorage.getItem('guiazap_pin_hash_' + uid);
+}
+
 function ativarModoSomenteVozVitrine(){
+  if(!currentUserV){
+    falarVozVitrine('Entra na conta antes de ativar o modo somente voz. Sem login e sem PIN, não tem como destravar depois.');
+    return;
+  }
+  if(!usuarioTemPinCadastradoVitrine()){
+    falarVozVitrine('Antes de travar a tela, você precisa cadastrar um PIN de voz. Vamos criar agora.');
+    configurarPinVozPorVoz();
+    return;
+  }
   _modoSomenteVozAtivoVitrine = true;
   localStorage.setItem('modo_somente_voz_ativo_vitrine', '1');
   document.getElementById('overlay-modo-somente-voz-vitrine').style.display = 'block';

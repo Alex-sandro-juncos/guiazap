@@ -17,7 +17,21 @@ function modoInterpretePapoAtivo(){
   return localStorage.getItem('papo_modo_interprete_ativo') === '1';
 }
 
+function usuarioTemPinCadastradoPapo(){
+  const uid = currentUserChat && currentUserChat.id;
+  if(!uid) return false;
+  return !!localStorage.getItem('guiazap_pin_hash_' + uid);
+}
+
 function ativarModoInterpretePapo(){
+  if(!currentUserChat){
+    falarVozPapo('Entra na conta antes de ativar o modo intérprete. Sem login e sem PIN, não tem como desativar depois.');
+    return;
+  }
+  if(!usuarioTemPinCadastradoPapo()){
+    falarVozPapo('Antes de ativar o modo intérprete, cadastra um PIN de voz na Vitrine. Fala lá "cadastrar pin". Sem PIN, você ficaria preso neste modo.');
+    return;
+  }
   localStorage.setItem('papo_modo_interprete_ativo', '1');
   localStorage.setItem('papo_ler_automatico', '1'); // trava a leitura automática ligada
   if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
