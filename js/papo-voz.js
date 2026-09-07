@@ -293,10 +293,30 @@ function listarConversasEmVoz(){
 function acharConversaPorNome(fala){
   const t = normalizarVozPapo(fala);
   const lista = conversasCarregadasCache || [];
-  return lista.find(c => {
+
+  // 1) Match exato ou uma string contida na outra — o caso mais confiável
+  const exata = lista.find(c => {
     const n = normalizarVozPapo(c.nomeExibido || '');
-    return n && (n.includes(t) || t.includes(n) || t.split(' ').some(p => p.length > 2 && n.includes(p)));
+    return n && (n === t || n.includes(t) || t.includes(n));
   });
+  if(exata) return exata;
+
+  // 2) Nenhum bateu perfeito — tenta por palavras, mas exige que TODAS as
+  // palavras relevantes da fala apareçam no nome (não só uma). Isso evita
+  // pegar o contato errado só porque uma palavra genérica (tipo
+  // "mercearia") aparece em vários nomes diferentes.
+  const palavrasFala = t.split(' ').filter(p => p.length > 2);
+  if(palavrasFala.length === 0) return null;
+
+  const candidatos = lista.filter(c => {
+    const n = normalizarVozPapo(c.nomeExibido || '');
+    return n && palavrasFala.every(p => n.includes(p));
+  });
+  if(candidatos.length === 1) return candidatos[0];
+
+  // Ainda ambíguo (nenhum bateu todas as palavras, ou bateu mais de um) —
+  // melhor não adivinhar errado do que abrir a conversa errada
+  return null;
 }
 
 async function processarComandoVozPapo(transcricao){

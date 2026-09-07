@@ -59,6 +59,11 @@ const _DESTINOS_NAVEGACAO_VOZ = [
     arquivo: 'chat.html',
     fala: 'Indo pro Papo...',
     gatilhos: ['=papo', 'ir para o papo', 'ir pro papo', 'abrir papo', 'ir para o chat', 'ir pro chat', 'abrir chat']
+  },
+  {
+    arquivo: 'mapa.html',
+    fala: 'Indo pro mapa...',
+    gatilhos: ['=mapa', 'ir para o mapa', 'ir pro mapa', 'abrir mapa', 'ver mapa', 'ver no mapa']
   }
 ];
 
@@ -106,7 +111,7 @@ async function verificarNavegacaoUniversalPorVozComIA(textoNormalizado, textoOri
   if(localMatch) return localMatch;
 
   try{
-    const resp = await fetch('/.netlify/functions/interpretar-navegacao-voz', {
+    const resp = await fetch('/.netlify/functions/interpretar-navegacao-universal-voz', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texto: textoOriginal, paginaAtual })
