@@ -187,6 +187,8 @@ function _criarReconhecimentoPapo(Api){
       if(t.includes('ativar') || t.includes('guiazap')){
         _aguardandoAtivacaoPapo = false;
         falarVozPapo('Modo voz ativado.');
+      } else {
+        falarVozPapo('Fala "ativar" pra começar.');
       }
       return;
     }

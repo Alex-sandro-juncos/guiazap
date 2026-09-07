@@ -3802,6 +3802,8 @@ function _criarReconhecimentoIndex(SpeechRecognitionApi){
       if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
         _aguardandoAtivacaoIndex = false;
         falarVozIndex('Modo voz ativado. Fala o que você procura.');
+      } else {
+        falarVozIndex('Fala "ativar" pra começar.');
       }
       return; // ignora qualquer outra fala enquanto está em espera
     }

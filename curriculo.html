@@ -621,6 +621,8 @@ function _criarReconhecimentoCv(SpeechRecognitionApi){
         _aguardandoAtivacaoCv = false;
         _estadoPreenchimentoCv = { etapa: 'nome' };
         falarVozCv('Modo voz ativado. Vamos preencher seu currículo. Qual seu nome completo?');
+      } else {
+        falarVozCv('Fala "ativar" pra começar.');
       }
       return;
     }

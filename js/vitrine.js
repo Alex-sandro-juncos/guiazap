@@ -2899,6 +2899,8 @@ function _criarReconhecimentoVitrine(SpeechRecognitionApi){
       if(textoNorm.includes('ativar') || textoNorm.includes('guiazap')){
         _aguardandoAtivacaoVitrine = false;
         falarVozVitrine('Modo voz ativado.');
+      } else {
+        falarVozVitrine('Fala "ativar" pra começar.');
       }
       return;
     }

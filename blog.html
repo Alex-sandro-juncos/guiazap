@@ -314,6 +314,8 @@ function _criarReconhecimentoBlog(SpeechRecognitionApi){
         _aguardandoAtivacaoBlog = false;
         _estadoRedacaoBlog = { etapa: 'escolher_ler_ou_escrever' };
         falarVozBlog('Modo voz ativado. Você quer ler um artigo ou escrever um novo? Fala "ler" ou "escrever".');
+      } else {
+        falarVozBlog('Fala "ativar" pra começar.');
       }
       return;
     }

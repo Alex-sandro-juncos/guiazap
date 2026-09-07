@@ -497,6 +497,8 @@ function _criarReconhecimentoPedidos(SpeechRecognitionApi){
       if(t.includes('ativar') || t.includes('guiazap')){
         _aguardandoAtivacaoPedidos = false;
         falarVozPedidos('Modo voz ativado.');
+      } else {
+        falarVozPedidos('Fala "ativar" pra começar.');
       }
       return;
     }

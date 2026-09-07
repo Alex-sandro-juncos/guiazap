@@ -310,6 +310,8 @@ function _criarReconhecimentoVagas(SpeechRecognitionApi){
         _estadoVozVagas = { etapa: 'titulo', rascunho: '', dados: {} };
         abrirFormVaga();
         falarVozVagas('Modo voz ativado. Vamos publicar uma vaga. Qual o cargo?');
+      } else {
+        falarVozVagas('Fala "ativar" pra começar.');
       }
       return;
     }
