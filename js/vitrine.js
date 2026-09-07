@@ -4033,15 +4033,14 @@ async function processarEtapaFinalizacaoVoz(transcricao){
     const querRetirar = textoNorm.includes('retirar') || textoNorm.includes('retirada') || textoNorm.includes('local') || textoNorm.includes('buscar');
 
     if(querEntrega && !querRetirar){
-      // Confere se já tem endereço padrão salvo
+      estado.etapa = 'como_endereco';
       const { data: { user } } = await supabaseClientV.auth.getUser();
-      const { data: perfil } = await supabaseClientV.from('perfis_usuario').select('endereco_padrao_texto, endereco_padrao_latitude, endereco_padrao_longitude').eq('user_id', user.id).maybeSingle();
-
-      if(perfil && perfil.endereco_padrao_texto){
-        await calcularFreteEAvancarParaPin(perfil.endereco_padrao_texto, perfil.endereco_padrao_latitude, perfil.endereco_padrao_longitude);
+      const { data: perfil } = await supabaseClientV.from('perfis_usuario').select('endereco_padrao_texto').eq('user_id', user.id).maybeSingle();
+      estado.temEnderecoSalvo = !!(perfil && perfil.endereco_padrao_texto);
+      if(estado.temEnderecoSalvo){
+        falarVozVitrine('Pra onde entrega? Fala "localização atual" pra usar onde você está agora, "endereço salvo" pra mandar no endereço que já está cadastrado, ou "outro endereço" se estiver em um lugar e quiser mandar em outro. Aí você dita rua, número, bairro e cidade.');
       } else {
-        estado.etapa = 'endereco';
-        falarVozVitrine('Ainda não tenho seu endereço salvo. Fala seu endereço completo: rua, número, bairro e cidade.');
+        falarVozVitrine('Pra onde entrega? Fala "localização atual" pra usar onde você está agora, ou "outro endereço" e dita rua, número, bairro e cidade. Assim dá pra estar num lugar e mandar a entrega em outro.');
       }
       return;
     }
@@ -4056,19 +4055,43 @@ async function processarEtapaFinalizacaoVoz(transcricao){
     return;
   }
 
+  if(estado.etapa === 'como_endereco'){
+    const querGps = textoNorm.includes('localizacao') || textoNorm.includes('localização') || textoNorm.includes('gps') || textoNorm.includes('onde eu estou') || textoNorm.includes('onde estou') || (textoNorm.includes('atual') && (textoNorm.includes('local') || textoNorm.includes('aqui')));
+    const querSalvo = textoNorm.includes('salvo') || textoNorm.includes('cadastrado') || textoNorm.includes('o de sempre') || textoNorm.includes('padrao') || textoNorm.includes('padrão');
+    const querOutro = textoNorm.includes('outro') || textoNorm.includes('diferente') || textoNorm.includes('ditar') || textoNorm.includes('falar endereco') || textoNorm.includes('falar endereço');
+
+    if(querGps && !querOutro){
+      await usarLocalizacaoAtualNoFreteVoz();
+      return;
+    }
+    if(querSalvo && !querOutro){
+      const { data: { user } } = await supabaseClientV.auth.getUser();
+      const { data: perfil } = await supabaseClientV.from('perfis_usuario').select('endereco_padrao_texto, endereco_padrao_latitude, endereco_padrao_longitude').eq('user_id', user.id).maybeSingle();
+      if(perfil && perfil.endereco_padrao_texto){
+        await calcularFreteEAvancarParaPin(perfil.endereco_padrao_texto, perfil.endereco_padrao_latitude, perfil.endereco_padrao_longitude);
+      } else {
+        estado.etapa = 'endereco';
+        falarVozVitrine('Não achei endereço salvo. Fala o endereço completo: rua, número, bairro e cidade.');
+      }
+      return;
+    }
+    if(querOutro || (!querGps && !querSalvo && textoNorm.length > 12)){
+      if(!querOutro && textoNorm.length > 12){
+        document.getElementById('voz-vitrine-status').textContent = '📍 Calculando frete...';
+        await calcularFreteEAvancarParaPin(transcricao, null, null);
+        return;
+      }
+      estado.etapa = 'endereco';
+      falarVozVitrine('Fala o endereço completo de entrega: rua, número, bairro e cidade.');
+      return;
+    }
+    falarVozVitrine('Não entendi. Fala "localização atual", "endereço salvo" ou "outro endereço".');
+    return;
+  }
+
   if(estado.etapa === 'endereco'){
     document.getElementById('voz-vitrine-status').textContent = '📍 Calculando frete...';
     await calcularFreteEAvancarParaPin(transcricao, null, null);
-
-    // Salva esse endereço como padrão pra próxima vez, se deu certo
-    if(estado.enderecoEntrega){
-      const { data: { user } } = await supabaseClientV.auth.getUser();
-      await supabaseClientV.from('perfis_usuario').update({
-        endereco_padrao_texto: estado.enderecoEntrega,
-        endereco_padrao_latitude: estado.latitudeEntrega,
-        endereco_padrao_longitude: estado.longitudeEntrega
-      }).eq('user_id', user.id);
-    }
     return;
   }
 
@@ -4081,6 +4104,27 @@ async function processarEtapaFinalizacaoVoz(transcricao){
     await processarConfirmacaoCvvVoz(transcricao);
     return;
   }
+}
+
+function usarLocalizacaoAtualNoFreteVoz(){
+  const estado = _estadoFinalizacaoVoz;
+  if(!navigator.geolocation){
+    estado.etapa = 'endereco';
+    falarVozVitrine('Seu aparelho não tem GPS. Fala o endereço completo: rua, número, bairro e cidade.');
+    return Promise.resolve();
+  }
+  falarVozVitrine('Pegando sua localização atual...');
+  document.getElementById('voz-vitrine-status').textContent = '📍 Localização atual...';
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      await calcularFreteEAvancarParaPin('localização atual', pos.coords.latitude, pos.coords.longitude);
+      resolve();
+    }, () => {
+      estado.etapa = 'endereco';
+      falarVozVitrine('Não consegui sua localização. Fala o endereço completo: rua, número, bairro e cidade.');
+      resolve();
+    }, { enableHighAccuracy: true, timeout: 12000 });
+  });
 }
 
 async function calcularFreteEAvancarParaPin(endereco, latitude, longitude){
@@ -4145,9 +4189,15 @@ async function processarConfirmacaoPinVoz(transcricao){
       return;
     }
 
-    // PIN certo — agora pede o CVV do cartão salvo pra cobrar de verdade
+    const { data: cartoes } = await supabaseClientV.from('cartoes_salvos_usuario').select('id').eq('user_id', currentUserV.id).limit(1);
+    if(!cartoes || cartoes.length === 0){
+      _estadoFinalizacaoVoz = null;
+      falarVozVitrine('PIN confirmado, mas você ainda não tem cartão salvo. Fala "cadastrar cartão" pra guardar um, e depois finaliza o pedido de novo. Sem cartão eu não peço CVV.');
+      return;
+    }
+
     estado.etapa = 'cvv';
-    falarVozVitrine('PIN confirmado! Agora fala o código de segurança (CVV) do seu cartão salvo.');
+    falarVozVitrine('PIN confirmado! Agora fala o código de segurança, o CVV, os 3 números de trás do cartão salvo.');
   } catch(e){
     console.error(e);
     falarVozVitrine('Deu um erro ao conferir o PIN. Tenta de novo.');
