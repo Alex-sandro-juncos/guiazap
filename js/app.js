@@ -4441,7 +4441,12 @@ async function processarComandoVozIndex(transcricao){
     textoNormalizado.includes('ir para o blog') ||
     textoNormalizado.includes('ir pro blog') ||
     textoNormalizado.includes('abrir blog') ||
-    textoNormalizado.includes('ver blog')
+    textoNormalizado.includes('ver blog') ||
+    textoNormalizado.includes('ler blog') ||
+    // O reconhecimento de voz às vezes entende "ler blog" errado, como se
+    // fosse inglês — cobre essas variações também
+    textoNormalizado.includes('learn blog') ||
+    textoNormalizado.includes('lair blog')
   ){
     irPara('blog.html', 'Indo pro blog...');
     return;

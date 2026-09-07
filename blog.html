@@ -117,18 +117,46 @@ async function enviarArtigo(){
   const slugBase = gerarSlug(titulo);
   const slugFinal = `${slugBase}-${Date.now().toString().slice(-5)}`;
 
-  const { error } = await supabaseClientBlog.from('blog_posts').insert({
+  const { data, error } = await supabaseClientBlog.from('blog_posts').insert({
     titulo, conteudo, autor_nome: autor, autor_email: email || null, slug: slugFinal
-  });
+  }).select('id').single();
 
   if(error){ console.error(error); msg.textContent = 'Erro ao enviar. Tente de novo.'; msg.style.color = '#a4402f'; return; }
 
-  msg.textContent = '✓ Enviado! Seu artigo aparece aqui assim que for aprovado.';
-  msg.style.color = 'var(--verde-escuro)';
   document.getElementById('blog-autor').value = '';
   document.getElementById('blog-email').value = '';
   document.getElementById('blog-titulo').value = '';
   document.getElementById('blog-conteudo').value = '';
+
+  // Manda pra revisão automática por IA — aprova ou exclui sozinha, sem
+  // precisar de ninguém lendo manualmente. Se der algum erro na revisão,
+  // o artigo fica pendente (não aprovado, não excluído) pra ser visto
+  // depois pelo admin.
+  msg.textContent = 'revisando com IA...';
+  try{
+    const resp = await fetch('/.netlify/functions/revisar-blog-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: data.id })
+    });
+    const resultado = await resp.json();
+
+    if(resultado.decisao === 'aprovado'){
+      msg.textContent = '✓ Artigo publicado! Já pode ver na lista abaixo.';
+      msg.style.color = 'var(--verde-escuro)';
+      loadArtigos();
+    } else if(resultado.decisao === 'excluido'){
+      msg.textContent = 'Seu artigo não passou na revisão automática. Motivo: ' + (resultado.motivo || 'não informado') + '. Você pode ajustar e enviar de novo.';
+      msg.style.color = '#a4402f';
+    } else {
+      msg.textContent = 'Artigo enviado! Vai ser revisado em breve.';
+      msg.style.color = 'var(--verde-escuro)';
+    }
+  } catch(e){
+    console.error('erro ao chamar revisão por IA', e);
+    msg.textContent = 'Artigo enviado! Vai ser revisado em breve.';
+    msg.style.color = 'var(--verde-escuro)';
+  }
 }
 
 let artigosCarregados = [];
@@ -330,6 +358,44 @@ function pararModoVozBlog(){
   if(ind) ind.style.background = '#6b46c1';
 }
 
+// Troca palavras de pontuação faladas pelo símbolo de verdade, pra quem
+// dita o artigo por voz não precisar escrever manualmente depois. O
+// reconhecimento de voz do navegador não insere pontuação sozinho — quem
+// dita precisa falar a palavra da pontuação no lugar certo da frase (ex:
+// "isso foi bom vírgula não foi" vira "isso foi bom, não foi"). Os
+// acentos das palavras normais (não, é, ótimo...) o próprio reconhecimento
+// de voz já entrega certos, isso aqui só cuida da pontuação.
+function aplicarPontuacaoFalada(texto){
+  let t = ' ' + texto.trim() + ' ';
+  const trocas = [
+    [/\s+ponto de interroga[cç][aã]o\s+/gi, '? '],
+    [/\s+ponto de exclama[cç][aã]o\s+/gi, '! '],
+    [/\s+interroga[cç][aã]o\s+/gi, '? '],
+    [/\s+exclama[cç][aã]o\s+/gi, '! '],
+    [/\s+ponto e v[ií]rgula\s+/gi, '; '],
+    [/\s+dois pontos\s+/gi, ': '],
+    [/\s+reticências\s+/gi, '... '],
+    [/\s+ponto final\s+/gi, '. '],
+    [/\s+novo par[aá]grafo\s+/gi, '.\n\n'],
+    [/\s+nova linha\s+/gi, '.\n'],
+    [/\s+abre par[eê]ntese[s]?\s+/gi, ' ('],
+    [/\s+fecha par[eê]ntese[s]?\s+/gi, ') '],
+    [/\s+abre aspas\s+/gi, ' "'],
+    [/\s+fecha aspas\s+/gi, '" '],
+    [/\s+v[ií]rgula\s+/gi, ', '],
+    [/\s+ponto\s+/gi, '. '],
+  ];
+  for(const [regex, symbol] of trocas){
+    t = t.replace(regex, symbol);
+  }
+  // Limpa espaço duplicado que a troca possa ter deixado, mas preserva as
+  // quebras de linha de parágrafo/linha nova
+  t = t.replace(/[ \t]+/g, ' ').trim();
+  // Espaço antes de pontuação de fechamento fica feio — remove
+  t = t.replace(/\s+([,.;:!?])/g, '$1');
+  return t;
+}
+
 function falarVozBlog(texto){
   if(!_vozBlogSynth) return;
   _vozBlogFalando = true;
@@ -425,10 +491,12 @@ async function processarComandoVozBlog(transcricao){
       falarVozBlog('Artigo com ' + conteudoAtual.length + ' caracteres. Quer enviar pra revisão agora? Fala "sim" ou "não".');
       return;
     }
-    // Continua acrescentando ao conteúdo
+    // Continua acrescentando ao conteúdo — aplica a pontuação falada
+    // (vírgula, ponto, interrogação...) antes de guardar no campo
     const campo = document.getElementById('blog-conteudo');
     const anterior = campo.value.trim();
-    campo.value = anterior ? (anterior + ' ' + transcricao.trim()) : transcricao.trim();
+    const trechoComPontuacao = aplicarPontuacaoFalada(transcricao);
+    campo.value = anterior ? (anterior + ' ' + trechoComPontuacao) : trechoComPontuacao;
     const chars = campo.value.length;
     document.getElementById('voz-blog-status').textContent = '📝 ' + chars + ' caracteres — continue ou diga "pronto"';
     return;
@@ -439,12 +507,16 @@ async function processarComandoVozBlog(transcricao){
       falarVozBlog('Enviando artigo pra revisão...');
       await enviarArtigo();
       const msg = document.getElementById('blog-msg').textContent || '';
-      if(msg.includes('Enviado') || msg.includes('✓')){
+      if(msg.includes('publicado')){
+        falarVozBlog('Seu artigo foi aprovado e já está publicado no blog!');
+      } else if(msg.includes('não passou')){
+        falarVozBlog('Seu artigo não passou na revisão automática. ' + msg.split('Motivo:')[1]?.split('.')[0] || 'Confere o motivo na tela.');
+      } else if(msg.includes('revisado em breve') || msg.includes('✓')){
         falarVozBlog('Artigo enviado! Ele aparece no blog assim que for aprovado.');
       } else {
         falarVozBlog('Houve um problema ao enviar. Você pode tentar de novo pelo formulário.');
       }
-      setTimeout(pararModoVozBlog, 2500);
+      setTimeout(pararModoVozBlog, 3000);
     } else if(textoNorm.includes('nao') || textoNorm.includes('não') || textoNorm.includes('cancelar')){
       falarVozBlog('Tudo bem. O artigo ficou preenchido na tela. Você pode revisar e enviar quando quiser.');
       setTimeout(pararModoVozBlog, 2000);
