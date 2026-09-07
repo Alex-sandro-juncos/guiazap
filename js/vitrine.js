@@ -3016,6 +3016,137 @@ function falarVozVitrine(texto){
   }, 6000);;
 }
 
+let _estadoPessoaEmpresaVoz = null;
+// { empresa, temProduto, etapa: 'compra_ou_conversar' | 'sabe_ou_lista' }
+
+function extrairNomePessoaEmpresaDaFalaVitrine(textoNorm){
+  let t = ' ' + String(textoNorm || '') + ' ';
+  const prefixos = [
+    'encontrar o contato de', 'achar o contato de', 'ver o contato de',
+    'contato de', 'falar com', 'conversar com', 'chamar', 'menu de',
+    'loja de', 'empresa de', 'quero o contato de', 'me passa o contato de'
+  ];
+  prefixos.forEach(p => { t = t.replace(new RegExp('\\s' + p + '\\s', 'g'), ' '); });
+  t = t.replace(/\s(quero|queria|por favor|porfavor|por|pra|para|pro|o|a|os|as|de|do|da|dos|das)\s/g, ' ');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+function falaParecePedidoDePessoaOuEmpresa(textoNorm){
+  const pistas = ['falar com', 'conversar com', 'contato', 'papo', 'chamar', 'menu de', 'loja de'];
+  return pistas.some(p => textoNorm.includes(p));
+}
+
+async function buscarEmpresaPorNomeVoz(nome){
+  if(!nome || nome.length < 3) return [];
+  const { data, error } = await supabaseClientV.from('profissionais')
+    .select('id, name, user_id, whatsapp, cidade')
+    .eq('status_pagamento', 'ativo')
+    .ilike('name', '%' + nome + '%')
+    .limit(8);
+  if(error){
+    console.warn(error);
+    return [];
+  }
+  return data || [];
+}
+
+function empresaTemProdutoNaVitrine(empresaId){
+  return (produtos || []).some(p => p.profissionais && p.profissionais.id === empresaId);
+}
+
+function irParaPapoDaEmpresaVoz(empresa){
+  localStorage.setItem('retomarModoVozAoCarregar', '1');
+  falarVozVitrine('Ela não tem produto à venda. Abrindo o Papo com ' + empresa.name + '.');
+  setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id; }, 1200);
+}
+
+function irParaPapoDaEmpresaVozComProduto(empresa){
+  localStorage.setItem('retomarModoVozAoCarregar', '1');
+  falarVozVitrine('Abrindo o Papo com ' + empresa.name + '.');
+  setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id; }, 1200);
+}
+
+function listarProdutosDaEmpresaEmVoz(empresa){
+  empresaFiltroId = empresa.id;
+  try{ history.replaceState({}, '', 'vitrine.html?empresa=' + empresa.id); } catch(e){}
+  const h1 = document.querySelector('.vitrine-header h1');
+  if(h1) h1.textContent = empresa.name;
+  document.getElementById('v-search').value = '';
+  renderProdutos();
+  const lista = (produtos || []).filter(p => p.profissionais && p.profissionais.id === empresa.id);
+  if(lista.length === 0){
+    falarVozVitrine(empresa.name + ' não tem produto listado agora.');
+    return;
+  }
+  const fala = lista.slice(0, 8).map(p => descreverProdutoVoz(p)).join('; ');
+  falarVozVitrine('Produtos de ' + empresa.name + ': ' + fala + '. Fala o nome do que quiser comprar.');
+}
+
+async function tratarFalaPessoaOuEmpresaVitrine(transcricao){
+  const t = normalizarTextoV(transcricao);
+
+  if(_estadoPessoaEmpresaVoz && _estadoPessoaEmpresaVoz.etapa === 'compra_ou_conversar'){
+    const querConversar = t.includes('conversar') || t.includes('papo') || t.includes('falar') || t.includes('contato') || t.includes('chat');
+    const querComprar = t.includes('comprar') || t.includes('compra') || t.includes('produto') || t.includes('pedir');
+    if(querConversar && !querComprar){
+      const emp = _estadoPessoaEmpresaVoz.empresa;
+      _estadoPessoaEmpresaVoz = null;
+      irParaPapoDaEmpresaVozComProduto(emp);
+      return true;
+    }
+    if(querComprar){
+      _estadoPessoaEmpresaVoz.etapa = 'sabe_ou_lista';
+      falarVozVitrine('Você já sabe o que quer comprar, ou quer saber quais produtos ' + _estadoPessoaEmpresaVoz.empresa.name + ' tem? Fala "já sei" ou "quais produtos".');
+      return true;
+    }
+    falarVozVitrine('Não entendi. Fala "comprar" ou "conversar".');
+    return true;
+  }
+
+  if(_estadoPessoaEmpresaVoz && _estadoPessoaEmpresaVoz.etapa === 'sabe_ou_lista'){
+    const querLista = t.includes('quais') || t.includes('lista') || t.includes('produto') || t.includes('cardapio') || t.includes('cardápio') || t.includes('menu') || t.includes('saber');
+    const jaSabe = t.includes('ja sei') || t.includes('já sei') || t.includes('sei o que') || t.includes('quero o');
+    if(querLista && !jaSabe){
+      const emp = _estadoPessoaEmpresaVoz.empresa;
+      _estadoPessoaEmpresaVoz = null;
+      listarProdutosDaEmpresaEmVoz(emp);
+      return true;
+    }
+    if(jaSabe || (!querLista && t.length > 3)){
+      _estadoPessoaEmpresaVoz = null;
+      falarVozVitrine('Pode falar o que você quer comprar.');
+      return true;
+    }
+    falarVozVitrine('Fala "já sei" se já sabe o produto, ou "quais produtos" pra eu listar.');
+    return true;
+  }
+
+  if(!falaParecePedidoDePessoaOuEmpresa(t)) return false;
+
+  const nome = extrairNomePessoaEmpresaDaFalaVitrine(t);
+  if(!nome || nome.length < 3) return false;
+
+  const empresas = await buscarEmpresaPorNomeVoz(nome);
+  if(empresas.length === 0) return false;
+
+  if(empresas.length > 1){
+    falarVozVitrine('Achei mais de um: ' + empresas.map(e => e.name).join(', ') + '. Fala o nome certinho.');
+    return true;
+  }
+
+  const empresa = empresas[0];
+  const temProduto = empresaTemProdutoNaVitrine(empresa.id);
+
+  if(!temProduto){
+    irParaPapoDaEmpresaVoz(empresa);
+    return true;
+  }
+
+  _estadoPessoaEmpresaVoz = { empresa, temProduto, etapa: 'compra_ou_conversar' };
+  falarVozVitrine(empresa.name + ' tem produto à venda. Você quer comprar ou conversar?');
+  return true;
+}
+
 async function processarComandoVozVitrine(transcricao){
   // Blindagem geral: se qualquer erro inesperado acontecer em qualquer
   // ponto do processamento do comando, avisa em voz em vez de ficar mudo
@@ -3047,6 +3178,8 @@ async function _processarComandoVozVitrineInterno(transcricao){
     const tratou = await processarEtapaCadastroCartaoVoz(transcricao);
     if(tratou) return;
   }
+
+  if(await tratarFalaPessoaOuEmpresaVitrine(transcricao)) return;
 
   // Prioridade máxima: se acabamos de mostrar várias opções parecidas
   // (mais barato/mais caro) e a pessoa está respondendo qual quer
@@ -3547,6 +3680,20 @@ async function _processarComandoVozVitrineInterno(transcricao){
         _ultimaBuscaVozVitrineComOpcoes = { maisBarato: porPreco[0].p, maisCaro: porPreco[porPreco.length - 1].p, ranqueados };
       }
       falarVozVitrine(fala);
+      return;
+    }
+  }
+
+  if(termoLimpo && termoLimpo.length >= 3){
+    const empresasNome = await buscarEmpresaPorNomeVoz(termoLimpo);
+    if(empresasNome.length === 1){
+      const empresa = empresasNome[0];
+      if(!empresaTemProdutoNaVitrine(empresa.id)){
+        irParaPapoDaEmpresaVoz(empresa);
+        return;
+      }
+      _estadoPessoaEmpresaVoz = { empresa, temProduto: true, etapa: 'compra_ou_conversar' };
+      falarVozVitrine(empresa.name + ' tem produto à venda. Você quer comprar ou conversar?');
       return;
     }
   }
