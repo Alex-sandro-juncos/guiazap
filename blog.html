@@ -535,10 +535,19 @@ async function processarComandoVozBlog(transcricao){
     }
   }
 
-  // Comandos globais
-  if(textoNorm === 'cancelar' || textoNorm === 'parar' || textoNorm === 'sair' || textoNorm === 'desligar'){
+  // Comandos globais. "desligar"/"sair" desliga o modo voz de vez —
+  // "parar"/"cancelar" só encerra a ação atual (ex: parar de ler um
+  // artigo), mas o modo voz continua ativo, esperando o próximo comando.
+  // Isso é importante pra pessoa poder navegar pro resto do site sem
+  // precisar reativar o microfone toda hora.
+  if(textoNorm === 'sair' || textoNorm === 'desligar'){
     falarVozBlog('Modo voz desligado.');
     setTimeout(pararModoVozBlog, 1200);
+    return;
+  }
+  if(textoNorm === 'parar' || textoNorm === 'cancelar'){
+    estado.etapa = 'escolher_ler_ou_escrever';
+    falarVozBlog('Tudo bem. O modo voz continua ativo. Pode pedir outra coisa, tipo ir pra vitrine, ou fala "ler" ou "escrever" pra continuar aqui no blog.');
     return;
   }
 
@@ -597,8 +606,8 @@ async function processarComandoVozBlog(transcricao){
       estado.etapa = 'nome';
       falarVozBlog('Vamos escrever! Qual o seu nome de autor?');
     } else {
-      falarVozBlog('Tudo bem. Modo voz desligado.');
-      setTimeout(pararModoVozBlog, 1500);
+      estado.etapa = 'escolher_ler_ou_escrever';
+      falarVozBlog('Tudo bem. Modo voz continua ativo — pode pedir outra coisa quando quiser.');
     }
     return;
   }
@@ -639,8 +648,8 @@ async function processarComandoVozBlog(transcricao){
       estado.etapa = 'nome';
       falarVozBlog('Vamos escrever um artigo novo. Qual o seu nome de autor?');
     } else {
-      falarVozBlog('Modo voz desligado.');
-      setTimeout(pararModoVozBlog, 1500);
+      // Não entendeu — mas o modo voz continua ativo, não desliga
+      falarVozBlog('Não entendi. Fala "ler outro", "escrever", ou pede outra coisa, tipo ir pra vitrine.');
     }
     return;
   }
@@ -715,18 +724,18 @@ async function processarComandoVozBlog(transcricao){
       await enviarArtigo();
       const msg = document.getElementById('blog-msg').textContent || '';
       if(msg.includes('publicado')){
-        falarVozBlog('Seu artigo foi aprovado e já está publicado no blog!');
+        falarVozBlog('Seu artigo foi aprovado e já está publicado no blog! Modo voz continua ativo, pode pedir outra coisa.');
       } else if(msg.includes('não passou')){
         falarVozBlog('Seu artigo não passou na revisão automática. ' + msg.split('Motivo:')[1]?.split('.')[0] || 'Confere o motivo na tela.');
       } else if(msg.includes('revisado em breve') || msg.includes('✓')){
-        falarVozBlog('Artigo enviado! Ele aparece no blog assim que for aprovado.');
+        falarVozBlog('Artigo enviado! Ele aparece no blog assim que for aprovado. Modo voz continua ativo, pode pedir outra coisa.');
       } else {
         falarVozBlog('Houve um problema ao enviar. Você pode tentar de novo pelo formulário.');
       }
-      setTimeout(pararModoVozBlog, 3000);
+      estado.etapa = 'escolher_ler_ou_escrever';
     } else if(textoNorm.includes('nao') || textoNorm.includes('não') || textoNorm.includes('cancelar')){
-      falarVozBlog('Tudo bem. O artigo ficou preenchido na tela. Você pode revisar e enviar quando quiser.');
-      setTimeout(pararModoVozBlog, 2000);
+      estado.etapa = 'escolher_ler_ou_escrever';
+      falarVozBlog('Tudo bem. O artigo ficou preenchido na tela. Modo voz continua ativo, pode pedir outra coisa quando quiser.');
     } else {
       falarVozBlog('Fala "sim" pra enviar, ou "não" pra só deixar preenchido na tela.');
     }

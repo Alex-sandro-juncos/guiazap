@@ -4500,9 +4500,15 @@ async function processarComandoVozIndex(transcricao){
     falarVozIndex('Busca limpa.');
     return;
   }
-  if(textoNormalizado.includes('parar') || textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
+  // "desligar"/"sair"/"desativar modo voz" desliga de vez — "parar" sozinho
+  // só confirma e mantém o modo voz ativo, pronto pro próximo comando
+  if(textoNormalizado.includes('desativar modo voz') || textoNormalizado.includes('desligar') || textoNormalizado === 'sair' || textoNormalizado.includes('cala boca') || textoNormalizado.includes('fica quieto') || textoNormalizado.includes('fique quieto')){
     falarVozIndex('Modo voz desativado.');
     setTimeout(pararModoVozIndex, 1500);
+    return;
+  }
+  if(textoNormalizado === 'parar'){
+    falarVozIndex('Ok. Modo voz continua ativo, pode pedir outra coisa.');
     return;
   }
 
