@@ -4437,6 +4437,17 @@ async function processarComandoVozIndex(transcricao){
   }
 
   if(
+    textoNormalizado === 'sobre' ||
+    textoNormalizado.includes('como funciona') ||
+    textoNormalizado.includes('sobre o guiazap') ||
+    textoNormalizado.includes('o que e o guiazap') ||
+    textoNormalizado.includes('o que é o guiazap')
+  ){
+    irPara('sobre.html', 'Indo pra página sobre o GuiaZap...');
+    return;
+  }
+
+  if(
     textoNormalizado === 'blog' ||
     textoNormalizado.includes('ir para o blog') ||
     textoNormalizado.includes('ir pro blog') ||

@@ -102,5 +102,79 @@
 </div>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
+<script>
+// Leitura da página "Sobre" por voz — essa página não tem modo voz
+// completo (não precisa de microfone o tempo todo, é só informativa), mas
+// se a pessoa chegou aqui vinda de um comando de voz em outra página, a
+// gente lê o conteúdo em voz alta e escuta um comando simples depois
+// (voltar ou repetir).
+(function(){
+  if(localStorage.getItem('retomarModoVozAoCarregar') !== '1') return;
+  localStorage.removeItem('retomarModoVozAoCarregar');
+
+  if(!('speechSynthesis' in window)) return;
+
+  const trechos = [
+    'Você está na página Sobre e Como Funciona do GuiaZap.',
+    'O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários.',
+    'Como funciona pra quem busca um profissional: primeiro, digite o que você precisa, tipo eletricista ou manicure, ou navegue pela lista. Segundo, filtre por cidade, bairro ou distância, e veja as avaliações de quem já contratou. Terceiro, clique em chamar no WhatsApp e fale direto com o profissional, sem cadastro, sem taxa.',
+    'Como funciona pra quem tem uma empresa: primeiro, crie sua conta grátis e cadastre sua empresa ou serviço. Segundo, escolha um pacote — o básico é cem por cento grátis, sempre. Terceiro, receba contatos diretos no seu WhatsApp, sem comissão sobre suas vendas.',
+    'O que você encontra no GuiaZap: vitrine de produtos, novidades em formato de stories, vagas de emprego, montador de currículo, selo verificado, e pacote premium.',
+    'Perguntas frequentes. O GuiaZap cobra alguma coisa dos visitantes? Não, buscar e entrar em contato é cem por cento grátis, sempre. O GuiaZap participa da negociação ou cobra comissão? Não — o GuiaZap é só um diretório, a conversa e o negócio acontecem direto entre você e a empresa, pelo WhatsApp. Preciso pagar pra cadastrar minha empresa? Não necessariamente — o pacote contato é grátis pra sempre. Pacotes pagos existem pra quem quer recursos extras, como vitrine de produtos e mais visibilidade.',
+    'Se quiser cadastrar sua empresa, fala "cadastrar empresa". Pra voltar ao GuiaZap, fala "voltar". Pra ouvir de novo, fala "repetir".'
+  ];
+
+  let indice = 0;
+  let cancelado = false;
+
+  function falarProximoTrecho(){
+    if(cancelado || indice >= trechos.length){
+      escutarComandoSobre();
+      return;
+    }
+    const utter = new SpeechSynthesisUtterance(trechos[indice]);
+    utter.lang = 'pt-BR';
+    utter.onend = function(){ indice++; falarProximoTrecho(); };
+    utter.onerror = function(){ indice++; falarProximoTrecho(); };
+    speechSynthesis.speak(utter);
+  }
+
+  function escutarComandoSobre(){
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRecognition) return;
+
+    const reconhecimento = new SpeechRecognition();
+    reconhecimento.lang = 'pt-BR';
+    reconhecimento.continuous = false;
+    reconhecimento.interimResults = false;
+
+    reconhecimento.onresult = function(event){
+      const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
+
+      if(texto.includes('voltar')){
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        window.location.href = 'index.html';
+      } else if(texto.includes('repetir') || texto.includes('de novo')){
+        indice = 0;
+        falarProximoTrecho();
+      } else if(texto.includes('cadastrar empresa') || texto.includes('cadastrar minha empresa')){
+        window.location.href = 'pacotes.html';
+      } else {
+        const aviso = new SpeechSynthesisUtterance('Não entendi. Fala "voltar" pra sair, ou "repetir" pra ouvir de novo.');
+        aviso.lang = 'pt-BR';
+        aviso.onend = escutarComandoSobre;
+        speechSynthesis.speak(aviso);
+      }
+    };
+
+    reconhecimento.onerror = function(){ /* silencioso — a pessoa pode navegar normal pelo toque */ };
+
+    try{ reconhecimento.start(); } catch(e){ /* ignora */ }
+  }
+
+  // Espera um instante a página carregar visualmente antes de começar a falar
+  setTimeout(falarProximoTrecho, 600);
+})();
+</script>
 </body>
 </html>
