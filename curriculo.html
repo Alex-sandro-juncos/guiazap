@@ -3,884 +3,195 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Montar Currículo — GuiaZap</title>
-<meta name="description" content="Monte seu currículo grátis e envie pro Banco de Talentos do GuiaZap — empresas da sua região podem te encontrar.">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css">
+<title>Sobre o GuiaZap — Como Funciona</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<meta name="description" content="O GuiaZap conecta você a profissionais e empresas da sua região. Busque, veja avaliações e fale direto no WhatsApp — de graça.">
+<link rel="stylesheet" href="css/style.css">
 <style>
-  .curriculo-header { background: #6b46c1; padding: 24px 15px; text-align: center; color: white; }
-  .curriculo-header h1 { font-size: 1.6rem; font-weight: 800; }
-  .curriculo-header p { font-size: 0.85rem; opacity: 0.95; margin-top: 4px; }
-  .curriculo-wrap { max-width: 600px; margin: 0 auto; padding: 18px 15px 40px; }
-
-  .cv-form { background: var(--cinza-card); border-radius: 14px; padding: 16px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-  .cv-form .field { margin-bottom: 10px; }
-  .cv-form label { display: block; font-size: 0.78rem; font-weight: 600; color: #444; margin-bottom: 4px; }
-  .cv-form input, .cv-form textarea, .cv-form select {
-    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;
+  .sobre-wrap { max-width: 700px; margin: 0 auto; padding: 30px 20px 60px; line-height: 1.6; color: #333; }
+  .sobre-wrap h1 { font-size: 1.6rem; margin-bottom: 6px; color: var(--verde-escuro); }
+  .sobre-wrap h2 { font-size: 1.15rem; margin: 28px 0 10px; color: var(--verde-escuro); }
+  .sobre-wrap p { font-size: 0.92rem; margin-bottom: 10px; }
+  .voltar { display: inline-block; margin-bottom: 20px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .passo-numerado {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    align-items: flex-start;
   }
-  .cv-secao-titulo { font-size: 0.95rem; font-weight: 700; color: #6b46c1; margin: 16px 0 8px; }
-  .btn-baixar-cv {
-    width: 100%; background: #6b46c1; color: white; border: none; padding: 12px;
-    border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; margin-top: 10px;
+  .passo-numerado .numero {
+    background: var(--verde-whats);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    flex-shrink: 0;
+    font-size: 0.85rem;
   }
-
-  /* Prévia do currículo */
-  #cv-preview {
-    background: white;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    color: #1c1c1c;
-  }
-  .cv-topo { display: flex; gap: 16px; align-items: center; border-bottom: 3px solid #6b46c1; padding-bottom: 14px; margin-bottom: 14px; }
-  .cv-foto { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
-  .cv-nome { font-size: 1.3rem; font-weight: 800; color: #1c1c1c; }
-  .cv-contato-linha { font-size: 0.8rem; color: #555; margin-top: 2px; }
-  .cv-secao { margin-bottom: 14px; }
-  .cv-secao h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b46c1; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 6px; }
-  .cv-secao p, .cv-secao .item { font-size: 0.85rem; color: #333; line-height: 1.5; margin-bottom: 6px; white-space: pre-wrap; }
-  .cv-vazio-preview { text-align: center; color: #999; padding: 30px 10px; font-size: 0.85rem; }
-
-  .voltar-guiazap { display: block; text-align: center; padding: 10px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
-
-  @media print {
-    header, .cv-form, .voltar-guiazap, .btn-baixar-cv, .btn-modo-escuro-solto, .btn-chat-flutuante { display: none !important; }
-    body { background: white; }
-    #cv-preview { box-shadow: none; padding: 0; }
-  }
-  .banco-talentos-box {
-    background: #ede9fe;
-    border-radius: 10px;
-    padding: 12px;
-    margin-top: 14px;
-  }
-  .banco-talentos-box p { font-size: 0.8rem; color: #4c1d95; margin-bottom: 10px; line-height: 1.4; }
-.cv-progresso-box { margin-bottom: 16px; }
-.cv-progresso-texto { font-size: 0.85rem; color: #444; margin-bottom: 6px; }
-.cv-progresso-barra-fundo { background: #eee; border-radius: 50px; height: 10px; overflow: hidden; }
-.cv-progresso-barra { height: 100%; background: linear-gradient(90deg, #25D366, #128C7E); transition: width 0.3s ease; }
+  .passo-numerado .texto { font-size: 0.9rem; padding-top: 3px; }
+  .recursos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .recurso-card { background: var(--cinza-card); border-radius: 12px; padding: 14px; text-align: center; }
+  .recurso-card .emoji { font-size: 1.6rem; }
+  .recurso-card .titulo { font-size: 0.82rem; font-weight: 700; margin-top: 4px; color: var(--verde-escuro); }
+  .cta-box { background: var(--cinza-card); border-radius: 14px; padding: 20px; text-align: center; margin-top: 24px; }
+  .cta-box a { display: inline-block; margin-top: 10px; background: var(--verde-whats); color: white; padding: 10px 22px; border-radius: 50px; font-weight: 700; text-decoration: none; }
 </style>
 </head>
 <body>
-<button type="button" onclick="toggleModoVozCv()" aria-label="Ativar modo de voz do GuiaZap Currículo, para preencher sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="position:absolute; top:0; left:0; width:100%; height:64px; margin:0; padding:0; border:none; background:transparent; color:transparent; cursor:pointer; font-size:0.01px; line-height:1; z-index:10;">
-  Ativar modo de voz do GuiaZap Currículo, para preencher sem precisar ver ou tocar na tela, feito pra quem não enxerga
-</button>
-<header class="curriculo-header">
-  <h1>📄 Montar Currículo</h1>
-  <p>Preencha seus dados e baixe seu currículo pronto, de graça</p>
-</header>
+<header><div class="logo">GuiaZap</div><p>Sobre e Como Funciona</p></header>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙 Modo escuro</button>
+<div class="sobre-wrap">
+<a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 
-<div class="curriculo-wrap">
-  <div id="cv-auth-box" class="cv-form" style="text-align:center;">
-    <p style="font-size:0.85rem; color:#555; margin-bottom:12px;">Crie uma conta grátis pra salvar seu currículo com segurança — só você consegue editar ou excluir depois.</p>
-    <input type="email" id="cv-auth-email" placeholder="Seu e-mail" style="margin-bottom:8px;">
-    <input type="password" id="cv-auth-senha" placeholder="Senha" style="margin-bottom:8px;">
-    <div style="display:flex; gap:8px;">
-      <button type="button" class="btn-baixar-cv" style="margin-top:0;" onclick="loginCv()">Entrar</button>
-      <button type="button" class="btn-baixar-cv" style="margin-top:0; background:#888;" onclick="criarContaCv()">Criar conta</button>
-    </div>
-    <div id="cv-auth-msg" style="font-size:0.78rem; color:#a4402f; margin-top:8px;"></div>
-  </div>
+<h1>O que é o GuiaZap?</h1>
+<p>O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários. E o GuiaZap cresceu: hoje também tem loja online, chat próprio com chamadas de voz e vídeo, blog, vagas de emprego, e controle por comando de voz em quase todo o site.</p>
 
-  <div id="cv-logado-box" class="cv-form" style="display:none; text-align:center;">
-    <p style="font-size:0.85rem;">Logado como <b id="cv-email-logado"></b></p>
-    <button type="button" class="btn-baixar-cv" style="margin-top:8px; background:#888;" onclick="sairCv()">Sair</button>
-  </div>
-
-  <div class="cv-form" id="cv-form-principal" style="display:none;">
-    <div class="cv-progresso-box">
-      <div class="cv-progresso-texto">Seu currículo está <b id="cv-progresso-porcentagem">0%</b> completo</div>
-      <div class="cv-progresso-barra-fundo"><div class="cv-progresso-barra" id="cv-progresso-barra" style="width:0%;"></div></div>
-    </div>
-    <div class="field">
-      <label>Foto (opcional)</label>
-      <div class="foto-botoes">
-        <label class="btn-foto-opcao">
-          📷 Tirar foto
-          <input type="file" accept="image/*" capture="environment" onchange="carregarFotoCv(event)" style="display:none;">
-        </label>
-        <label class="btn-foto-opcao">
-          🖼️ Escolher da galeria
-          <input type="file" accept="image/*" onchange="carregarFotoCv(event)" style="display:none;">
-        </label>
-      </div>
-    </div>
-
-    <button type="button" id="btn-modo-voz-cv" onclick="toggleModoVozCv()" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; padding:10px 16px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; margin-bottom:12px; width:100%;">🎙️ Preencher currículo por voz</button>
-
-    <div id="painel-modo-voz-cv" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <div id="voz-cv-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
-        <div style="flex:1; min-width:0;">
-          <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-cv-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
-          <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-cv-transcricao"></div>
-        </div>
-        <button type="button" onclick="toggleModoVozCv()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label for="cv-input-nome">Nome completo</label>
-      <input id="cv-input-nome" oninput="atualizarPreviewCv()" placeholder="Seu nome completo">
-    </div>
-    <div class="field">
-      <label for="cv-input-telefone">Telefone/WhatsApp</label>
-      <input id="cv-input-telefone" oninput="atualizarPreviewCv()" placeholder="(46) 99999-9999">
-    </div>
-    <div class="field">
-      <label for="cv-input-email">E-mail (opcional)</label>
-      <input id="cv-input-email" oninput="atualizarPreviewCv()" placeholder="seuemail@gmail.com">
-    </div>
-    <div class="field">
-      <label for="cv-input-cep">CEP</label>
-      <input id="cv-input-cep" placeholder="00000-000" oninput="mascaraCep(event)" onblur="buscarCepCv()">
-      <span id="cv-cep-msg" style="font-size:0.72rem; color:#888;"></span>
-    </div>
-    <div class="field">
-      <label for="cv-input-estado">Estado</label>
-      <select id="cv-input-estado" onchange="atualizarPreviewCv()"></select>
-    </div>
-    <div class="field">
-      <label for="cv-input-cidade">Cidade</label>
-      <input id="cv-input-cidade" oninput="atualizarPreviewCv()" placeholder="Sua cidade">
-    </div>
-    <div class="field">
-      <label for="cv-input-bairro">Bairro</label>
-      <input id="cv-input-bairro" oninput="atualizarPreviewCv()" placeholder="Seu bairro">
-    </div>
-
-    <div class="cv-secao-titulo">Objetivo</div>
-    <div class="field">
-      <label for="cv-input-objetivo" class="sr-only" style="position:absolute; left:-9999px;">Objetivo profissional</label>
-      <textarea id="cv-input-objetivo" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Busco oportunidade na área de vendas, com foco em atendimento ao cliente."></textarea>
-    </div>
-
-    <div class="cv-secao-titulo">Experiência profissional</div>
-    <div class="field">
-      <label for="cv-input-experiencia" class="sr-only" style="position:absolute; left:-9999px;">Experiência profissional</label>
-      <textarea id="cv-input-experiencia" rows="4" oninput="atualizarPreviewCv()" placeholder="Ex: Atendente de loja — Mercado São José (2022-2024)&#10;Responsável pelo caixa e atendimento ao público."></textarea>
-    </div>
-
-    <div class="cv-secao-titulo">Formação/Escolaridade</div>
-    <div class="field">
-      <label for="cv-input-formacao" class="sr-only" style="position:absolute; left:-9999px;">Formação e escolaridade</label>
-      <textarea id="cv-input-formacao" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Ensino Médio completo — Colégio Estadual X, 2021"></textarea>
-    </div>
-
-    <div class="cv-secao-titulo">Habilidades e cursos</div>
-    <div class="field">
-      <label for="cv-input-habilidades" class="sr-only" style="position:absolute; left:-9999px;">Habilidades e cursos</label>
-      <textarea id="cv-input-habilidades" rows="2" oninput="atualizarPreviewCv()" placeholder="Ex: Pacote Office, CNH categoria B, atendimento ao cliente"></textarea>
-    </div>
-
-    <button type="button" class="btn-baixar-cv" onclick="window.print()">⬇ Baixar/Imprimir currículo (PDF)</button>
-    <button type="button" class="btn-baixar-cv" style="background:var(--verde-whats); margin-top:8px;" onclick="copiarCurriculoTexto()">📋 Copiar texto (colar no WhatsApp)</button>
-    <div id="cv-copiar-msg" style="text-align:center; font-size:0.78rem; color:var(--verde-escuro); margin-top:6px;"></div>
-
-    <div class="banco-talentos-box">
-      <p>🎯 <b>Quer que empresas te encontrem?</b> Envie seu currículo pro Banco de Talentos do GuiaZap — empresas cadastradas podem consultar diretamente, mesmo sem você precisar se candidatar a uma vaga específica.</p>
-      <button type="button" class="btn-baixar-cv" style="background:#6b46c1;" onclick="enviarParaBancoTalentos()">📤 Enviar para o Banco de Talentos</button>
-      <button type="button" id="cv-btn-excluir" class="btn-baixar-cv" style="background:#a4402f; display:none;" onclick="excluirMeuCurriculo()">🗑️ Excluir currículo do banco</button>
-      <div id="cv-banco-msg" style="text-align:center; font-size:0.78rem; margin-top:6px;"></div>
-    </div>
-
-    <div id="cv-vagas-compativeis-box" style="display:none; margin-top:16px;">
-      <h3 style="font-size:0.95rem; color:var(--verde-escuro); margin-bottom:8px;">🎯 Vagas que combinam com seu perfil</h3>
-      <div id="cv-vagas-compativeis-lista"></div>
-    </div>
-  </div>
-
-  <div id="cv-preview">
-    <div class="cv-topo">
-      <img id="cv-preview-foto" class="cv-foto" src="https://api.dicebear.com/7.x/initials/svg?seed=Você" alt="Foto">
-      <div>
-        <div class="cv-nome" id="cv-preview-nome">Seu nome aqui</div>
-        <div class="cv-contato-linha" id="cv-preview-contato">Telefone · E-mail · Cidade</div>
-      </div>
-    </div>
-    <div class="cv-secao" id="cv-secao-objetivo" style="display:none;">
-      <h3>Objetivo</h3>
-      <p id="cv-preview-objetivo"></p>
-    </div>
-    <div class="cv-secao" id="cv-secao-experiencia" style="display:none;">
-      <h3>Experiência profissional</h3>
-      <p id="cv-preview-experiencia"></p>
-    </div>
-    <div class="cv-secao" id="cv-secao-formacao" style="display:none;">
-      <h3>Formação/Escolaridade</h3>
-      <p id="cv-preview-formacao"></p>
-    </div>
-    <div class="cv-secao" id="cv-secao-habilidades" style="display:none;">
-      <h3>Habilidades e cursos</h3>
-      <p id="cv-preview-habilidades"></p>
-    </div>
-  </div>
-
-  <a href="vagas.html" class="voltar-guiazap">← Ver vagas de emprego (Contrata-se)</a>
+<h2>🔍 Como funciona pra quem busca um profissional</h2>
+<div class="passo-numerado">
+  <div class="numero">1</div>
+  <div class="texto">Digite o que você precisa (ex: "eletricista", "manicure") ou navegue pela lista</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">2</div>
+  <div class="texto">Filtre por cidade, bairro ou distância, e veja as avaliações de quem já contratou</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">3</div>
+  <div class="texto">Clique em "Chamar no WhatsApp", ou converse pelo Papo direto no site — sem cadastro, sem taxa</div>
 </div>
 
-<script>
-async function copiarCurriculoTexto(){
-  const nome = document.getElementById('cv-input-nome').value.trim();
-  const telefone = document.getElementById('cv-input-telefone').value.trim();
-  const email = document.getElementById('cv-input-email').value.trim();
-  const cidade = document.getElementById('cv-input-cidade').value.trim();
-  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
-  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
-  const formacao = document.getElementById('cv-input-formacao').value.trim();
-  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
-
-  const msg = document.getElementById('cv-copiar-msg');
-
-  if(!nome){ msg.textContent = 'Preencha ao menos o nome antes de copiar.'; msg.style.color = '#a4402f'; return; }
-
-  let texto = `*CURRÍCULO*\n\n*${nome}*\n`;
-  const contato = [telefone, email, cidade].filter(Boolean).join(' · ');
-  if(contato) texto += `${contato}\n`;
-  if(objetivo) texto += `\n*Objetivo:*\n${objetivo}\n`;
-  if(experiencia) texto += `\n*Experiência profissional:*\n${experiencia}\n`;
-  if(formacao) texto += `\n*Formação/Escolaridade:*\n${formacao}\n`;
-  if(habilidades) texto += `\n*Habilidades e cursos:*\n${habilidades}\n`;
-
-  try{
-    await navigator.clipboard.writeText(texto);
-    msg.textContent = 'Currículo copiado! Agora é só colar na conversa do WhatsApp.';
-    msg.style.color = 'var(--verde-escuro)';
-  } catch(e){
-    prompt('Copie o texto abaixo:', texto);
-  }
-}
-
-function carregarFotoCv(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e){
-    document.getElementById('cv-preview-foto').src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function atualizarPreviewCv(){
-  const nome = document.getElementById('cv-input-nome').value.trim();
-  const telefone = document.getElementById('cv-input-telefone').value.trim();
-  const email = document.getElementById('cv-input-email').value.trim();
-  const bairro = document.getElementById('cv-input-bairro').value.trim();
-  const cidade = document.getElementById('cv-input-cidade').value.trim();
-  const estado = document.getElementById('cv-input-estado').value.trim();
-  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
-  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
-  const formacao = document.getElementById('cv-input-formacao').value.trim();
-  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
-
-  document.getElementById('cv-preview-nome').textContent = nome || 'Seu nome aqui';
-
-  // Calcula e mostra a barra de progresso do currículo
-  const fotoCarregada = !document.getElementById('cv-preview-foto').src.includes('dicebear.com');
-  const camposParaContar = [nome, telefone, email, cidade, objetivo, experiencia, formacao, habilidades];
-  const preenchidos = camposParaContar.filter(Boolean).length + (fotoCarregada ? 1 : 0);
-  const totalCampos = camposParaContar.length + 1;
-  const porcentagem = Math.round((preenchidos / totalCampos) * 100);
-  document.getElementById('cv-progresso-porcentagem').textContent = `${porcentagem}%`;
-  document.getElementById('cv-progresso-barra').style.width = `${porcentagem}%`;
-
-  const localizacao = [bairro, cidade && estado ? `${cidade}/${estado}` : cidade].filter(Boolean).join(', ');
-  const contatoPartes = [telefone, email, localizacao].filter(Boolean);
-  document.getElementById('cv-preview-contato').textContent = contatoPartes.length ? contatoPartes.join(' · ') : 'Telefone · E-mail · Cidade';
-
-  const secoes = [
-    ['objetivo', objetivo],
-    ['experiencia', experiencia],
-    ['formacao', formacao],
-    ['habilidades', habilidades]
-  ];
-  secoes.forEach(([chave, valor]) => {
-    document.getElementById('cv-secao-' + chave).style.display = valor ? 'block' : 'none';
-    document.getElementById('cv-preview-' + chave).textContent = valor;
-  });
-}
-
-const UFS_CV = [
-  {sigla:'AC',nome:'Acre'},{sigla:'AL',nome:'Alagoas'},{sigla:'AP',nome:'Amapá'},{sigla:'AM',nome:'Amazonas'},
-  {sigla:'BA',nome:'Bahia'},{sigla:'CE',nome:'Ceará'},{sigla:'DF',nome:'Distrito Federal'},{sigla:'ES',nome:'Espírito Santo'},
-  {sigla:'GO',nome:'Goiás'},{sigla:'MA',nome:'Maranhão'},{sigla:'MT',nome:'Mato Grosso'},{sigla:'MS',nome:'Mato Grosso do Sul'},
-  {sigla:'MG',nome:'Minas Gerais'},{sigla:'PA',nome:'Pará'},{sigla:'PB',nome:'Paraíba'},{sigla:'PR',nome:'Paraná'},
-  {sigla:'PE',nome:'Pernambuco'},{sigla:'PI',nome:'Piauí'},{sigla:'RJ',nome:'Rio de Janeiro'},{sigla:'RN',nome:'Rio Grande do Norte'},
-  {sigla:'RS',nome:'Rio Grande do Sul'},{sigla:'RO',nome:'Rondônia'},{sigla:'RR',nome:'Roraima'},{sigla:'SC',nome:'Santa Catarina'},
-  {sigla:'SP',nome:'São Paulo'},{sigla:'SE',nome:'Sergipe'},{sigla:'TO',nome:'Tocantins'}
-];
-
-function popularEstadosCv(){
-  const sel = document.getElementById('cv-input-estado');
-  sel.innerHTML = '<option value="">Selecione</option>' + UFS_CV.map(u => `<option value="${u.sigla}">${u.sigla} - ${u.nome}</option>`).join('');
-}
-popularEstadosCv();
-
-async function buscarCepCv(){
-  const cepInput = document.getElementById('cv-input-cep');
-  const msg = document.getElementById('cv-cep-msg');
-  const cep = cepInput.value.replace(/\D/g,'');
-
-  if(cep.length !== 8){
-    msg.textContent = cep.length > 0 ? 'CEP deve ter 8 números' : '';
-    return;
-  }
-
-  msg.textContent = 'buscando...';
-  try{
-    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    const data = await resp.json();
-    if(data.erro){ msg.textContent = 'CEP não encontrado'; return; }
-
-    document.getElementById('cv-input-estado').value = data.uf || '';
-    document.getElementById('cv-input-cidade').value = data.localidade || '';
-    document.getElementById('cv-input-bairro').value = data.bairro || '';
-    msg.textContent = 'endereço preenchido';
-    atualizarPreviewCv();
-  } catch(e){
-    msg.textContent = 'erro ao buscar CEP, preencha manualmente';
-  }
-}
-
-async function carregarVagasCompativeis(curriculo){
-  const box = document.getElementById('cv-vagas-compativeis-box');
-  const lista = document.getElementById('cv-vagas-compativeis-lista');
-
-  const { data: vagas } = await supabaseClientCv.from('vagas').select('*, profissionais(name, whatsapp, status_pagamento)');
-  const vagasAtivas = (vagas || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
-
-  if(vagasAtivas.length === 0){ box.style.display = 'none'; return; }
-
-  // Junta todo o texto do currículo numa "sacola de palavras", pra comparar com cada vaga
-  const textoCompletoCv = normalizarTextoCv([
-    curriculo.objetivo, curriculo.experiencia, curriculo.formacao, curriculo.habilidades, curriculo.cidade
-  ].filter(Boolean).join(' '));
-  const palavrasCv = new Set(textoCompletoCv.split(/\s+/).filter(p => p.length > 3));
-
-  const vagasComPontuacao = vagasAtivas.map(v => {
-    const textoVaga = normalizarTextoCv([v.titulo, v.descricao, v.requisitos].filter(Boolean).join(' '));
-    const palavrasVaga = textoVaga.split(/\s+/).filter(p => p.length > 3);
-    const pontuacao = palavrasVaga.filter(p => palavrasCv.has(p)).length;
-    return { vaga: v, pontuacao };
-  }).filter(item => item.pontuacao > 0)
-    .sort((a, b) => b.pontuacao - a.pontuacao)
-    .slice(0, 5);
-
-  if(vagasComPontuacao.length === 0){ box.style.display = 'none'; return; }
-
-  box.style.display = 'block';
-  lista.innerHTML = vagasComPontuacao.map(item => `
-    <div class="card-vaga" style="margin-bottom:10px;">
-      <div class="titulo-vaga">${item.vaga.titulo}</div>
-      <span class="tipo-vaga">${item.vaga.tipo}</span>
-      <div class="empresa-vaga">${item.vaga.profissionais ? item.vaga.profissionais.name : ''}</div>
-      <a href="vagas.html?vaga=${item.vaga.id}" class="btn-baixar-cv" style="display:block; text-align:center; margin-top:8px; text-decoration:none;">Ver vaga completa</a>
-    </div>
-  `).join('');
-}
-
-function normalizarTextoCv(str){
-  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-atualizarPreviewCv();
-</script>
-<script src="js/comandos-navegacao-voz.js"></script>
-<script src="config.js"></script>
-<script>
-let supabaseClientCv = null;
-let currentUserCv = null;
-let meuCurriculoId = null;
-
-function mascaraCep(event){
-  let v = event.target.value.replace(/\D/g, '').slice(0, 8);
-  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
-  event.target.value = v;
-}
-
-if(typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined'){
-  supabaseClientCv = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-async function initAuthCv(){
-  const { data: { session } } = await supabaseClientCv.auth.getSession();
-  currentUserCv = session ? session.user : null;
-  atualizarUiAuthCv();
-
-  supabaseClientCv.auth.onAuthStateChange((event, session) => {
-    currentUserCv = session ? session.user : null;
-    atualizarUiAuthCv();
-  });
-}
-
-async function atualizarUiAuthCv(){
-  const authBox = document.getElementById('cv-auth-box');
-  const logadoBox = document.getElementById('cv-logado-box');
-  const formPrincipal = document.getElementById('cv-form-principal');
-
-  if(currentUserCv){
-    authBox.style.display = 'none';
-    logadoBox.style.display = 'block';
-    formPrincipal.style.display = 'block';
-    document.getElementById('cv-email-logado').textContent = currentUserCv.email;
-    await carregarMeuCurriculo();
-  } else {
-    authBox.style.display = 'block';
-    logadoBox.style.display = 'none';
-    formPrincipal.style.display = 'block'; // continua deixando montar/imprimir sem login, só o ENVIO ao banco exige conta
-  }
-}
-
-async function criarContaCv(){
-  const email = document.getElementById('cv-auth-email').value.trim();
-  const senha = document.getElementById('cv-auth-senha').value;
-  const msg = document.getElementById('cv-auth-msg');
-  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
-
-  msg.textContent = 'criando conta...';
-  const { error } = await supabaseClientCv.auth.signUp({ email, password: senha });
-  if(error){ msg.textContent = error.message; return; }
-  msg.textContent = 'conta criada! verifique seu e-mail se for solicitado, ou já pode entrar.';
-  msg.style.color = 'var(--verde-escuro)';
-}
-
-async function loginCv(){
-  const email = document.getElementById('cv-auth-email').value.trim();
-  const senha = document.getElementById('cv-auth-senha').value;
-  const msg = document.getElementById('cv-auth-msg');
-  if(!email || !senha){ msg.textContent = 'preencha e-mail e senha'; return; }
-
-  msg.textContent = 'entrando...';
-  const { error } = await supabaseClientCv.auth.signInWithPassword({ email, password: senha });
-  if(error){ msg.textContent = error.message; return; }
-  msg.textContent = '';
-}
-
-async function sairCv(){
-  await supabaseClientCv.auth.signOut();
-}
-
-async function carregarMeuCurriculo(){
-  const { data } = await supabaseClientCv
-    .from('banco_curriculos')
-    .select('*')
-    .eq('user_id', currentUserCv.id)
-    .maybeSingle();
-
-  if(data){
-    meuCurriculoId = data.id;
-    document.getElementById('cv-input-nome').value = data.nome || '';
-    document.getElementById('cv-input-telefone').value = data.telefone || '';
-    document.getElementById('cv-input-email').value = data.email || '';
-    document.getElementById('cv-input-estado').value = data.estado || '';
-    document.getElementById('cv-input-cidade').value = data.cidade || '';
-    document.getElementById('cv-input-bairro').value = data.bairro || '';
-    document.getElementById('cv-input-objetivo').value = data.objetivo || '';
-    document.getElementById('cv-input-experiencia').value = data.experiencia || '';
-    document.getElementById('cv-input-formacao').value = data.formacao || '';
-    document.getElementById('cv-input-habilidades').value = data.habilidades || '';
-    atualizarPreviewCv();
-
-    document.getElementById('cv-banco-msg').textContent = 'Você já tem um currículo salvo no banco. Editar os campos e enviar de novo atualiza ele.';
-    document.getElementById('cv-banco-msg').style.color = '#555';
-    document.getElementById('cv-btn-excluir').style.display = 'block';
-
-    carregarVagasCompativeis(data);
-  } else {
-    meuCurriculoId = null;
-    document.getElementById('cv-btn-excluir').style.display = 'none';
-  }
-}
-
-async function enviarParaBancoTalentos(){
-  const msg = document.getElementById('cv-banco-msg');
-  if(!supabaseClientCv){ msg.textContent = 'Erro de configuração, tente novamente mais tarde.'; msg.style.color = '#a4402f'; return; }
-
-  if(!currentUserCv){ msg.textContent = 'Crie uma conta ou entre (ali em cima) antes de enviar pro banco de talentos.'; msg.style.color = '#a4402f'; return; }
-
-  const nome = document.getElementById('cv-input-nome').value.trim();
-  const telefone = document.getElementById('cv-input-telefone').value.trim();
-  const email = document.getElementById('cv-input-email').value.trim();
-  const estado = document.getElementById('cv-input-estado').value.trim();
-  const cidade = document.getElementById('cv-input-cidade').value.trim();
-  const bairro = document.getElementById('cv-input-bairro').value.trim();
-  const objetivo = document.getElementById('cv-input-objetivo').value.trim();
-  const experiencia = document.getElementById('cv-input-experiencia').value.trim();
-  const formacao = document.getElementById('cv-input-formacao').value.trim();
-  const habilidades = document.getElementById('cv-input-habilidades').value.trim();
-
-  if(!nome || !telefone){ msg.textContent = 'Preencha ao menos nome e telefone antes de enviar.'; msg.style.color = '#a4402f'; return; }
-
-  const payload = {
-    nome, telefone, email: email || null, estado: estado || null, cidade: cidade || null, bairro: bairro || null,
-    objetivo: objetivo || null, experiencia: experiencia || null,
-    formacao: formacao || null, habilidades: habilidades || null,
-    user_id: currentUserCv.id
-  };
-
-  msg.textContent = 'enviando...';
-  let error;
-  if(meuCurriculoId){
-    ({ error } = await supabaseClientCv.from('banco_curriculos').update(payload).eq('id', meuCurriculoId));
-  } else {
-    const { data, error: errInsert } = await supabaseClientCv.from('banco_curriculos').insert(payload).select('id').single();
-    error = errInsert;
-    if(data) meuCurriculoId = data.id;
-  }
-
-  if(error){ console.error(error); msg.textContent = 'erro ao enviar, tente novamente'; msg.style.color = '#a4402f'; return; }
-
-  msg.textContent = meuCurriculoId ? 'Currículo salvo/atualizado! Empresas do Pacote Completo já podem consultar.' : 'Currículo enviado!';
-  msg.style.color = 'var(--verde-escuro)';
-  document.getElementById('cv-btn-excluir').style.display = 'block';
-}
-
-async function excluirMeuCurriculo(){
-  if(!meuCurriculoId) return;
-  if(!confirm('Excluir seu currículo do Banco de Talentos? As empresas não vão mais conseguir te encontrar por lá.')) return;
-
-  const msg = document.getElementById('cv-banco-msg');
-  msg.textContent = 'excluindo...';
-
-  const { error } = await supabaseClientCv.from('banco_curriculos').delete().eq('id', meuCurriculoId);
-  if(error){ console.error(error); msg.textContent = 'erro ao excluir, tente novamente'; msg.style.color = '#a4402f'; return; }
-
-  meuCurriculoId = null;
-  document.getElementById('cv-btn-excluir').style.display = 'none';
-  msg.textContent = 'Currículo excluído do banco.';
-  msg.style.color = 'var(--verde-escuro)';
-}
-
-// ---------- MODO VOZ NO CURRÍCULO ----------
-
-let _vozCvReconhecimento = null;
-let _vozCvAtiva = false;
-let _vozCvFalando = false;
-const _vozCvSynth = window.speechSynthesis;
-let _estadoPreenchimentoCv = null;
-
-function toggleModoVozCv(){
-  if(_vozCvAtiva) pararModoVozCv();
-  else iniciarModoVozCv();
-}
-
-let _aguardandoAtivacaoCv = false;
-let _vozCvUltimoSinalDeVida = 0;
-let _vozCvVigia = null;
-let _vozCvTentativasReconexao = 0;
-
-function iniciarModoVozCv(retomandoAutomaticamente){
-  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SpeechRecognitionApi){
-    alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome no Android.');
-    return;
-  }
-
-  _vozCvAtiva = true;
-  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
-  document.getElementById('btn-modo-voz-cv').style.background = '#a4402f';
-  document.getElementById('painel-modo-voz-cv').style.display = 'block';
-  _aguardandoAtivacaoCv = !!retomandoAutomaticamente;
-  _vozCvTentativasReconexao = 0;
-
-  _criarReconhecimentoCv(SpeechRecognitionApi);
-  _iniciarVigiaVozCv(SpeechRecognitionApi);
-  if(typeof iniciarBiometriaSeConfigurada === 'function') iniciarBiometriaSeConfigurada();
-
-  if(_aguardandoAtivacaoCv){
-    falarVozCv('Modo voz em espera. Fala "ativar" pra preencher o currículo.');
-  } else {
-    _estadoPreenchimentoCv = { etapa: 'nome' };
-    falarVozCv('Vamos preencher seu currículo por voz. Qual seu nome completo?');
-  }
-}
-
-function _criarReconhecimentoCv(SpeechRecognitionApi){
-  _vozCvReconhecimento = new SpeechRecognitionApi();
-  _vozCvReconhecimento.lang = 'pt-BR';
-  _vozCvReconhecimento.continuous = true;
-  _vozCvReconhecimento.interimResults = false;
-
-  _vozCvReconhecimento.onstart = () => {
-    _vozCvUltimoSinalDeVida = Date.now();
-    _vozCvTentativasReconexao = 0;
-  };
-
-  _vozCvReconhecimento.onresult = (event) => {
-    _vozCvUltimoSinalDeVida = Date.now();
-    if(!_vozCvAtiva) return;
-    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
-    document.getElementById('voz-cv-transcricao').textContent = '🗣️ "' + transcricao + '"';
-
-    if(_aguardandoAtivacaoCv){
-      const t = normalizarTextoCv(transcricao);
-      if(t.includes('ativar') || t.includes('guiazap')){
-        _aguardandoAtivacaoCv = false;
-        _estadoPreenchimentoCv = { etapa: 'nome' };
-        falarVozCv('Modo voz ativado. Vamos preencher seu currículo. Qual seu nome completo?');
-      } else {
-        falarVozCv('Fala "ativar" pra começar.');
-      }
-      return;
-    }
-
-    processarEtapaPreenchimentoCv(transcricao);
-  };
-
-  _vozCvReconhecimento.onend = () => {
-    _vozCvUltimoSinalDeVida = Date.now();
-    if(_vozCvAtiva && !_vozCvFalando){ try{ _vozCvReconhecimento.start(); } catch(e){} }
-  };
-
-  _vozCvReconhecimento.onerror = (event) => {
-    if(event.error === 'not-allowed'){
-      falarVozCv('Preciso de permissão pra usar o microfone. Se você já permitiu antes e continua aparecendo, verifica as permissões do aplicativo nas configurações do celular.');
-      pararModoVozCv();
-      return;
-    }
-    _vozCvUltimoSinalDeVida = Date.now();
-  };
-
-  try{ _vozCvReconhecimento.start(); } catch(e){}
-  _vozCvUltimoSinalDeVida = Date.now();
-}
-
-function _iniciarVigiaVozCv(SpeechRecognitionApi){
-  clearInterval(_vozCvVigia);
-  _vozCvVigia = setInterval(() => {
-    if(!_vozCvAtiva){ clearInterval(_vozCvVigia); return; }
-    if(_vozCvFalando) return;
-
-    const semSinalHa = Date.now() - _vozCvUltimoSinalDeVida;
-    if(semSinalHa > 8000){
-      _vozCvTentativasReconexao++;
-      console.warn('modo voz do Currículo parece ter travado, recriando (tentativa ' + _vozCvTentativasReconexao + ')');
-      try{ _vozCvReconhecimento.onend = null; _vozCvReconhecimento.onerror = null; _vozCvReconhecimento.stop(); } catch(e){}
-      _criarReconhecimentoCv(SpeechRecognitionApi);
-
-      if(_vozCvTentativasReconexao === 2){
-        falarVozCv('O microfone parou de responder. Reconectando...');
-      }
-    }
-  }, 4000);
-}
-
-function pararModoVozCv(){
-  _vozCvAtiva = false;
-  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
-  clearInterval(_vozCvVigia);
-  if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
-  if(_vozCvReconhecimento){
-    _vozCvReconhecimento.onresult = null;
-    _vozCvReconhecimento.onend = null;
-    _vozCvReconhecimento.onerror = null;
-    try{ _vozCvReconhecimento.abort(); } catch(e){}
-    _vozCvReconhecimento = null;
-  }
-  _vozCvSynth.cancel();
-  document.getElementById('btn-modo-voz-cv').style.background = '#6b46c1';
-  document.getElementById('painel-modo-voz-cv').style.display = 'none';
-}
-
-function falarVozCv(texto){
-  _vozCvFalando = true;
-  if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.stop(); } catch(e){} }
-  _vozCvSynth.cancel();
-
-  document.getElementById('voz-cv-status').textContent = '🔊 ' + texto;
-  document.getElementById('voz-cv-indicador').style.background = '#4fc3a1';
-
-  const fala = new SpeechSynthesisUtterance(texto);
-  fala.lang = 'pt-BR';
-  fala.rate = 1;
-
-  fala.onend = () => {
-    document.getElementById('voz-cv-indicador').style.background = '#6b46c1';
-    document.getElementById('voz-cv-status').textContent = '🎙️ Pode falar';
-    _vozCvFalando = false;
-    if(_vozCvAtiva){ try{ _vozCvReconhecimento.start(); } catch(e){} }
-  };
-
-  _vozCvSynth.speak(fala);
-  setTimeout(function(){
-    _vozCvFalando = false;
-    if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.start(); } catch(e){} }
-  }, 6000);
-}
-
-function normalizarTextoCv(str){
-  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-async function processarEtapaPreenchimentoCv(transcricao){
-  if(_vozCvSynth) try{ _vozCvSynth.cancel(); } catch(e){}
-  _vozCvFalando = false;
-  const estado = _estadoPreenchimentoCv;
-  if(!estado) return;
-  const textoNorm = normalizarTextoCv(transcricao);
-  const pulou = textoNorm.includes('pular') || textoNorm.includes('pula');
-
-  const _ehPararCv = textoNorm.includes('parar') || textoNorm.includes('desligar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto');
-  if(!_ehPararCv && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
-    return;
-  }
-
-  if(textoNorm.includes('parar') || textoNorm.includes('desligar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
-    falarVozCv('Modo voz desligado.');
-    setTimeout(pararModoVozCv, 1200);
-    return;
-  }
-
-  // Comando de navegação universal — funciona igual em todas as páginas
-  // com modo voz. Só checa na etapa de confirmação final — nas demais
-  // etapas a fala é DADO sendo ditado (nome, telefone, cidade, objetivo,
-  // experiência, etc), e uma menção a "vagas" ou "blog" no meio do texto
-  // não pode disparar navegação sem querer.
-  if(estado.etapa === 'confirmar' && typeof verificarNavegacaoUniversalPorVoz === 'function'){
-    const destinoUniversal = verificarNavegacaoUniversalPorVoz(textoNorm, 'curriculo.html');
-    if(destinoUniversal){
-      localStorage.setItem('retomarModoVozAoCarregar', '1');
-      falarVozCv(destinoUniversal.fala);
-      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
-      return;
-    }
-  }
-
-  if(estado.etapa === 'nome'){
-    document.getElementById('cv-input-nome').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'telefone';
-    falarVozCv('Qual seu telefone com WhatsApp? Fala número por número, com DDD.');
-    return;
-  }
-
-  if(estado.etapa === 'telefone'){
-    const digitos = extrairDigitosDaFalaCv(transcricao);
-    if(digitos.length < 10){ falarVozCv('Não entendi o telefone direito, precisa ter DDD e o número completo. Fala de novo.'); return; }
-    document.getElementById('cv-input-telefone').value = digitos;
-    atualizarPreviewCv();
-    estado.etapa = 'cidade';
-    falarVozCv('Qual sua cidade?');
-    return;
-  }
-
-  if(estado.etapa === 'cidade'){
-    document.getElementById('cv-input-cidade').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'bairro';
-    falarVozCv('Qual seu bairro? Ou fala "pular".');
-    return;
-  }
-
-  if(estado.etapa === 'bairro'){
-    if(!pulou) document.getElementById('cv-input-bairro').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'objetivo';
-    falarVozCv('Qual seu objetivo profissional? Tipo "busco vaga na área de vendas". Ou fala "pular".');
-    return;
-  }
-
-  if(estado.etapa === 'objetivo'){
-    if(!pulou) document.getElementById('cv-input-objetivo').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'experiencia';
-    falarVozCv('Fala sua experiência profissional — os empregos anteriores. Ou fala "pular".');
-    return;
-  }
-
-  if(estado.etapa === 'experiencia'){
-    if(!pulou) document.getElementById('cv-input-experiencia').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'formacao';
-    falarVozCv('Qual sua formação ou escolaridade? Ou fala "pular".');
-    return;
-  }
-
-  if(estado.etapa === 'formacao'){
-    if(!pulou) document.getElementById('cv-input-formacao').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'habilidades';
-    falarVozCv('Quais suas habilidades ou cursos? Ou fala "pular".');
-    return;
-  }
-
-  if(estado.etapa === 'habilidades'){
-    if(!pulou) document.getElementById('cv-input-habilidades').value = transcricao.trim();
-    atualizarPreviewCv();
-    estado.etapa = 'confirmar';
-    falarVozCv('Currículo preenchido! Quer enviar pro Banco de Talentos agora? Fala "sim" ou "não".');
-    return;
-  }
-
-  if(estado.etapa === 'confirmar'){
-    _estadoPreenchimentoCv = null;
-    if(textoNorm.includes('sim') || textoNorm.includes('confirma') || textoNorm.includes('enviar')){
-      falarVozCv('Enviando...');
-      await enviarParaBancoTalentos();
-      falarVozCv('Currículo enviado pro Banco de Talentos!');
-    } else {
-      falarVozCv('Tudo bem, o currículo ficou preenchido na tela mas não foi enviado ainda. Você pode revisar e enviar quando quiser.');
-    }
-    return;
-  }
-}
-
-function extrairDigitosDaFalaCv(texto){
-  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
-  const normalizado = normalizarTextoCv(texto);
-  const palavras = normalizado.split(/\s+/);
-  let digitos = '';
-  palavras.forEach(palavra => {
-    if(/^\d+$/.test(palavra)) digitos += palavra;
-    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
-  });
-  return digitos;
-}
-
-if(supabaseClientCv) initAuthCv();
-
-window.addEventListener('pagehide', function(){
-  if(_vozCvAtiva){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-  }
-});
-
-window.addEventListener('pageshow', function(event){
-  if(event.persisted){
-    if(_vozCvReconhecimento){
-      try{
-        _vozCvReconhecimento.onresult = null;
-        _vozCvReconhecimento.onend = null;
-        _vozCvReconhecimento.onerror = null;
-        _vozCvReconhecimento.abort();
-      } catch(e){}
-      _vozCvReconhecimento = null;
-    }
-    clearInterval(_vozCvVigia);
-    _vozCvAtiva = false;
-    const btn = document.getElementById('btn-modo-voz-cv');
-    if(btn) btn.style.background = '#6b46c1';
-    const painel = document.getElementById('painel-modo-voz-cv');
-    if(painel) painel.style.display = 'none';
-  }
-});
-</script>
-<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
+<h2>🏢 Como funciona pra quem tem uma empresa</h2>
+<div class="passo-numerado">
+  <div class="numero">1</div>
+  <div class="texto">Crie sua conta grátis e cadastre sua empresa ou serviço</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">2</div>
+  <div class="texto">Escolha um pacote: o básico é <b>100% grátis</b>, sempre</div>
+</div>
+<div class="passo-numerado">
+  <div class="numero">3</div>
+  <div class="texto">Receba contatos diretos no seu WhatsApp ou no Papo — sem comissão sobre suas vendas</div>
+</div>
+
+<h2>💬 O Papo — chat completo com cada empresa</h2>
+<p>Além do WhatsApp, o GuiaZap tem um chat próprio chamado <b>Papo</b>. Nele dá pra mandar mensagem de texto, mensagem de voz (que já chega pro outro lado com o texto transcrito automaticamente), figurinhas e GIFs, e até fazer chamada de voz ou vídeo direto pelo navegador, sem precisar trocar de número. Tudo isso gratuito, tanto pra quem busca quanto pra quem atende.</p>
+
+<h2>🎙️ Modo Voz — use o site de mãos livres</h2>
+<p>Quase todo o GuiaZap pode ser usado só por comando de voz: buscar, comprar na Vitrine, ler e escrever no blog, publicar vaga, montar currículo, conversar no Papo, e navegar entre as páginas — tudo falando. É pensado especialmente pra quem usa leitor de tela ou tem dificuldade de enxergar a tela, mas qualquer pessoa pode ativar. Uma vez ligado, o modo voz continua ativo mesmo depois de fechar e abrir o site de novo, até você mandar desativar.</p>
+
+<h2>✨ O que você encontra no GuiaZap</h2>
+<div class="recursos-grid">
+  <div class="recurso-card"><div class="emoji">🛍️</div><div class="titulo">Vitrine de produtos</div></div>
+  <div class="recurso-card"><div class="emoji">💬</div><div class="titulo">Papo com chamada de voz e vídeo</div></div>
+  <div class="recurso-card"><div class="emoji">📸</div><div class="titulo">Novidades (Stories)</div></div>
+  <div class="recurso-card"><div class="emoji">📰</div><div class="titulo">Feed de quem você segue</div></div>
+  <div class="recurso-card"><div class="emoji">✍️</div><div class="titulo">Blog da comunidade</div></div>
+  <div class="recurso-card"><div class="emoji">💼</div><div class="titulo">Vagas de emprego</div></div>
+  <div class="recurso-card"><div class="emoji">📄</div><div class="titulo">Montador de currículo</div></div>
+  <div class="recurso-card"><div class="emoji">🧑‍💼</div><div class="titulo">Banco de Talentos</div></div>
+  <div class="recurso-card"><div class="emoji">🛵</div><div class="titulo">Banco de Entregadores</div></div>
+  <div class="recurso-card"><div class="emoji">🗺️</div><div class="titulo">Mapa de profissionais</div></div>
+  <div class="recurso-card"><div class="emoji">🎬</div><div class="titulo">Vídeos das empresas</div></div>
+  <div class="recurso-card"><div class="emoji">🎙️</div><div class="titulo">Modo Voz (mãos livres)</div></div>
+  <div class="recurso-card"><div class="emoji">✅</div><div class="titulo">Selo Verificado</div></div>
+  <div class="recurso-card"><div class="emoji">👑</div><div class="titulo">Pacote Premium</div></div>
+</div>
+
+<h2>❓ Perguntas frequentes</h2>
+<p><b>O GuiaZap cobra alguma coisa dos visitantes?</b><br>Não. Usar o GuiaZap pra buscar, navegar na Vitrine e conversar no Papo é 100% grátis, sempre — você paga só o preço normal do produto ou serviço, direto pra empresa, sem nenhuma taxa extra do GuiaZap em cima.</p>
+<p><b>O GuiaZap participa da negociação ou cobra comissão?</b><br>Não. O GuiaZap é só um diretório — a conversa e o negócio acontecem direto entre você e a empresa, pelo WhatsApp ou pelo Papo.</p>
+<p><b>Preciso pagar pra cadastrar minha empresa?</b><br>Não necessariamente — o Pacote Contato é grátis pra sempre. Pacotes pagos existem pra quem quer recursos extras, como Vitrine de produtos e mais visibilidade.</p>
+<p><b>Preciso saber usar comando de voz pra usar o site?</b><br>Não, é totalmente opcional. O modo voz é um recurso a mais — o site funciona normalmente por toque também.</p>
+
+<div class="cta-box">
+  <p><b>Tem uma empresa ou presta serviços?</b></p>
+  <p style="font-size:0.85rem; color:#666;">Cadastre-se gratuitamente e comece a receber contatos ainda hoje.</p>
+  <a href="pacotes.html">Cadastrar minha empresa</a>
+</div>
+
+</div>
 <script src="js/modo-escuro.js"></script>
-
-<script src="js/voz-biometria.js"></script>
-<script src="js/voz-acesso-cego.js"></script>
+<a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-  if(typeof prepararAcessoVozCego === 'function'){
-    prepararAcessoVozCego(function(){ if(typeof iniciarModoVozCv === 'function') iniciarModoVozCv(true); });
-  }
-});
-</script>
+// Leitura da página "Sobre" por voz — essa página não tem modo voz
+// completo (não precisa de microfone o tempo todo, é só informativa), mas
+// se a pessoa chegou aqui vinda de um comando de voz em outra página, a
+// gente lê o conteúdo em voz alta e escuta um comando simples depois
+// (voltar ou repetir).
+(function(){
+  if(localStorage.getItem('retomarModoVozAoCarregar') !== '1') return;
+  localStorage.removeItem('retomarModoVozAoCarregar');
 
-<script src="js/debug-console.js"></script>
+  if(!('speechSynthesis' in window)) return;
+
+  const trechos = [
+    'Você está na página Sobre e Como Funciona do GuiaZap.',
+    'O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários. E o GuiaZap cresceu: hoje também tem loja online, chat próprio com chamadas de voz e vídeo, blog, vagas de emprego, e controle por comando de voz em quase todo o site.',
+    'Como funciona pra quem busca um profissional: primeiro, digite o que você precisa, tipo eletricista ou manicure, ou navegue pela lista. Segundo, filtre por cidade, bairro ou distância, e veja as avaliações de quem já contratou. Terceiro, clique em chamar no WhatsApp, ou converse pelo Papo direto no site, sem cadastro, sem taxa.',
+    'Como funciona pra quem tem uma empresa: primeiro, crie sua conta grátis e cadastre sua empresa ou serviço. Segundo, escolha um pacote — o básico é cem por cento grátis, sempre. Terceiro, receba contatos diretos no seu WhatsApp ou no Papo, sem comissão sobre suas vendas.',
+    'O Papo é o chat completo do GuiaZap. Além de mensagem de texto, dá pra mandar mensagem de voz, que já chega com o texto transcrito automaticamente, figurinhas, GIFs, e até fazer chamada de voz ou vídeo direto pelo navegador. Tudo gratuito.',
+    'O modo voz deixa usar quase o site inteiro de mãos livres: buscar, comprar na vitrine, ler e escrever no blog, publicar vaga, montar currículo, conversar no Papo, e navegar entre as páginas, tudo falando. É pensado especialmente pra quem usa leitor de tela, mas qualquer pessoa pode ativar. Uma vez ligado, continua ativo mesmo depois de fechar e abrir o site de novo.',
+    'O que você encontra no GuiaZap: vitrine de produtos, Papo com chamada de voz e vídeo, novidades em formato de stories, feed de quem você segue, blog da comunidade, vagas de emprego, montador de currículo, banco de talentos, banco de entregadores, mapa de profissionais, vídeos das empresas, modo voz de mãos livres, selo verificado, e pacote premium.',
+    'Perguntas frequentes. O GuiaZap cobra alguma coisa dos visitantes? Não. Usar o GuiaZap pra buscar, navegar na vitrine e conversar no Papo é cem por cento grátis, sempre — você paga só o preço normal do produto ou serviço, direto pra empresa, sem nenhuma taxa extra do GuiaZap em cima. O GuiaZap participa da negociação ou cobra comissão? Não — o GuiaZap é só um diretório, a conversa e o negócio acontecem direto entre você e a empresa, pelo WhatsApp ou pelo Papo. Preciso pagar pra cadastrar minha empresa? Não necessariamente — o pacote contato é grátis pra sempre. Preciso saber usar comando de voz pra usar o site? Não, é totalmente opcional.',
+    'Se quiser cadastrar sua empresa, fala "cadastrar empresa". Pra voltar ao GuiaZap, fala "voltar". Pra ouvir de novo, fala "repetir".'
+  ];
+
+  let indice = 0;
+  let cancelado = false;
+
+  function falarProximoTrecho(){
+    if(cancelado || indice >= trechos.length){
+      escutarComandoSobre();
+      return;
+    }
+    const utter = new SpeechSynthesisUtterance(trechos[indice]);
+    utter.lang = 'pt-BR';
+    utter.onend = function(){ indice++; falarProximoTrecho(); };
+    utter.onerror = function(){ indice++; falarProximoTrecho(); };
+    speechSynthesis.speak(utter);
+  }
+
+  function escutarComandoSobre(){
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRecognition) return;
+
+    const reconhecimento = new SpeechRecognition();
+    reconhecimento.lang = 'pt-BR';
+    reconhecimento.continuous = false;
+    reconhecimento.interimResults = false;
+
+    reconhecimento.onresult = function(event){
+      const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
+
+      if(texto.includes('voltar')){
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        window.location.href = 'index.html';
+      } else if(texto.includes('repetir') || texto.includes('de novo')){
+        indice = 0;
+        falarProximoTrecho();
+      } else if(texto.includes('cadastrar empresa') || texto.includes('cadastrar minha empresa')){
+        window.location.href = 'pacotes.html';
+      } else {
+        const aviso = new SpeechSynthesisUtterance('Não entendi. Fala "voltar" pra sair, ou "repetir" pra ouvir de novo.');
+        aviso.lang = 'pt-BR';
+        aviso.onend = escutarComandoSobre;
+        speechSynthesis.speak(aviso);
+      }
+    };
+
+    reconhecimento.onerror = function(){ /* silencioso — a pessoa pode navegar normal pelo toque */ };
+
+    try{ reconhecimento.start(); } catch(e){ /* ignora */ }
+  }
+
+  // Espera um instante a página carregar visualmente antes de começar a falar
+  setTimeout(falarProximoTrecho, 600);
+})();
+</script>
 </body>
 </html>
