@@ -18,12 +18,12 @@ const _DESTINOS_NAVEGACAO_VOZ = [
   {
     arquivo: 'index.html',
     fala: 'Voltando pra página inicial...',
-    gatilhos: ['=inicio', '=início', 'pagina inicial', 'página inicial', 'voltar pro guiazap', 'voltar para o guiazap', 'ir pro guiazap', 'ir para o guiazap', 'ir para pagina inicial', 'ir para página inicial']
+    gatilhos: ['=inicio', '=início', '=guiazap', 'pagina inicial', 'página inicial', 'voltar pro guiazap', 'voltar para o guiazap', 'ir pro guiazap', 'ir para o guiazap', 'ir para pagina inicial', 'ir para página inicial']
   },
   {
     arquivo: 'vitrine.html',
     fala: 'Indo pra Vitrine...',
-    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine']
+    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine', 'quero comprar', 'fazer compras', 'ver produtos']
   },
   {
     arquivo: 'blog.html',
@@ -77,4 +77,30 @@ function verificarNavegacaoUniversalPorVoz(textoNormalizado, paginaAtual){
   }
 
   return null;
+}
+
+// Versão com IA de reserva: primeiro tenta a lista local (rápido, grátis).
+// Se não bater com nada, manda pra IA interpretar — cobre qualquer jeito
+// criativo ou inesperado de pedir pra navegar, tipo "mudei de ideia, quero
+// comprar uma coisa" no meio de outra conversa. Retorna uma Promise.
+async function verificarNavegacaoUniversalPorVozComIA(textoNormalizado, textoOriginal, paginaAtual){
+  const localMatch = verificarNavegacaoUniversalPorVoz(textoNormalizado, paginaAtual);
+  if(localMatch) return localMatch;
+
+  try{
+    const resp = await fetch('/.netlify/functions/interpretar-navegacao-voz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: textoOriginal, paginaAtual })
+    });
+    const resultado = await resp.json();
+    if(resultado.pagina){
+      return { url: resultado.pagina, fala: resultado.resposta_falada || ('Indo pra ' + resultado.pagina + '...') };
+    }
+    // IA não achou nenhuma página, mas pode ter uma resposta falada útil
+    return { url: null, fala: resultado.resposta_falada || null };
+  } catch(e){
+    console.warn('erro ao consultar IA de navegação por voz', e);
+    return null;
+  }
 }

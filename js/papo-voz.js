@@ -196,16 +196,31 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  if(t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
+  if(t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;
   }
-  if(t === 'guiazap' || t === 'inicio' || t === 'início' || t.includes('voltar pro guiazap') || t.includes('pagina inicial')){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozPapo('Voltando ao GuiaZap.');
-    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+  if(t === 'parar'){
+    _estadoVozPapo.etapa = 'conversa';
+    falarVozPapo('Ok. Modo voz continua ativo, pode pedir outra coisa.');
     return;
+  }
+
+  // Comando de navegação universal — funciona igual em todas as páginas
+  // com modo voz (a lista fica em js/comandos-navegacao-voz.js). Só checa
+  // fora das etapas de ditado/pedido (atendimento, ditando, endereço,
+  // cardápio) — senão um pedido que mencione "blog" ou "vagas" ia
+  // disparar navegação sem querer.
+  const _etapasDeDadosPapo = ['atendimento', 'ditando', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado', 'endereco_referencia', 'escolhendo_direto_cardapio', 'navegando_cardapio'];
+  if(!_etapasDeDadosPapo.includes(_estadoVozPapo.etapa) && typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destinoUniversal = verificarNavegacaoUniversalPorVoz(t, 'chat.html');
+    if(destinoUniversal){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozPapo(destinoUniversal.fala);
+      setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
+      return;
+    }
   }
 
   if(_estadoVozPapo.etapa === 'escolhendo_direto_cardapio'){
@@ -511,6 +526,24 @@ async function processarComandoVozPapo(transcricao){
     _estadoVozPapo.etapa = 'conversa';
     falarVozPapo('Conversa com ' + (achada.nomeExibido || 'contato') + '. Diga falar, ouvir, ligar ou voltar.');
     return;
+  }
+
+  // Último recurso antes de desistir: pode ser um pedido pra ir pra outra
+  // página do site, dito de um jeito que a lista de palavras-chave não
+  // cobre (ex: "mudei de ideia, quero ver vagas"). Primeiro tenta a lista
+  // local (grátis), e só se não bater com nada manda pra IA interpretar.
+  if(typeof verificarNavegacaoUniversalPorVozComIA === 'function'){
+    const destino = await verificarNavegacaoUniversalPorVozComIA(t, transcricao, 'chat.html');
+    if(destino && destino.url){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozPapo(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+    if(destino && destino.fala){
+      falarVozPapo(destino.fala);
+      return;
+    }
   }
 
   falarVozPapo('Não achei esse comando. Diga listar, o nome da pessoa, falar, ouvir, ligar ou voltar.');

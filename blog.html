@@ -443,6 +443,29 @@ function falarVozBlog(texto){
   }, 6000);
 }
 
+// Última tentativa antes de desistir: manda pra IA ver se o que a pessoa
+// falou era um pedido pra ir pra outra página, mesmo dito de um jeito
+// inesperado (ex: "mudei de ideia, quero comprar uma coisa"). Se a IA
+// achar uma página, navega; se não achar mas tiver uma resposta melhor
+// que "não entendi", fala essa resposta; em último caso, fala o texto
+// padrão que foi passado.
+async function _tentarNavegacaoPorIABlog(textoOriginal, textoPadraoSeNaoEntender){
+  if(typeof verificarNavegacaoUniversalPorVozComIA !== 'function'){
+    falarVozBlog(textoPadraoSeNaoEntender);
+    return;
+  }
+  const destino = await verificarNavegacaoUniversalPorVozComIA(normalizarTextoBlog(textoOriginal), textoOriginal, 'blog.html');
+  if(destino && destino.url){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozBlog(destino.fala);
+    setTimeout(() => { window.location.href = destino.url; }, 1200);
+  } else if(destino && destino.fala){
+    falarVozBlog(destino.fala);
+  } else {
+    falarVozBlog(textoPadraoSeNaoEntender);
+  }
+}
+
 function _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm){
   if(encontrados.length === 0){
     falarVozBlog('Não encontrei nenhum artigo com isso. Pode falar outra palavra?');
@@ -562,7 +585,7 @@ async function processarComandoVozBlog(transcricao){
       falarVozBlog('Vamos escrever um artigo novo. Qual o seu nome de autor?');
       return;
     }
-    falarVozBlog('Não entendi. Fala "ler" pra ouvir um artigo, ou "escrever" pra criar um novo.');
+    await _tentarNavegacaoPorIABlog(transcricao, 'Não entendi. Fala "ler" pra ouvir um artigo, ou "escrever" pra criar um novo.');
     return;
   }
 
@@ -597,7 +620,7 @@ async function processarComandoVozBlog(transcricao){
       return;
     }
 
-    falarVozBlog('Não entendi. Fala "tema", "título" ou "autor".');
+    await _tentarNavegacaoPorIABlog(transcricao, 'Não entendi. Fala "tema", "título" ou "autor".');
     return;
   }
 
@@ -648,8 +671,9 @@ async function processarComandoVozBlog(transcricao){
       estado.etapa = 'nome';
       falarVozBlog('Vamos escrever um artigo novo. Qual o seu nome de autor?');
     } else {
-      // Não entendeu — mas o modo voz continua ativo, não desliga
-      falarVozBlog('Não entendi. Fala "ler outro", "escrever", ou pede outra coisa, tipo ir pra vitrine.');
+      // Não entendeu de cara — mas antes de desistir, tenta a IA (talvez
+      // seja um pedido pra ir pra outra página)
+      await _tentarNavegacaoPorIABlog(transcricao, 'Não entendi. Fala "ler outro", "escrever", ou pede outra coisa, tipo ir pra vitrine.');
     }
     return;
   }

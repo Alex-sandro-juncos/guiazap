@@ -635,9 +635,13 @@ async function processarComandoVozPedidos(transcricao){
     lerPedidosNovosEmVoz();
     return;
   }
-  if(textoNorm.includes('parar') || textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
+  if(textoNorm.includes('desativar modo voz') || textoNorm.includes('cala boca') || textoNorm.includes('fica quieto') || textoNorm.includes('fique quieto')){
     falarVozPedidos('Modo voz desativado.');
     setTimeout(pararModoVozPedidos, 1500);
+    return;
+  }
+  if(textoNorm === 'parar'){
+    falarVozPedidos('Ok. Modo voz continua ativo, pode pedir outra coisa.');
     return;
   }
 
