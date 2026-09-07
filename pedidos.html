@@ -458,6 +458,7 @@ function iniciarModoVozPedidos(retomandoAutomaticamente){
   }
 
   _vozPedidosAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-pedidos').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-pedidos').style.display = 'block';
   _aguardandoAtivacaoPedidos = !!retomandoAutomaticamente;
@@ -545,6 +546,7 @@ function _iniciarVigiaVozPedidos(SpeechRecognitionApi){
 
 function pararModoVozPedidos(){
   _vozPedidosAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   clearInterval(_vozPedidosVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPedidosReconhecimento){
@@ -784,11 +786,6 @@ function normalizarTextoPedidos(str){
 }
 
 initPedidos();
-
-if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
-  localStorage.removeItem('retomarModoVozAoCarregar');
-  setTimeout(() => iniciarModoVozPedidos(true), 800);
-}
 
 window.addEventListener('pagehide', function(){
   if(_vozPedidosAtiva){

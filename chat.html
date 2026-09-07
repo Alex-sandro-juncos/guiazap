@@ -2212,6 +2212,10 @@ function lerAutomaticoPapoAtivo(){
 }
 
 function toggleLerAutomaticoPapo(){
+  if(typeof modoInterpretePapoAtivo === 'function' && modoInterpretePapoAtivo()){
+    alert('O modo intérprete está ativado — a leitura automática fica travada ligada. Pra desativar, use o comando de voz "modo normal" e informe seu PIN.');
+    return;
+  }
   const novo = lerAutomaticoPapoAtivo() ? '0' : '1';
   localStorage.setItem('papo_ler_automatico', novo);
   atualizarBotaoLerAutomaticoPapo();

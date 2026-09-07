@@ -2845,6 +2845,7 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   }
 
   _vozVitrineAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-vitrine').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
@@ -2955,6 +2956,7 @@ function _iniciarVigiaVozVitrine(SpeechRecognitionApi){
 
 function pararModoVozVitrine(){
   _vozVitrineAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   clearInterval(_vozVitrineVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozVitrineReconhecimento){
@@ -4388,7 +4390,7 @@ if(initSupabaseV()){
   initAuthV().then(loadProdutos);
 }
 
-if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
   localStorage.removeItem('retomarModoVozAoCarregar');
   setTimeout(() => iniciarModoVozVitrine(true), 800);
 }

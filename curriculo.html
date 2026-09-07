@@ -580,6 +580,7 @@ function iniciarModoVozCv(retomandoAutomaticamente){
   }
 
   _vozCvAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-cv').style.background = '#a4402f';
   document.getElementById('painel-modo-voz-cv').style.display = 'block';
   _aguardandoAtivacaoCv = !!retomandoAutomaticamente;
@@ -667,6 +668,7 @@ function _iniciarVigiaVozCv(SpeechRecognitionApi){
 
 function pararModoVozCv(){
   _vozCvAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   clearInterval(_vozCvVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozCvReconhecimento){

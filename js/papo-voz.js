@@ -4,6 +4,103 @@ let _vozPapoFalando = false;
 const _vozPapoSynth = window.speechSynthesis;
 let _estadoVozPapo = { etapa: 'lista' }; // lista | conversa | ditando
 
+// ---------- MODO INTÉRPRETE (surdo escreve/lê, cego fala/ouve) ----------
+// Liga duas coisas que já existem separadamente e deixa PERMANENTE (até
+// desativar com o PIN): mensagem de voz sempre mostra a transcrição em
+// texto (isso já é automático, sempre), e mensagem de texto sempre é lida
+// em voz alta (isso é o \"ler automático\", que passa a ficar travado
+// ligado). Protegido por PIN pra desativar — assim ninguém desliga sem
+// querer no meio de uma conversa importante.
+let _aguardandoPinParaDesativarInterpretePapo = false;
+
+function modoInterpretePapoAtivo(){
+  return localStorage.getItem('papo_modo_interprete_ativo') === '1';
+}
+
+function ativarModoInterpretePapo(){
+  localStorage.setItem('papo_modo_interprete_ativo', '1');
+  localStorage.setItem('papo_ler_automatico', '1'); // trava a leitura automática ligada
+  if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
+  falarVozPapo('Modo intérprete ativado. Toda mensagem de voz que chegar vai mostrar o texto na tela, e toda mensagem de texto vai ser lida em voz alta, sempre — mesmo depois de fechar e abrir o app de novo. Pra desativar, fala "modo normal" e depois o seu PIN.');
+}
+
+async function _extrairDigitosDaFalaPapo(texto){
+  const mapaNumeros = { zero:'0', um:'1', uma:'1', dois:'2', duas:'2', tres:'3', três:'3', quatro:'4', cinco:'5', seis:'6', sete:'7', oito:'8', nove:'9' };
+  const normalizado = normalizarVozPapo(texto).replace(/[.,;!?\-]/g, ' ');
+  const palavras = normalizado.split(/\s+/);
+  let digitos = '';
+  palavras.forEach(palavra => {
+    if(/^\d+$/.test(palavra)) digitos += palavra;
+    else if(mapaNumeros[palavra] !== undefined) digitos += mapaNumeros[palavra];
+  });
+  return digitos;
+}
+
+async function _hashPinLocalPapo(pin, userId){
+  const data = new TextEncoder().encode(String(pin) + ':' + String(userId));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function _pinLocalConferePapo(pin){
+  const uid = currentUserChat && currentUserChat.id;
+  if(!uid) return false;
+  const salvo = localStorage.getItem('guiazap_pin_hash_' + uid);
+  if(!salvo) return false;
+  const hash = await _hashPinLocalPapo(pin, uid);
+  return hash === salvo;
+}
+
+async function processarComandoDesativarInterpretePapo(transcricao){
+  const tCancelar = normalizarVozPapo(transcricao);
+  if(tCancelar.includes('cancelar') || tCancelar.includes('deixa pra la') || tCancelar.includes('deixa pra lá')){
+    _aguardandoPinParaDesativarInterpretePapo = false;
+    falarVozPapo('Ok, cancelado. O modo intérprete continua ativo.');
+    return;
+  }
+
+  if(!_aguardandoPinParaDesativarInterpretePapo){
+    falarVozPapo('Pra desativar o modo intérprete, fala seu PIN de voz.');
+    _aguardandoPinParaDesativarInterpretePapo = true;
+    return;
+  }
+
+  const pinFalado = await _extrairDigitosDaFalaPapo(transcricao);
+  if(!pinFalado || pinFalado.length < 4){
+    falarVozPapo('Não entendi o PIN. Fala os números de novo, ou fala "cancelar".');
+    return;
+  }
+
+  try{
+    let data = {};
+    const { data: { session } } = await supabaseClientChat.auth.getSession();
+    if(session && session.access_token){
+      const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ pin: pinFalado })
+      });
+      data = await resp.json().catch(() => ({}));
+    }
+    if((!session || data.error || data.motivo === 'sem_pin_cadastrado')){
+      const localOk = await _pinLocalConferePapo(pinFalado);
+      if(localOk) data = { valido: true };
+    }
+
+    if(!data.valido){
+      falarVozPapo('PIN incorreto. Fala de novo.');
+      return;
+    }
+
+    _aguardandoPinParaDesativarInterpretePapo = false;
+    localStorage.removeItem('papo_modo_interprete_ativo');
+    falarVozPapo('Modo intérprete desativado. Voltou ao normal.');
+  } catch(e){
+    console.error(e);
+    falarVozPapo('Erro ao conferir o PIN. Tenta de novo.');
+  }
+}
+
 function normalizarVozPapo(str){
   return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
@@ -26,6 +123,7 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   }
   _vozPapoAtiva = true;
   window._vozPapoAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
   _aguardandoAtivacaoPapo = !!retomandoAutomaticamente;
   _vozPapoTentativasReconexao = 0;
@@ -124,6 +222,7 @@ function _iniciarVigiaVozPapo(Api){
 function pararModoVozPapo(){
   _vozPapoAtiva = false;
   window._vozPapoAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   clearInterval(_vozPapoVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPapoReconhecimento){
@@ -191,6 +290,18 @@ async function processarComandoVozPapo(transcricao){
   _vozPapoFalando = false;
   const t = normalizarVozPapo(transcricao);
 
+  // Prioridade MÁXIMA: se estamos esperando o PIN pra desativar o modo
+  // intérprete, essa fala é o PIN — nada mais é processado. Proteção
+  // extra: se por algum motivo isso ficou ligado sem o modo intérprete
+  // estar realmente ativo, desliga sozinho aqui.
+  if(_aguardandoPinParaDesativarInterpretePapo && !modoInterpretePapoAtivo()){
+    _aguardandoPinParaDesativarInterpretePapo = false;
+  }
+  if(_aguardandoPinParaDesativarInterpretePapo){
+    await processarComandoDesativarInterpretePapo(transcricao);
+    return;
+  }
+
   const _ehPararP = t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
   if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
@@ -204,6 +315,26 @@ async function processarComandoVozPapo(transcricao){
   if(t === 'parar'){
     _estadoVozPapo.etapa = 'conversa';
     falarVozPapo('Ok. Modo voz continua ativo, pode pedir outra coisa.');
+    return;
+  }
+
+  // Modo intérprete: liga a leitura automática de texto e a transcrição
+  // de áudio de forma permanente, pensado pra uma conversa entre uma
+  // pessoa surda e uma pessoa cega. Desativar exige o PIN de propósito.
+  if(t.includes('modo interprete') || t.includes('modo intérprete') || t.includes('modo tradutor')){
+    if(modoInterpretePapoAtivo()){
+      falarVozPapo('O modo intérprete já está ativado.');
+    } else {
+      ativarModoInterpretePapo();
+    }
+    return;
+  }
+  if(t === 'modo normal' || t.includes('desativar modo interprete') || t.includes('desativar modo intérprete')){
+    if(!modoInterpretePapoAtivo()){
+      falarVozPapo('O modo intérprete já está desativado. Já está no modo normal.');
+    } else {
+      await processarComandoDesativarInterpretePapo(transcricao);
+    }
     return;
   }
 

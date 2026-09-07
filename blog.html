@@ -253,6 +253,7 @@ function iniciarModoVozBlog(retomandoAutomaticamente){
   }
 
   _vozBlogAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-blog').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-blog').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-blog').style.display = 'block';
@@ -352,6 +353,7 @@ function _iniciarVigiaVozBlog(SpeechRecognitionApi){
 
 function pararModoVozBlog(){
   _vozBlogAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   _estadoRedacaoBlog = null;
   clearInterval(_vozBlogVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();

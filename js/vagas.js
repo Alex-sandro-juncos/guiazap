@@ -255,6 +255,7 @@ function iniciarModoVozVagas(retomandoAutomaticamente){
   }
 
   _vozVagasAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-vagas').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-vagas').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vagas').style.display = 'block';
@@ -358,6 +359,7 @@ function _iniciarVigiaVozVagas(SpeechRecognitionApi){
 
 function pararModoVozVagas(){
   _vozVagasAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   _estadoVozVagas = null;
   clearInterval(_vozVagasVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();

@@ -62,6 +62,24 @@ const _DESTINOS_NAVEGACAO_VOZ = [
   }
 ];
 
+// ---------- MODO VOZ PERMANENTE ----------
+// Diferente do "retomarModoVozAoCarregar" (que é usado só UMA vez, ao
+// navegar de uma página do GuiaZap pra outra), essa flag NUNCA se apaga
+// sozinha — fica salva até a pessoa mandar desativar de propósito. Serve
+// pra alguém que usa o modo voz sempre (ex: pessoa cega) não precisar
+// reativar toda vez que fecha e abre o navegador de novo.
+const _CHAVE_MODO_VOZ_PERMANENTE = 'modo_voz_permanente_ativo';
+
+function modoVozPermanenteAtivo(){
+  return localStorage.getItem(_CHAVE_MODO_VOZ_PERMANENTE) === '1';
+}
+function ativarModoVozPermanente(){
+  localStorage.setItem(_CHAVE_MODO_VOZ_PERMANENTE, '1');
+}
+function desativarModoVozPermanente(){
+  localStorage.removeItem(_CHAVE_MODO_VOZ_PERMANENTE);
+}
+
 function verificarNavegacaoUniversalPorVoz(textoNormalizado, paginaAtual){
   if(!textoNormalizado) return null;
 

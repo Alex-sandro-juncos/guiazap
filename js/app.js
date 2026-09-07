@@ -3606,7 +3606,7 @@ if(initSupabase()){
   setTimeout(tentarIniciarNotificacoes, 3000);
 }
 
-if(localStorage.getItem('retomarModoVozAoCarregar') === '1'){
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
   localStorage.removeItem('retomarModoVozAoCarregar');
   setTimeout(() => iniciarModoVozIndex(true), 1500); // espera um pouco mais, pra dar tempo de carregar a lista de empresas
 }
@@ -3762,6 +3762,7 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
 
   _vozIndexAtiva = true;
   window._vozIndexAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
   document.getElementById('btn-modo-voz-index').style.background = '#a4402f';
   document.getElementById('btn-modo-voz-index').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-index').style.display = 'block';
@@ -3860,6 +3861,7 @@ let _aguardandoAtivacaoIndex = false;
 
 function pararModoVozIndex(){
   _vozIndexAtiva = false;
+  if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
   clearInterval(_vozIndexVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozIndexReconhecimento){
