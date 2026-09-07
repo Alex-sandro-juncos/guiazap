@@ -4334,6 +4334,81 @@ function extrairDigitosDaFalaIndex(texto){
   return digitos;
 }
 
+let _ultimoContatoVozIndex = null;
+let _estadoPessoaIndexVoz = null;
+
+function empresaTemProdutoNoIndex(empresaId){
+  return (produtosParaBuscaPrincipal || []).some(p => p.profissional_id === empresaId || (p.profissionais && p.profissionais.id === empresaId));
+}
+
+function abrirPapoIndexVoz(empresa, fala){
+  localStorage.setItem('retomarModoVozAoCarregar', '1');
+  localStorage.setItem('guiazap_quer_voz', '1');
+  falarVozIndex(fala || ('Abrindo o Papo com ' + empresa.name + '.'));
+  setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id; }, 1100);
+}
+
+async function tratarPapoOuCompraNoIndex(transcricao, textoNormalizado){
+  const t = textoNormalizado;
+  const querPapo = t.includes('papo') || t.includes('conversar') || t.includes('falar com') || (t.includes('chamar') && !t.includes('whatsapp'));
+
+  if(_estadoPessoaIndexVoz && _estadoPessoaIndexVoz.etapa === 'compra_ou_conversar'){
+    if(querPapo || t.includes('conversar') || t.includes('falar')){
+      const emp = _estadoPessoaIndexVoz.empresa;
+      _estadoPessoaIndexVoz = null;
+      abrirPapoIndexVoz(emp);
+      return true;
+    }
+    if(t.includes('comprar') || t.includes('compra') || t.includes('produto') || t.includes('cardapio') || t.includes('cardápio')){
+      const emp = _estadoPessoaIndexVoz.empresa;
+      _estadoPessoaIndexVoz = null;
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      localStorage.setItem('guiazap_quer_voz', '1');
+      falarVozIndex('Abrindo o cardápio de ' + emp.name + '.');
+      setTimeout(() => { window.location.href = 'vitrine.html?empresa=' + encodeURIComponent(emp.id); }, 1100);
+      return true;
+    }
+    falarVozIndex('Fala "comprar" ou "conversar".');
+    return true;
+  }
+
+  if(querPapo){
+    let alvo = _ultimoContatoVozIndex;
+    if(!alvo && cadastroCompartilhadoId){
+      alvo = (entries || []).find(e => e.id === cadastroCompartilhadoId) || null;
+    }
+    if(!alvo){
+      const nome = t.replace(/chamar|no papo|papo|conversar|falar com|com/g, ' ').replace(/\s+/g, ' ').trim();
+      if(nome.length >= 3) alvo = acharProfissionalPorNomeVozIndex(nome);
+    }
+    if(alvo){
+      abrirPapoIndexVoz(alvo);
+      return true;
+    }
+    falarVozIndex('Não sei com quem abrir o Papo. Fala o nome da pessoa ou empresa.');
+    return true;
+  }
+  return false;
+}
+
+function acharProfissionalPorNomeVozIndex(nome){
+  const n = normalizarTexto(nome);
+  if(!n || n.length < 2) return null;
+  const ativos = (entries || []).filter(e => e.status_pagamento === 'ativo');
+  const exact = ativos.find(e => normalizarTexto(e.name) === n);
+  if(exact) return exact;
+  const contem = ativos.filter(e => {
+    const nn = normalizarTexto(e.name);
+    return nn.includes(n) || n.includes(nn);
+  });
+  if(contem.length === 1) return contem[0];
+  const porPalavra = ativos.filter(e => {
+    const nn = normalizarTexto(e.name);
+    return n.split(/\s+/).filter(w => w.length > 2).some(w => nn.includes(w));
+  });
+  return porPalavra[0] || contem[0] || null;
+}
+
 async function processarComandoVozIndex(transcricao){
   if(_vozIndexSynth) try{ _vozIndexSynth.cancel(); } catch(e){}
   _vozIndexFalando = false;
@@ -4373,6 +4448,8 @@ async function processarComandoVozIndex(transcricao){
     await processarEtapaAtendimentoVoz(transcricao);
     return;
   }
+
+  if(await tratarPapoOuCompraNoIndex(transcricao, textoNormalizado)) return;
 
   if(_estadoMotoboysVoz){
     await processarComandoMotoboysVoz(transcricao);
@@ -4546,6 +4623,7 @@ async function processarComandoVozIndex(transcricao){
 
   function irAoProfissionalVoz(e, falaExtra){
     cadastroCompartilhadoId = e.id;
+    _ultimoContatoVozIndex = e;
     const campo = document.getElementById('search');
     if(campo) campo.value = e.name;
     render();
@@ -4554,7 +4632,12 @@ async function processarComandoVozIndex(transcricao){
     if(card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const cat = e.cat ? (', ' + e.cat) : '';
     const cidade = e.cidade ? (', em ' + e.cidade) : '';
-    falarVozIndex((falaExtra ? falaExtra + ' ' : '') + e.name + cat + cidade + '. Você está no contato dele.');
+    if(!empresaTemProdutoNoIndex(e.id)){
+      abrirPapoIndexVoz(e, (falaExtra ? falaExtra + ' ' : '') + e.name + cat + cidade + '. Não tem produto à venda. Abrindo o Papo.');
+      return;
+    }
+    _estadoPessoaIndexVoz = { empresa: e, etapa: 'compra_ou_conversar' };
+    falarVozIndex((falaExtra ? falaExtra + ' ' : '') + e.name + cat + cidade + '. Tem produto à venda. Quer comprar ou conversar no Papo?');
   }
 
   function irAoMenuEmpresaVoz(e, termoProduto){
