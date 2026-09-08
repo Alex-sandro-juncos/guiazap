@@ -186,7 +186,7 @@
   }
   body.dark-mode .chat-mensagens { background-color: #0b1410; }
 
-  .chat-input-area-wrap { display: flex; align-items: flex-end; gap: 8px; margin: 10px -15px -15px; padding: 8px 12px 12px; background: transparent; }
+  .chat-input-area-wrap { position: relative; display: flex; align-items: flex-end; gap: 8px; margin: 10px -15px -15px; padding: 8px 12px 12px; background: transparent; }
   .chat-input-pill {
     flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; background: white; border-radius: 26px;
     padding: 4px 6px 4px 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -206,6 +206,21 @@
   .bolha-msg.minha .check-lida.lida { color: #4fc3f7; }
   .btn-ferramenta-chat { background: none !important; color: #666 !important; font-size: 1.05rem !important; width: 28px !important; height: 28px !important; }
   .btn-ferramenta-chat.gravando { color: #a4402f !important; }
+  .menu-mais-chat-papo {
+    position: absolute; bottom: 52px; left: 0; right: 0; margin: 0 auto; max-width: 320px;
+    background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.22); z-index: 50;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 10px; overflow: hidden;
+  }
+  body.dark-mode .menu-mais-chat-papo { background: #233138; }
+  .menu-mais-chat-papo button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    border: none; background: none; padding: 12px 4px; border-radius: 10px; cursor: pointer;
+    font-size: 1.35rem; color: inherit;
+  }
+  .menu-mais-chat-papo button:hover, .menu-mais-chat-papo button:active { background: rgba(0,0,0,0.06); }
+  body.dark-mode .menu-mais-chat-papo button:hover, body.dark-mode .menu-mais-chat-papo button:active { background: rgba(255,255,255,0.08); }
+  .menu-mais-chat-papo button span { font-size: 0.68rem; color: #666; font-weight: 500; }
+  body.dark-mode .menu-mais-chat-papo button span { color: #aaa; }
   .gravacao-audio-box {
     display: flex; align-items: center; gap: 8px; margin-top: 10px;
     background: white; border-radius: 50px; padding: 8px 14px;
@@ -571,18 +586,18 @@
       <div class="chat-input-pill">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
         <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
-        <button type="button" class="btn-ferramenta-chat" id="btn-camera-chat" onclick="toggleMenuCameraChat()" title="Tirar foto ou vídeo" style="position:relative;">📷</button>
-        <div id="menu-camera-chat" style="display:none; position:absolute; bottom:52px; background:white; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,0.2); overflow:hidden; z-index:50;">
-          <button type="button" onclick="document.getElementById('chat-input-foto').click(); toggleMenuCameraChat()" style="display:block; width:100%; padding:12px 18px; border:none; background:white; text-align:left; font-size:0.85rem; cursor:pointer;">📷 Tirar foto</button>
-          <button type="button" onclick="document.getElementById('chat-input-video').click(); toggleMenuCameraChat()" style="display:block; width:100%; padding:12px 18px; border:none; background:white; text-align:left; font-size:0.85rem; cursor:pointer; border-top:1px solid #eee;">🎥 Gravar vídeo</button>
+        <button type="button" class="btn-ferramenta-chat" id="btn-mais-chat" onclick="toggleMenuMaisChat()" title="Mais opções" style="position:relative;">➕</button>
+        <div id="menu-mais-chat" class="menu-mais-chat-papo" style="display:none;">
+          <button type="button" onclick="document.getElementById('chat-input-foto').click(); toggleMenuMaisChat()">📷 <span>Câmera</span></button>
+          <button type="button" onclick="document.getElementById('chat-input-video').click(); toggleMenuMaisChat()">🎥 <span>Vídeo</span></button>
+          <button type="button" onclick="document.getElementById('chat-input-arquivo').click(); toggleMenuMaisChat()">📁 <span>Arquivo</span></button>
+          <button type="button" onclick="togglePainel('painel-gif'); toggleMenuMaisChat()">🖼️ <span>GIF</span></button>
+          <button type="button" onclick="togglePainel('painel-sticker'); toggleMenuMaisChat()">🏷️ <span>Figurinha</span></button>
+          <button type="button" onclick="falarMensagemParaTexto(); toggleMenuMaisChat()">🗣️ <span>Falar mensagem</span></button>
         </div>
         <input type="file" id="chat-input-foto" accept="image/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
         <input type="file" id="chat-input-video" accept="video/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
-        <button type="button" class="btn-ferramenta-chat" onclick="document.getElementById('chat-input-arquivo').click()" title="Anexar foto/vídeo/arquivo">📎</button>
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
-        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-gif')" title="GIF" style="font-size:0.62rem !important; font-weight:800;">GIF</button>
-        <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-sticker')" title="Figurinha">🏷️</button>
-        <button type="button" class="btn-ferramenta-chat" id="btn-falar-mensagem" onclick="falarMensagemParaTexto()" aria-label="Falar mensagem, transforma sua fala em texto pra enviar" title="Falar mensagem (vira texto, diferente do áudio)">🗣️</button>
       </div>
       <button type="button" class="btn-enviar-msg" id="btn-microfone" onclick="acaoBotaoEnviarOuMic()" title="Gravar áudio">🎤</button>
     </div>
@@ -2638,10 +2653,19 @@ async function enviarQualquerMensagem(payload){
 
 const LISTA_EMOJIS = ['😀','😂','😍','😘','😉','😊','🙂','😎','🤔','😢','😭','😡','😱','🥳','👍','👎','🙏','👏','💪','🤝','❤️','💚','💙','💜','🔥','⭐','✅','❌','🎉','🎁','📞','💬','😴','🤗','😅','🥰','😇','🙄','😬','🤩','💰','🛒','📦','🚀','⏰','📍','🏠','🚗','☕','🍕'];
 
-function toggleMenuCameraChat(){
-  const menu = document.getElementById('menu-camera-chat');
-  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+function toggleMenuMaisChat(){
+  const menu = document.getElementById('menu-mais-chat');
+  const abrindo = menu.style.display === 'none' || !menu.style.display;
+  menu.style.display = abrindo ? 'grid' : 'none';
 }
+// Fecha o menu "➕" se a pessoa tocar em qualquer lugar fora dele
+document.addEventListener('click', function(event){
+  const menu = document.getElementById('menu-mais-chat');
+  const btn = document.getElementById('btn-mais-chat');
+  if(!menu || menu.style.display === 'none' || !menu.style.display) return;
+  if(menu.contains(event.target) || (btn && btn.contains(event.target))) return;
+  menu.style.display = 'none';
+});
 
 function togglePainel(id){
   document.querySelectorAll('.painel-flutuante').forEach(p => {
