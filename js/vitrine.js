@@ -89,6 +89,7 @@ async function initAuthV(){
       document.getElementById('v-add-btn').style.display = 'none';
     } else {
       document.getElementById('v-ver-meus-btn').style.display = 'inline-block';
+      document.getElementById('v-config-atendimento-btn').style.display = 'inline-block';
       document.getElementById('v-ia-cardapio-btn').style.display = 'inline-block';
       document.getElementById('v-massa-bot-btn').style.display = 'inline-block';
       document.getElementById('v-comando-voz-btn').style.display = 'inline-block';
