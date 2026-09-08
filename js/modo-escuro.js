@@ -4,7 +4,7 @@
 function aplicarModoEscuro(ativo){
   document.body.classList.toggle('dark-mode', ativo);
   const btn = document.getElementById('btn-modo-escuro');
-  if(btn) btn.textContent = ativo ? '☀️ Modo claro' : '🌙 Modo escuro';
+  if(btn) btn.textContent = ativo ? '☀️' : '🌙';
 }
 
 function toggleModoEscuro(){

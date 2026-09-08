@@ -800,9 +800,13 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
   background: rgba(255,255,255,0.25);
   border: 1.5px solid rgba(255,255,255,0.6);
   color: white;
-  border-radius: 50px;
-  padding: 6px 12px;
-  font-size: 0.78rem;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
   cursor: pointer;
   margin-left: 6px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.15);
@@ -810,14 +814,17 @@ body.dark-mode .btn-modo-escuro { background: #333; color: #f0d020; }
 .btn-modo-escuro:hover { background: rgba(255,255,255,0.4); }
 
 .btn-modo-escuro-solto {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 10px auto 0;
   background: white;
   border: 1.5px solid var(--line, #d8cdb6);
   color: #555;
-  border-radius: 50px;
-  padding: 6px 14px;
-  font-size: 0.78rem;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  font-size: 0.95rem;
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
