@@ -594,11 +594,30 @@
           <button type="button" onclick="togglePainel('painel-gif'); toggleMenuMaisChat()">🖼️ <span>GIF</span></button>
           <button type="button" onclick="togglePainel('painel-sticker'); toggleMenuMaisChat()">🏷️ <span>Figurinha</span></button>
           <button type="button" onclick="falarMensagemParaTexto(); toggleMenuMaisChat()">🗣️ <span>Falar mensagem</span></button>
+          <button type="button" onclick="abrirMenuLocalizacaoChat(); toggleMenuMaisChat()">📍 <span>Localização</span></button>
+          <button type="button" onclick="abrirEnvioContatoChat(); toggleMenuMaisChat()">👤 <span>Contato</span></button>
+          <button type="button" onclick="abrirEnvioPixChat(); toggleMenuMaisChat()">💰 <span>Pix</span></button>
         </div>
         <input type="file" id="chat-input-foto" accept="image/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
         <input type="file" id="chat-input-video" accept="video/*" capture="environment" style="display:none;" onchange="enviarArquivoChat(event)">
         <input type="file" id="chat-input-arquivo" style="display:none;" onchange="enviarArquivoChat(event)">
       </div>
+
+      <div id="overlay-menu-localizacao-chat" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2000; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:white; width:100%; max-width:360px; border-radius:16px; overflow:hidden;">
+          <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <b style="font-size:0.95rem;">📍 Enviar localização</b>
+            <button type="button" onclick="fecharMenuLocalizacaoChat()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+          </div>
+          <div style="padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
+            <button type="button" onclick="enviarLocalizacaoAtualChat()" style="padding:11px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; text-align:left;">📍 Enviar minha localização atual</button>
+            <button type="button" onclick="iniciarLocalizacaoTempoRealChat(15)" style="padding:11px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; text-align:left;">🔴 Tempo real por 15 minutos</button>
+            <button type="button" onclick="iniciarLocalizacaoTempoRealChat(60)" style="padding:11px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; text-align:left;">🔴 Tempo real por 1 hora</button>
+            <button type="button" onclick="iniciarLocalizacaoTempoRealChat(480)" style="padding:11px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; text-align:left;">🔴 Tempo real por 8 horas (dia de trabalho)</button>
+          </div>
+        </div>
+      </div>
+
       <button type="button" class="btn-enviar-msg" id="btn-microfone" onclick="acaoBotaoEnviarOuMic()" title="Gravar áudio">🎤</button>
     </div>
   </div>
@@ -1574,6 +1593,9 @@ async function carregarListaConversas(){
       else if(ultimaMsg.tipo === 'sticker') resumoUltimaMsg = '🏷️ Figurinha';
       else if(ultimaMsg.tipo === 'chamada_perdida' || ultimaMsg.tipo === 'chamada_atendida') resumoUltimaMsg = resumoChamada(ultimaMsg);
       else if(ultimaMsg.tipo === 'link') resumoUltimaMsg = '🔗 ' + (ultimaMsg.arquivo_nome || 'Link compartilhado');
+      else if(ultimaMsg.tipo === 'localizacao') resumoUltimaMsg = '📍 Localização';
+      else if(ultimaMsg.tipo === 'contato_compartilhado') resumoUltimaMsg = '👤 Contato compartilhado';
+      else if(ultimaMsg.tipo === 'pix_chave') resumoUltimaMsg = '💰 Chave Pix';
       else resumoUltimaMsg = ultimaMsg.texto || '';
     }
 
@@ -1735,6 +1757,13 @@ async function abrirConversa(conversaId){
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens_chat', filter: `conversa_id=eq.${conversaId}` }, (payload) => {
       atualizarCheckLida(payload.new.id, payload.new.lida);
+      if(payload.new.tipo === 'localizacao'){
+        const bolha = document.querySelector(`[data-msg-id="${payload.new.id}"]`);
+        if(bolha){
+          const conteudoAtual = bolha.querySelector('div:not(.menu-msg-opcoes)');
+          if(conteudoAtual) conteudoAtual.innerHTML = conteudoLocalizacaoChat(payload.new);
+        }
+      }
     })
     .subscribe();
 }
@@ -2155,6 +2184,15 @@ function conteudoDaMensagem(m, minha){
   if(m.tipo === 'link'){
     return `<a href="${escapeHtmlChat(m.arquivo_url)}" target="_blank" class="arquivo-chat"><span class="icone-arquivo">🔗</span> ${escapeHtmlChat(m.arquivo_nome || 'Ver no GuiaZap')}</a>`;
   }
+  if(m.tipo === 'localizacao'){
+    return conteudoLocalizacaoChat(m);
+  }
+  if(m.tipo === 'contato_compartilhado'){
+    return conteudoContatoCompartilhadoChat(m);
+  }
+  if(m.tipo === 'pix_chave'){
+    return conteudoPixChat(m);
+  }
   return linkificarTexto(escapeHtmlChat(m.texto));
 }
 
@@ -2171,13 +2209,15 @@ function adicionarBolhaMensagem(m){
   const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const ehInterativa = m.tipo === 'menu_interativo' || m.tipo === 'formulario_endereco';
   const podeOuvir = m.tipo === 'texto' || (m.tipo === 'audio' && (m.texto || '').trim());
-  const temAlgumaOpcao = podeOuvir || (minha && m.tipo !== 'apagada');
+  const ehMinhaLocalizacaoAoVivoAtiva = minha && m.tipo === 'localizacao' && m.id === _msgIdLocalizacaoTempoRealChat;
+  const temAlgumaOpcao = podeOuvir || ehMinhaLocalizacaoAoVivoAtiva || (minha && m.tipo !== 'apagada');
   container.insertAdjacentHTML('beforeend', `
     <div class="bolha-msg ${minha ? 'minha' : 'outra'}" data-msg-id="${m.id}" style="${ehInterativa ? 'max-width:92%;' : ''} position:relative;">
       ${temAlgumaOpcao ? `<button type="button" onclick="toggleMenuMensagem('${m.id}')" style="position:absolute; top:2px; ${minha ? 'left:-26px;' : 'right:-26px;'} background:none; border:none; color:#999; font-size:1rem; cursor:pointer; padding:4px;">⋮</button>` : ''}
       <div class="menu-msg-opcoes" id="menu-msg-${m.id}" style="display:none; position:absolute; top:22px; ${minha ? 'left:-26px;' : 'right:-26px;'} background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.25); z-index:20; overflow:hidden; min-width:150px;">
         ${podeOuvir ? `<button type="button" onclick="ouvirMensagemEmVoz('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer;">🔊 Ouvir mensagem</button>` : ''}
-        ${minha && m.tipo !== 'apagada' ? `<button type="button" onclick="apagarMensagem('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer; color:#a4402f; border-top:${podeOuvir ? '1px solid #eee' : 'none'};">🗑️ Apagar mensagem</button>` : ''}
+        ${ehMinhaLocalizacaoAoVivoAtiva ? `<button type="button" onclick="pararLocalizacaoTempoRealChat(); toggleMenuMensagem('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer; color:#a4402f; border-top:${podeOuvir ? '1px solid #eee' : 'none'};">🛑 Parar de compartilhar localização</button>` : ''}
+        ${minha && m.tipo !== 'apagada' ? `<button type="button" onclick="apagarMensagem('${m.id}')" style="display:block; width:100%; padding:10px 14px; border:none; background:white; text-align:left; font-size:0.82rem; cursor:pointer; color:#a4402f; border-top:${podeOuvir || ehMinhaLocalizacaoAoVivoAtiva ? '1px solid #eee' : 'none'};">🗑️ Apagar mensagem</button>` : ''}
       </div>
       ${conteudoDaMensagem(m, minha)}
       <span class="hora-msg">${hora}${minha ? ` <span class="check-lida${m.lida ? ' lida' : ''}">${m.lida ? '✓✓' : '✓'}</span>` : ''}</span>
@@ -2277,6 +2317,9 @@ function lerMensagemRecebidaSeAtivo(m){
   else if(m.tipo === 'formulario_endereco'){
     texto = 'A empresa pediu seu endereço de entrega. Isso precisa ser preenchido tocando na tela, com CEP, rua e número — não dá pra fazer só por voz ainda.';
   }
+  else if(m.tipo === 'localizacao') texto = 'Chegou uma localização. Toque pra ver no mapa.';
+  else if(m.tipo === 'contato_compartilhado') texto = 'Chegou um contato compartilhado.';
+  else if(m.tipo === 'pix_chave') texto = 'Chegou uma chave Pix.';
   if(!texto) return;
 
   speechSynthesis.cancel();
@@ -2648,6 +2691,187 @@ async function enviarQualquerMensagem(payload){
     };
 
     setTimeout(verificarEstado, 600);
+  }
+}
+
+// ---------- LOCALIZAÇÃO, CONTATO E PIX ----------
+
+function abrirMenuLocalizacaoChat(){
+  if(!conversaAtual) return;
+  document.getElementById('overlay-menu-localizacao-chat').style.display = 'flex';
+}
+
+function fecharMenuLocalizacaoChat(){
+  document.getElementById('overlay-menu-localizacao-chat').style.display = 'none';
+}
+
+function linkGoogleMapsChat(lat, lng){
+  return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+
+async function enviarLocalizacaoAtualChat(){
+  fecharMenuLocalizacaoChat();
+  if(!navigator.geolocation){ alert('Seu navegador não suporta localização.'); return; }
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const payload = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    await enviarQualquerMensagem({ tipo: 'localizacao', texto: JSON.stringify(payload) });
+  }, () => {
+    alert('Não consegui pegar sua localização. Verifique as permissões do navegador.');
+  }, { enableHighAccuracy: true });
+}
+
+let _watchIdLocalizacaoTempoRealChat = null;
+let _msgIdLocalizacaoTempoRealChat = null;
+let _timeoutFimLocalizacaoTempoRealChat = null;
+
+async function iniciarLocalizacaoTempoRealChat(minutos){
+  fecharMenuLocalizacaoChat();
+  if(!conversaAtual) return;
+  if(!navigator.geolocation){ alert('Seu navegador não suporta localização.'); return; }
+
+  if(_watchIdLocalizacaoTempoRealChat){
+    alert('Você já está compartilhando localização em tempo real nessa conversa. Pare a atual antes de começar outra (toque nos ⋮ da mensagem de localização).');
+    return;
+  }
+
+  const ativoAte = new Date(Date.now() + minutos * 60000).toISOString();
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const payload = { lat: pos.coords.latitude, lng: pos.coords.longitude, tempoReal: true, ativoAte };
+    const { data, error } = await supabaseClientChat.from('mensagens_chat').insert({
+      conversa_id: conversaAtual,
+      remetente_user_id: currentUserChat.id,
+      tipo: 'localizacao',
+      texto: JSON.stringify(payload),
+      lida: false
+    }).select('id').single();
+
+    if(error){ console.error(error); alert('Erro ao começar a compartilhar localização.'); return; }
+
+    _msgIdLocalizacaoTempoRealChat = data.id;
+    await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
+    fetch('/.netlify/functions/notificar-nova-mensagem', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: '📍 Localização em tempo real' })
+    }).catch(e => console.error(e));
+
+    _watchIdLocalizacaoTempoRealChat = navigator.geolocation.watchPosition(async (posNova) => {
+      if(!_msgIdLocalizacaoTempoRealChat) return;
+      const payloadNovo = { lat: posNova.coords.latitude, lng: posNova.coords.longitude, tempoReal: true, ativoAte };
+      await supabaseClientChat.from('mensagens_chat').update({ texto: JSON.stringify(payloadNovo) }).eq('id', _msgIdLocalizacaoTempoRealChat);
+      const bolha = document.querySelector(`[data-msg-id="${_msgIdLocalizacaoTempoRealChat}"]`);
+      if(bolha) atualizarBolhaLocalizacaoTempoReal(bolha, payloadNovo);
+    }, (e) => console.error('erro no watchPosition', e), { enableHighAccuracy: true, maximumAge: 10000 });
+
+    _timeoutFimLocalizacaoTempoRealChat = setTimeout(pararLocalizacaoTempoRealChat, minutos * 60000);
+
+    alert(`📍 Compartilhando sua localização em tempo real por ${minutos < 60 ? minutos + ' minutos' : (minutos / 60) + ' hora(s)'}. Pra parar antes, toque nos ⋮ da mensagem de localização.`);
+  }, () => {
+    alert('Não consegui pegar sua localização. Verifique as permissões do navegador.');
+  }, { enableHighAccuracy: true });
+}
+
+function pararLocalizacaoTempoRealChat(){
+  if(_watchIdLocalizacaoTempoRealChat){
+    navigator.geolocation.clearWatch(_watchIdLocalizacaoTempoRealChat);
+    _watchIdLocalizacaoTempoRealChat = null;
+  }
+  if(_timeoutFimLocalizacaoTempoRealChat){
+    clearTimeout(_timeoutFimLocalizacaoTempoRealChat);
+    _timeoutFimLocalizacaoTempoRealChat = null;
+  }
+  _msgIdLocalizacaoTempoRealChat = null;
+}
+
+function atualizarBolhaLocalizacaoTempoReal(bolha, payload){
+  const link = bolha.querySelector('.localizacao-chat-link');
+  if(link) link.href = linkGoogleMapsChat(payload.lat, payload.lng);
+}
+
+function conteudoLocalizacaoChat(m){
+  let payload;
+  try{ payload = JSON.parse(m.texto); } catch(e){ return 'Localização'; }
+  const link = linkGoogleMapsChat(payload.lat, payload.lng);
+  const expirado = payload.tempoReal && payload.ativoAte && new Date(payload.ativoAte) < new Date();
+  return `
+    <a href="${link}" target="_blank" class="localizacao-chat-link" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:inherit;">
+      <span style="font-size:1.6rem;">📍</span>
+      <span>
+        <b style="display:block; font-size:0.85rem;">${payload.tempoReal ? (expirado ? 'Localização em tempo real (encerrada)' : '🔴 Localização em tempo real') : 'Localização'}</b>
+        <span style="font-size:0.75rem; color:#888;">Toque pra ver no mapa</span>
+      </span>
+    </a>
+  `;
+}
+
+async function abrirEnvioContatoChat(){
+  if(!conversaAtual) return;
+  const { data: contatos } = await supabaseClientChat.from('agenda_contatos').select('nome_salvo, contato_user_id, profissional_id').eq('dono_user_id', currentUserChat.id).order('nome_salvo', { ascending: true });
+
+  if(!contatos || contatos.length === 0){
+    alert('Você ainda não tem contatos salvos na agenda pra compartilhar.');
+    return;
+  }
+
+  const nomesNumerados = contatos.map((c, i) => `${i + 1}. ${c.nome_salvo}`).join('\n');
+  const escolha = prompt(`Qual contato você quer enviar?\n${nomesNumerados}`);
+  const indice = parseInt(escolha, 10) - 1;
+  const escolhido = contatos[indice];
+  if(!escolhido) return;
+
+  const payload = { nome: escolhido.nome_salvo, contato_user_id: escolhido.contato_user_id || null, profissional_id: escolhido.profissional_id || null };
+  await enviarQualquerMensagem({ tipo: 'contato_compartilhado', texto: JSON.stringify(payload) });
+}
+
+function conteudoContatoCompartilhadoChat(m){
+  let payload;
+  try{ payload = JSON.parse(m.texto); } catch(e){ return 'Contato'; }
+  const link = payload.profissional_id ? `chat.html?empresa=${payload.profissional_id}` : (payload.contato_user_id ? `chat.html?pessoa=${payload.contato_user_id}` : null);
+  return `
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font-size:1.6rem;">👤</span>
+      <div style="flex:1; min-width:0;">
+        <b style="display:block; font-size:0.85rem;">${escapeHtmlChat(payload.nome)}</b>
+        <span style="font-size:0.75rem; color:#888;">Contato compartilhado</span>
+      </div>
+      ${link ? `<a href="${link}" style="background:var(--verde-whats); color:white; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; text-decoration:none; white-space:nowrap;">Ver</a>` : ''}
+    </div>
+  `;
+}
+
+async function abrirEnvioPixChat(){
+  if(!conversaAtual) return;
+  const chave = prompt('Digite sua chave Pix (CPF, e-mail, telefone ou chave aleatória):');
+  if(!chave || !chave.trim()) return;
+  const valor = prompt('Valor combinado (opcional, só pra referência — deixe em branco se não quiser informar):');
+
+  const payload = { chave: chave.trim(), valor: valor ? valor.trim() : null };
+  await enviarQualquerMensagem({ tipo: 'pix_chave', texto: JSON.stringify(payload) });
+}
+
+function conteudoPixChat(m){
+  let payload;
+  try{ payload = JSON.parse(m.texto); } catch(e){ return 'Pix'; }
+  return `
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font-size:1.6rem;">💰</span>
+      <div style="flex:1; min-width:0;">
+        <b style="display:block; font-size:0.85rem;">Chave Pix</b>
+        <span style="font-size:0.8rem; word-break:break-all;">${escapeHtmlChat(payload.chave)}</span>
+        ${payload.valor ? `<span style="display:block; font-size:0.75rem; color:#888;">Valor: R$ ${escapeHtmlChat(payload.valor)}</span>` : ''}
+      </div>
+      <button type="button" onclick="event.stopPropagation(); copiarPixChat('${escapeHtmlChat(payload.chave).replace(/'/g, "\\'")}')" style="background:var(--verde-whats); color:white; border:none; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; white-space:nowrap;">Copiar</button>
+    </div>
+  `;
+}
+
+async function copiarPixChat(chave){
+  try{
+    await navigator.clipboard.writeText(chave);
+    alert('Chave Pix copiada!');
+  } catch(e){
+    prompt('Copie a chave Pix abaixo:', chave);
   }
 }
 
