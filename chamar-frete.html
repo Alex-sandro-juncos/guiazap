@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chamar Frete — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .frete-wrap { max-width: 560px; margin: 0 auto; padding: 16px 15px 60px; }
+  .frete-secao {
+    background: var(--cinza-card, #fff); border-radius: 14px; padding: 16px;
+    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .frete-secao h3 { font-size: 0.95rem; margin-bottom: 10px; color: var(--verde-escuro); }
+  .frete-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .frete-row .field { flex: 1; margin-bottom: 0; }
+  .chk-caracteristica {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 0.85rem;
+  }
+  .chk-caracteristica input { width: 18px; height: 18px; }
+  .card-entregador {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    background: var(--cinza-card, #fff); border-radius: 12px; padding: 12px 14px;
+    margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  .card-entregador .info-entregador { flex: 1; min-width: 0; }
+  .card-entregador .nome-entregador { font-weight: 700; font-size: 0.9rem; }
+  .card-entregador .detalhe-entregador { font-size: 0.75rem; color: #888; margin-top: 2px; }
+  .btn-chamar-um {
+    background: var(--verde-whats); color: white; border: none; padding: 8px 14px;
+    border-radius: 8px; font-weight: 700; font-size: 0.78rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-mandar-todos {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    background: #1c1c1c; color: white; font-weight: 700; font-size: 0.9rem;
+    cursor: pointer; margin-top: 6px;
+  }
+  .frete-msg { font-size: 0.8rem; margin-top: 8px; }
+  .badge-preco-sugerido {
+    background: #e8f5f0; color: #0a4a3a; border-radius: 8px; padding: 8px 10px;
+    font-size: 0.8rem; margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Chamar frete / corrida</p></header>
+<a href="index.html" class="voltar" style="display:block; max-width:560px; margin:10px auto 0; padding:0 15px;">← Voltar</a>
+
+<div class="frete-wrap">
+
+  <div id="aviso-login" style="display:none; text-align:center; padding:30px 15px;">
+    <p style="margin-bottom:12px;">Você precisa estar logado pra chamar um frete.</p>
+    <a href="index.html" class="btn-baixar-app">Fazer login</a>
+  </div>
+
+  <div id="frete-conteudo" style="display:none;">
+
+    <div class="frete-secao">
+      <h3>📦 Local de retirada</h3>
+      <div class="field">
+        <input id="ret-cep" placeholder="CEP (opcional, preenche sozinho)" maxlength="9" oninput="mascaraCepFrete(this)" onblur="buscarCepFrete('ret')">
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ret-rua" placeholder="Rua"></div>
+        <div class="field" style="flex:0 0 90px;"><input id="ret-numero" placeholder="Número"></div>
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ret-bairro" placeholder="Bairro"></div>
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ret-cidade" placeholder="Cidade"></div>
+        <div class="field" style="flex:0 0 70px;"><input id="ret-estado" placeholder="UF" maxlength="2" style="text-transform:uppercase;"></div>
+      </div>
+    </div>
+
+    <div class="frete-secao">
+      <h3>🏠 Local de entrega</h3>
+      <div class="field">
+        <input id="ent-cep" placeholder="CEP (opcional, preenche sozinho)" maxlength="9" oninput="mascaraCepFrete(this)" onblur="buscarCepFrete('ent')">
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ent-rua" placeholder="Rua"></div>
+        <div class="field" style="flex:0 0 90px;"><input id="ent-numero" placeholder="Número"></div>
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ent-bairro" placeholder="Bairro"></div>
+      </div>
+      <div class="frete-row">
+        <div class="field"><input id="ent-cidade" placeholder="Cidade"></div>
+        <div class="field" style="flex:0 0 70px;"><input id="ent-estado" placeholder="UF" maxlength="2" style="text-transform:uppercase;"></div>
+      </div>
+    </div>
+
+    <div class="frete-secao">
+      <h3>🧰 Características da entrega (marque o que precisa)</h3>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-bau"> 📦 Precisa de baú (proteger a carga)</label>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-refrigerado"> ❄️ Precisa ser refrigerado</label>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-espaco-grande"> 📐 Peça/objeto grande (precisa de espaço)</label>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-fragil"> 🥚 É frágil</label>
+    </div>
+
+    <div class="frete-secao">
+      <h3>💰 Valor do frete</h3>
+      <div class="field">
+        <label for="frete-valor">Valor (R$) — combinado direto com o entregador</label>
+        <input id="frete-valor" type="text" placeholder="Ex: 15,00" inputmode="decimal">
+      </div>
+      <div id="frete-valor-sugestao" style="display:none;"></div>
+      <button type="button" onclick="calcularSugestaoFreteCarro()" style="margin-top:8px; background:none; border:1.5px solid var(--verde-escuro); color:var(--verde-escuro); padding:8px 12px; border-radius:8px; font-weight:600; font-size:0.78rem; cursor:pointer;">🚗 Calcular sugestão pra carro (R$20 + R$1,50/km)</button>
+      <p style="font-size:0.72rem; color:#888; margin-top:8px;">A forma de pagamento é combinada direto entre você e o entregador — o GuiaZap não processa esse pagamento.</p>
+    </div>
+
+    <button type="button" onclick="buscarEntregadoresCompativeis()" style="width:100%; padding:13px; border-radius:10px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.9rem; cursor:pointer;">🔍 Ver entregadores disponíveis</button>
+
+    <div id="frete-msg-geral" class="frete-msg"></div>
+
+    <div id="lista-entregadores-frete" style="margin-top:16px;"></div>
+
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientFrete = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserFrete = null;
+let entregadoresCompativeisCache = [];
+
+async function initFrete(){
+  const { data: { session } } = await supabaseClientFrete.auth.getSession();
+  if(!session){
+    document.getElementById('aviso-login').style.display = 'block';
+    return;
+  }
+  currentUserFrete = session.user;
+  document.getElementById('frete-conteudo').style.display = 'block';
+}
+
+function mascaraCepFrete(input){
+  let v = input.value.replace(/\D/g, '').slice(0, 8);
+  if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  input.value = v;
+}
+
+async function buscarCepFrete(prefixo){
+  const cep = document.getElementById(prefixo + '-cep').value.replace(/\D/g, '');
+  if(cep.length !== 8) return;
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro) return;
+    document.getElementById(prefixo + '-rua').value = data.logradouro || '';
+    document.getElementById(prefixo + '-bairro').value = data.bairro || '';
+    document.getElementById(prefixo + '-cidade').value = data.localidade || '';
+    document.getElementById(prefixo + '-estado').value = data.uf || '';
+  } catch(e){ console.error(e); }
+}
+
+function coletarEnderecoFrete(prefixo){
+  return {
+    rua: document.getElementById(prefixo + '-rua').value.trim(),
+    numero: document.getElementById(prefixo + '-numero').value.trim(),
+    bairro: document.getElementById(prefixo + '-bairro').value.trim(),
+    cidade: document.getElementById(prefixo + '-cidade').value.trim(),
+    estado: document.getElementById(prefixo + '-estado').value.trim().toUpperCase()
+  };
+}
+
+function enderecoFreteCompleto(e){
+  return `${e.rua}, ${e.numero}, ${e.bairro}, ${e.cidade} - ${e.estado}`;
+}
+
+function calcularDistanciaKmFrete(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+async function geocodificarFrete(e){
+  const resp = await fetch(`/.netlify/functions/geocodificar-endereco?cidade=${encodeURIComponent(e.cidade)}&bairro=${encodeURIComponent(e.bairro)}&estado=${encodeURIComponent(e.estado)}&rua=${encodeURIComponent(e.rua)}&numero=${encodeURIComponent(e.numero)}`);
+  return resp.json();
+}
+
+async function calcularSugestaoFreteCarro(){
+  const retirada = coletarEnderecoFrete('ret');
+  const entrega = coletarEnderecoFrete('ent');
+  const box = document.getElementById('frete-valor-sugestao');
+
+  if(!retirada.cidade || !retirada.estado || !entrega.cidade || !entrega.estado){
+    box.style.display = 'block';
+    box.className = 'frete-msg';
+    box.style.color = '#a4402f';
+    box.textContent = 'Preencha pelo menos cidade e estado dos dois endereços primeiro.';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.className = 'badge-preco-sugerido';
+  box.textContent = 'Calculando distância...';
+
+  try{
+    const [geoRet, geoEnt] = await Promise.all([geocodificarFrete(retirada), geocodificarFrete(entrega)]);
+    if(!geoRet.encontrado || !geoEnt.encontrado){
+      box.textContent = 'Não consegui estimar a distância — digite o valor manualmente.';
+      return;
+    }
+    const distanciaKm = calcularDistanciaKmFrete(geoRet.latitude, geoRet.longitude, geoEnt.latitude, geoEnt.longitude);
+    const valorSugerido = 20 + (1.5 * distanciaKm);
+    box.innerHTML = `📍 Distância estimada: ${distanciaKm.toFixed(1)} km<br>💰 Sugestão pra carro: R$ ${valorSugerido.toFixed(2).replace('.', ',')} (R$20 + R$1,50/km)`;
+    document.getElementById('frete-valor').value = valorSugerido.toFixed(2).replace('.', ',');
+  } catch(e){
+    console.error(e);
+    box.textContent = 'Erro ao calcular. Digite o valor manualmente.';
+  }
+}
+
+function caracteristicasExigidasFrete(){
+  const exigidas = [];
+  if(document.getElementById('carac-bau').checked) exigidas.push('bau');
+  if(document.getElementById('carac-refrigerado').checked) exigidas.push('refrigerado');
+  if(document.getElementById('carac-espaco-grande').checked) exigidas.push('espaco_grande');
+  if(document.getElementById('carac-fragil').checked) exigidas.push('fragil');
+  return exigidas;
+}
+
+const NOMES_CARACTERISTICAS = { bau: '📦 Baú', refrigerado: '❄️ Refrigerado', espaco_grande: '📐 Espaço grande', fragil: '🥚 Frágil' };
+const NOMES_VEICULOS = { moto: '🏍️ Moto', carro: '🚗 Carro' };
+
+async function buscarEntregadoresCompativeis(){
+  const retirada = coletarEnderecoFrete('ret');
+  const entrega = coletarEnderecoFrete('ent');
+  const valor = document.getElementById('frete-valor').value.trim();
+  const msgGeral = document.getElementById('frete-msg-geral');
+  const lista = document.getElementById('lista-entregadores-frete');
+
+  if(!retirada.rua || !retirada.numero || !retirada.bairro || !retirada.cidade || !retirada.estado){
+    msgGeral.style.color = '#a4402f';
+    msgGeral.textContent = 'Preencha o endereço de retirada completo.';
+    return;
+  }
+  if(!entrega.rua || !entrega.numero || !entrega.bairro || !entrega.cidade || !entrega.estado){
+    msgGeral.style.color = '#a4402f';
+    msgGeral.textContent = 'Preencha o endereço de entrega completo.';
+    return;
+  }
+  if(!valor){
+    msgGeral.style.color = '#a4402f';
+    msgGeral.textContent = 'Preencha o valor do frete (ou clique em calcular sugestão pra carro).';
+    return;
+  }
+
+  msgGeral.style.color = '#888';
+  msgGeral.textContent = 'Buscando entregadores...';
+  lista.innerHTML = '';
+
+  const exigidas = caracteristicasExigidasFrete();
+
+  const { data, error } = await supabaseClientFrete
+    .from('profissionais')
+    .select('id, name, cidade, estado, veiculo_modelo, veiculo_tipos, entregador_equipamentos')
+    .eq('plano', 'entregador')
+    .eq('status_pagamento', 'ativo');
+
+  if(error){ msgGeral.style.color = '#a4402f'; msgGeral.textContent = 'Erro ao buscar entregadores.'; console.error(error); return; }
+
+  const compativeis = (data || []).filter(e => {
+    if(exigidas.length === 0) return true;
+    const equipamentosDele = (e.entregador_equipamentos || '').split(',').filter(Boolean);
+    return exigidas.every(ex => equipamentosDele.includes(ex));
+  });
+
+  entregadoresCompativeisCache = compativeis;
+
+  if(compativeis.length === 0){
+    msgGeral.style.color = '#a4402f';
+    msgGeral.textContent = 'Nenhum entregador cadastrado atende essas características ainda. Tenta desmarcar alguma, ou fala com a empresa direto.';
+    return;
+  }
+
+  msgGeral.style.color = 'var(--verde-escuro)';
+  msgGeral.textContent = `${compativeis.length} entregador${compativeis.length > 1 ? 'es' : ''} encontrado${compativeis.length > 1 ? 's' : ''}:`;
+
+  lista.innerHTML = compativeis.map(e => {
+    const veiculos = (e.veiculo_tipos || '').split(',').filter(Boolean).map(v => NOMES_VEICULOS[v] || v).join(' · ');
+    const equip = (e.entregador_equipamentos || '').split(',').filter(Boolean).map(q => NOMES_CARACTERISTICAS[q] || q).join(' · ');
+    return `
+      <div class="card-entregador">
+        <div class="info-entregador">
+          <div class="nome-entregador">${escapeHtmlFrete(e.name)}</div>
+          <div class="detalhe-entregador">${veiculos || 'veículo não informado'}${equip ? ' · ' + equip : ''}</div>
+          <div class="detalhe-entregador">📍 ${escapeHtmlFrete(e.cidade)}/${escapeHtmlFrete(e.estado)}</div>
+        </div>
+        <button type="button" class="btn-chamar-um" onclick="chamarUmEntregador('${e.id}')">Chamar</button>
+      </div>
+    `;
+  }).join('') + `
+    <button type="button" class="btn-mandar-todos" onclick="chamarTodosEntregadores()">📢 Mandar chamado pra todos (${compativeis.length})</button>
+  `;
+}
+
+function escapeHtmlFrete(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function montarMensagemFrete(){
+  const retirada = coletarEnderecoFrete('ret');
+  const entrega = coletarEnderecoFrete('ent');
+  const valor = document.getElementById('frete-valor').value.trim();
+  const exigidas = caracteristicasExigidasFrete();
+  const caracteristicasTexto = exigidas.map(c => NOMES_CARACTERISTICAS[c]).join(', ');
+
+  return `📦 *Chamado de frete pelo GuiaZap*\n\n` +
+    `📍 Retirada: ${enderecoFreteCompleto(retirada)}\n` +
+    `🏠 Entrega: ${enderecoFreteCompleto(entrega)}\n` +
+    `💰 Valor combinado: R$ ${valor}\n` +
+    (caracteristicasTexto ? `🧰 Características: ${caracteristicasTexto}\n` : '') +
+    `\n💵 Forma de pagamento: combinar direto pelo Papo.\n` +
+    `Se puder pegar essa corrida, responde aqui!`;
+}
+
+async function enviarChamadoParaProfissional(profissionalId, texto){
+  const { data: existente } = await supabaseClientFrete
+    .from('conversas')
+    .select('id')
+    .eq('profissional_id', profissionalId)
+    .eq('visitante_user_id', currentUserFrete.id)
+    .maybeSingle();
+
+  let conversaId = existente ? existente.id : null;
+  if(!conversaId){
+    const { data: nova, error } = await supabaseClientFrete
+      .from('conversas')
+      .insert({ profissional_id: profissionalId, visitante_user_id: currentUserFrete.id })
+      .select('id')
+      .single();
+    if(error){ console.error(error); return false; }
+    conversaId = nova.id;
+  }
+
+  const { error: erroMsg } = await supabaseClientFrete.from('mensagens_chat').insert({
+    conversa_id: conversaId,
+    remetente_user_id: currentUserFrete.id,
+    tipo: 'texto',
+    texto,
+    lida: false
+  });
+  if(erroMsg){ console.error(erroMsg); return false; }
+
+  await supabaseClientFrete.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
+
+  fetch('/.netlify/functions/notificar-nova-mensagem', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversaId, remetenteUserId: currentUserFrete.id, texto: '📦 Novo chamado de frete' })
+  }).catch(e => console.error(e));
+
+  return conversaId;
+}
+
+async function chamarUmEntregador(profissionalId){
+  const msgGeral = document.getElementById('frete-msg-geral');
+  msgGeral.style.color = '#888';
+  msgGeral.textContent = 'Enviando chamado...';
+
+  const texto = montarMensagemFrete();
+  const conversaId = await enviarChamadoParaProfissional(profissionalId, texto);
+
+  if(!conversaId){
+    msgGeral.style.color = '#a4402f';
+    msgGeral.textContent = 'Erro ao enviar o chamado. Tenta de novo.';
+    return;
+  }
+
+  window.location.href = 'chat.html?empresa=' + profissionalId;
+}
+
+async function chamarTodosEntregadores(){
+  const msgGeral = document.getElementById('frete-msg-geral');
+  if(!confirm(`Mandar esse chamado pra todos os ${entregadoresCompativeisCache.length} entregadores compatíveis? Quem pegar a corrida primeiro, responde no Papo.`)) return;
+
+  msgGeral.style.color = '#888';
+  msgGeral.textContent = 'Enviando chamado pra todos...';
+
+  const texto = montarMensagemFrete();
+  let enviados = 0;
+  for(const e of entregadoresCompativeisCache){
+    const ok = await enviarChamadoParaProfissional(e.id, texto);
+    if(ok) enviados++;
+  }
+
+  msgGeral.style.color = 'var(--verde-escuro)';
+  msgGeral.textContent = `✅ Chamado enviado pra ${enviados} entregador${enviados > 1 ? 'es' : ''}! Assim que alguém responder, a conversa aparece no seu Papo.`;
+}
+
+initFrete();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

@@ -442,7 +442,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, localizacao_confirmada_manualmente, rua, numero')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, entregador_equipamentos, localizacao_confirmada_manualmente, rua, numero')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -892,6 +892,11 @@ async function openForm(entry){
   const tiposSalvos = entry && entry.veiculo_tipos ? entry.veiculo_tipos.split(',') : [];
   document.getElementById('f-veiculo-tipo-moto').checked = tiposSalvos.includes('moto');
   document.getElementById('f-veiculo-tipo-carro').checked = tiposSalvos.includes('carro');
+  const equipSalvos = entry && entry.entregador_equipamentos ? entry.entregador_equipamentos.split(',') : [];
+  document.getElementById('f-equip-bau').checked = equipSalvos.includes('bau');
+  document.getElementById('f-equip-refrigerado').checked = equipSalvos.includes('refrigerado');
+  document.getElementById('f-equip-espaco-grande').checked = equipSalvos.includes('espaco_grande');
+  document.getElementById('f-equip-fragil').checked = equipSalvos.includes('fragil');
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
   document.getElementById('foto-msg').textContent = '';
   const preview = document.getElementById('foto-preview');
@@ -1193,6 +1198,12 @@ async function saveEntry(e){
     veiculo_tipos: planoAtualDoCadastro === 'entregador' ? [
       document.getElementById('f-veiculo-tipo-moto').checked ? 'moto' : null,
       document.getElementById('f-veiculo-tipo-carro').checked ? 'carro' : null
+    ].filter(Boolean).join(',') : null,
+    entregador_equipamentos: planoAtualDoCadastro === 'entregador' ? [
+      document.getElementById('f-equip-bau').checked ? 'bau' : null,
+      document.getElementById('f-equip-refrigerado').checked ? 'refrigerado' : null,
+      document.getElementById('f-equip-espaco-grande').checked ? 'espaco_grande' : null,
+      document.getElementById('f-equip-fragil').checked ? 'fragil' : null
     ].filter(Boolean).join(',') : null
   };
   // Se a empresa marcou a localização exata no mapa, usa esses valores em
