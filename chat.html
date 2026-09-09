@@ -2223,7 +2223,9 @@ function ouvirMensagemEmVoz(msgId){
 }
 
 function lerAutomaticoPapoAtivo(){
-  return localStorage.getItem('papo_ler_automatico') !== '0';
+  // Desligado por padrão — só lê em voz alta se a pessoa ligar de propósito
+  // (ou se o modo intérprete estiver ativo, que trava ligado por segurança)
+  return localStorage.getItem('papo_ler_automatico') === '1';
 }
 
 function toggleLerAutomaticoPapo(){
