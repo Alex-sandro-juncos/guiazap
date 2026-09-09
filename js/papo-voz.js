@@ -339,12 +339,12 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  const _ehPararP = t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
+  const _ehPararP = t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
   if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
   }
 
-  if(t === 'desligar' || t === 'sair do modo voz' || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
+  if(t === 'desligar' || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;
