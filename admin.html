@@ -69,6 +69,7 @@
     <button class="admin-aba-btn" id="aba-verificacao" onclick="mostrarAbaAdmin('verificacao')">🔵 Selo Verificado</button>
     <button class="admin-aba-btn" id="aba-depoimentos" onclick="mostrarAbaAdmin('depoimentos')">💬 Depoimentos</button>
     <button class="admin-aba-btn" id="aba-blog" onclick="mostrarAbaAdmin('blog')">📝 Blog</button>
+    <button class="admin-aba-btn" id="aba-contagem" onclick="mostrarAbaAdmin('contagem')">📊 Contagem</button>
   </div>
   <button type="button" id="btn-exportar-emails" onclick="exportarEmails()" style="display:none; margin-bottom:14px; background:#0a4a6b; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">⬇ Exportar e-mails (.csv)</button>
   <input type="text" id="admin-busca" placeholder="🔍 Buscar..." oninput="renderAdmin()" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
@@ -136,10 +137,11 @@ async function carregarDadosAdmin(){
 
 function mostrarAbaAdmin(aba){
   abaAtual = aba;
-  ['feedback','denuncias','mensagens','empresas','produtos','verificacao','depoimentos','blog'].forEach(a => {
+  ['feedback','denuncias','mensagens','empresas','produtos','verificacao','depoimentos','blog','contagem'].forEach(a => {
     document.getElementById('aba-' + a).classList.toggle('ativa', aba === a);
   });
   document.getElementById('btn-exportar-emails').style.display = aba === 'empresas' ? 'block' : 'none';
+  document.getElementById('admin-busca').style.display = aba === 'contagem' ? 'none' : 'block';
   renderAdmin();
 }
 
@@ -399,6 +401,79 @@ function textoBuscavelDoItem(item){
   ].filter(Boolean).join(' '));
 }
 
+function renderContagemAdmin(){
+  const lista = document.getElementById('admin-lista');
+  const profissionais = dadosAdmin.profissionais || [];
+  const perfis = dadosAdmin.perfisUsuario || [];
+
+  const idsComEmpresa = new Set(profissionais.map(p => p.user_id));
+  const visitantes = perfis.filter(p => !idsComEmpresa.has(p.user_id));
+
+  const porPlano = (plano) => profissionais.filter(p => p.plano === plano && p.status_pagamento === 'ativo');
+  const gratis = porPlano('basico');
+  const completo = porPlano('completo');
+  const premium = porPlano('premium');
+  const vendas = porPlano('vendas');
+  const entregadores = porPlano('entregador');
+  const comMoto = entregadores.filter(p => (p.veiculo_tipos || '').split(',').includes('moto'));
+  const comCarro = entregadores.filter(p => (p.veiculo_tipos || '').split(',').includes('carro'));
+  const semTipoMarcado = entregadores.filter(p => !p.veiculo_tipos);
+
+  const categorias = [
+    { chave: 'visitantes', titulo: '👥 Visitantes (sem empresa)', lista: visitantes, pegarNome: v => v.nome_exibicao || v.codigo_guiazap || 'Sem nome' },
+    { chave: 'gratis', titulo: '🆓 Plano Grátis', lista: gratis, pegarNome: p => p.name },
+    { chave: 'completo', titulo: '💚 Plano Completo', lista: completo, pegarNome: p => p.name },
+    { chave: 'premium', titulo: '👑 Plano Premium', lista: premium, pegarNome: p => p.name },
+    { chave: 'vendas', titulo: '💼 Plano Vendas', lista: vendas, pegarNome: p => p.name },
+    { chave: 'motoboy', titulo: '🏍️ Corridas e Fretes — Moto', lista: comMoto, pegarNome: p => p.name },
+    { chave: 'carro', titulo: '🚗 Corridas e Fretes — Carro', lista: comCarro, pegarNome: p => p.name }
+  ];
+
+  const botoesHtml = categorias.map(c => `
+    <button type="button" class="admin-aba-btn" style="min-width:150px; flex:none;" onclick="mostrarCategoriaContagem('${c.chave}')" id="contagem-btn-${c.chave}">
+      ${c.titulo} <b style="display:block; font-size:1.1rem; margin-top:2px;">${c.lista.length}</b>
+    </button>
+  `).join('');
+
+  const avisoSemTipo = semTipoMarcado.length > 0
+    ? `<p style="font-size:0.75rem; color:#a4402f; margin-top:10px;">⚠️ ${semTipoMarcado.length} entregador${semTipoMarcado.length > 1 ? 'es' : ''} sem marcar moto/carro ainda (cadastro antigo, de antes desse campo existir): ${semTipoMarcado.map(p => escapeHtmlAdmin(p.name)).join(', ')}</p>`
+    : '';
+
+  lista.innerHTML = `
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">${botoesHtml}</div>
+    ${avisoSemTipo}
+    <div id="contagem-detalhe"></div>
+  `;
+
+  window._categoriasContagemAdmin = categorias;
+}
+
+function mostrarCategoriaContagem(chave){
+  const categorias = window._categoriasContagemAdmin || [];
+  const cat = categorias.find(c => c.chave === chave);
+  const detalhe = document.getElementById('contagem-detalhe');
+  if(!cat || !detalhe) return;
+
+  categorias.forEach(c => {
+    const btn = document.getElementById('contagem-btn-' + c.chave);
+    if(btn) btn.classList.toggle('ativa', c.chave === chave);
+  });
+
+  if(cat.lista.length === 0){
+    detalhe.innerHTML = '<div class="admin-vazio">Ninguém nessa categoria ainda.</div>';
+    return;
+  }
+
+  detalhe.innerHTML = `
+    <div class="admin-item">
+      <div class="tipo">${cat.titulo} — ${cat.lista.length}</div>
+      <div style="margin-top:8px; font-size:0.85rem; line-height:1.9;">
+        ${cat.lista.map(item => escapeHtmlAdmin(cat.pegarNome(item))).join('<br>')}
+      </div>
+    </div>
+  `;
+}
+
 function renderAdmin(){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin){ lista.innerHTML = ''; return; }
@@ -414,6 +489,7 @@ function renderAdmin(){
   if(abaAtual === 'verificacao'){ renderVerificacoesAdmin(busca); return; }
   if(abaAtual === 'depoimentos'){ renderDepoimentosAdmin(busca); return; }
   if(abaAtual === 'blog'){ renderBlogAdmin(busca); return; }
+  if(abaAtual === 'contagem'){ renderContagemAdmin(); return; }
 
   if(busca){
     itens = (itens || []).filter(item => textoBuscavelDoItem(item).includes(busca));

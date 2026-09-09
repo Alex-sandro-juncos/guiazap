@@ -442,7 +442,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, localizacao_confirmada_manualmente, rua, numero')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, localizacao_confirmada_manualmente, rua, numero')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -889,6 +889,9 @@ async function openForm(entry){
   document.getElementById('campo-veiculo-entregador').style.display = planoDoFormulario === 'entregador' ? 'block' : 'none';
   document.getElementById('f-veiculo-modelo').value = entry ? (entry.veiculo_modelo || '') : '';
   document.getElementById('f-veiculo-placa').value = entry ? (entry.veiculo_placa || '') : '';
+  const tiposSalvos = entry && entry.veiculo_tipos ? entry.veiculo_tipos.split(',') : [];
+  document.getElementById('f-veiculo-tipo-moto').checked = tiposSalvos.includes('moto');
+  document.getElementById('f-veiculo-tipo-carro').checked = tiposSalvos.includes('carro');
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
   document.getElementById('foto-msg').textContent = '';
   const preview = document.getElementById('foto-preview');
@@ -1186,7 +1189,11 @@ async function saveEntry(e){
     horario_abre: document.getElementById('f-horario-abre').value || null,
     horario_fecha: document.getElementById('f-horario-fecha').value || null,
     veiculo_modelo: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-modelo').value.trim() : null,
-    veiculo_placa: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null
+    veiculo_placa: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null,
+    veiculo_tipos: planoAtualDoCadastro === 'entregador' ? [
+      document.getElementById('f-veiculo-tipo-moto').checked ? 'moto' : null,
+      document.getElementById('f-veiculo-tipo-carro').checked ? 'carro' : null
+    ].filter(Boolean).join(',') : null
   };
   // Se a empresa marcou a localização exata no mapa, usa esses valores em
   // vez de deixar a geocodificação automática (por cidade/bairro) sobrescrever
@@ -1200,6 +1207,10 @@ async function saveEntry(e){
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
   if(planoAtualDoCadastro === 'entregador' && (!payload.veiculo_modelo || !payload.veiculo_placa)){
     document.getElementById('form-msg').textContent = 'Preencha o modelo do veículo e a placa — obrigatório pro Pacote Corridas e Fretes (segurança pra quem vai te contratar).';
+    return false;
+  }
+  if(planoAtualDoCadastro === 'entregador' && !payload.veiculo_tipos){
+    document.getElementById('form-msg').textContent = 'Marca se você tem moto, carro, ou os dois.';
     return false;
   }
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){
