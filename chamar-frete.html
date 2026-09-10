@@ -93,11 +93,37 @@
     </div>
 
     <div class="frete-secao">
+      <h3>🚚 Tipo de veículo</h3>
+      <div style="display:flex; gap:16px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;"><input type="checkbox" id="tipo-moto" style="width:18px; height:18px;"> 🏍️ Moto</label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;"><input type="checkbox" id="tipo-carro" style="width:18px; height:18px;"> 🚗 Carro</label>
+      </div>
+      <p style="font-size:0.72rem; color:#888; margin-top:6px;">Deixe os dois desmarcados se qualquer veículo servir.</p>
+    </div>
+
+    <div class="frete-secao">
+      <h3>📦 Tipo de carga</h3>
+      <div class="field">
+        <select id="tipo-carga-select" style="width:100%; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:0.85rem;">
+          <option value="">Qualquer tipo / não sei dizer</option>
+          <option value="comida">🍔 Comida</option>
+          <option value="documentos">📄 Documentos</option>
+          <option value="moveis">🛋️ Móveis e eletrodomésticos</option>
+          <option value="construcao">🧱 Material de construção</option>
+          <option value="eletronicos">📱 Eletrônicos</option>
+          <option value="geral">🛍️ Compras e itens gerais</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="frete-secao">
       <h3>🧰 Características da entrega (marque o que precisa)</h3>
       <label class="chk-caracteristica"><input type="checkbox" id="carac-bau"> 📦 Precisa de baú (proteger a carga)</label>
       <label class="chk-caracteristica"><input type="checkbox" id="carac-refrigerado"> ❄️ Precisa ser refrigerado</label>
       <label class="chk-caracteristica"><input type="checkbox" id="carac-espaco-grande"> 📐 Peça/objeto grande (precisa de espaço)</label>
       <label class="chk-caracteristica"><input type="checkbox" id="carac-fragil"> 🥚 É frágil</label>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-carroceria-aberta"> 🚚 Precisa de carroceria aberta (caçamba)</label>
+      <label class="chk-caracteristica"><input type="checkbox" id="carac-pesado"> ⚖️ É pesado</label>
     </div>
 
     <div class="frete-secao">
@@ -134,8 +160,35 @@ async function initFrete(){
   }
   currentUserFrete = session.user;
   document.getElementById('frete-conteudo').style.display = 'block';
+  preencherComParametrosUrl();
 }
 
+function preencherComParametrosUrl(){
+  const params = new URLSearchParams(window.location.search);
+  const tipos = (params.get('tipos') || '').split(',');
+  if(tipos.includes('moto')) document.getElementById('tipo-moto').checked = true;
+  if(tipos.includes('carro')) document.getElementById('tipo-carro').checked = true;
+
+  const caracs = (params.get('caracteristicas') || '').split(',');
+  if(caracs.includes('bau')) document.getElementById('carac-bau').checked = true;
+  if(caracs.includes('refrigerado')) document.getElementById('carac-refrigerado').checked = true;
+  if(caracs.includes('espaco_grande')) document.getElementById('carac-espaco-grande').checked = true;
+  if(caracs.includes('fragil')) document.getElementById('carac-fragil').checked = true;
+  if(caracs.includes('carroceria_aberta')) document.getElementById('carac-carroceria-aberta').checked = true;
+  if(caracs.includes('pesado')) document.getElementById('carac-pesado').checked = true;
+
+  if(params.get('valor')) document.getElementById('frete-valor').value = params.get('valor');
+  if(params.get('tipoCarga')) document.getElementById('tipo-carga-select').value = params.get('tipoCarga');
+
+  ['retRua', 'retNumero', 'retBairro', 'retCidade', 'retEstado'].forEach(chave => {
+    const campo = 'ret-' + chave.replace('ret', '').toLowerCase();
+    if(params.get(chave)) document.getElementById(campo).value = params.get(chave);
+  });
+  ['entRua', 'entNumero', 'entBairro', 'entCidade', 'entEstado'].forEach(chave => {
+    const campo = 'ent-' + chave.replace('ent', '').toLowerCase();
+    if(params.get(chave)) document.getElementById(campo).value = params.get(chave);
+  });
+}
 function mascaraCepFrete(input){
   let v = input.value.replace(/\D/g, '').slice(0, 8);
   if(v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
@@ -225,10 +278,19 @@ function caracteristicasExigidasFrete(){
   if(document.getElementById('carac-refrigerado').checked) exigidas.push('refrigerado');
   if(document.getElementById('carac-espaco-grande').checked) exigidas.push('espaco_grande');
   if(document.getElementById('carac-fragil').checked) exigidas.push('fragil');
+  if(document.getElementById('carac-carroceria-aberta').checked) exigidas.push('carroceria_aberta');
+  if(document.getElementById('carac-pesado').checked) exigidas.push('pesado');
   return exigidas;
 }
 
-const NOMES_CARACTERISTICAS = { bau: '📦 Baú', refrigerado: '❄️ Refrigerado', espaco_grande: '📐 Espaço grande', fragil: '🥚 Frágil' };
+function tiposVeiculoExigidos(){
+  const tipos = [];
+  if(document.getElementById('tipo-moto').checked) tipos.push('moto');
+  if(document.getElementById('tipo-carro').checked) tipos.push('carro');
+  return tipos;
+}
+
+const NOMES_CARACTERISTICAS = { bau: '📦 Baú', refrigerado: '❄️ Refrigerado', espaco_grande: '📐 Espaço grande', fragil: '🥚 Frágil', carroceria_aberta: '🚚 Carroceria aberta', pesado: '⚖️ Pesado' };
 const NOMES_VEICULOS = { moto: '🏍️ Moto', carro: '🚗 Carro' };
 
 async function buscarEntregadoresCompativeis(){
@@ -259,19 +321,33 @@ async function buscarEntregadoresCompativeis(){
   lista.innerHTML = '';
 
   const exigidas = caracteristicasExigidasFrete();
+  const tipoCargaExigido = document.getElementById('tipo-carga-select').value;
 
   const { data, error } = await supabaseClientFrete
     .from('profissionais')
-    .select('id, name, cidade, estado, veiculo_modelo, veiculo_tipos, entregador_equipamentos')
+    .select('id, name, cidade, estado, veiculo_modelo, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga')
     .eq('plano', 'entregador')
     .eq('status_pagamento', 'ativo');
 
   if(error){ msgGeral.style.color = '#a4402f'; msgGeral.textContent = 'Erro ao buscar entregadores.'; console.error(error); return; }
 
+  const tiposVeiculoPedidos = tiposVeiculoExigidos();
+
   const compativeis = (data || []).filter(e => {
-    if(exigidas.length === 0) return true;
-    const equipamentosDele = (e.entregador_equipamentos || '').split(',').filter(Boolean);
-    return exigidas.every(ex => equipamentosDele.includes(ex));
+    if(tiposVeiculoPedidos.length > 0){
+      const tiposDele = (e.veiculo_tipos || '').split(',').filter(Boolean);
+      if(!tiposVeiculoPedidos.some(t => tiposDele.includes(t))) return false;
+    }
+    if(exigidas.length > 0){
+      const equipamentosDele = (e.entregador_equipamentos || '').split(',').filter(Boolean);
+      if(!exigidas.every(ex => equipamentosDele.includes(ex))) return false;
+    }
+    // Tipo de carga: se o entregador não marcou nenhum, aceita qualquer tipo — não bloqueia
+    if(tipoCargaExigido){
+      const cargasDele = (e.entregador_tipos_carga || '').split(',').filter(Boolean);
+      if(cargasDele.length > 0 && !cargasDele.includes(tipoCargaExigido)) return false;
+    }
+    return true;
   });
 
   entregadoresCompativeisCache = compativeis;
@@ -315,11 +391,14 @@ function montarMensagemFrete(){
   const valor = document.getElementById('frete-valor').value.trim();
   const exigidas = caracteristicasExigidasFrete();
   const caracteristicasTexto = exigidas.map(c => NOMES_CARACTERISTICAS[c]).join(', ');
+  const tipoCargaValor = document.getElementById('tipo-carga-select').value;
+  const tipoCargaTexto = tipoCargaValor ? document.getElementById('tipo-carga-select').selectedOptions[0].textContent : '';
 
   return `📦 *Chamado de frete pelo GuiaZap*\n\n` +
     `📍 Retirada: ${enderecoFreteCompleto(retirada)}\n` +
     `🏠 Entrega: ${enderecoFreteCompleto(entrega)}\n` +
     `💰 Valor combinado: R$ ${valor}\n` +
+    (tipoCargaTexto ? `📦 Tipo de carga: ${tipoCargaTexto}\n` : '') +
     (caracteristicasTexto ? `🧰 Características: ${caracteristicasTexto}\n` : '') +
     `\n💵 Forma de pagamento: combinar direto pelo Papo.\n` +
     `Se puder pegar essa corrida, responde aqui!`;

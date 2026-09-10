@@ -442,7 +442,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, entregador_equipamentos, localizacao_confirmada_manualmente, rua, numero')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga, localizacao_confirmada_manualmente, rua, numero')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -897,6 +897,15 @@ async function openForm(entry){
   document.getElementById('f-equip-refrigerado').checked = equipSalvos.includes('refrigerado');
   document.getElementById('f-equip-espaco-grande').checked = equipSalvos.includes('espaco_grande');
   document.getElementById('f-equip-fragil').checked = equipSalvos.includes('fragil');
+  document.getElementById('f-equip-carroceria-aberta').checked = equipSalvos.includes('carroceria_aberta');
+  document.getElementById('f-equip-pesado').checked = equipSalvos.includes('pesado');
+  const cargaSalva = entry && entry.entregador_tipos_carga ? entry.entregador_tipos_carga.split(',') : [];
+  document.getElementById('f-carga-comida').checked = cargaSalva.includes('comida');
+  document.getElementById('f-carga-documentos').checked = cargaSalva.includes('documentos');
+  document.getElementById('f-carga-moveis').checked = cargaSalva.includes('moveis');
+  document.getElementById('f-carga-construcao').checked = cargaSalva.includes('construcao');
+  document.getElementById('f-carga-eletronicos').checked = cargaSalva.includes('eletronicos');
+  document.getElementById('f-carga-geral').checked = cargaSalva.includes('geral');
   document.getElementById('f-foto').value = entry ? (entry.foto || '') : '';
   document.getElementById('foto-msg').textContent = '';
   const preview = document.getElementById('foto-preview');
@@ -1203,7 +1212,17 @@ async function saveEntry(e){
       document.getElementById('f-equip-bau').checked ? 'bau' : null,
       document.getElementById('f-equip-refrigerado').checked ? 'refrigerado' : null,
       document.getElementById('f-equip-espaco-grande').checked ? 'espaco_grande' : null,
-      document.getElementById('f-equip-fragil').checked ? 'fragil' : null
+      document.getElementById('f-equip-fragil').checked ? 'fragil' : null,
+      document.getElementById('f-equip-carroceria-aberta').checked ? 'carroceria_aberta' : null,
+      document.getElementById('f-equip-pesado').checked ? 'pesado' : null
+    ].filter(Boolean).join(',') : null,
+    entregador_tipos_carga: planoAtualDoCadastro === 'entregador' ? [
+      document.getElementById('f-carga-comida').checked ? 'comida' : null,
+      document.getElementById('f-carga-documentos').checked ? 'documentos' : null,
+      document.getElementById('f-carga-moveis').checked ? 'moveis' : null,
+      document.getElementById('f-carga-construcao').checked ? 'construcao' : null,
+      document.getElementById('f-carga-eletronicos').checked ? 'eletronicos' : null,
+      document.getElementById('f-carga-geral').checked ? 'geral' : null
     ].filter(Boolean).join(',') : null
   };
   // Se a empresa marcou a localização exata no mapa, usa esses valores em
@@ -4213,6 +4232,147 @@ async function processarEtapaAtendimentoVoz(transcricao){
   }
 }
 
+// ---------- CHAMAR FRETE POR VOZ ----------
+
+let _estadoChamarFreteVoz = null;
+// formato: { etapa, retirada: {...}, entrega: {...}, tiposVeiculo: [], tipoCarga: '', caracteristicas: [] }
+
+function iniciarChamarFretePorVoz(){
+  if(!currentUser){
+    falarVozIndex('Você precisa estar logado pra chamar um frete. Faz login primeiro, na tela normal.');
+    return;
+  }
+  _estadoChamarFreteVoz = { etapa: 'retirada_cep', retirada: {}, entrega: {}, tiposVeiculo: [], tipoCarga: '', caracteristicas: [] };
+  falarVozIndex('Vamos chamar um frete. Qual o CEP de onde vai ser a retirada? Se não souber, fala "não sei".');
+}
+
+async function buscarCepPorVoz(cep){
+  try{
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await resp.json();
+    if(data.erro) return null;
+    return { rua: data.logradouro || '', bairro: data.bairro || '', cidade: data.localidade || '', estado: data.uf || '' };
+  } catch(e){ return null; }
+}
+
+async function processarEtapaChamarFretePorVoz(transcricao){
+  const estado = _estadoChamarFreteVoz;
+  const t = normalizarTexto(transcricao);
+
+  if(t.includes('cancelar') || t === 'sair'){
+    _estadoChamarFreteVoz = null;
+    falarVozIndex('Ok, cancelado.');
+    return;
+  }
+
+  if(estado.etapa === 'retirada_cep'){
+    if(t.includes('nao sei')){
+      falarVozIndex('Sem problema — vou te levar pra tela pra preencher o endereço manualmente.');
+      estado.retirada.semCep = true;
+      estado.etapa = 'entrega_cep';
+      falarVozIndex('Agora, o CEP de onde vai ser a entrega? Ou fala "não sei".');
+      return;
+    }
+    const digitos = extrairDigitosDaFalaIndex(transcricao);
+    if(digitos.length !== 8){ falarVozIndex('Não entendi o CEP, precisa ter 8 números. Fala de novo, ou fala "não sei".'); return; }
+    const dados = await buscarCepPorVoz(digitos);
+    if(!dados){ falarVozIndex('Não achei esse CEP. Fala de novo, ou fala "não sei" pra preencher na tela.'); return; }
+    estado.retirada = dados;
+    estado.etapa = 'retirada_numero';
+    falarVozIndex(`Achei: ${dados.rua}, ${dados.bairro}, ${dados.cidade}. Qual o número?`);
+    return;
+  }
+
+  if(estado.etapa === 'retirada_numero'){
+    estado.retirada.numero = transcricao.trim();
+    estado.etapa = 'entrega_cep';
+    falarVozIndex('Agora o CEP de onde vai ser a entrega. Ou fala "não sei".');
+    return;
+  }
+
+  if(estado.etapa === 'entrega_cep'){
+    if(t.includes('nao sei')){
+      estado.entrega.semCep = true;
+      estado.etapa = 'tipo_veiculo';
+      falarVozIndex('Beleza. Precisa de moto, carro, ou qualquer um serve?');
+      return;
+    }
+    const digitos = extrairDigitosDaFalaIndex(transcricao);
+    if(digitos.length !== 8){ falarVozIndex('Não entendi o CEP, precisa ter 8 números. Fala de novo, ou fala "não sei".'); return; }
+    const dados = await buscarCepPorVoz(digitos);
+    if(!dados){ falarVozIndex('Não achei esse CEP. Fala de novo, ou fala "não sei" pra preencher na tela.'); return; }
+    estado.entrega = dados;
+    estado.etapa = 'entrega_numero';
+    falarVozIndex(`Achei: ${dados.rua}, ${dados.bairro}, ${dados.cidade}. Qual o número?`);
+    return;
+  }
+
+  if(estado.etapa === 'entrega_numero'){
+    estado.entrega.numero = transcricao.trim();
+    estado.etapa = 'tipo_veiculo';
+    falarVozIndex('Precisa de moto, carro, ou qualquer um serve?');
+    return;
+  }
+
+  if(estado.etapa === 'tipo_veiculo'){
+    if(t.includes('moto')) estado.tiposVeiculo = ['moto'];
+    else if(t.includes('carro')) estado.tiposVeiculo = ['carro'];
+    // "qualquer" ou qualquer outra coisa: deixa vazio (aceita os dois)
+    estado.etapa = 'tipo_carga';
+    falarVozIndex('Que tipo de carga é? Comida, documentos, móveis, material de construção, eletrônicos, ou fala "qualquer" se não for nenhum desses.');
+    return;
+  }
+
+  if(estado.etapa === 'tipo_carga'){
+    if(t.includes('comida')) estado.tipoCarga = 'comida';
+    else if(t.includes('documento')) estado.tipoCarga = 'documentos';
+    else if(t.includes('movel') || t.includes('eletrodomestico')) estado.tipoCarga = 'moveis';
+    else if(t.includes('construcao') || t.includes('material')) estado.tipoCarga = 'construcao';
+    else if(t.includes('eletronico')) estado.tipoCarga = 'eletronicos';
+    else if(t.includes('geral') || t.includes('compra')) estado.tipoCarga = 'geral';
+    // qualquer/outro: deixa em branco
+    estado.etapa = 'caracteristicas';
+    falarVozIndex('Precisa de alguma característica especial? Baú, refrigerado, espaço grande, frágil, carroceria aberta, ou é pesado? Fala as que precisar, ou fala "nenhuma".');
+    return;
+  }
+
+  if(estado.etapa === 'caracteristicas'){
+    if(!t.includes('nenhuma')){
+      if(t.includes('bau')) estado.caracteristicas.push('bau');
+      if(t.includes('refrigerado') || t.includes('gelad')) estado.caracteristicas.push('refrigerado');
+      if(t.includes('espaco') || t.includes('grande')) estado.caracteristicas.push('espaco_grande');
+      if(t.includes('fragil')) estado.caracteristicas.push('fragil');
+      if(t.includes('carroceria') || t.includes('cacamba')) estado.caracteristicas.push('carroceria_aberta');
+      if(t.includes('pesado')) estado.caracteristicas.push('pesado');
+    }
+
+    const params = new URLSearchParams();
+    if(estado.tiposVeiculo.length) params.set('tipos', estado.tiposVeiculo.join(','));
+    if(estado.tipoCarga) params.set('tipoCarga', estado.tipoCarga);
+    if(estado.caracteristicas.length) params.set('caracteristicas', estado.caracteristicas.join(','));
+    if(!estado.retirada.semCep){
+      if(estado.retirada.rua) params.set('retRua', estado.retirada.rua);
+      if(estado.retirada.numero) params.set('retNumero', estado.retirada.numero);
+      if(estado.retirada.bairro) params.set('retBairro', estado.retirada.bairro);
+      if(estado.retirada.cidade) params.set('retCidade', estado.retirada.cidade);
+      if(estado.retirada.estado) params.set('retEstado', estado.retirada.estado);
+    }
+    if(!estado.entrega.semCep){
+      if(estado.entrega.rua) params.set('entRua', estado.entrega.rua);
+      if(estado.entrega.numero) params.set('entNumero', estado.entrega.numero);
+      if(estado.entrega.bairro) params.set('entBairro', estado.entrega.bairro);
+      if(estado.entrega.cidade) params.set('entCidade', estado.entrega.cidade);
+      if(estado.entrega.estado) params.set('entEstado', estado.entrega.estado);
+    }
+
+    _estadoChamarFreteVoz = null;
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozIndex('Prontinho! Te levando pra tela, já com tudo preenchido — só falta o valor do frete e escolher o entregador.');
+    setTimeout(() => { window.location.href = 'chamar-frete.html?' + params.toString(); }, 1400);
+    return;
+  }
+}
+
 // ---------- GERENCIAR MOTOBOYS POR VOZ ----------
 
 let _estadoMotoboysVoz = null;
@@ -4695,6 +4855,11 @@ async function processarComandoVozIndex(transcricao){
     return;
   }
 
+  if(_estadoChamarFreteVoz){
+    await processarEtapaChamarFretePorVoz(transcricao);
+    return;
+  }
+
   const matchFazerPedido = textoNormalizado.match(/fazer pedido (com|na|no) (.+)/) || textoNormalizado.match(/comprar (com|na|no) (.+)/);
   if(matchFazerPedido){
     const nomeEmpresa = matchFazerPedido[2].trim();
@@ -4794,6 +4959,33 @@ async function processarComandoVozIndex(transcricao){
     textoNormalizado.includes('ir pra agenda')
   ){
     irPara('agenda.html', 'Indo pra agenda...');
+    return;
+  }
+
+  const _PALAVRAS_GATILHO_FRETE = [
+    'preciso de uma moto', 'preciso de um carro', 'preciso de um motoboy', 'preciso de uma motoboy',
+    'chamar frete', 'chamar uma corrida', 'chamar corrida', 'quero um motoboy', 'quero uma moto',
+    'preciso de uma corrida', 'preciso de entrega', 'preciso de um frete', 'preciso de frete',
+    'quero fazer uma entrega', 'quero mandar uma encomenda', 'preciso mandar uma encomenda',
+    'preciso enviar um pacote', 'quero enviar um pacote', 'preciso transportar', 'quero transportar',
+    'alguem pode buscar', 'alguem pode levar', 'preciso que busquem', 'preciso que levem',
+    'tem motoboy disponivel', 'tem moto disponivel', 'tem entregador disponivel', 'tem carro disponivel',
+    'quero pedir uma corrida', 'preciso de transporte', 'quero um frete', 'chama um motoboy',
+    'chama uma moto', 'quero fazer um frete', 'preciso fazer uma entrega', 'preciso de carreto',
+    'quero um carreto', 'preciso de mudanca pequena'
+  ];
+  const _ehGatilhoFrete = _PALAVRAS_GATILHO_FRETE.some(p => textoNormalizado.includes(p)) || textoNormalizado === 'motoboy' || textoNormalizado === 'entregador' || textoNormalizado === 'frete' || textoNormalizado === 'carreto';
+
+  if(_ehGatilhoFrete){
+    iniciarChamarFretePorVoz();
+    return;
+  }
+
+  if(
+    textoNormalizado.includes('banco de entregadores') || textoNormalizado.includes('ver entregadores') ||
+    textoNormalizado.includes('lista de entregadores') || textoNormalizado.includes('procurar entregador')
+  ){
+    irPara('banco-entregadores.html', 'Abrindo o Banco de Entregadores...');
     return;
   }
 

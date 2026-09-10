@@ -2094,7 +2094,15 @@ function conteudoDaMensagem(m, minha){
   }
   if(m.tipo === 'audio'){
     const legenda = (m.texto || '').trim();
-    return `<audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>` +
+    return `
+      <div class="audio-chat-wrap">
+        <audio src="${escapeHtmlChat(m.arquivo_url)}" controls class="midia-chat"></audio>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button type="button" onclick="event.stopPropagation(); baixarArquivoChat('${escapeHtmlChat(m.arquivo_url)}', 'audio-guiazap.webm')" style="background:none; border:1px solid #ccc; border-radius:20px; padding:4px 10px; font-size:0.72rem; cursor:pointer; color:#555;">⬇️ Baixar</button>
+          <button type="button" onclick="event.stopPropagation(); compartilharAudioChat('${escapeHtmlChat(m.arquivo_url)}')" style="background:none; border:1px solid #ccc; border-radius:20px; padding:4px 10px; font-size:0.72rem; cursor:pointer; color:#555;">📤 Compartilhar</button>
+          <button type="button" onclick="event.stopPropagation(); copiarLinkAudioChat('${escapeHtmlChat(m.arquivo_url)}')" style="background:none; border:1px solid #ccc; border-radius:20px; padding:4px 10px; font-size:0.72rem; cursor:pointer; color:#555;">📋 Copiar link</button>
+        </div>
+      </div>` +
       (legenda ? `<div class="transcricao-audio-chat" style="margin-top:6px; font-size:0.82rem; line-height:1.35;">📝 ${escapeHtmlChat(legenda)}</div>` : `<div class="transcricao-audio-chat" style="margin-top:6px; font-size:0.75rem; color:#888;">🎤 Áudio (sem texto). Peça pra pessoa usar o botão 🗣️ pra virar texto.</div>`);
   }
   if(m.tipo === 'gif' || m.tipo === 'sticker'){
@@ -3089,6 +3097,40 @@ async function baixarArquivoChat(url, nomeArquivo){
     console.error(e);
     // Se der erro (raro), pelo menos abre o arquivo numa aba nova como alternativa
     window.open(url, '_blank');
+  }
+}
+
+// Manda o áudio direto pra outro app (WhatsApp, Notas, Instagram, etc) —
+// resolve o mesmo problema de "copiar e usar em outro lugar", só que de um
+// jeito que realmente funciona bem no celular (copiar áudio pra área de
+// transferência não é suportado de forma confiável pelos navegadores).
+async function compartilharAudioChat(url){
+  try{
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const arquivo = new File([blob], 'audio-guiazap.webm', { type: blob.type || 'audio/webm' });
+
+    if(navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })){
+      await navigator.share({ files: [arquivo], title: 'Áudio do GuiaZap' });
+    } else {
+      // Navegador não suporta compartilhar arquivo — baixa como alternativa
+      baixarArquivoChat(url, 'audio-guiazap.webm');
+      alert('Seu navegador não suporta compartilhar áudio direto. Baixei o arquivo — agora é só anexar ele manualmente no outro app.');
+    }
+  } catch(e){
+    if(e.name !== 'AbortError'){ // AbortError = pessoa cancelou o compartilhamento, não é erro de verdade
+      console.error(e);
+      alert('Erro ao compartilhar o áudio.');
+    }
+  }
+}
+
+async function copiarLinkAudioChat(url){
+  try{
+    await navigator.clipboard.writeText(url);
+    alert('Link do áudio copiado! Cola em qualquer app — no WhatsApp, por exemplo, já aparece com o player pra tocar direto.');
+  } catch(e){
+    prompt('Copie o link abaixo:', url);
   }
 }
 
