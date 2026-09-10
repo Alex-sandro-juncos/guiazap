@@ -12,6 +12,8 @@ let _estadoVozPapo = { etapa: 'lista' }; // lista | conversa | ditando
 // ligado). Protegido por PIN pra desativar — assim ninguém desliga sem
 // querer no meio de uma conversa importante.
 let _aguardandoPinParaDesativarInterpretePapo = false;
+let _lerAutomaticoAntesDoModoVozPapo = null; // guarda o valor de antes do modo voz ligar, pra devolver ao desligar
+let _capturouLerAutomaticoAntesDoModoVozPapo = false; // true só quando o modo voz de fato guardou o valor de antes
 
 function modoInterpretePapoAtivo(){
   return localStorage.getItem('papo_modo_interprete_ativo') === '1';
@@ -202,6 +204,18 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
   _vozPapoAtiva = true;
   window._vozPapoAtiva = true;
   if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+
+  // Quem liga o modo voz claramente precisa ouvir tudo — liga a leitura
+  // automática sozinha enquanto o modo voz estiver ativo, sem precisar
+  // mexer em outro botão separado. Guarda o valor de antes pra devolver
+  // certinho quando desligar (não força a preferência de quem usa por toque).
+  if(!modoInterpretePapoAtivo()){
+    _lerAutomaticoAntesDoModoVozPapo = localStorage.getItem('papo_ler_automatico');
+    _capturouLerAutomaticoAntesDoModoVozPapo = true;
+    localStorage.setItem('papo_ler_automatico', '1');
+    if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
+  }
+
   _estadoVozPapo = { etapa: conversaAtual ? 'conversa' : 'lista' };
   const vindoDiretoPapo = typeof consumirRetomarModoVozDireto === 'function' && consumirRetomarModoVozDireto();
   _aguardandoAtivacaoPapo = !!retomandoAutomaticamente && !vindoDiretoPapo;
@@ -304,6 +318,20 @@ function pararModoVozPapo(){
   _vozPapoAtiva = false;
   window._vozPapoAtiva = false;
   if(typeof desativarModoVozPermanente === 'function') desativarModoVozPermanente();
+
+  // Devolve a leitura automática pro que estava antes de ligar o modo voz
+  // (a não ser que o modo intérprete esteja travando ligado, que continua valendo)
+  if(!modoInterpretePapoAtivo() && _capturouLerAutomaticoAntesDoModoVozPapo){
+    if(_lerAutomaticoAntesDoModoVozPapo === null){
+      localStorage.removeItem('papo_ler_automatico');
+    } else {
+      localStorage.setItem('papo_ler_automatico', _lerAutomaticoAntesDoModoVozPapo);
+    }
+    if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
+  }
+  _lerAutomaticoAntesDoModoVozPapo = null;
+  _capturouLerAutomaticoAntesDoModoVozPapo = false;
+
   clearInterval(_vozPapoVigia);
   if(typeof pararBiometriaSeAtiva === 'function') pararBiometriaSeAtiva();
   if(_vozPapoReconhecimento){
