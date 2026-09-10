@@ -35,7 +35,70 @@ function ativarModoInterpretePapo(){
   localStorage.setItem('papo_modo_interprete_ativo', '1');
   localStorage.setItem('papo_ler_automatico', '1'); // trava a leitura automática ligada
   if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
+  atualizarBotaoModoInterpretePapo();
   falarVozPapo('Modo intérprete ativado. Toda mensagem de voz que chegar vai mostrar o texto na tela, e toda mensagem de texto vai ser lida em voz alta, sempre — mesmo depois de fechar e abrir o app de novo. Pra desativar, fala "modo normal" e depois o seu PIN.');
+}
+
+// Versão por toque do mesmo botão — não precisava de comando de voz, e sem
+// um botão visível esse recurso ficava impossível de achar sem lembrar da
+// frase exata. Pra ATIVAR não precisa de PIN nenhum (só desativar exige,
+// por segurança). Pra DESATIVAR pede o PIN digitado, em vez de falado.
+function toggleModoInterpretePapoPorToque(){
+  if(modoInterpretePapoAtivo()){
+    desativarModoInterpretePapoPorToque();
+  } else {
+    ativarModoInterpretePapo();
+  }
+}
+
+async function desativarModoInterpretePapoPorToque(){
+  if(!usuarioTemPinCadastradoPapo()){
+    // Sem PIN cadastrado, não tem como ter ativado — mas por segurança,
+    // se de alguma forma estiver ativo, deixa desativar direto
+    localStorage.removeItem('papo_modo_interprete_ativo');
+    atualizarBotaoModoInterpretePapo();
+    return;
+  }
+
+  const pin = prompt('Digite seu PIN pra desativar o modo intérprete:');
+  if(!pin) return;
+
+  try{
+    let data = {};
+    const { data: { session } } = await supabaseClientChat.auth.getSession();
+    if(session && session.access_token){
+      const resp = await fetch('/.netlify/functions/verificar-pin-voz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ pin })
+      });
+      data = await resp.json().catch(() => ({}));
+    }
+    if((!session || data.error || data.motivo === 'sem_pin_cadastrado')){
+      const localOk = await _pinLocalConferePapo(pin);
+      if(localOk) data = { valido: true };
+    }
+
+    if(!data.valido){
+      alert('PIN incorreto.');
+      return;
+    }
+
+    localStorage.removeItem('papo_modo_interprete_ativo');
+    atualizarBotaoModoInterpretePapo();
+    alert('Modo intérprete desativado. Voltou ao normal.');
+  } catch(e){
+    console.error(e);
+    alert('Erro ao conferir o PIN. Tenta de novo.');
+  }
+}
+
+function atualizarBotaoModoInterpretePapo(){
+  const btn = document.getElementById('btn-modo-interprete-papo');
+  if(!btn) return;
+  const ativo = modoInterpretePapoAtivo();
+  btn.textContent = ativo ? '🧏 Intérprete: LIGADO' : '🧏 Modo Intérprete (surdo-cego)';
+  btn.style.color = ativo ? '#e91e63' : '';
 }
 
 async function _extrairDigitosDaFalaPapo(texto){
@@ -108,6 +171,7 @@ async function processarComandoDesativarInterpretePapo(transcricao){
 
     _aguardandoPinParaDesativarInterpretePapo = false;
     localStorage.removeItem('papo_modo_interprete_ativo');
+    if(typeof atualizarBotaoModoInterpretePapo === 'function') atualizarBotaoModoInterpretePapo();
     falarVozPapo('Modo intérprete desativado. Voltou ao normal.');
   } catch(e){
     console.error(e);

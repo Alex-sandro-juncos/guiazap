@@ -550,6 +550,7 @@
           <button type="button" class="config-chat-item" id="btn-bloquear-config" onclick="toggleBloquearContatoAtual()">🚫 Bloquear contato</button>
           <button type="button" class="config-chat-item" id="btn-silenciar-config" onclick="toggleSilenciarConversa()">🔔 Silenciar conversa</button>
           <button type="button" class="config-chat-item" id="btn-ler-auto-papo" onclick="toggleLerAutomaticoPapo()">🔊 Ler mensagens novas em voz alta</button>
+          <button type="button" class="config-chat-item" id="btn-modo-interprete-papo" onclick="toggleModoInterpretePapoPorToque()">🧏 Modo Intérprete (surdo-cego)</button>
           <div class="config-chat-secao">
             <label class="config-chat-label" for="volume-chat">🔊 Volume da notificação</label>
             <input type="range" id="volume-chat" min="0" max="100" value="50" style="width:100%;" onchange="localStorage.setItem('volume_chat', this.value)">
@@ -1854,7 +1855,12 @@ function atualizarBotaoSilenciar(silenciada){
 function toggleConfigChat(){
   const menu = document.getElementById('menu-config-chat');
   if(!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+  const abrindo = menu.style.display === 'none';
+  menu.style.display = abrindo ? 'flex' : 'none';
+  if(abrindo){
+    if(typeof atualizarBotaoLerAutomaticoPapo === 'function') atualizarBotaoLerAutomaticoPapo();
+    if(typeof atualizarBotaoModoInterpretePapo === 'function') atualizarBotaoModoInterpretePapo();
+  }
 }
 
 // ---------- BLOQUEIO DE CONTATO ----------
@@ -2201,6 +2207,14 @@ function conteudoDaMensagem(m, minha){
   if(m.tipo === 'pix_chave'){
     return conteudoPixChat(m);
   }
+  // Se for uma mensagem do robô de atendimento pedindo pra digitar
+  // "finalizar" (depois de adicionar item ao carrinho), mostra um botão
+  // pronto em vez da pessoa precisar digitar a palavra na mão
+  if(!minha && m.texto && /\*finalizar\*/i.test(m.texto)){
+    return linkificarTexto(escapeHtmlChat(m.texto)) +
+      `<button type="button" onclick="event.stopPropagation(); enviarFinalizarPedidoChat()" style="display:block; width:100%; margin-top:10px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.85rem; cursor:pointer;">✅ Finalizar pedido</button>`;
+  }
+
   return linkificarTexto(escapeHtmlChat(m.texto));
 }
 
@@ -2443,6 +2457,11 @@ async function enviarMensagemChat(){
   input.value = '';
   atualizarBotaoEnviarOuMic();
   await enviarQualquerMensagem({ tipo: 'texto', texto });
+}
+
+async function enviarFinalizarPedidoChat(){
+  if(!conversaAtual) return;
+  await enviarQualquerMensagem({ tipo: 'texto', texto: 'finalizar' });
 }
 
 async function enviarSelecaoMenuInterativo(msgId){
