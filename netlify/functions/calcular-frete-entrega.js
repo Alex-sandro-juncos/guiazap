@@ -151,62 +151,21 @@ exports.handler = async function (event) {
     const total = Math.round((subtotal + valorFrete) * 100) / 100;
     const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
-    // 5. Cria o pedido já esperando pagamento
-    if (config && config.aceita_pagamento_entrega) {
-      // Empresa aceita pagamento na entrega — pergunta antes de criar o
-      // pedido/gerar link, guardando o endereço e o frete calculado pro
-      // próximo passo usar (seja pagamento online ou na entrega)
-      await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n💳 Como você prefere pagar?\n1️⃣ Pagar agora online (Pix, cartão)\n2️⃣ Pagar na entrega (dinheiro, cartão ou Pix na hora)`);
+    // 5. Pergunta o local de entrega (portão ou porta) ANTES de decidir
+    // pagamento — o acréscimo de R$5 é aplicado pelo gatilho do banco
+    // quando a pessoa responde "2" (porta), e só depois segue pro fluxo
+    // normal de pagamento — funciona igual pra empresa que aceita ou não
+    // pagamento na entrega, já que essa etapa vem antes dessa escolha.
+    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n🚪 Até onde você quer a entrega?\n1️⃣ No portão\n2️⃣ Na porta (dentro do prédio/terreno) — +R$5,00`);
 
-      await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          estado: 'escolhendo_quando_pagar',
-          lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10, latitude: latCliente, longitude: lngCliente }]
-        })
-      });
-
-      return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
-    }
-
-    // Empresa só aceita pagamento online — cria o pedido e já parte pro pagamento
-    await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        conversa_id: conversaId,
-        profissional_id: profissionalId,
-        cliente_user_id: clienteUserId,
-        itens: carrinho,
-        subtotal,
-        taxa_entrega: valorFrete,
-        total,
-        status: 'aguardando_pagamento',
-        codigo_confirmacao: codigoConfirmacao,
-        endereco_entrega: endereco,
-        latitude_entrega: latCliente,
-        longitude_entrega: lngCliente
-      })
-    });
-
-    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n💳 Gerando o link de pagamento, aguarde um instante...`);
-
-    // Passa pro estado de "gerando pagamento" — e já chama a função de
-    // pagamento direto (não dá pra depender de uma mensagem nova do cliente
-    // pra perceber essa mudança, já que essa etapa não veio de um texto dele)
     await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ estado: 'gerando_pagamento', carrinho: [], lista_atual: [] })
+      body: JSON.stringify({
+        estado: 'escolhendo_local_entrega',
+        lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10, latitude: latCliente, longitude: lngCliente }]
+      })
     });
-
-    const SITE_URL = process.env.URL || 'https://guiazap.shop';
-    fetch(`${SITE_URL}/.netlify/functions/gerar-link-pagamento`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversaId, profissionalId })
-    }).catch(e => console.error('erro ao encadear gerar-link-pagamento', e));
 
     return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
   } catch (err) {
