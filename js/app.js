@@ -3235,7 +3235,11 @@ function render(){
       // "Modo gerenciar" (ver só o próprio cadastro) só liga quando a pessoa
       // clica no botão "Ver minha empresa" — nunca troca sozinho ao logar,
       // pra ela continuar podendo buscar outras empresas/produtos à vontade.
-      return modoGerenciarAtivo ? e.user_id === currentUser.id : e.status_pagamento === 'ativo';
+      // No modo normal (não "Ver minha empresa"), mostra os ativos pra
+      // todo mundo — MAS também mostra os PRÓPRIOS cadastros da pessoa,
+      // mesmo pendentes, senão ela nunca vê o que acabou de cadastrar
+      // (a mensagem de "role pra baixo" ficava mentindo, sem aparecer nada).
+      return modoGerenciarAtivo ? e.user_id === currentUser.id : (e.status_pagamento === 'ativo' || (currentUser && e.user_id === currentUser.id));
     })
     .filter(e => !mostrandoSoFavoritos || favoritosEmpresas.has(e.id))
     .filter(e => !mostrandoSoSeguindo || seguindoEmpresas.has(e.id))
