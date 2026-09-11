@@ -3661,13 +3661,19 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPe
 // Igual na Vitrine: se o modo somente voz estava ativo antes de recarregar,
 // o bloqueio precisa continuar valendo — senão bastaria recarregar a
 // página pra escapar da trava
-if(localStorage.getItem('modo_somente_voz_ativo_index') === '1'){
-  _modoSomenteVozAtivoIndex = true;
-  document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
-  if(!_vozIndexAtiva){
-    setTimeout(() => iniciarModoVozIndex(true), 1500);
+// (roda num setTimeout de 0 pra esperar o script inteiro terminar de
+// carregar antes — as variáveis usadas aqui só são declaradas mais adiante
+// no arquivo, e ler elas cedo demais quebrava a página inteira quando essa
+// condição batia "modo_somente_voz_ativo_index" === '1')
+setTimeout(() => {
+  if(localStorage.getItem('modo_somente_voz_ativo_index') === '1'){
+    _modoSomenteVozAtivoIndex = true;
+    document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
+    if(!_vozIndexAtiva){
+      setTimeout(() => iniciarModoVozIndex(true), 1500);
+    }
   }
-}
+}, 0);
 
 localStorage.removeItem('historico_busca'); // remove o histórico de buscas antigo, já que a funcionalidade foi retirada
 
