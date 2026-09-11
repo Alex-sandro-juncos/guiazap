@@ -143,9 +143,11 @@
 
   let indice = 0;
   let cancelado = false;
+  let _reconhecimentoInterrupcaoSobre = null;
 
   function falarProximoTrecho(){
     if(cancelado || indice >= trechos.length){
+      pararEscutaInterrupcaoSobre();
       escutarComandoSobre();
       return;
     }
@@ -154,6 +156,51 @@
     utter.onend = function(){ indice++; falarProximoTrecho(); };
     utter.onerror = function(){ indice++; falarProximoTrecho(); };
     speechSynthesis.speak(utter);
+  }
+
+  // Fica escutando em paralelo enquanto o texto é lido, só pra pegar o
+  // comando "parar" — sem isso, a pessoa ficava presa ouvindo os 9 blocos
+  // inteiros sem conseguir interromper, já que o reconhecimento normal só
+  // começava depois que a leitura toda acabasse.
+  function iniciarEscutaInterrupcaoSobre(){
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRecognition) return;
+
+    try{
+      _reconhecimentoInterrupcaoSobre = new SpeechRecognition();
+      _reconhecimentoInterrupcaoSobre.lang = 'pt-BR';
+      _reconhecimentoInterrupcaoSobre.continuous = true;
+      _reconhecimentoInterrupcaoSobre.interimResults = false;
+
+      _reconhecimentoInterrupcaoSobre.onresult = function(event){
+        const ultimo = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
+        if(ultimo.includes('parar') || ultimo.includes('para') || ultimo.includes('silêncio') || ultimo.includes('silencio') || ultimo.includes('cala')){
+          cancelado = true;
+          speechSynthesis.cancel();
+          pararEscutaInterrupcaoSobre();
+          escutarComandoSobre();
+        }
+      };
+
+      _reconhecimentoInterrupcaoSobre.onend = function(){
+        // Se ainda estiver lendo (não cancelado nem terminado), tenta reiniciar sozinho
+        if(!cancelado && indice < trechos.length){
+          try{ _reconhecimentoInterrupcaoSobre.start(); } catch(e){}
+        }
+      };
+
+      _reconhecimentoInterrupcaoSobre.onerror = function(){};
+
+      _reconhecimentoInterrupcaoSobre.start();
+    } catch(e){ /* ignora — a pessoa ainda pode navegar por toque */ }
+  }
+
+  function pararEscutaInterrupcaoSobre(){
+    if(_reconhecimentoInterrupcaoSobre){
+      _reconhecimentoInterrupcaoSobre.onend = null;
+      try{ _reconhecimentoInterrupcaoSobre.abort(); } catch(e){}
+      _reconhecimentoInterrupcaoSobre = null;
+    }
   }
 
   function escutarComandoSobre(){
@@ -172,7 +219,9 @@
         localStorage.setItem('retomarModoVozAoCarregar', '1');
         window.location.href = 'index.html';
       } else if(texto.includes('repetir') || texto.includes('de novo')){
+        cancelado = false;
         indice = 0;
+        iniciarEscutaInterrupcaoSobre();
         falarProximoTrecho();
       } else if(texto.includes('cadastrar empresa') || texto.includes('cadastrar minha empresa')){
         window.location.href = 'pacotes.html';
@@ -190,7 +239,10 @@
   }
 
   // Espera um instante a página carregar visualmente antes de começar a falar
-  setTimeout(falarProximoTrecho, 600);
+  setTimeout(function(){
+    iniciarEscutaInterrupcaoSobre();
+    falarProximoTrecho();
+  }, 600);
 })();
 </script>
 </body>
