@@ -93,6 +93,19 @@
     </div>
 
     <div class="frete-secao">
+      <h3>🚪 Até onde vai a entrega?</h3>
+      <label class="chk-caracteristica" style="align-items:flex-start;">
+        <input type="radio" name="local-entrega-tipo" id="entrega-portao" value="portao" checked onchange="atualizarPreviewValorTotalFrete()" style="margin-top:3px;">
+        <span><b>Entregar no portão</b> — sem acréscimo</span>
+      </label>
+      <label class="chk-caracteristica" style="align-items:flex-start;">
+        <input type="radio" name="local-entrega-tipo" id="entrega-porta" value="porta" onchange="atualizarPreviewValorTotalFrete()" style="margin-top:3px;">
+        <span><b>Entregar na porta</b> (dentro do prédio/terreno) — <b style="color:var(--verde-escuro);">+R$5,00</b></span>
+      </label>
+      <p style="font-size:0.72rem; color:#888; margin-top:6px;">Isso fica combinado desde já com o entregador, pra ninguém ter dúvida depois.</p>
+    </div>
+
+    <div class="frete-secao">
       <h3>🚚 Tipo de veículo</h3>
       <div style="display:flex; gap:16px;">
         <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;"><input type="checkbox" id="tipo-moto" style="width:18px; height:18px;"> 🏍️ Moto</label>
@@ -130,10 +143,11 @@
       <h3>💰 Valor do frete</h3>
       <div class="field">
         <label for="frete-valor">Valor (R$) — combinado direto com o entregador</label>
-        <input id="frete-valor" type="text" placeholder="Ex: 15,00" inputmode="decimal">
+        <input id="frete-valor" type="text" placeholder="Ex: 15,00" inputmode="decimal" oninput="atualizarPreviewValorTotalFrete()">
       </div>
       <div id="frete-valor-sugestao" style="display:none;"></div>
       <button type="button" onclick="calcularSugestaoFreteCarro()" style="margin-top:8px; background:none; border:1.5px solid var(--verde-escuro); color:var(--verde-escuro); padding:8px 12px; border-radius:8px; font-weight:600; font-size:0.78rem; cursor:pointer;">🚗 Calcular sugestão pra carro (R$20 + R$1,50/km)</button>
+      <div id="preview-valor-total-frete" style="display:none; margin-top:8px; background:#e8f5f0; color:#0a4a3a; border-radius:8px; padding:8px 10px; font-size:0.8rem; font-weight:700;"></div>
       <p style="font-size:0.72rem; color:#888; margin-top:8px;">A forma de pagamento é combinada direto entre você e o entregador — o GuiaZap não processa esse pagamento.</p>
     </div>
 
@@ -389,19 +403,45 @@ function escapeHtmlFrete(str){
   return d.innerHTML;
 }
 
+function localEntregaSelecionado(){
+  return document.querySelector('input[name="local-entrega-tipo"]:checked').value;
+}
+
+function valorComAcrescimoEntrega(valorBase){
+  const numero = parseFloat(String(valorBase || '0').replace(',', '.')) || 0;
+  const acrescimo = localEntregaSelecionado() === 'porta' ? 5 : 0;
+  return numero + acrescimo;
+}
+
+function atualizarPreviewValorTotalFrete(){
+  const preview = document.getElementById('preview-valor-total-frete');
+  const valorDigitado = document.getElementById('frete-valor').value.trim();
+  if(!valorDigitado || localEntregaSelecionado() !== 'porta'){
+    preview.style.display = 'none';
+    return;
+  }
+  const total = valorComAcrescimoEntrega(valorDigitado);
+  preview.textContent = `Total com entrega na porta: R$ ${total.toFixed(2).replace('.', ',')} (frete + R$5,00)`;
+  preview.style.display = 'block';
+}
+
 function montarMensagemFrete(){
   const retirada = coletarEnderecoFrete('ret');
   const entrega = coletarEnderecoFrete('ent');
-  const valor = document.getElementById('frete-valor').value.trim();
+  const valorDigitado = document.getElementById('frete-valor').value.trim();
+  const localEntrega = localEntregaSelecionado();
+  const valorFinal = valorComAcrescimoEntrega(valorDigitado);
   const exigidas = caracteristicasExigidasFrete();
   const caracteristicasTexto = exigidas.map(c => NOMES_CARACTERISTICAS[c]).join(', ');
   const tipoCargaValor = document.getElementById('tipo-carga-select').value;
   const tipoCargaTexto = tipoCargaValor ? document.getElementById('tipo-carga-select').selectedOptions[0].textContent : '';
+  const localEntregaTexto = localEntrega === 'porta' ? '🏠 Entregar na porta (dentro do prédio/terreno)' : '🚪 Entregar no portão';
 
   return `📦 *Chamado de frete pelo GuiaZap*\n\n` +
     `📍 Retirada: ${enderecoFreteCompleto(retirada)}\n` +
     `🏠 Entrega: ${enderecoFreteCompleto(entrega)}\n` +
-    `💰 Valor combinado: R$ ${valor}\n` +
+    `${localEntregaTexto}${localEntrega === 'porta' ? ' (+R$5,00 já incluso no valor abaixo)' : ''}\n` +
+    `💰 Valor combinado: R$ ${valorFinal.toFixed(2).replace('.', ',')}\n` +
     (tipoCargaTexto ? `📦 Tipo de carga: ${tipoCargaTexto}\n` : '') +
     (caracteristicasTexto ? `🧰 Características: ${caracteristicasTexto}\n` : '') +
     `\n💵 Forma de pagamento: combinar direto pelo Papo.\n` +
@@ -487,4 +527,4 @@ initFrete();
 <script src="js/modo-escuro.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
-</html>s
+</html>
