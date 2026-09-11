@@ -131,11 +131,17 @@ exports.handler = async function (event) {
 
     const taxaBase = config ? parseFloat(config.taxa_base_entrega || 0) : 0;
     const valorPorKm = config ? parseFloat(config.valor_por_km || 0) : 0;
-    const valorFrete = Math.round((taxaBase + distanciaKm * valorPorKm) * 100) / 100;
+    let valorFrete = Math.round((taxaBase + distanciaKm * valorPorKm) * 100) / 100;
 
-    // 4. Busca o carrinho e quem é o cliente dessa conversa
-    const estados = await buscar('atendimento_estado', `conversa_id=eq.${conversaId}&select=carrinho`);
+    // 4. Busca o carrinho, a escolha de portão/porta (já feita ANTES do
+    // endereço) e quem é o cliente dessa conversa
+    const estados = await buscar('atendimento_estado', `conversa_id=eq.${conversaId}&select=carrinho,lista_atual`);
     const carrinho = estados[0] ? estados[0].carrinho : [];
+    const localEntrega = estados[0] && estados[0].lista_atual && estados[0].lista_atual[0] ? estados[0].lista_atual[0].local_entrega : null;
+
+    if (localEntrega === 'porta') {
+      valorFrete = Math.round((valorFrete + 5) * 100) / 100;
+    }
 
     const conversas = await buscar('conversas', `id=eq.${conversaId}&select=visitante_user_id`);
     const clienteUserId = conversas[0] ? conversas[0].visitante_user_id : null;
@@ -151,20 +157,26 @@ exports.handler = async function (event) {
     const total = Math.round((subtotal + valorFrete) * 100) / 100;
     const codigoConfirmacao = String(Math.floor(1000 + Math.random() * 9000));
 
-    // 5. Pergunta o local de entrega (portão ou porta) ANTES de decidir
-    // pagamento — o acréscimo de R$5 é aplicado pelo gatilho do banco
-    // quando a pessoa responde "2" (porta), e só depois segue pro fluxo
-    // normal de pagamento — funciona igual pra empresa que aceita ou não
-    // pagamento na entrega, já que essa etapa vem antes dessa escolha.
-    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n\n🚪 Até onde você quer a entrega?\n1️⃣ No portão\n2️⃣ Na porta (dentro do prédio/terreno) — +R$5,00`);
+    // 5. Confirma o frete pro cliente (já com o acréscimo da porta, se for
+    // o caso — a escolha de portão/porta já foi feita ANTES de pedir o
+    // endereço, então não precisa perguntar de novo aqui) e guarda os
+    // dados da entrega. Em seguida, chama a function do banco que decide
+    // o próximo passo: perguntar qual motoboy, ou já ir pro pagamento.
+    const textoLocalEntrega = localEntrega === 'porta' ? '🏠 Entrega na porta (+R$5,00 já incluso)' : '🚪 Entrega no portão';
+    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n${textoLocalEntrega}\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}`);
 
     await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({
-        estado: 'escolhendo_local_entrega',
-        lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10, latitude: latCliente, longitude: lngCliente }]
+        lista_atual: [{ endereco, taxa_entrega: valorFrete, distancia_km: Math.round(distanciaKm * 10) / 10, latitude: latCliente, longitude: lngCliente, local_entrega: localEntrega }]
       })
+    });
+
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/guiazap_pos_calculo_frete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_conversa_id: conversaId, p_profissional_id: profissionalId })
     });
 
     return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };

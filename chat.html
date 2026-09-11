@@ -2214,6 +2214,21 @@ function conteudoDaMensagem(m, minha){
     return linkificarTexto(escapeHtmlChat(m.texto)) +
       `<button type="button" onclick="event.stopPropagation(); enviarFinalizarPedidoChat()" style="display:block; width:100%; margin-top:10px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.85rem; cursor:pointer;">✅ Finalizar pedido</button>`;
   }
+  // Chamado de corrida pro motoboy — mostra botões de aceitar/recusar em
+  // vez de precisar digitar as palavras na mão
+  if(!minha && m.texto && /\*aceito\*/i.test(m.texto) && /\*recuso\*/i.test(m.texto)){
+    return linkificarTexto(escapeHtmlChat(m.texto)) +
+      `<div style="display:flex; gap:8px; margin-top:10px;">
+        <button type="button" onclick="event.stopPropagation(); enviarRespostaCorridaChat('aceito')" style="flex:1; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.85rem; cursor:pointer;">✅ Aceito</button>
+        <button type="button" onclick="event.stopPropagation(); enviarRespostaCorridaChat('recuso')" style="flex:1; padding:9px; border-radius:8px; border:1.5px solid #a4402f; background:white; color:#a4402f; font-weight:700; font-size:0.85rem; cursor:pointer;">✕ Recuso</button>
+      </div>`;
+  }
+  // Confirmação de entrega concluída — mostra o botão de "entreguei" logo
+  // depois de aceitar uma corrida
+  if(!minha && m.texto && /\*entreguei\*/i.test(m.texto)){
+    return linkificarTexto(escapeHtmlChat(m.texto)) +
+      `<button type="button" onclick="event.stopPropagation(); enviarRespostaCorridaChat('entreguei')" style="display:block; width:100%; margin-top:10px; padding:9px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; font-size:0.85rem; cursor:pointer;">🏁 Marcar como entregue</button>`;
+  }
 
   return linkificarTexto(escapeHtmlChat(m.texto));
 }
@@ -2462,6 +2477,11 @@ async function enviarMensagemChat(){
 async function enviarFinalizarPedidoChat(){
   if(!conversaAtual) return;
   await enviarQualquerMensagem({ tipo: 'texto', texto: 'finalizar' });
+}
+
+async function enviarRespostaCorridaChat(palavra){
+  if(!conversaAtual) return;
+  await enviarQualquerMensagem({ tipo: 'texto', texto: palavra });
 }
 
 async function enviarSelecaoMenuInterativo(msgId){
