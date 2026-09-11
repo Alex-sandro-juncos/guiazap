@@ -95,7 +95,7 @@ function renderBancoEntregadores(){
         <div class="local-entregador">📍 ${escapeHtmlBanco(e.cidade)} · ${escapeHtmlBanco(e.bairro)}</div>
         ${e.veiculo_modelo ? `<div class="veiculo-entregador">🛵 ${escapeHtmlBanco(e.veiculo_modelo)}${e.veiculo_placa ? ' · Placa ' + escapeHtmlBanco(e.veiculo_placa) : ''}</div>` : ''}
         <br>
-        <a class="btn-chamar-entregador" href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no Banco de Entregadores do GuiaZap e preciso de uma entrega.')}" target="_blank">💬 Chamar no WhatsApp</a>
+        <a class="btn-chamar-entregador" href="chat.html?empresa=${e.id}&msg=${encodeURIComponent('Olá! Vi seu contato no Banco de Entregadores e preciso de uma entrega.')}">💬 Chamar pelo Papo</a>
       </div>
     </div>
   `).join('');
