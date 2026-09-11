@@ -129,6 +129,21 @@
 
   if(!('speechSynthesis' in window)) return;
 
+  // Confere TODAS as alternativas que o reconhecimento sugeriu (não só a
+  // primeira/mais provável) contra uma lista de palavras-chave — em celular
+  // com áudio mais baixo ou ruído, a palavra certa às vezes aparece só como
+  // 2ª ou 3ª opção, não como a primeira escolha do reconhecimento.
+  function textoContemPalavraChave(event, palavras){
+    for(let i = 0; i < event.results.length; i++){
+      const resultado = event.results[i];
+      for(let j = 0; j < resultado.length; j++){
+        const transcricao = (resultado[j].transcript || '').toLowerCase().trim();
+        if(palavras.some(p => transcricao.includes(p))) return transcricao;
+      }
+    }
+    return null;
+  }
+
   const trechosGrandes = [
     'Você está na página Sobre e Como Funciona do GuiaZap. Se quiser interromper a leitura a qualquer momento, fala "abacaxi".',
     'O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários. E o GuiaZap cresceu: hoje também tem loja online, chat próprio com chamadas de voz e vídeo, blog, vagas de emprego, e controle por comando de voz em quase todo o site.',
@@ -188,18 +203,23 @@
       const reconhecimento = new SpeechRecognition();
       reconhecimento.lang = 'pt-BR';
       reconhecimento.continuous = false;
-      reconhecimento.interimResults = false;
+      reconhecimento.interimResults = true;
+      reconhecimento.maxAlternatives = 5;
 
       reconhecimento.onresult = function(event){
-        const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
-        console.log('[sobre-voz] ouvi:', texto);
-        if(texto.includes('abacaxi') || texto.includes('parar') || texto.includes('silêncio') || texto.includes('silencio') || texto.includes('cala')){
+        const ultimoResultado = event.results[event.results.length - 1];
+        const texto = textoContemPalavraChave(event, ['abacaxi', 'parar', 'silêncio', 'silencio', 'cala']);
+        if(texto){
+          console.log('[sobre-voz] ouvi (bateu):', texto);
           cancelado = true;
           jaContinuou = true;
           speechSynthesis.cancel();
           try{ reconhecimento.abort(); } catch(e){}
           setTimeout(escutarComandoSobre, 300);
-        } else {
+        } else if(ultimoResultado.isFinal){
+          // Só desiste e segue em frente quando o reconhecimento realmente
+          // terminou (resultado final) — resultados provisórios (enquanto
+          // a pessoa ainda está falando) não contam como "não bateu"
           continuar();
         }
       };
@@ -224,11 +244,15 @@
     reconhecimento.lang = 'pt-BR';
     reconhecimento.continuous = false;
     reconhecimento.interimResults = false;
+    reconhecimento.maxAlternatives = 5;
     let respondeu = false;
 
     reconhecimento.onresult = function(event){
       respondeu = true;
-      const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
+      // Confere todas as alternativas sugeridas, não só a primeira — ajuda
+      // quando a fala não sai muito clara e a palavra certa vira a 2ª ou 3ª opção
+      const encontrado = textoContemPalavraChave(event, ['voltar', 'repetir', 'de novo', 'cadastrar empresa', 'cadastrar minha empresa']);
+      const texto = encontrado || (event.results[0][0].transcript || '').toLowerCase().trim();
       console.log('[sobre-voz] comando ouvido:', texto);
 
       if(texto.includes('voltar')){
