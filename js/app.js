@@ -3810,6 +3810,16 @@ function iniciarModoVozIndex(retomandoAutomaticamente){
   _vozIndexAtiva = true;
   window._vozIndexAtiva = true;
   if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+
+  // Fecha o aviso de boas-vindas se estiver aberto — ele cobre a tela
+  // inteira e travaria qualquer clique depois, mesmo com o modo voz já
+  // ativado (importante pra quem é cego: sem isso ficaria preso mesmo
+  // conseguindo ligar a voz, porque o resto da tela continuaria bloqueada)
+  const welcomeGateAberto = document.getElementById('welcome-gate');
+  if(welcomeGateAberto && welcomeGateAberto.style.display !== 'none' && typeof fecharWelcomeGate === 'function'){
+    fecharWelcomeGate();
+  }
+
   // Sempre começa do zero — sem isso, o resultado de uma busca por nome de
   // uma ativação anterior podia "vazar" pra próxima e confundir o que a
   // pessoa acabou de pedir agora
