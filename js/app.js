@@ -3670,7 +3670,11 @@ setTimeout(() => {
     _modoSomenteVozAtivoIndex = true;
     document.getElementById('overlay-modo-somente-voz-index').style.display = 'block';
     if(!_vozIndexAtiva){
-      setTimeout(() => iniciarModoVozIndex(true), 1500);
+      // Ativa DIRETO, sem esperar a pessoa falar "ativar" primeiro — no
+      // modo somente voz o toque já está bloqueado, então ficar esperando
+      // por uma palavra que a pessoa não sabe que precisa dizer a deixaria
+      // travada sem nenhum jeito de interagir.
+      setTimeout(() => iniciarModoVozIndex(false), 1500);
     }
   }
 }, 0);
