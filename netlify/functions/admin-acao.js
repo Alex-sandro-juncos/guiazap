@@ -28,7 +28,7 @@ exports.handler = async function (event) {
     const body = JSON.parse(event.body || '{}');
     const { acao, tabela, id } = body;
 
-    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'plano_vendas', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post', 'dispensar_analise_denuncias'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
+    if (!['suspender', 'excluir', 'ativar', 'verificar', 'desverificar', 'plano_completo', 'plano_basico', 'plano_premium', 'plano_vendas', 'plano_entregador', 'confirmar_whatsapp_verificacao', 'aprovar_selo', 'rejeitar_selo', 'aprovar_depoimento', 'aprovar_post', 'dispensar_analise_denuncias'].includes(acao) || !['profissionais', 'produtos', 'depoimentos', 'blog_posts'].includes(tabela) || !id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'parâmetros inválidos' }) };
     }
 
@@ -150,8 +150,8 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
     }
 
-    if ((acao === 'plano_completo' || acao === 'plano_basico' || acao === 'plano_premium' || acao === 'plano_vendas') && tabela === 'profissionais') {
-      const novoPlano = acao === 'plano_vendas' ? 'vendas' : acao === 'plano_completo' ? 'completo' : acao === 'plano_premium' ? 'premium' : 'basico';
+    if ((acao === 'plano_completo' || acao === 'plano_basico' || acao === 'plano_premium' || acao === 'plano_vendas' || acao === 'plano_entregador') && tabela === 'profissionais') {
+      const novoPlano = acao === 'plano_vendas' ? 'vendas' : acao === 'plano_entregador' ? 'entregador' : acao === 'plano_completo' ? 'completo' : acao === 'plano_premium' ? 'premium' : 'basico';
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
         method: 'PATCH',
         headers: {

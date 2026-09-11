@@ -197,7 +197,9 @@ async function executarAcaoAdmin(acao, tabela, id, nome){
                 ? `Mudar "${nome}" pro Pacote Premium? Ela ganha: até 10 fotos por Story, botão de "Seguir" pros visitantes, e prioridade na fileira de novidades.`
                 : acao === 'plano_vendas'
                   ? `Mudar "${nome}" pro Pacote Vendas? Ela ganha acesso à Vitrine de produtos, carrinho de pedidos, atendimento automático e cálculo de frete — além de tudo do Premium.`
-                  : acao === 'confirmar_whatsapp_verificacao'
+                  : acao === 'plano_entregador'
+                    ? `Mudar "${nome}" pro Pacote Corridas e Fretes? Ela passa a aparecer no Banco de Entregadores.`
+                    : acao === 'confirmar_whatsapp_verificacao'
                   ? `Confirmar que "${nome}" mandou a mensagem certa no WhatsApp do GuiaZap?`
                   : acao === 'aprovar_selo'
                     ? `Aprovar o Selo Verificado de "${nome}"? Isso adiciona o ✅ no cadastro dela.`
@@ -530,6 +532,9 @@ function renderAdmin(){
           ${item.plano === 'vendas'
             ? `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Vendas</button>`
             : `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_vendas', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">💼 Mudar p/ Vendas</button>`}
+          ${item.plano === 'entregador'
+            ? `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Corridas e Fretes</button>`
+            : `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_entregador', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">🛵 Mudar p/ Corridas e Fretes</button>`}
           <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
         </div>
       </div>`;
