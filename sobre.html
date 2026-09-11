@@ -129,8 +129,8 @@
 
   if(!('speechSynthesis' in window)) return;
 
-  const trechos = [
-    'Você está na página Sobre e Como Funciona do GuiaZap.',
+  const trechosGrandes = [
+    'Você está na página Sobre e Como Funciona do GuiaZap. Se quiser interromper a leitura a qualquer momento, fala "abacaxi".',
     'O GuiaZap é um diretório gratuito que conecta você a profissionais e empresas da sua região — de eletricistas a salões de beleza, de pedreiros a lojas de roupa. Busque, veja avaliações de quem já contratou, e fale direto no WhatsApp, sem intermediários. E o GuiaZap cresceu: hoje também tem loja online, chat próprio com chamadas de voz e vídeo, blog, vagas de emprego, e controle por comando de voz em quase todo o site.',
     'Como funciona pra quem busca um profissional: primeiro, digite o que você precisa, tipo eletricista ou manicure, ou navegue pela lista. Segundo, filtre por cidade, bairro ou distância, e veja as avaliações de quem já contratou. Terceiro, clique em chamar no WhatsApp, ou converse pelo Papo direto no site, sem cadastro, sem taxa.',
     'Como funciona pra quem tem uma empresa: primeiro, crie sua conta grátis e cadastre sua empresa ou serviço. Segundo, escolha um pacote — o básico é cem por cento grátis, sempre. Terceiro, receba contatos diretos no seu WhatsApp ou no Papo, sem comissão sobre suas vendas.',
@@ -141,65 +141,78 @@
     'Se quiser cadastrar sua empresa, fala "cadastrar empresa". Pra voltar ao GuiaZap, fala "voltar". Pra ouvir de novo, fala "repetir".'
   ];
 
+  // Quebra cada bloco em frases menores — em vez de tentar ESCUTAR e FALAR
+  // ao mesmo tempo (o que falha silenciosamente em vários celulares Android,
+  // porque a saída de áudio atrapalha o microfone), a gente fala uma frase
+  // curta de cada vez e escuta rapidinho nas pausas naturais entre elas.
+  // Assim "parar" tem muitas chances de ser ouvido, sem precisar de
+  // microfone e alto-falante ativos ao mesmo tempo.
+  const trechos = [];
+  trechosGrandes.forEach(bloco => {
+    const partes = bloco.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ú])/);
+    partes.forEach(p => { if(p.trim()) trechos.push(p.trim()); });
+  });
+
   let indice = 0;
   let cancelado = false;
-  let _reconhecimentoInterrupcaoSobre = null;
 
   function falarProximoTrecho(){
     if(cancelado || indice >= trechos.length){
-      pararEscutaInterrupcaoSobre();
       escutarComandoSobre();
       return;
     }
     const utter = new SpeechSynthesisUtterance(trechos[indice]);
     utter.lang = 'pt-BR';
-    utter.onend = function(){ indice++; falarProximoTrecho(); };
-    utter.onerror = function(){ indice++; falarProximoTrecho(); };
+    utter.onend = function(){ indice++; setTimeout(escutaRapidaEntreFrasesSobre, 250); };
+    utter.onerror = function(){ indice++; setTimeout(escutaRapidaEntreFrasesSobre, 250); };
     speechSynthesis.speak(utter);
   }
 
-  // Fica escutando em paralelo enquanto o texto é lido, só pra pegar o
-  // comando "parar" — sem isso, a pessoa ficava presa ouvindo os 9 blocos
-  // inteiros sem conseguir interromper, já que o reconhecimento normal só
-  // começava depois que a leitura toda acabasse.
-  function iniciarEscutaInterrupcaoSobre(){
+  // Escuta por uma janela curta (a maior parte do tempo em silêncio) logo
+  // depois de cada frase, só pra pegar um "parar" dito nesse intervalo —
+  // sem tentar escutar enquanto o texto ainda está sendo falado. Espera
+  // um pouquinho antes de começar (o hardware do celular leva um instante
+  // pra "soltar" o alto-falante e liberar o microfone de verdade).
+  function escutaRapidaEntreFrasesSobre(){
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!SpeechRecognition) return;
+    if(!SpeechRecognition){ falarProximoTrecho(); return; }
+
+    let jaContinuou = false;
+    function continuar(){
+      if(jaContinuou) return;
+      jaContinuou = true;
+      falarProximoTrecho();
+    }
 
     try{
-      _reconhecimentoInterrupcaoSobre = new SpeechRecognition();
-      _reconhecimentoInterrupcaoSobre.lang = 'pt-BR';
-      _reconhecimentoInterrupcaoSobre.continuous = true;
-      _reconhecimentoInterrupcaoSobre.interimResults = false;
+      const reconhecimento = new SpeechRecognition();
+      reconhecimento.lang = 'pt-BR';
+      reconhecimento.continuous = false;
+      reconhecimento.interimResults = false;
 
-      _reconhecimentoInterrupcaoSobre.onresult = function(event){
-        const ultimo = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
-        if(ultimo.includes('parar') || ultimo.includes('para') || ultimo.includes('silêncio') || ultimo.includes('silencio') || ultimo.includes('cala')){
+      reconhecimento.onresult = function(event){
+        const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
+        console.log('[sobre-voz] ouvi:', texto);
+        if(texto.includes('abacaxi') || texto.includes('parar') || texto.includes('silêncio') || texto.includes('silencio') || texto.includes('cala')){
           cancelado = true;
+          jaContinuou = true;
           speechSynthesis.cancel();
-          pararEscutaInterrupcaoSobre();
-          escutarComandoSobre();
+          try{ reconhecimento.abort(); } catch(e){}
+          setTimeout(escutarComandoSobre, 300);
+        } else {
+          continuar();
         }
       };
 
-      _reconhecimentoInterrupcaoSobre.onend = function(){
-        // Se ainda estiver lendo (não cancelado nem terminado), tenta reiniciar sozinho
-        if(!cancelado && indice < trechos.length){
-          try{ _reconhecimentoInterrupcaoSobre.start(); } catch(e){}
-        }
-      };
+      reconhecimento.onerror = function(event){ console.log('[sobre-voz] erro no reconhecimento:', event.error); continuar(); };
+      reconhecimento.onend = continuar;
 
-      _reconhecimentoInterrupcaoSobre.onerror = function(){};
-
-      _reconhecimentoInterrupcaoSobre.start();
-    } catch(e){ /* ignora — a pessoa ainda pode navegar por toque */ }
-  }
-
-  function pararEscutaInterrupcaoSobre(){
-    if(_reconhecimentoInterrupcaoSobre){
-      _reconhecimentoInterrupcaoSobre.onend = null;
-      try{ _reconhecimentoInterrupcaoSobre.abort(); } catch(e){}
-      _reconhecimentoInterrupcaoSobre = null;
+      reconhecimento.start();
+      // Segurança extra: se por algum motivo nenhum evento disparar,
+      // não trava a leitura pra sempre
+      setTimeout(() => { if(!jaContinuou && !cancelado) continuar(); }, 2800);
+    } catch(e){
+      continuar();
     }
   }
 
@@ -211,9 +224,12 @@
     reconhecimento.lang = 'pt-BR';
     reconhecimento.continuous = false;
     reconhecimento.interimResults = false;
+    let respondeu = false;
 
     reconhecimento.onresult = function(event){
+      respondeu = true;
       const texto = (event.results[0][0].transcript || '').toLowerCase().trim();
+      console.log('[sobre-voz] comando ouvido:', texto);
 
       if(texto.includes('voltar')){
         localStorage.setItem('retomarModoVozAoCarregar', '1');
@@ -221,7 +237,6 @@
       } else if(texto.includes('repetir') || texto.includes('de novo')){
         cancelado = false;
         indice = 0;
-        iniciarEscutaInterrupcaoSobre();
         falarProximoTrecho();
       } else if(texto.includes('cadastrar empresa') || texto.includes('cadastrar minha empresa')){
         window.location.href = 'pacotes.html';
@@ -233,16 +248,23 @@
       }
     };
 
-    reconhecimento.onerror = function(){ /* silencioso — a pessoa pode navegar normal pelo toque */ };
+    reconhecimento.onerror = function(event){ console.log('[sobre-voz] erro ao escutar comando:', event.error); };
+
+    // Sem isso, se o reconhecimento parar sozinho por silêncio (comum depois
+    // de uns 5-10s sem ninguém falar) e nada tiver sido reconhecido, o
+    // microfone ficava morto pra sempre — a pessoa falava de novo e nada
+    // acontecia. Reinicia sozinho enquanto ainda estiver nessa tela de espera.
+    reconhecimento.onend = function(){
+      if(!respondeu){
+        try{ reconhecimento.start(); } catch(e){ setTimeout(escutarComandoSobre, 500); }
+      }
+    };
 
     try{ reconhecimento.start(); } catch(e){ /* ignora */ }
   }
 
   // Espera um instante a página carregar visualmente antes de começar a falar
-  setTimeout(function(){
-    iniciarEscutaInterrupcaoSobre();
-    falarProximoTrecho();
-  }, 600);
+  setTimeout(falarProximoTrecho, 600);
 })();
 </script>
 </body>
