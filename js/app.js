@@ -442,7 +442,7 @@ async function loadContadorPlataforma(){
 async function loadEntries(){
   const { data, error } = await supabaseClient
     .from('profissionais')
-    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga, localizacao_confirmada_manualmente, rua, numero')
+    .select('id, name, cat, categorias_extra, estado, cidade, bairro, whatsapp, contatos_extra, foto, status_pagamento, plano, verificado, visualizacoes, created_at, user_id, notificar_seguidores, verificacao_pago, verificacao_status, verificacao_documento_caminho, verificacao_email_confirmado, verificacao_whatsapp_confirmado, latitude, longitude, horario_dias, horario_abre, horario_fecha, ultimo_login, status_disponibilidade, impulsionado_ate, veiculo_modelo, veiculo_placa, veiculo_modelo_carro, veiculo_placa_carro, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga, localizacao_confirmada_manualmente, rua, numero')
     .order('name', { ascending: true });
   if(error){
     console.error(error);
@@ -861,6 +861,13 @@ function linkDoPlano(plano){
   return plano === 'completo' ? LINK_ASSINATURA_COMPLETO : LINK_ASSINATURA_BASICO;
 }
 
+function atualizarCamposVeiculoEntregador(){
+  const temMoto = document.getElementById('f-veiculo-tipo-moto').checked;
+  const temCarro = document.getElementById('f-veiculo-tipo-carro').checked;
+  document.getElementById('campo-veiculo-moto-separado').style.display = temMoto ? 'block' : 'none';
+  document.getElementById('campo-veiculo-carro-separado').style.display = temCarro ? 'block' : 'none';
+}
+
 async function openForm(entry){
   if(!currentUser) return;
   const form = document.getElementById('cadastro-form');
@@ -889,9 +896,12 @@ async function openForm(entry){
   document.getElementById('campo-veiculo-entregador').style.display = planoDoFormulario === 'entregador' ? 'block' : 'none';
   document.getElementById('f-veiculo-modelo').value = entry ? (entry.veiculo_modelo || '') : '';
   document.getElementById('f-veiculo-placa').value = entry ? (entry.veiculo_placa || '') : '';
+  document.getElementById('f-veiculo-modelo-carro').value = entry ? (entry.veiculo_modelo_carro || '') : '';
+  document.getElementById('f-veiculo-placa-carro').value = entry ? (entry.veiculo_placa_carro || '') : '';
   const tiposSalvos = entry && entry.veiculo_tipos ? entry.veiculo_tipos.split(',') : [];
   document.getElementById('f-veiculo-tipo-moto').checked = tiposSalvos.includes('moto');
   document.getElementById('f-veiculo-tipo-carro').checked = tiposSalvos.includes('carro');
+  atualizarCamposVeiculoEntregador();
   const equipSalvos = entry && entry.entregador_equipamentos ? entry.entregador_equipamentos.split(',') : [];
   document.getElementById('f-equip-bau').checked = equipSalvos.includes('bau');
   document.getElementById('f-equip-refrigerado').checked = equipSalvos.includes('refrigerado');
@@ -1202,8 +1212,10 @@ async function saveEntry(e){
     horario_dias: Array.from(document.querySelectorAll('.f-horario-dia:checked')).map(el => el.value).join(',') || null,
     horario_abre: document.getElementById('f-horario-abre').value || null,
     horario_fecha: document.getElementById('f-horario-fecha').value || null,
-    veiculo_modelo: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-modelo').value.trim() : null,
-    veiculo_placa: planoAtualDoCadastro === 'entregador' ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null,
+    veiculo_modelo: (planoAtualDoCadastro === 'entregador' && document.getElementById('f-veiculo-tipo-moto').checked) ? document.getElementById('f-veiculo-modelo').value.trim() : null,
+    veiculo_placa: (planoAtualDoCadastro === 'entregador' && document.getElementById('f-veiculo-tipo-moto').checked) ? document.getElementById('f-veiculo-placa').value.trim().toUpperCase() : null,
+    veiculo_modelo_carro: (planoAtualDoCadastro === 'entregador' && document.getElementById('f-veiculo-tipo-carro').checked) ? document.getElementById('f-veiculo-modelo-carro').value.trim() : null,
+    veiculo_placa_carro: (planoAtualDoCadastro === 'entregador' && document.getElementById('f-veiculo-tipo-carro').checked) ? document.getElementById('f-veiculo-placa-carro').value.trim().toUpperCase() : null,
     veiculo_tipos: planoAtualDoCadastro === 'entregador' ? [
       document.getElementById('f-veiculo-tipo-moto').checked ? 'moto' : null,
       document.getElementById('f-veiculo-tipo-carro').checked ? 'carro' : null
@@ -1235,13 +1247,21 @@ async function saveEntry(e){
     payload.localizacao_confirmada_manualmente = true;
   }
   if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
-  if(planoAtualDoCadastro === 'entregador' && (!payload.veiculo_modelo || !payload.veiculo_placa)){
-    document.getElementById('form-msg').textContent = 'Preencha o modelo do veículo e a placa — obrigatório pro Pacote Corridas e Fretes (segurança pra quem vai te contratar).';
-    return false;
-  }
-  if(planoAtualDoCadastro === 'entregador' && !payload.veiculo_tipos){
-    document.getElementById('form-msg').textContent = 'Marca se você tem moto, carro, ou os dois.';
-    return false;
+  if(planoAtualDoCadastro === 'entregador'){
+    const temMoto = document.getElementById('f-veiculo-tipo-moto').checked;
+    const temCarro = document.getElementById('f-veiculo-tipo-carro').checked;
+    if(!temMoto && !temCarro){
+      document.getElementById('form-msg').textContent = 'Marca se você tem moto, carro, ou os dois.';
+      return false;
+    }
+    if(temMoto && (!payload.veiculo_modelo || !payload.veiculo_placa)){
+      document.getElementById('form-msg').textContent = 'Preencha o modelo e a placa da moto — obrigatório pro Pacote Corridas e Fretes (segurança pra quem vai te contratar).';
+      return false;
+    }
+    if(temCarro && (!payload.veiculo_modelo_carro || !payload.veiculo_placa_carro)){
+      document.getElementById('form-msg').textContent = 'Preencha o modelo e a placa do carro — obrigatório pro Pacote Corridas e Fretes (segurança pra quem vai te contratar).';
+      return false;
+    }
   }
   if(payload.foto && !/^https?:\/\//i.test(payload.foto)){
     document.getElementById('form-msg').textContent = 'O link da foto precisa começar com http:// ou https://';
@@ -3296,18 +3316,22 @@ function render(){
     contarVisualizacao(e.id, isOwner);
     return `
     <div class="card-profissional${pendente ? ' card-pendente' : ''}">
-      ${isOwner && pendente ? `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
+      ${isOwner && pendente ? (() => {
+        const nomesPlano = { completo: '💳 Pagar Pacote Completo (R$10/mês)', premium: '👑 Pagar Pacote Premium (R$25/mês)', vendas: '💼 Pagar Pacote Vendas (R$40/mês)', entregador: '🛵 Pagar Pacote Corridas e Fretes (R$10/mês)' };
+        const corDoPlano = e.plano === 'premium' ? 'background:linear-gradient(90deg, #d4af37, #f4d570, #d4af37); color:#4a3800;' : e.plano === 'vendas' ? 'background:#0f766e; color:white;' : e.plano === 'entregador' ? 'background:#1c1c1c; color:white;' : '';
+        const linkDoPlanoEscolhido = e.plano !== 'basico' ? `<a href="${linkDoPlano(e.plano)}" class="link-pagar" style="${corDoPlano}">${nomesPlano[e.plano] || '💳 Pagar assinatura'}</a>` : '';
+        return `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
         <button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">🎁 Ativar Pacote Grátis agora</button>
-        <a href="${linkDoPlano('completo')}" class="link-pagar">💳 Pagar Pacote Completo (R$10/mês)</a>
-        <a href="${linkDoPlano('premium')}" class="link-pagar" style="background:linear-gradient(90deg, #d4af37, #f4d570, #d4af37); color:#4a3800;">👑 Pagar Pacote Premium (R$25/mês)</a>
+        ${linkDoPlanoEscolhido}
         <div class="cupom-row">
           <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">
           <button type="button" class="btn-cupom" onclick="aplicarCupom('${e.id}')">Aplicar</button>
         </div>
         <span class="cupom-msg" id="cupom-msg-${e.id}"></span>
         <span class="cupom-msg" id="reativar-msg-${e.id}"></span>
-        <div class="aviso-espera">⏳ Já pagou pelo Pacote Completo? Pode levar até 15 minutos pra ativar sozinho. Não precisa pagar de novo nem criar outro cadastro — só aguardar.</div>
-      </div>` : ''}
+        <div class="aviso-espera">⏳ Já pagou? Pode levar até 15 minutos pra ativar sozinho. Não precisa pagar de novo nem criar outro cadastro — só aguardar.</div>
+      </div>`;
+      })() : ''}
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">

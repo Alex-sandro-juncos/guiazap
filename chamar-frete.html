@@ -325,7 +325,7 @@ async function buscarEntregadoresCompativeis(){
 
   const { data, error } = await supabaseClientFrete
     .from('profissionais')
-    .select('id, name, cidade, estado, veiculo_modelo, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga')
+    .select('id, name, cidade, estado, veiculo_modelo, veiculo_placa, veiculo_modelo_carro, veiculo_placa_carro, veiculo_tipos, entregador_equipamentos, entregador_tipos_carga')
     .eq('plano', 'entregador')
     .eq('status_pagamento', 'ativo');
 
@@ -364,11 +364,15 @@ async function buscarEntregadoresCompativeis(){
   lista.innerHTML = compativeis.map(e => {
     const veiculos = (e.veiculo_tipos || '').split(',').filter(Boolean).map(v => NOMES_VEICULOS[v] || v).join(' · ');
     const equip = (e.entregador_equipamentos || '').split(',').filter(Boolean).map(q => NOMES_CARACTERISTICAS[q] || q).join(' · ');
+    const detalheVeiculos = [
+      e.veiculo_modelo ? '🏍️ ' + e.veiculo_modelo : '',
+      e.veiculo_modelo_carro ? '🚗 ' + e.veiculo_modelo_carro : ''
+    ].filter(Boolean).join(' · ');
     return `
       <div class="card-entregador">
         <div class="info-entregador">
           <div class="nome-entregador">${escapeHtmlFrete(e.name)}</div>
-          <div class="detalhe-entregador">${veiculos || 'veículo não informado'}${equip ? ' · ' + equip : ''}</div>
+          <div class="detalhe-entregador">${detalheVeiculos || veiculos || 'veículo não informado'}${equip ? ' · ' + equip : ''}</div>
           <div class="detalhe-entregador">📍 ${escapeHtmlFrete(e.cidade)}/${escapeHtmlFrete(e.estado)}</div>
         </div>
         <button type="button" class="btn-chamar-um" onclick="chamarUmEntregador('${e.id}')">Chamar</button>
@@ -483,4 +487,4 @@ initFrete();
 <script src="js/modo-escuro.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
-</html>
+</html>s

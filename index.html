@@ -322,16 +322,24 @@
       <label>🚚 Quais veículos você tem? (pode marcar os dois)</label>
       <div style="display:flex; gap:16px; margin:4px 0 10px;">
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.9rem;">
-          <input type="checkbox" id="f-veiculo-tipo-moto" style="width:18px; height:18px;"> 🏍️ Moto
+          <input type="checkbox" id="f-veiculo-tipo-moto" onchange="atualizarCamposVeiculoEntregador()" style="width:18px; height:18px;"> 🏍️ Moto
         </label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.9rem;">
-          <input type="checkbox" id="f-veiculo-tipo-carro" style="width:18px; height:18px;"> 🚗 Carro
+          <input type="checkbox" id="f-veiculo-tipo-carro" onchange="atualizarCamposVeiculoEntregador()" style="width:18px; height:18px;"> 🚗 Carro
         </label>
       </div>
-      <label for="f-veiculo-modelo">Modelo do veículo</label>
-      <input id="f-veiculo-modelo" placeholder="Ex: Honda CG 160, ou Fiat Uno">
-      <label for="f-veiculo-placa" style="margin-top:8px;">🔖 Placa</label>
-      <input id="f-veiculo-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
+      <div id="campo-veiculo-moto-separado" style="display:none;">
+        <label for="f-veiculo-modelo">🏍️ Modelo da moto</label>
+        <input id="f-veiculo-modelo" placeholder="Ex: Honda CG 160">
+        <label for="f-veiculo-placa" style="margin-top:8px;">🔖 Placa da moto</label>
+        <input id="f-veiculo-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
+      </div>
+      <div id="campo-veiculo-carro-separado" style="display:none; margin-top:14px; padding-top:14px; border-top:1px dashed #ccc;">
+        <label for="f-veiculo-modelo-carro">🚗 Modelo do carro</label>
+        <input id="f-veiculo-modelo-carro" placeholder="Ex: Fiat Uno">
+        <label for="f-veiculo-placa-carro" style="margin-top:8px;">🔖 Placa do carro</label>
+        <input id="f-veiculo-placa-carro" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
+      </div>
       <label style="margin-top:10px;">🧰 Equipamentos que você tem (marque os que se aplicam)</label>
       <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
         <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
