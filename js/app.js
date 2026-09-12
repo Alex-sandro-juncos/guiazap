@@ -3325,7 +3325,7 @@ function render(){
         const corDoPlano = e.plano === 'premium' ? 'background:linear-gradient(90deg, #d4af37, #f4d570, #d4af37); color:#4a3800;' : e.plano === 'vendas' ? 'background:#0f766e; color:white;' : e.plano === 'entregador' ? 'background:#1c1c1c; color:white;' : '';
         const linkDoPlanoEscolhido = e.plano !== 'basico' ? `<a href="${linkDoPlano(e.plano)}" class="link-pagar" style="${corDoPlano}">${nomesPlano[e.plano] || '💳 Pagar assinatura'}</a>` : '';
         return `<div class="badge-pendente">Cadastro inativo — só você vê este cadastro
-        <button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">🎁 Ativar Pacote Grátis agora</button>
+        ${e.plano !== 'entregador' ? `<button type="button" class="link-pagar" onclick="reativarGratis('${e.id}')">🎁 Ativar Pacote Grátis agora</button>` : ''}
         ${linkDoPlanoEscolhido}
         <div class="cupom-row">
           <input type="text" id="cupom-input-${e.id}" placeholder="Tem um cupom?" class="cupom-input">

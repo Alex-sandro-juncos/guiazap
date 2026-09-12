@@ -284,12 +284,23 @@
 }
 
 .link-pagar {
-  display: inline-block;
-  margin-left: 8px;
-  color: var(--verde-escuro);
-  font-weight: 700;
-  text-decoration: underline;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--verde-whats);
+  color: white;
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
 }
+.link-pagar + .link-pagar { margin-top: 14px; }
+.link-pagar:hover { filter: brightness(1.05); }
 
 .contatos-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .btn-zap-extra { background: var(--verde-escuro); font-size: 0.75rem; padding: 8px 11px; }
