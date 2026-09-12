@@ -2830,6 +2830,7 @@ function toggleModoVozVitrine(){
 }
 
 let _aguardandoAtivacaoVitrine = false;
+let _aguardandoEscolhaPedidoOuCardapio = false;
 let _vozVitrineUltimoSinalDeVida = 0;
 let _vozVitrineVigia = null;
 let _vozVitrineTentativasReconexao = 0;
@@ -2862,11 +2863,12 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
     falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
   } else if(vindoDireto && empresaFiltroId){
     // Veio direto de um comando de voz que já tinha decidido "quero
-    // comprar" — continua a conversa sem pausa nenhuma, já falando sobre
-    // a empresa certa em vez do saudação genérica
+    // comprar" — pergunta se quer fazer pedido de verdade ou só ouvir o
+    // cardápio, em vez de já presumir que quer comprar algo específico
     const empresaAchada = (produtos || []).find(p => p.profissionais && p.profissionais.id === empresaFiltroId);
     const nomeEmpresa = empresaAchada ? empresaAchada.profissionais.name : '';
-    falarVozVitrine((nomeEmpresa ? ('Esses são os produtos de ' + nomeEmpresa + '. ') : '') + 'Fala o nome do que você quer, ou "ver tudo" pra ouvir a lista.');
+    _aguardandoEscolhaPedidoOuCardapio = true;
+    falarVozVitrine((nomeEmpresa ? ('Você está no cardápio de ' + nomeEmpresa + '. ') : '') + 'Quer fazer um pedido, ou só ouvir o cardápio?');
   } else {
     falarVozVitrine('Modo voz ativado. Pode falar o que você procura, ou dizer "meu carrinho" pra ouvir o que já tem.');
   }
@@ -2902,6 +2904,18 @@ function _criarReconhecimentoVitrine(SpeechRecognitionApi){
         falarVozVitrine('Modo voz ativado.');
       } else {
         falarVozVitrine('Fala "ativar" pra começar.');
+      }
+      return;
+    }
+
+    if(_aguardandoEscolhaPedidoOuCardapio){
+      const textoNorm = normalizarTextoV(transcricao);
+      _aguardandoEscolhaPedidoOuCardapio = false;
+      if(textoNorm.includes('cardapio') || textoNorm.includes('cardápio') || textoNorm.includes('ouvir') || textoNorm.includes('ver tudo')){
+        renderProdutos();
+        falarVozVitrine(lerResultadosBuscaVitrine());
+      } else {
+        falarVozVitrine('Fala o nome do que você quer, ou "ver tudo" pra ouvir a lista.');
       }
       return;
     }
