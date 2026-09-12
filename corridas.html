@@ -51,8 +51,24 @@
 <body>
 
 <div class="corridas-header">
-  <h1>🛵 GuiaCorridas</h1>
-  <p>Suas corridas de entrega, tudo num só lugar</p>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h1>🛵 GuiaCorridas</h1>
+      <p>Suas corridas de entrega, tudo num só lugar</p>
+    </div>
+    <button type="button" id="btn-modo-voz-corridas" onclick="toggleModoVozCorridas()" title="Comando de voz (útil em cima da moto/carro)" style="background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.3rem; cursor:pointer; flex-shrink:0;">🎙️</button>
+  </div>
+</div>
+
+<div id="painel-voz-corridas" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div id="voz-corridas-indicador" style="width:14px;height:14px;border-radius:50%;background:#22c55e;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-corridas-status" style="color:white;font-weight:700;font-size:0.85rem;">Modo voz — fala "aceito", "recuso" ou "entreguei"</div>
+      <div id="voz-corridas-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="toggleModoVozCorridas()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
 </div>
 
 <div id="aviso-sem-acesso" class="aviso-sem-acesso" style="display:none;">
@@ -188,7 +204,7 @@ function cardCorrida(c){
   } else if(c.status === 'aceita'){
     botoes = `
       <div class="card-corrida-acoes">
-        <button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>
+        <button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>
       </div>`;
   }
 
@@ -242,6 +258,123 @@ async function responderCorrida(corridaId, palavra){
   await supabaseClientCorridas.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', corrida.conversa_id);
 
   setTimeout(carregarCorridas, 800);
+}
+
+async function confirmarEntregaComCodigo(corridaId){
+  const codigo = prompt('Digite o código de confirmação que a pessoa te passou:');
+  if(!codigo || !codigo.trim()) return;
+  await responderCorrida(corridaId, codigo.trim());
+}
+
+// ---------- MODO VOZ (aceitar/recusar de mãos livres, útil em cima da moto/carro) ----------
+
+let _vozCorridasAtiva = false;
+let _vozCorridasReconhecimento = null;
+let _vozCorridasVigia = null;
+let _vozCorridasUltimoSinal = 0;
+const _vozCorridasSynth = window.speechSynthesis;
+
+function toggleModoVozCorridas(){
+  if(_vozCorridasAtiva) pararModoVozCorridas();
+  else iniciarModoVozCorridas();
+}
+
+function iniciarModoVozCorridas(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozCorridasAtiva = true;
+  document.getElementById('btn-modo-voz-corridas').style.background = '#a4402f';
+  document.getElementById('painel-voz-corridas').style.display = 'block';
+
+  _criarReconhecimentoCorridas(Api);
+  clearInterval(_vozCorridasVigia);
+  _vozCorridasVigia = setInterval(() => {
+    if(!_vozCorridasAtiva){ clearInterval(_vozCorridasVigia); return; }
+    if(Date.now() - _vozCorridasUltimoSinal > 8000){
+      try{ _vozCorridasReconhecimento.onend = null; _vozCorridasReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoCorridas(Api);
+    }
+  }, 4000);
+
+  falarVozCorridas('Modo voz ativado. Fala "aceito" ou "recuso" quando chegar uma corrida.');
+}
+
+function _criarReconhecimentoCorridas(Api){
+  _vozCorridasReconhecimento = new Api();
+  _vozCorridasReconhecimento.lang = 'pt-BR';
+  _vozCorridasReconhecimento.continuous = true;
+  _vozCorridasReconhecimento.interimResults = false;
+
+  _vozCorridasReconhecimento.onstart = () => { _vozCorridasUltimoSinal = Date.now(); };
+
+  _vozCorridasReconhecimento.onresult = (event) => {
+    _vozCorridasUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
+    document.getElementById('voz-corridas-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozCorridas(texto);
+  };
+
+  _vozCorridasReconhecimento.onend = () => {
+    _vozCorridasUltimoSinal = Date.now();
+    if(_vozCorridasAtiva){ try{ _vozCorridasReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozCorridasReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozCorridas('Preciso de permissão pro microfone.');
+      pararModoVozCorridas();
+      return;
+    }
+    _vozCorridasUltimoSinal = Date.now();
+    if(_vozCorridasAtiva){ setTimeout(() => { try{ _vozCorridasReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozCorridasReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozCorridas(){
+  _vozCorridasAtiva = false;
+  clearInterval(_vozCorridasVigia);
+  if(_vozCorridasReconhecimento){
+    _vozCorridasReconhecimento.onresult = null;
+    _vozCorridasReconhecimento.onend = null;
+    _vozCorridasReconhecimento.onerror = null;
+    try{ _vozCorridasReconhecimento.abort(); } catch(e){}
+    _vozCorridasReconhecimento = null;
+  }
+  _vozCorridasSynth.cancel();
+  document.getElementById('btn-modo-voz-corridas').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-voz-corridas').style.display = 'none';
+}
+
+function falarVozCorridas(texto){
+  document.getElementById('voz-corridas-status').textContent = texto;
+  if(!('speechSynthesis' in window)) return;
+  _vozCorridasSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  _vozCorridasSynth.speak(fala);
+}
+
+function processarComandoVozCorridas(texto){
+  const pendente = todasCorridas.find(c => c.status === 'pendente');
+
+  if(texto.includes('aceito') || texto.includes('aceitar') || texto.includes('topo') || texto.includes('bora')){
+    if(!pendente){ falarVozCorridas('Nenhuma corrida esperando resposta agora.'); return; }
+    falarVozCorridas('Aceitando a corrida de ' + (pendente.empresaNome || 'entrega') + '.');
+    responderCorrida(pendente.id, 'aceito');
+    return;
+  }
+
+  if(texto.includes('recuso') || texto.includes('recusar') || texto.includes('nao posso') || texto.includes('não posso')){
+    if(!pendente){ falarVozCorridas('Nenhuma corrida esperando resposta agora.'); return; }
+    falarVozCorridas('Recusando a corrida de ' + (pendente.empresaNome || 'entrega') + '.');
+    responderCorrida(pendente.id, 'recuso');
+    return;
+  }
+
+  falarVozCorridas('Não entendi. Fala "aceito" ou "recuso".');
 }
 
 initCorridas();
