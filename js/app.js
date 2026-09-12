@@ -5175,7 +5175,7 @@ async function processarComandoVozIndex(transcricao){
     if(!q) return 'nada';
     const palavrasContato = ['empresa','contato','profissional','dentista','medico','medica','barbeiro','manicure','eletricista','advogado','mecanico','oficina','padaria','farmacia','igreja','escola'];
     if(palavrasContato.some(w => q.includes(w))) return 'contato';
-    if(q.includes('comprar') || q.includes('lanche') || q.includes('cardapio') || q.includes('cardápio') || q.includes('menu') || q.includes('vitrine') || q.includes('produto')) return 'produto';
+    if(q.includes('comprar') || q.includes('cardapio') || q.includes('cardápio') || q.includes('menu') || q.includes('vitrine') || q.includes('produto')) return 'produto';
     const nContato = (entries || []).filter(e => e.status_pagamento === 'ativo' && (
       normalizarTexto(e.name).includes(q) || normalizarTexto(e.cat).includes(q) ||
       normalizarTexto(e.cidade).includes(q) || normalizarTexto(e.bairro).includes(q)
