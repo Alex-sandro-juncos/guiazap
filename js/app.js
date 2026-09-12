@@ -5132,11 +5132,11 @@ async function processarComandoVozIndex(transcricao){
 
   // "manicure da maria", "lanche do alex", "empresa y"
   let nomeAlvo = '';
-  const matchDe = textoNormalizado.match(/\b(?:do|da|de|no|na)\s+([a-z0-9][a-z0-9\s]{1,40})$/);
+  const matchDe = textoNormalizado.match(/\b(?:do|da|de|dos|das|no|na|nos|nas)\s+([a-z0-9][a-z0-9\s]{1,40})$/);
   if(matchDe) nomeAlvo = matchDe[1].trim();
 
   const textoSemAlvo = nomeAlvo
-    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|no|na)\\s+' + nomeAlvo.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '$'), '').trim()
+    ? textoNormalizado.replace(new RegExp('\\b(?:do|da|de|dos|das|no|na|nos|nas)\\s+' + nomeAlvo.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '$'), '').trim()
     : textoNormalizado;
 
   const palavrasPedido = textoSemAlvo.split(/\s+/).map(w => w.replace(/[^\wáéíóúâêôãõç]/gi,'')).filter(w => w.length > 1 && !STOP_VOZ_INDEX.includes(w));
