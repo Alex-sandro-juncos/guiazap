@@ -71,12 +71,13 @@ exports.handler = async function (event) {
     const listaProdutos = (produtosVisiveis || []).map(p => `- id:${p.id} | ${p.nome} | marca:${p.marca || '-'} | R$${p.preco || '?'} | ${p.temOpcoes ? 'TEM variação/adicional' : 'sem opções'}`).join('\n');
     const resumoCarrinho = (carrinhoAtual || []).length === 0
       ? 'vazio'
-      : carrinhoAtual.map(i => `${i.quantidade}x ${i.nome} (R$${i.precoUnitario})`).join(', ');
+      : carrinhoAtual.map(i => `${i.quantidade}x ${i.nome} (R$${i.precoUnitario}, empresa: ${i.empresaNome || '-'})`).join(', ');
+    const empresasNoCarrinho = [...new Set((carrinhoAtual || []).map(i => i.empresaNome).filter(Boolean))];
 
     const promptSistema = `Você interpreta comandos de VOZ de um cliente comprando numa loja online (GuiaZap Vitrine), no modo "mãos livres". Responda APENAS com um JSON válido, sem texto antes/depois, sem markdown, no formato:
 {
   "voice_response": "resposta curta e natural, em português, pra ser lida em voz alta",
-  "action": "BUSCAR" | "ADICIONAR_CARRINHO" | "VER_CARRINHO" | "REMOVER_ITEM" | "FINALIZAR_PEDIDO" | "NENHUMA",
+  "action": "BUSCAR" | "ADICIONAR_CARRINHO" | "VER_CARRINHO" | "REMOVER_ITEM" | "REMOVER_EMPRESA_CARRINHO" | "ESVAZIAR_CARRINHO" | "FINALIZAR_PEDIDO" | "NENHUMA",
   "params": { ... }
 }
 
@@ -84,15 +85,18 @@ Regras:
 - BUSCAR: params = { "termo": "o que buscar" }
 - ADICIONAR_CARRINHO: params = { "produto_id": "id do produto da lista abaixo que mais combina com o pedido", "quantidade": numero }. Se o produto tiver "TEM variação/adicional", NÃO adicione direto — responda pedindo pra especificar, e action = "NENHUMA".
 - VER_CARRINHO: só lê o carrinho, sem params.
-- REMOVER_ITEM: params = { "nome_aproximado": "nome do item a remover" }
+- REMOVER_ITEM: quando quiser remover um produto específico (não uma empresa inteira). params = { "nome_aproximado": "nome do item a remover" }
+- REMOVER_EMPRESA_CARRINHO: quando quiser descartar/excluir/tirar os itens de UMA empresa específica do carrinho (ex: "exclui o pedido da tal empresa", "tira os itens de X", "não quero mais o de Y"). params = { "empresaNome": "nome da empresa, EXATAMENTE como aparece na lista de empresas no carrinho abaixo" }. Preste atenção a erros de transcrição de voz em nomes de empresa (ex: "Bocosal"/"Macosal"/"Bocozão" provavelmente é "Bocosão") e escolha a empresa mais parecida da lista.
+- ESVAZIAR_CARRINHO: quando quiser descartar TUDO do carrinho, sem especificar uma empresa (ex: "descarta tudo", "esvazia o carrinho", "cancela o pedido inteiro").
 - FINALIZAR_PEDIDO: só quando o cliente claramente disser que quer finalizar/fechar o pedido.
 - Se não entender ou for só conversa, action = "NENHUMA" e responda naturalmente.
-- Nunca invente produto_id que não esteja na lista.
+- Nunca invente produto_id que não esteja na lista, nem empresaNome que não esteja na lista de empresas no carrinho.
 
 Produtos visíveis agora na tela:
 ${listaProdutos || '(nenhum produto na tela no momento)'}
 
-Carrinho atual: ${resumoCarrinho}`;
+Carrinho atual: ${resumoCarrinho}
+Empresas no carrinho: ${empresasNoCarrinho.join(', ') || '(nenhuma)'}`;
 
     const ia = await chamarIABarata(promptSistema, texto, 500);
     const resultado = ia.ok

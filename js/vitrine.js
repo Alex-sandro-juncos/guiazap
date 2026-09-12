@@ -3771,7 +3771,7 @@ async function _processarComandoVozVitrineInterno(transcricao){
       id: p.id, nome: p.nome, marca: p.marca, preco: p.preco,
       temOpcoes: (p.variacoes && p.variacoes.length > 0) || (p.adicionais && p.adicionais.length > 0)
     }));
-    const carrinhoResumo = carrinhoV.map(i => ({ nome: i.nome, quantidade: i.quantidade, precoUnitario: i.preco }));
+    const carrinhoResumo = carrinhoV.map(i => ({ nome: i.nome, quantidade: i.quantidade, precoUnitario: i.preco, empresaNome: i.empresaNome }));
 
     const resp = await fetch('/.netlify/functions/interpretar-comando-voz-vitrine', {
       method: 'POST',
@@ -3842,6 +3842,17 @@ function executarAcaoVozVitrine(resultado){
   } else if(action === 'REMOVER_ITEM' && params && params.nome_aproximado){
     const alvo = carrinhoV.find(i => normalizarTextoV(i.nome).includes(normalizarTextoV(params.nome_aproximado)));
     if(alvo) removerDoCarrinho(alvo.chaveItem);
+  } else if(action === 'REMOVER_EMPRESA_CARRINHO' && params && params.empresaNome){
+    const antesLen = carrinhoV.length;
+    carrinhoV = carrinhoV.filter(i => normalizarTextoV(i.empresaNome) !== normalizarTextoV(params.empresaNome));
+    if(carrinhoV.length !== antesLen){
+      salvarCarrinhoV();
+      renderProdutos();
+    }
+  } else if(action === 'ESVAZIAR_CARRINHO'){
+    carrinhoV = [];
+    salvarCarrinhoV();
+    renderProdutos();
   } else if(action === 'FINALIZAR_PEDIDO'){
     falarVozVitrine(voice_response || 'Ok, vamos finalizar.');
     setTimeout(dispararFinalizarPorVoz, 1800);
