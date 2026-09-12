@@ -456,7 +456,37 @@ if(vindoParaInstalarAppCorridas){
 }
 
 async function instalarAppCorridas(){
+  // Prioridade 1: baixar o .apk direto, se já existir — funciona em
+  // qualquer lugar, inclusive dentro de outro app instalado (GuiaZap ou
+  // GuiaPapo), porque é só um download de arquivo, sem depender do
+  // navegador oferecer instalação
+  try{
+    const respApk = await fetch('GuiaCorridas.apk', { method: 'GET', cache: 'no-store' });
+    if(respApk.ok){
+      const link = document.createElement('a');
+      link.href = 'GuiaCorridas.apk';
+      link.download = 'GuiaCorridas.apk';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+  } catch(e){ /* segue pro método de instalação PWA abaixo */ }
+
   if(!promptInstalacaoCorridas){
+    const rodandoDentroDeAppInstalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if(rodandoDentroDeAppInstalado){
+      const link = 'https://guiazap.shop/corridas.html';
+      try{
+        await navigator.clipboard.writeText(link);
+        alert('📲 Você está dentro de um app instalado, então não dá pra instalar outro app por aqui.\n\nCopiei o link do GuiaCorridas — cola no navegador normal (Chrome), abre por lá, e instala usando o menu do navegador.');
+      } catch(e){
+        prompt('Você está dentro de um app instalado — copie esse link, cola no Chrome normal, e instala por lá:', link);
+      }
+      return;
+    }
+
     const ehCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const dica = ehCelular
       ? 'Toque no menu do navegador (⋮ ou o ícone de compartilhar) e procure "Adicionar à tela inicial" ou "Instalar app".'
