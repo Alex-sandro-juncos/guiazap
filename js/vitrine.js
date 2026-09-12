@@ -3410,6 +3410,40 @@ async function _processarComandoVozVitrineInterno(transcricao){
     lerCarrinhoEmVozAlta();
     return;
   }
+
+  // Descartar tudo do carrinho, ou só os itens de uma empresa específica —
+  // útil quando o carrinho tem produto de mais de uma empresa e a pessoa
+  // quer manter só uma delas antes de finalizar.
+  const _matchDescartarEmpresa = textoNormalizado.match(/(?:descartar|excluir|remover|tirar)\s+(?:o\s+)?(?:pedido\s+)?(?:da|do|de)\s+(.+)/);
+  if(_matchDescartarEmpresa){
+    const nomeAlvo = normalizarTextoV(_matchDescartarEmpresa[1].replace(/\bcarrinho\b/g, '').trim());
+    const empresasNoCarrinho = [...new Set(carrinhoV.map(i => i.empresaNome))];
+    const empresaEncontrada = empresasNoCarrinho.find(nome => normalizarTextoV(nome).includes(nomeAlvo) || nomeAlvo.includes(normalizarTextoV(nome)));
+
+    if(!empresaEncontrada){
+      falarVozVitrine('Não achei "' + _matchDescartarEmpresa[1].trim() + '" no seu carrinho. As empresas que estão lá são: ' + (empresasNoCarrinho.join(', ') || 'nenhuma') + '.');
+      return;
+    }
+
+    carrinhoV = carrinhoV.filter(i => i.empresaNome !== empresaEncontrada);
+    salvarCarrinhoV();
+    renderProdutos();
+    falarVozVitrine('Removi os itens de ' + empresaEncontrada + ' do carrinho. ' + (carrinhoV.length > 0 ? 'Ainda tem itens de outra empresa lá.' : 'Seu carrinho ficou vazio.'));
+    return;
+  }
+
+  if(textoNormalizado.includes('esvaziar carrinho') || textoNormalizado.includes('limpar carrinho') || textoNormalizado.includes('descartar tudo') || textoNormalizado.includes('descartar o pedido') || textoNormalizado.includes('descartar pedido') || textoNormalizado === 'descartar'){
+    if(carrinhoV.length === 0){
+      falarVozVitrine('Seu carrinho já está vazio.');
+      return;
+    }
+    carrinhoV = [];
+    salvarCarrinhoV();
+    renderProdutos();
+    falarVozVitrine('Prontinho, carrinho esvaziado.');
+    return;
+  }
+
   if(textoNormalizado.includes('configurar pin') || textoNormalizado.includes('criar pin') || textoNormalizado.includes('cadastrar pin')){
     configurarPinVozPorVoz();
     return;
