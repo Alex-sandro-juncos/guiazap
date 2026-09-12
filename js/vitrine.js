@@ -2852,7 +2852,11 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
   document.getElementById('btn-modo-voz-vitrine').setAttribute('aria-label', 'Desativar modo voz');
   document.getElementById('painel-modo-voz-vitrine').style.display = 'block';
   const vindoDireto = typeof consumirRetomarModoVozDireto === 'function' && consumirRetomarModoVozDireto();
-  _aguardandoAtivacaoVitrine = !!retomandoAutomaticamente && !vindoDireto;
+  // A Vitrine só é aberta por voz vindo de um comando explícito (nunca é
+  // a primeira tela que alguém abre do zero) — então não precisa da
+  // pausa de segurança "fala ativar pra começar". Essa pausa continua
+  // existindo só na Index, que pode ser a primeira tela carregada.
+  _aguardandoAtivacaoVitrine = false;
   _vozVitrineTentativasReconexao = 0;
 
   _criarReconhecimentoVitrine(SpeechRecognitionApi);
@@ -2861,10 +2865,10 @@ function iniciarModoVozVitrine(retomandoAutomaticamente){
 
   if(_aguardandoAtivacaoVitrine){
     falarVozVitrine('Modo voz em espera. Fala "ativar" pra começar.');
-  } else if(vindoDireto && empresaFiltroId){
-    // Veio direto de um comando de voz que já tinha decidido "quero
-    // comprar" — pergunta se quer fazer pedido de verdade ou só ouvir o
-    // cardápio, em vez de já presumir que quer comprar algo específico
+  } else if(empresaFiltroId){
+    // Chegou numa empresa específica (veio de um comando de voz que já
+    // tinha decidido "quero comprar") — pergunta se quer fazer pedido de
+    // verdade ou só ouvir o cardápio, em vez de já presumir
     const empresaAchada = (produtos || []).find(p => p.profissionais && p.profissionais.id === empresaFiltroId);
     const nomeEmpresa = empresaAchada ? empresaAchada.profissionais.name : '';
     _aguardandoEscolhaPedidoOuCardapio = true;
