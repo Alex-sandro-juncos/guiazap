@@ -14,6 +14,46 @@
 // evita disparar sem querer no meio de outra frase). As demais frases
 // bastam estar contidas em qualquer parte do que foi falado.
 
+// ---------- IA GENÉRICA DE INTERPRETAÇÃO DE COMANDO DE VOZ ----------
+// Função compartilhada por qualquer página com modo voz — chama a function
+// genérica no backend (interpretar-comando-voz-generico.js), passando quais
+// ações fazem sentido NAQUELA tela e os dados de contexto relevantes.
+// Devolve o resultado (action/params/voice_response) ou null se der erro
+// (nesse caso, quem chamou deve cair no "não entendi" de sempre).
+
+async function _pegarSessionTokenGenerico(){
+  const candidatos = ['supabaseClientChat', 'supabaseClientV', 'supabaseClient', 'supabaseClientFrete', 'supabaseClientCorridas', 'supabaseClientAgenda'];
+  for(const nome of candidatos){
+    if(typeof window[nome] !== 'undefined' && window[nome] && window[nome].auth){
+      try{
+        const { data: { session } } = await window[nome].auth.getSession();
+        if(session && session.access_token) return session.access_token;
+      } catch(e){}
+    }
+  }
+  return null;
+}
+
+async function chamarIAGenericaVoz(texto, contexto, acoesDisponiveis, dadosContexto){
+  try{
+    const token = await _pegarSessionTokenGenerico();
+    if(!token) return null;
+
+    const resp = await fetch('/.netlify/functions/interpretar-comando-voz-generico', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ texto, contexto, acoesDisponiveis, dadosContexto })
+    });
+    if(!resp.ok) return null;
+    const resultado = await resp.json();
+    if(resultado.action === 'NENHUMA' && !resultado.voice_response) return null;
+    return resultado;
+  } catch(e){
+    console.error('erro ao chamar IA genérica de voz', e);
+    return null;
+  }
+}
+
 const _DESTINOS_NAVEGACAO_VOZ = [
   {
     arquivo: 'index.html',

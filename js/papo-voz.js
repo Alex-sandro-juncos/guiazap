@@ -805,6 +805,41 @@ async function processarComandoVozPapo(transcricao){
     }
   }
 
+  // Última rede de segurança: tenta a IA genérica antes de desistir de vez —
+  // cobre frases soltas que nenhum padrão fixo previu (ex: variações de
+  // "abre a conversa com fulano", "manda mensagem pra sicrano").
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const listaConversasContexto = (typeof conversasCarregadasCache !== 'undefined' ? conversasCarregadasCache : [])
+      .slice(0, 30).map(c => ({ id: c.id, nome: c.nomeExibido }));
+
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'papo', [
+      { nome: 'ABRIR_CONVERSA', descricao: 'abrir uma conversa existente pelo nome da pessoa/empresa', params: '{ "id": "id da conversa da lista" }' },
+      { nome: 'MEU_CODIGO', descricao: 'ouvir/repetir o próprio código GuiaZap', params: '{}' },
+      { nome: 'ADICIONAR_CONTATO', descricao: 'adicionar um novo contato usando um código GuiaZap', params: '{}' }
+    ], { conversas: listaConversasContexto });
+
+    if(resultadoIA){
+      if(resultadoIA.action === 'ABRIR_CONVERSA' && resultadoIA.params && resultadoIA.params.id && typeof abrirConversa === 'function'){
+        await abrirConversa(resultadoIA.params.id);
+        _estadoVozPapo.etapa = 'conversa';
+        falarVozPapo(resultadoIA.voice_response || 'Abrindo a conversa.');
+        return;
+      }
+      if(resultadoIA.action === 'MEU_CODIGO' && typeof copiarMeuCodigoPapo === 'function'){
+        falarVozPapo('Seu código é ' + (meuCodigoPapoAtual || 'ainda não gerado') + '.');
+        return;
+      }
+      if(resultadoIA.action === 'ADICIONAR_CONTATO' && typeof adicionarContatoPorCodigo === 'function'){
+        falarVozPapo(resultadoIA.voice_response || 'Vamos adicionar um contato — digite o código na tela, essa parte ainda precisa de toque.');
+        return;
+      }
+      if(resultadoIA.voice_response){
+        falarVozPapo(resultadoIA.voice_response);
+        return;
+      }
+    }
+  }
+
   falarVozPapo('Não achei esse comando. Diga listar, o nome da pessoa, falar, ouvir, ligar ou voltar.');
 }
 
