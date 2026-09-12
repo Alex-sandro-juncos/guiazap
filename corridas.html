@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuiaCorridas — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="corridas-manifest.json">
+<meta name="theme-color" content="#1c1c1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GuiaCorridas">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  body { background: #f0f2f5; padding-bottom: 30px; }
+  .corridas-header { background: #1c1c1c; padding: 16px 16px 14px; color: white; }
+  .corridas-header h1 { font-size: 1.4rem; font-weight: 800; }
+  .corridas-header p { font-size: 0.8rem; opacity: 0.85; margin-top: 2px; }
+  .corridas-abas { display: flex; gap: 6px; padding: 12px 12px 0; max-width: 560px; margin: 0 auto; }
+  .corridas-aba-btn {
+    flex: 1; padding: 10px 6px; border-radius: 10px; border: none; background: white;
+    font-weight: 700; font-size: 0.8rem; color: #666; cursor: pointer; position: relative;
+  }
+  .corridas-aba-btn.ativa { background: #1c1c1c; color: white; }
+  .corridas-badge { position: absolute; top: -6px; right: -4px; background: #e05d5d; color: white; border-radius: 50%; min-width: 18px; height: 18px; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+  .corridas-lista { max-width: 560px; margin: 14px auto 0; padding: 0 12px; }
+  .card-corrida {
+    background: white; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .card-corrida .empresa-nome { font-weight: 800; font-size: 0.95rem; color: #1c1c1c; }
+  .card-corrida .linha { font-size: 0.85rem; color: #444; margin-top: 6px; display: flex; gap: 6px; align-items: flex-start; }
+  .card-corrida .linha b { color: #1c1c1c; }
+  .card-corrida .status-tag { display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 3px 9px; border-radius: 50px; margin-top: 8px; }
+  .status-pendente { background: #fff3cd; color: #7c4a03; }
+  .status-aceita { background: #d4edda; color: #155724; }
+  .status-recusada { background: #f8d7da; color: #721c24; }
+  .status-finalizada { background: #e2e3e5; color: #383d41; }
+  .card-corrida-acoes { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-corrida { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+  .btn-corrida.aceitar { background: var(--verde-whats); color: white; }
+  .btn-corrida.recusar { background: white; border: 1.5px solid #a4402f; color: #a4402f; }
+  .btn-corrida.entregue { background: #1c1c1c; color: white; }
+  .vazio-corridas { text-align: center; padding: 50px 20px; color: #999; }
+  .vazio-corridas .icone { font-size: 3rem; margin-bottom: 12px; opacity: 0.6; }
+  .aviso-sem-acesso { max-width: 480px; margin: 60px auto; padding: 0 20px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="corridas-header">
+  <h1>🛵 GuiaCorridas</h1>
+  <p>Suas corridas de entrega, tudo num só lugar</p>
+</div>
+
+<div id="aviso-sem-acesso" class="aviso-sem-acesso" style="display:none;">
+  <p style="margin-bottom:14px;">Essa área é só para quem tem o Pacote Corridas e Fretes, ou foi cadastrado como motoboy por alguma empresa.</p>
+  <a href="pacotes.html" class="btn-baixar-app" style="display:inline-block;">Conhecer o Pacote Corridas e Fretes</a>
+</div>
+
+<div id="aviso-login" style="display:none; text-align:center; padding:40px 20px;">
+  <p style="margin-bottom:14px;">Você precisa estar logado pra ver suas corridas.</p>
+  <a href="index.html" class="btn-baixar-app">Fazer login</a>
+</div>
+
+<div id="corridas-conteudo" style="display:none;">
+  <div class="corridas-abas">
+    <button type="button" class="corridas-aba-btn ativa" id="aba-pendentes" onclick="trocarAbaCorridas('pendentes')">
+      Pendentes<span class="corridas-badge" id="badge-pendentes" style="display:none;">0</span>
+    </button>
+    <button type="button" class="corridas-aba-btn" id="aba-andamento" onclick="trocarAbaCorridas('andamento')">Em andamento</button>
+    <button type="button" class="corridas-aba-btn" id="aba-historico" onclick="trocarAbaCorridas('historico')">Histórico</button>
+  </div>
+  <div class="corridas-lista" id="corridas-lista">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientCorridas = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUserCorridas = null;
+let meusMotoboyIds = [];
+let todasCorridas = [];
+let abaCorridasAtual = 'pendentes';
+
+function escapeHtmlCorridas(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function initCorridas(){
+  const { data: { session } } = await supabaseClientCorridas.auth.getSession();
+  if(!session){
+    document.getElementById('aviso-login').style.display = 'block';
+    return;
+  }
+  currentUserCorridas = session.user;
+
+  const { data: motoboys } = await supabaseClientCorridas.from('motoboys').select('id').eq('user_id', currentUserCorridas.id);
+  meusMotoboyIds = (motoboys || []).map(m => m.id);
+
+  const { data: cadastroEntregador } = await supabaseClientCorridas.from('profissionais').select('id').eq('user_id', currentUserCorridas.id).eq('plano', 'entregador').eq('status_pagamento', 'ativo').limit(1);
+
+  if(meusMotoboyIds.length === 0 && (!cadastroEntregador || cadastroEntregador.length === 0)){
+    document.getElementById('aviso-sem-acesso').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('corridas-conteudo').style.display = 'block';
+
+  if(meusMotoboyIds.length > 0){
+    carregarCorridas();
+    ligarRealtimeCorridas();
+    setInterval(carregarCorridas, 30000);
+  } else {
+    document.getElementById('corridas-lista').innerHTML = '<div class="vazio-corridas"><div class="icone">🛵</div>Você ainda não foi cadastrado como motoboy de nenhuma empresa. Peça pra empresa te adicionar em "Gerenciar motoboys", usando seu código GuiaZap.</div>';
+  }
+}
+
+function ligarRealtimeCorridas(){
+  supabaseClientCorridas
+    .channel('corridas-motoboy-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'corridas_motoboy' }, () => {
+      carregarCorridas();
+    })
+    .subscribe();
+}
+
+async function carregarCorridas(){
+  if(meusMotoboyIds.length === 0) return;
+
+  const { data: corridas, error } = await supabaseClientCorridas
+    .from('corridas_motoboy')
+    .select('id, pedido_id, motoboy_id, status, created_at, conversa_id')
+    .in('motoboy_id', meusMotoboyIds)
+    .order('created_at', { ascending: false });
+
+  if(error){ console.error(error); return; }
+  if(!corridas || corridas.length === 0){ todasCorridas = []; renderizarCorridas(); return; }
+
+  const idsPedidos = [...new Set(corridas.map(c => c.pedido_id).filter(Boolean))];
+  let pedidosPorId = {};
+  if(idsPedidos.length > 0){
+    const { data: pedidos } = await supabaseClientCorridas.from('pedidos').select('id, profissional_id, endereco_entrega, total, taxa_entrega, codigo_confirmacao').in('id', idsPedidos);
+    (pedidos || []).forEach(p => { pedidosPorId[p.id] = p; });
+  }
+
+  const idsEmpresas = [...new Set(Object.values(pedidosPorId).map(p => p.profissional_id).filter(Boolean))];
+  let empresasPorId = {};
+  if(idsEmpresas.length > 0){
+    const { data: empresas } = await supabaseClientCorridas.from('profissionais').select('id, name').in('id', idsEmpresas);
+    (empresas || []).forEach(e => { empresasPorId[e.id] = e; });
+  }
+
+  todasCorridas = corridas.map(c => {
+    const pedido = pedidosPorId[c.pedido_id];
+    const empresa = pedido ? empresasPorId[pedido.profissional_id] : null;
+    return { ...c, pedido, empresaNome: empresa ? empresa.name : 'Empresa' };
+  });
+
+  renderizarCorridas();
+}
+
+function trocarAbaCorridas(aba){
+  abaCorridasAtual = aba;
+  ['pendentes', 'andamento', 'historico'].forEach(a => {
+    document.getElementById('aba-' + a).classList.toggle('ativa', a === aba);
+  });
+  renderizarCorridas();
+}
+
+const NOMES_STATUS = { pendente: 'Esperando resposta', aceita: 'Aceita — a caminho', recusada: 'Recusada', finalizada: 'Entregue' };
+
+function cardCorrida(c){
+  const pedido = c.pedido;
+  const valor = pedido ? Number(pedido.total || 0).toFixed(2).replace('.', ',') : '—';
+  const taxa = pedido ? Number(pedido.taxa_entrega || 0).toFixed(2).replace('.', ',') : '—';
+
+  let botoes = '';
+  if(c.status === 'pendente'){
+    botoes = `
+      <div class="card-corrida-acoes">
+        <button type="button" class="btn-corrida aceitar" onclick="responderCorrida('${c.id}', 'aceito')">✅ Aceitar</button>
+        <button type="button" class="btn-corrida recusar" onclick="responderCorrida('${c.id}', 'recuso')">✕ Recusar</button>
+      </div>`;
+  } else if(c.status === 'aceita'){
+    botoes = `
+      <div class="card-corrida-acoes">
+        <button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>
+      </div>`;
+  }
+
+  return `
+    <div class="card-corrida">
+      <div class="empresa-nome">${escapeHtmlCorridas(c.empresaNome)}</div>
+      ${pedido && pedido.endereco_entrega ? `<div class="linha">📍 <span>${escapeHtmlCorridas(pedido.endereco_entrega)}</span></div>` : ''}
+      <div class="linha">💰 <b>R$ ${valor}</b> total (frete: R$ ${taxa})</div>
+      ${pedido && pedido.codigo_confirmacao ? `<div class="linha">🔑 Código: <b>${escapeHtmlCorridas(pedido.codigo_confirmacao)}</b></div>` : ''}
+      <span class="status-tag status-${c.status}">${NOMES_STATUS[c.status] || c.status}</span>
+      ${botoes}
+    </div>
+  `;
+}
+
+function renderizarCorridas(){
+  const lista = document.getElementById('corridas-lista');
+
+  const pendentes = todasCorridas.filter(c => c.status === 'pendente');
+  const andamento = todasCorridas.filter(c => c.status === 'aceita');
+  const historico = todasCorridas.filter(c => c.status === 'recusada' || c.status === 'finalizada');
+
+  const badge = document.getElementById('badge-pendentes');
+  if(pendentes.length > 0){ badge.textContent = pendentes.length; badge.style.display = 'flex'; }
+  else badge.style.display = 'none';
+
+  const grupoAtual = abaCorridasAtual === 'pendentes' ? pendentes : abaCorridasAtual === 'andamento' ? andamento : historico;
+
+  if(grupoAtual.length === 0){
+    const mensagens = { pendentes: 'Nenhuma corrida esperando resposta agora.', andamento: 'Nenhuma corrida em andamento.', historico: 'Nenhuma corrida no histórico ainda.' };
+    lista.innerHTML = `<div class="vazio-corridas"><div class="icone">🛵</div>${mensagens[abaCorridasAtual]}</div>`;
+    return;
+  }
+
+  lista.innerHTML = grupoAtual.map(cardCorrida).join('');
+}
+
+async function responderCorrida(corridaId, palavra){
+  const corrida = todasCorridas.find(c => c.id === corridaId);
+  if(!corrida || !corrida.conversa_id) return;
+
+  const { error } = await supabaseClientCorridas.from('mensagens_chat').insert({
+    conversa_id: corrida.conversa_id,
+    remetente_user_id: currentUserCorridas.id,
+    tipo: 'texto',
+    texto: palavra,
+    lida: false
+  });
+  if(error){ console.error(error); alert('Erro ao responder. Tenta de novo.'); return; }
+
+  await supabaseClientCorridas.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', corrida.conversa_id);
+
+  setTimeout(carregarCorridas, 800);
+}
+
+initCorridas();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
+  });
+}
+</script>
+<script src="js/modo-escuro.js"></script>
+<script src="js/debug-console.js"></script>
+</body>
+</html>
