@@ -429,11 +429,17 @@ if('serviceWorker' in navigator){
 // ---------- INSTALAÇÃO DO APP (PWA) ----------
 
 let promptInstalacaoCorridas = null;
+let vindoParaInstalarAppCorridas = new URLSearchParams(window.location.search).get('instalarApp') === '1';
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   promptInstalacaoCorridas = event;
   document.getElementById('btn-instalar-corridas').style.display = 'flex';
+
+  if(vindoParaInstalarAppCorridas){
+    vindoParaInstalarAppCorridas = false;
+    instalarAppCorridas();
+  }
 });
 
 async function instalarAppCorridas(){
