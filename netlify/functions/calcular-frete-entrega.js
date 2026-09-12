@@ -163,7 +163,7 @@ exports.handler = async function (event) {
     // dados da entrega. Em seguida, chama a function do banco que decide
     // o próximo passo: perguntar qual motoboy, ou já ir pro pagamento.
     const textoLocalEntrega = localEntrega === 'porta' ? '🏠 Entrega na porta (+R$5,00 já incluso)' : '🚪 Entrega no portão';
-    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n${textoLocalEntrega}\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}`);
+    await responderNoChat(`📍 Endereço confirmado: ${endereco}\n📏 Distância: ${distanciaKm.toFixed(1)} km\n${textoLocalEntrega}\n\n🛒 Produtos: R$ ${subtotal.toFixed(2).replace('.', ',')}\n🛵 Frete: R$ ${valorFrete.toFixed(2).replace('.', ',')}\n💰 Total: R$ ${total.toFixed(2).replace('.', ',')}`);
 
     await fetch(`${SUPABASE_URL}/rest/v1/atendimento_estado?conversa_id=eq.${conversaId}`, {
       method: 'PATCH',
@@ -173,11 +173,16 @@ exports.handler = async function (event) {
       })
     });
 
-    await fetch(`${SUPABASE_URL}/rest/v1/rpc/guiazap_pos_calculo_frete`, {
+    const respPosCalculo = await fetch(`${SUPABASE_URL}/rest/v1/rpc/guiazap_pos_calculo_frete`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ p_conversa_id: conversaId, p_profissional_id: profissionalId })
     });
+    if (!respPosCalculo.ok) {
+      const erroTexto = await respPosCalculo.text().catch(() => '');
+      console.error('erro ao chamar guiazap_pos_calculo_frete:', respPosCalculo.status, erroTexto);
+      await responderNoChat(`⚠️ Deu um probleminha ao continuar o pedido (erro: ${respPosCalculo.status}). Digite *menu* e tenta de novo, ou fala com a empresa.`);
+    }
 
     return { statusCode: 200, body: JSON.stringify({ ok: true, distanciaKm, valorFrete }) };
   } catch (err) {
