@@ -56,7 +56,10 @@
       <h1>🛵 GuiaCorridas</h1>
       <p>Suas corridas de entrega, tudo num só lugar</p>
     </div>
-    <button type="button" id="btn-modo-voz-corridas" onclick="toggleModoVozCorridas()" title="Comando de voz (útil em cima da moto/carro)" style="background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.3rem; cursor:pointer; flex-shrink:0;">🎙️</button>
+    <div style="display:flex; gap:8px; flex-shrink:0;">
+      <button type="button" id="btn-instalar-corridas" onclick="instalarAppCorridas()" title="Instalar o GuiaCorridas" style="display:none; background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.2rem; cursor:pointer;">📲</button>
+      <button type="button" id="btn-modo-voz-corridas" onclick="toggleModoVozCorridas()" title="Comando de voz (útil em cima da moto/carro)" style="background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.3rem; cursor:pointer;">🎙️</button>
+    </div>
   </div>
 </div>
 
@@ -97,6 +100,7 @@
 const supabaseClientCorridas = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUserCorridas = null;
 let meusMotoboyIds = [];
+let meusEntregadorIds = [];
 let todasCorridas = [];
 let abaCorridasAtual = 'pendentes';
 
@@ -117,16 +121,17 @@ async function initCorridas(){
   const { data: motoboys } = await supabaseClientCorridas.from('motoboys').select('id').eq('user_id', currentUserCorridas.id);
   meusMotoboyIds = (motoboys || []).map(m => m.id);
 
-  const { data: cadastroEntregador } = await supabaseClientCorridas.from('profissionais').select('id').eq('user_id', currentUserCorridas.id).eq('plano', 'entregador').eq('status_pagamento', 'ativo').limit(1);
+  const { data: cadastroEntregador } = await supabaseClientCorridas.from('profissionais').select('id').eq('user_id', currentUserCorridas.id).eq('plano', 'entregador').eq('status_pagamento', 'ativo');
+  meusEntregadorIds = (cadastroEntregador || []).map(p => p.id);
 
-  if(meusMotoboyIds.length === 0 && (!cadastroEntregador || cadastroEntregador.length === 0)){
+  if(meusMotoboyIds.length === 0 && meusEntregadorIds.length === 0){
     document.getElementById('aviso-sem-acesso').style.display = 'block';
     return;
   }
 
   document.getElementById('corridas-conteudo').style.display = 'block';
 
-  if(meusMotoboyIds.length > 0){
+  if(meusMotoboyIds.length > 0 || meusEntregadorIds.length > 0){
     carregarCorridas();
     ligarRealtimeCorridas();
     setInterval(carregarCorridas, 30000);
@@ -145,13 +150,19 @@ function ligarRealtimeCorridas(){
 }
 
 async function carregarCorridas(){
-  if(meusMotoboyIds.length === 0) return;
+  if(meusMotoboyIds.length === 0 && meusEntregadorIds.length === 0) return;
 
-  const { data: corridas, error } = await supabaseClientCorridas
+  let query = supabaseClientCorridas
     .from('corridas_motoboy')
-    .select('id, pedido_id, motoboy_id, status, created_at, conversa_id')
-    .in('motoboy_id', meusMotoboyIds)
+    .select('id, pedido_id, motoboy_id, entregador_profissional_id, status, created_at, conversa_id, endereco_manual, retirada_manual, valor_manual, empresa_nome_manual')
     .order('created_at', { ascending: false });
+
+  const filtros = [];
+  if(meusMotoboyIds.length > 0) filtros.push(`motoboy_id.in.(${meusMotoboyIds.join(',')})`);
+  if(meusEntregadorIds.length > 0) filtros.push(`entregador_profissional_id.in.(${meusEntregadorIds.join(',')})`);
+  query = query.or(filtros.join(','));
+
+  const { data: corridas, error } = await query;
 
   if(error){ console.error(error); return; }
   if(!corridas || corridas.length === 0){ todasCorridas = []; renderizarCorridas(); return; }
@@ -173,7 +184,7 @@ async function carregarCorridas(){
   todasCorridas = corridas.map(c => {
     const pedido = pedidosPorId[c.pedido_id];
     const empresa = pedido ? empresasPorId[pedido.profissional_id] : null;
-    return { ...c, pedido, empresaNome: empresa ? empresa.name : 'Empresa' };
+    return { ...c, pedido, empresaNome: empresa ? empresa.name : (c.empresa_nome_manual || 'Chamado direto') };
   });
 
   renderizarCorridas();
@@ -189,10 +200,34 @@ function trocarAbaCorridas(aba){
 
 const NOMES_STATUS = { pendente: 'Esperando resposta', aceita: 'Aceita — a caminho', recusada: 'Recusada', finalizada: 'Entregue' };
 
+function abrirRotaNoMapa(corridaId){
+  const c = todasCorridas.find(x => x.id === corridaId);
+  if(!c) return;
+
+  const destino = c.pedido ? c.pedido.endereco_entrega : c.endereco_manual;
+  if(!destino){ alert('Esse chamado não tem endereço de entrega registrado.'); return; }
+
+  const origem = c.pedido ? null : c.retirada_manual; // pedido do robô: retirada é a própria empresa, o app de mapa já sabe partir de onde você está
+
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const minhaPosicao = `${pos.coords.latitude},${pos.coords.longitude}`;
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
+    if(origem) url += `&waypoints=${encodeURIComponent(origem)}`;
+    url += `&origin=${minhaPosicao}`;
+    window.open(url, '_blank');
+  }, () => {
+    // Sem GPS liberado, ainda assim abre a rota (só sem partir da localização atual)
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
+    if(origem) url += `&origin=${encodeURIComponent(origem)}`;
+    window.open(url, '_blank');
+  });
+}
+
 function cardCorrida(c){
   const pedido = c.pedido;
-  const valor = pedido ? Number(pedido.total || 0).toFixed(2).replace('.', ',') : '—';
-  const taxa = pedido ? Number(pedido.taxa_entrega || 0).toFixed(2).replace('.', ',') : '—';
+  const valor = pedido ? Number(pedido.total || 0).toFixed(2).replace('.', ',') : (c.valor_manual != null ? Number(c.valor_manual).toFixed(2).replace('.', ',') : '—');
+  const taxa = pedido ? Number(pedido.taxa_entrega || 0).toFixed(2).replace('.', ',') : null;
+  const enderecoTexto = pedido ? pedido.endereco_entrega : c.endereco_manual;
 
   let botoes = '';
   if(c.status === 'pendente'){
@@ -202,17 +237,23 @@ function cardCorrida(c){
         <button type="button" class="btn-corrida recusar" onclick="responderCorrida('${c.id}', 'recuso')">✕ Recusar</button>
       </div>`;
   } else if(c.status === 'aceita'){
+    const btnEntregar = c.pedido
+      ? `<button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>`
+      : `<button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>`;
     botoes = `
       <div class="card-corrida-acoes">
-        <button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>
+        <button type="button" class="btn-corrida" style="background:#0f766e; color:white;" onclick="abrirRotaNoMapa('${c.id}')">🗺️ Ver rota</button>
+      </div>
+      <div class="card-corrida-acoes">
+        ${btnEntregar}
       </div>`;
   }
 
   return `
     <div class="card-corrida">
       <div class="empresa-nome">${escapeHtmlCorridas(c.empresaNome)}</div>
-      ${pedido && pedido.endereco_entrega ? `<div class="linha">📍 <span>${escapeHtmlCorridas(pedido.endereco_entrega)}</span></div>` : ''}
-      <div class="linha">💰 <b>R$ ${valor}</b> total (frete: R$ ${taxa})</div>
+      ${enderecoTexto ? `<div class="linha">📍 <span>${escapeHtmlCorridas(enderecoTexto)}</span></div>` : ''}
+      <div class="linha">💰 <b>R$ ${valor}</b>${taxa !== null ? ` total (frete: R$ ${taxa})` : ''}</div>
       ${pedido && pedido.codigo_confirmacao ? `<div class="linha">🔑 Código: <b>${escapeHtmlCorridas(pedido.codigo_confirmacao)}</b></div>` : ''}
       <span class="status-tag status-${c.status}">${NOMES_STATUS[c.status] || c.status}</span>
       ${botoes}
@@ -384,6 +425,37 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
   });
 }
+
+// ---------- INSTALAÇÃO DO APP (PWA) ----------
+
+let promptInstalacaoCorridas = null;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  promptInstalacaoCorridas = event;
+  document.getElementById('btn-instalar-corridas').style.display = 'flex';
+});
+
+async function instalarAppCorridas(){
+  if(!promptInstalacaoCorridas){
+    const ehCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const dica = ehCelular
+      ? 'Toque no menu do navegador (⋮ ou o ícone de compartilhar) e procure "Adicionar à tela inicial" ou "Instalar app".'
+      : 'Procure o ícone de instalar (⊕ ou uma tela com seta) na barra de endereço do navegador.';
+    alert('📲 Pra instalar o GuiaCorridas:\n\n' + dica);
+    return;
+  }
+  promptInstalacaoCorridas.prompt();
+  const { outcome } = await promptInstalacaoCorridas.userChoice;
+  if(outcome === 'accepted'){
+    document.getElementById('btn-instalar-corridas').style.display = 'none';
+  }
+  promptInstalacaoCorridas = null;
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('btn-instalar-corridas').style.display = 'none';
+});
 </script>
 <script src="js/modo-escuro.js"></script>
 <script src="js/debug-console.js"></script>

@@ -446,10 +446,10 @@ function montarMensagemFrete(){
     (tipoCargaTexto ? `📦 Tipo de carga: ${tipoCargaTexto}\n` : '') +
     (caracteristicasTexto ? `🧰 Características: ${caracteristicasTexto}\n` : '') +
     `\n💵 Forma de pagamento: combinar direto pelo Papo.\n` +
-    `Se puder pegar essa corrida, responde aqui!`;
+    `Responde *aceito* pra pegar essa corrida, ou *recuso* se não puder agora.`;
 }
 
-async function enviarChamadoParaProfissional(profissionalId, texto){
+async function enviarChamadoParaProfissional(profissionalId, texto, nomeEntregador){
   const { data: existente } = await supabaseClientFrete
     .from('conversas')
     .select('id')
@@ -478,6 +478,24 @@ async function enviarChamadoParaProfissional(profissionalId, texto){
   if(erroMsg){ console.error(erroMsg); return false; }
 
   await supabaseClientFrete.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
+
+  // Cria o registro da corrida — mesma tabela usada pelo robô de pedidos,
+  // pra esse chamado aparecer certinho no GuiaCorridas do entregador,
+  // com os botões de aceitar/recusar funcionando igual.
+  const retirada = coletarEnderecoFrete('ret');
+  const entrega = coletarEnderecoFrete('ent');
+  const valorDigitado = document.getElementById('frete-valor').value.trim();
+  const valorFinal = valorComAcrescimoEntrega(valorDigitado);
+
+  await supabaseClientFrete.from('corridas_motoboy').insert({
+    entregador_profissional_id: profissionalId,
+    status: 'pendente',
+    conversa_id: conversaId,
+    retirada_manual: enderecoFreteCompleto(retirada),
+    endereco_manual: enderecoFreteCompleto(entrega),
+    valor_manual: valorFinal,
+    empresa_nome_manual: 'Chamado direto pelo GuiaZap'
+  });
 
   fetch('/.netlify/functions/notificar-nova-mensagem', {
     method: 'POST',
