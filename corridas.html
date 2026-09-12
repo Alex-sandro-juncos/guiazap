@@ -442,6 +442,19 @@ window.addEventListener('beforeinstallprompt', (event) => {
   }
 });
 
+// Se a página veio com ?instalarApp=1 mas o navegador não ofereceu o
+// prompt automático depois de um tempo (app já instalado, ou navegador
+// sem suporte), mostra a dica manual mesmo assim — sem isso, a pessoa só
+// caía na tela normal sem entender por que nada aconteceu.
+if(vindoParaInstalarAppCorridas){
+  setTimeout(() => {
+    if(vindoParaInstalarAppCorridas){
+      vindoParaInstalarAppCorridas = false;
+      instalarAppCorridas();
+    }
+  }, 2500);
+}
+
 async function instalarAppCorridas(){
   if(!promptInstalacaoCorridas){
     const ehCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);

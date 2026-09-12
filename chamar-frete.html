@@ -487,7 +487,7 @@ async function enviarChamadoParaProfissional(profissionalId, texto, nomeEntregad
   const valorDigitado = document.getElementById('frete-valor').value.trim();
   const valorFinal = valorComAcrescimoEntrega(valorDigitado);
 
-  await supabaseClientFrete.from('corridas_motoboy').insert({
+  const { error: erroCorrida } = await supabaseClientFrete.from('corridas_motoboy').insert({
     entregador_profissional_id: profissionalId,
     status: 'pendente',
     conversa_id: conversaId,
@@ -496,6 +496,7 @@ async function enviarChamadoParaProfissional(profissionalId, texto, nomeEntregad
     valor_manual: valorFinal,
     empresa_nome_manual: 'Chamado direto pelo GuiaZap'
   });
+  if(erroCorrida) console.error('erro ao criar registro de corrida:', erroCorrida);
 
   fetch('/.netlify/functions/notificar-nova-mensagem', {
     method: 'POST',
