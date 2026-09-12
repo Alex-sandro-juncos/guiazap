@@ -3,510 +3,683 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GuiaCorridas — GuiaZap</title>
+<title>GuiaZap — Encontre profissionais e fale direto no WhatsApp</title>
+<meta name="description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp. Busque por categoria, cidade e bairro no GuiaZap.">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="corridas-manifest.json">
-<meta name="theme-color" content="#1c1c1c">
+<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="GuiaCorridas">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GuiaZap">
+<meta name="theme-color" content="#25D366">
+
+<meta property="og:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
+<meta property="og:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://guiazap.shop">
+<meta property="og:image" content="https://guiazap.shop/favicon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="GuiaZap — Encontre profissionais e fale direto no WhatsApp">
+<meta name="twitter:description" content="Encontre empresas e profissionais perto de você e fale direto no WhatsApp.">
+<meta name="twitter:image" content="https://guiazap.shop/favicon-512.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="css/style.css">
-<style>
-  body { background: #f0f2f5; padding-bottom: 30px; }
-  .corridas-header { background: #1c1c1c; padding: 16px 16px 14px; color: white; }
-  .corridas-header h1 { font-size: 1.4rem; font-weight: 800; }
-  .corridas-header p { font-size: 0.8rem; opacity: 0.85; margin-top: 2px; }
-  .corridas-abas { display: flex; gap: 6px; padding: 12px 12px 0; max-width: 560px; margin: 0 auto; }
-  .corridas-aba-btn {
-    flex: 1; padding: 10px 6px; border-radius: 10px; border: none; background: white;
-    font-weight: 700; font-size: 0.8rem; color: #666; cursor: pointer; position: relative;
-  }
-  .corridas-aba-btn.ativa { background: #1c1c1c; color: white; }
-  .corridas-badge { position: absolute; top: -6px; right: -4px; background: #e05d5d; color: white; border-radius: 50%; min-width: 18px; height: 18px; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: 800; }
-  .corridas-lista { max-width: 560px; margin: 14px auto 0; padding: 0 12px; }
-  .card-corrida {
-    background: white; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  }
-  .card-corrida .empresa-nome { font-weight: 800; font-size: 0.95rem; color: #1c1c1c; }
-  .card-corrida .linha { font-size: 0.85rem; color: #444; margin-top: 6px; display: flex; gap: 6px; align-items: flex-start; }
-  .card-corrida .linha b { color: #1c1c1c; }
-  .card-corrida .status-tag { display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 3px 9px; border-radius: 50px; margin-top: 8px; }
-  .status-pendente { background: #fff3cd; color: #7c4a03; }
-  .status-aceita { background: #d4edda; color: #155724; }
-  .status-recusada { background: #f8d7da; color: #721c24; }
-  .status-finalizada { background: #e2e3e5; color: #383d41; }
-  .card-corrida-acoes { display: flex; gap: 8px; margin-top: 12px; }
-  .btn-corrida { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
-  .btn-corrida.aceitar { background: var(--verde-whats); color: white; }
-  .btn-corrida.recusar { background: white; border: 1.5px solid #a4402f; color: #a4402f; }
-  .btn-corrida.entregue { background: #1c1c1c; color: white; }
-  .vazio-corridas { text-align: center; padding: 50px 20px; color: #999; }
-  .vazio-corridas .icone { font-size: 3rem; margin-bottom: 12px; opacity: 0.6; }
-  .aviso-sem-acesso { max-width: 480px; margin: 60px auto; padding: 0 20px; text-align: center; }
-</style>
 </head>
 <body>
+<!-- Tarja de acessibilidade — o PRIMEIRO elemento da página, de propósito.
+     Quem usa leitor de tela (TalkBack/VoiceOver) sempre começa a explorar
+     a página do topo, então colocar aqui garante que essa pessoa encontra
+     isso antes de qualquer outra coisa, sem precisar eu falar sozinho.
+     Pra quem enxerga, é discreta (quase transparente) e não atrapalha. -->
+<button type="button" onclick="toggleModoVozIndex()" aria-label="Ativar modo de voz do GuiaZap, pra navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga" style="position:absolute; top:0; left:0; width:100%; height:64px; margin:0; padding:0; border:none; background:transparent; color:transparent; cursor:pointer; font-size:0.01px; line-height:1; z-index:2000;">
+  Ativar modo de voz do GuiaZap, pra navegar e comprar sem precisar ver ou tocar na tela, feito pra quem não enxerga
+</button>
 
-<div class="corridas-header">
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <div>
-      <h1>🛵 GuiaCorridas</h1>
-      <p>Suas corridas de entrega, tudo num só lugar</p>
+<!-- Campo "isca", escondido fora da tela — tentativa de desviar a atenção do
+     Chrome, que insiste em sugerir contas Google no campo de busca real. -->
+<input type="email" name="email" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; pointer-events:none;">
+
+<div id="overlay-modo-somente-voz-index" style="display:none; position:fixed; inset:0; z-index:1650; background:rgba(0,0,0,0.03);" aria-hidden="true"></div>
+
+<div id="painel-modo-voz-index" style="display:none; position:fixed; bottom:20px; left:16px; right:16px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:16px; z-index:1600; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div id="voz-index-indicador" style="width:14px; height:14px; border-radius:50%; background:#6b46c1; flex-shrink:0; transition:background 0.2s;"></div>
+    <div style="flex:1; min-width:0;">
+      <div style="color:white; font-weight:700; font-size:0.85rem;" id="voz-index-status" aria-live="polite" role="status">🎙️ Modo voz ativado — pode falar</div>
+      <div style="color:#aaa; font-size:0.75rem; margin-top:2px;" id="voz-index-transcricao"></div>
     </div>
-    <div style="display:flex; gap:8px; flex-shrink:0;">
-      <button type="button" id="btn-instalar-corridas" onclick="instalarAppCorridas()" title="Instalar o GuiaCorridas" style="display:none; background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.2rem; cursor:pointer;">📲</button>
-      <button type="button" id="btn-modo-voz-corridas" onclick="toggleModoVozCorridas()" title="Comando de voz (útil em cima da moto/carro)" style="background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.3rem; cursor:pointer;">🎙️</button>
+    <button type="button" onclick="toggleModoVozIndex()" style="background:#a4402f; border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:0.9rem; cursor:pointer; flex-shrink:0;">✕</button>
+  </div>
+  <button type="button" id="btn-toggle-somente-voz-index" onclick="ativarModoSomenteVozIndex()" aria-label="Ativar modo somente voz, bloqueia toque na tela" style="width:100%; margin-top:10px; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.25); background:none; color:#ccc; font-size:0.75rem; cursor:pointer;">🔒 Ativar modo somente voz (bloqueia toque)</button>
+</div>
+
+<div id="welcome-gate" class="welcome-gate" style="display:none;">
+  <div class="welcome-gate-conteudo">
+    <div class="welcome-logo">GuiaZap</div>
+    <p class="welcome-sub">Encontre profissionais locais e fale direto no WhatsApp</p>
+
+    <div class="welcome-beneficios">
+      🎁 <b>Crie sua conta grátis</b> e tenha acesso a ofertas e produtos dedicados — além de receber notificações das empresas que você seguir.
     </div>
-  </div>
-</div>
 
-<div id="painel-voz-corridas" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
-  <div style="display:flex; gap:10px; align-items:flex-start;">
-    <div id="voz-corridas-indicador" style="width:14px;height:14px;border-radius:50%;background:#22c55e;flex-shrink:0;margin-top:4px;"></div>
-    <div style="flex:1;min-width:0;">
-      <div id="voz-corridas-status" style="color:white;font-weight:700;font-size:0.85rem;">Modo voz — fala "aceito", "recuso" ou "entreguei"</div>
-      <div id="voz-corridas-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
-    </div>
-    <button type="button" onclick="toggleModoVozCorridas()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
-  </div>
-</div>
-
-<div id="aviso-sem-acesso" class="aviso-sem-acesso" style="display:none;">
-  <p style="margin-bottom:14px;">Essa área é só para quem tem o Pacote Corridas e Fretes, ou foi cadastrado como motoboy por alguma empresa.</p>
-  <a href="pacotes.html" class="btn-baixar-app" style="display:inline-block;">Conhecer o Pacote Corridas e Fretes</a>
-</div>
-
-<div id="aviso-login" style="display:none; text-align:center; padding:40px 20px;">
-  <p style="margin-bottom:14px;">Você precisa estar logado pra ver suas corridas.</p>
-  <a href="index.html" class="btn-baixar-app">Fazer login</a>
-</div>
-
-<div id="corridas-conteudo" style="display:none;">
-  <div class="corridas-abas">
-    <button type="button" class="corridas-aba-btn ativa" id="aba-pendentes" onclick="trocarAbaCorridas('pendentes')">
-      Pendentes<span class="corridas-badge" id="badge-pendentes" style="display:none;">0</span>
-    </button>
-    <button type="button" class="corridas-aba-btn" id="aba-andamento" onclick="trocarAbaCorridas('andamento')">Em andamento</button>
-    <button type="button" class="corridas-aba-btn" id="aba-historico" onclick="trocarAbaCorridas('historico')">Histórico</button>
-  </div>
-  <div class="corridas-lista" id="corridas-lista">Carregando...</div>
-</div>
-
-<script src="config.js"></script>
-<script>
-const supabaseClientCorridas = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let currentUserCorridas = null;
-let meusMotoboyIds = [];
-let meusEntregadorIds = [];
-let todasCorridas = [];
-let abaCorridasAtual = 'pendentes';
-
-function escapeHtmlCorridas(str){
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
-}
-
-async function initCorridas(){
-  const { data: { session } } = await supabaseClientCorridas.auth.getSession();
-  if(!session){
-    document.getElementById('aviso-login').style.display = 'block';
-    return;
-  }
-  currentUserCorridas = session.user;
-
-  const { data: motoboys } = await supabaseClientCorridas.from('motoboys').select('id').eq('user_id', currentUserCorridas.id);
-  meusMotoboyIds = (motoboys || []).map(m => m.id);
-
-  const { data: cadastroEntregador } = await supabaseClientCorridas.from('profissionais').select('id').eq('user_id', currentUserCorridas.id).eq('plano', 'entregador').eq('status_pagamento', 'ativo');
-  meusEntregadorIds = (cadastroEntregador || []).map(p => p.id);
-
-  if(meusMotoboyIds.length === 0 && meusEntregadorIds.length === 0){
-    document.getElementById('aviso-sem-acesso').style.display = 'block';
-    return;
-  }
-
-  document.getElementById('corridas-conteudo').style.display = 'block';
-
-  if(meusMotoboyIds.length > 0 || meusEntregadorIds.length > 0){
-    carregarCorridas();
-    ligarRealtimeCorridas();
-    setInterval(carregarCorridas, 30000);
-  } else {
-    document.getElementById('corridas-lista').innerHTML = '<div class="vazio-corridas"><div class="icone">🛵</div>Você ainda não foi cadastrado como motoboy de nenhuma empresa. Peça pra empresa te adicionar em "Gerenciar motoboys", usando seu código GuiaZap.</div>';
-  }
-}
-
-function ligarRealtimeCorridas(){
-  supabaseClientCorridas
-    .channel('corridas-motoboy-realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'corridas_motoboy' }, () => {
-      carregarCorridas();
-    })
-    .subscribe();
-}
-
-async function carregarCorridas(){
-  if(meusMotoboyIds.length === 0 && meusEntregadorIds.length === 0) return;
-
-  let query = supabaseClientCorridas
-    .from('corridas_motoboy')
-    .select('id, pedido_id, motoboy_id, entregador_profissional_id, status, created_at, conversa_id, endereco_manual, retirada_manual, valor_manual, empresa_nome_manual')
-    .order('created_at', { ascending: false });
-
-  const filtros = [];
-  if(meusMotoboyIds.length > 0) filtros.push(`motoboy_id.in.(${meusMotoboyIds.join(',')})`);
-  if(meusEntregadorIds.length > 0) filtros.push(`entregador_profissional_id.in.(${meusEntregadorIds.join(',')})`);
-  query = query.or(filtros.join(','));
-
-  const { data: corridas, error } = await query;
-
-  if(error){ console.error(error); return; }
-  if(!corridas || corridas.length === 0){ todasCorridas = []; renderizarCorridas(); return; }
-
-  const idsPedidos = [...new Set(corridas.map(c => c.pedido_id).filter(Boolean))];
-  let pedidosPorId = {};
-  if(idsPedidos.length > 0){
-    const { data: pedidos } = await supabaseClientCorridas.from('pedidos').select('id, profissional_id, endereco_entrega, total, taxa_entrega, codigo_confirmacao').in('id', idsPedidos);
-    (pedidos || []).forEach(p => { pedidosPorId[p.id] = p; });
-  }
-
-  const idsEmpresas = [...new Set(Object.values(pedidosPorId).map(p => p.profissional_id).filter(Boolean))];
-  let empresasPorId = {};
-  if(idsEmpresas.length > 0){
-    const { data: empresas } = await supabaseClientCorridas.from('profissionais').select('id, name').in('id', idsEmpresas);
-    (empresas || []).forEach(e => { empresasPorId[e.id] = e; });
-  }
-
-  todasCorridas = corridas.map(c => {
-    const pedido = pedidosPorId[c.pedido_id];
-    const empresa = pedido ? empresasPorId[pedido.profissional_id] : null;
-    return { ...c, pedido, empresaNome: empresa ? empresa.name : (c.empresa_nome_manual || 'Chamado direto') };
-  });
-
-  renderizarCorridas();
-}
-
-function trocarAbaCorridas(aba){
-  abaCorridasAtual = aba;
-  ['pendentes', 'andamento', 'historico'].forEach(a => {
-    document.getElementById('aba-' + a).classList.toggle('ativa', a === aba);
-  });
-  renderizarCorridas();
-}
-
-const NOMES_STATUS = { pendente: 'Esperando resposta', aceita: 'Aceita — a caminho', recusada: 'Recusada', finalizada: 'Entregue' };
-
-function abrirRotaNoMapa(corridaId){
-  const c = todasCorridas.find(x => x.id === corridaId);
-  if(!c) return;
-
-  const destino = c.pedido ? c.pedido.endereco_entrega : c.endereco_manual;
-  if(!destino){ alert('Esse chamado não tem endereço de entrega registrado.'); return; }
-
-  const origem = c.pedido ? null : c.retirada_manual; // pedido do robô: retirada é a própria empresa, o app de mapa já sabe partir de onde você está
-
-  navigator.geolocation.getCurrentPosition((pos) => {
-    const minhaPosicao = `${pos.coords.latitude},${pos.coords.longitude}`;
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
-    if(origem) url += `&waypoints=${encodeURIComponent(origem)}`;
-    url += `&origin=${minhaPosicao}`;
-    window.open(url, '_blank');
-  }, () => {
-    // Sem GPS liberado, ainda assim abre a rota (só sem partir da localização atual)
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
-    if(origem) url += `&origin=${encodeURIComponent(origem)}`;
-    window.open(url, '_blank');
-  });
-}
-
-function cardCorrida(c){
-  const pedido = c.pedido;
-  const valor = pedido ? Number(pedido.total || 0).toFixed(2).replace('.', ',') : (c.valor_manual != null ? Number(c.valor_manual).toFixed(2).replace('.', ',') : '—');
-  const taxa = pedido ? Number(pedido.taxa_entrega || 0).toFixed(2).replace('.', ',') : null;
-  const enderecoTexto = pedido ? pedido.endereco_entrega : c.endereco_manual;
-
-  let botoes = '';
-  if(c.status === 'pendente'){
-    botoes = `
-      <div class="card-corrida-acoes">
-        <button type="button" class="btn-corrida aceitar" onclick="responderCorrida('${c.id}', 'aceito')">✅ Aceitar</button>
-        <button type="button" class="btn-corrida recusar" onclick="responderCorrida('${c.id}', 'recuso')">✕ Recusar</button>
-      </div>`;
-  } else if(c.status === 'aceita'){
-    const btnEntregar = c.pedido
-      ? `<button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>`
-      : `<button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>`;
-    botoes = `
-      <div class="card-corrida-acoes">
-        <button type="button" class="btn-corrida" style="background:#0f766e; color:white;" onclick="abrirRotaNoMapa('${c.id}')">🗺️ Ver rota</button>
+    <form autocomplete="on" onsubmit="return false;">
+      <div class="auth-row">
+        <input id="welcome-nome" type="text" placeholder="Seu nome" aria-label="Seu nome" autocomplete="name">
       </div>
-      <div class="card-corrida-acoes">
-        ${btnEntregar}
-      </div>`;
-  }
+      <div class="auth-row">
+        <input id="welcome-email" type="email" placeholder="Seu e-mail" aria-label="Seu e-mail" autocomplete="email">
+        <div class="campo-com-olho">
+          <input id="welcome-password" type="password" placeholder="Senha" aria-label="Senha" autocomplete="current-password">
+          <button type="button" class="btn-ver-senha" aria-label="Mostrar senha" onclick="toggleVerSenha('welcome-password', this)">👁️</button>
+        </div>
+      </div>
+      <label class="termos-check welcome-termos">
+        <input type="checkbox" id="welcome-aceite-termos">
+        <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a></span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn-auth" onclick="welcomeSignIn()">Entrar</button>
+        <button type="button" class="btn-auth-outline welcome-btn-outline" onclick="welcomeSignUp()">Criar conta</button>
+      </div>
+      <span class="auth-msg" id="welcome-msg"></span>
+      <button type="button" id="btn-welcome-entrar-pin" style="display:none; width:100%; margin-top:8px; padding:10px; border-radius:8px; border:1.5px solid var(--verde-escuro); background:white; color:var(--verde-escuro); font-weight:700; cursor:pointer;" onclick="entrarComPin()">🔢 Entrar com PIN</button>
+    </form>
 
-  return `
-    <div class="card-corrida">
-      <div class="empresa-nome">${escapeHtmlCorridas(c.empresaNome)}</div>
-      ${enderecoTexto ? `<div class="linha">📍 <span>${escapeHtmlCorridas(enderecoTexto)}</span></div>` : ''}
-      <div class="linha">💰 <b>R$ ${valor}</b>${taxa !== null ? ` total (frete: R$ ${taxa})` : ''}</div>
-      ${pedido && pedido.codigo_confirmacao ? `<div class="linha">🔑 Código: <b>${escapeHtmlCorridas(pedido.codigo_confirmacao)}</b></div>` : ''}
-      <span class="status-tag status-${c.status}">${NOMES_STATUS[c.status] || c.status}</span>
-      ${botoes}
+    <div class="welcome-divisor"><span>ou</span></div>
+
+    <button type="button" class="btn-pular-welcome-grande" onclick="pularWelcomeGate()">🔍 Continuar sem cadastro</button>
+  </div>
+</div>
+
+<header>
+  <div class="logo">GuiaZap</div>
+  <p>Conectando você ao que sua cidade tem de melhor</p>
+  <div id="stories-linha" class="stories-linha" style="display:none;"></div>
+  <a href="feed.html" class="link-ver-feed">📰 Ver feed completo de novidades →</a>
+
+  <div id="auth-logged-out" class="auth-box-discreto-header">
+    <button type="button" class="auth-toggle-link-header" onclick="toggleAuthForm()" id="auth-toggle-btn">🔑 Sou dono de empresa — Entrar / Criar conta</button>
+    <div id="auth-form-fields" style="display:none;"></div>
+  </div>
+
+  <div id="auth-logged-in" class="auth-box-logged-header" style="display:none;">
+    <span>Logado como <b id="auth-email-display"></b></span>
+    <div id="meu-codigo-inline-box" style="display:none; width:100%; background:#f3eefc; border:1px solid #d8c8f0; border-radius:8px; padding:8px 10px; margin-top:4px; font-size:0.75rem; color:#4a2d7a; text-align:center;">
+      🔑 Seu código do Papo: <b id="meu-codigo-inline-valor" style="letter-spacing:1px;"></b>
+      <br><span style="font-size:0.68rem; color:#6b46c1;">Compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone</span>
     </div>
-  `;
-}
+    <div>
+      <button type="button" class="btn-auth-outline-header" id="btn-ver-minha-empresa" style="display:none;" onclick="verMinhaEmpresa()">🏢 Ver minha empresa</button>
+      <button type="button" class="btn-auth-outline-header" onclick="mostrarLinkIndicacao()">🎁 Indique e ganhe</button>
+      <button type="button" class="btn-auth-outline-header" onclick="mostrarMeuCodigoGuiaZap()">🔑 Meu código GuiaZap</button>
+      <button type="button" class="btn-auth-outline-header" onclick="toggleTrocarSenha()">Trocar senha</button>
+      <button type="button" class="btn-auth-outline-header" onclick="signOut()">Sair</button>
+    </div>
+    <div id="indicacao-box" style="display:none; width:100%; margin-top:10px; background:#f8f6fc; border-radius:8px; padding:10px;">
+      <p style="font-size:0.78rem; color:#444; margin-bottom:6px;">🎁 Indique o GuiaZap: quando uma empresa se cadastra pelo seu link e vira pagante, você ganha <b>1 mês grátis</b> automaticamente!</p>
+      <input type="text" id="indicacao-link-input" readonly style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.78rem; margin-bottom:6px;">
+      <button type="button" class="btn-auth-outline-header" onclick="copiarLinkIndicacao()" style="width:100%;">📋 Copiar link</button>
+    </div>
+    <div id="codigo-guiazap-box" style="display:none; width:100%; margin-top:10px; background:#e8f5e9; border-radius:8px; padding:10px;">
+      <p style="font-size:0.78rem; color:#444; margin-bottom:6px;">🔑 Compartilhe esse código pra outras pessoas te adicionarem no chat, sem ver seu e-mail ou telefone de verdade.</p>
+      <input type="text" id="codigo-guiazap-input" readonly style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem; margin-bottom:6px; text-align:center; font-weight:800; letter-spacing:2px;">
+      <button type="button" class="btn-auth-outline-header" onclick="copiarCodigoGuiaZap()" style="width:100%;">📋 Copiar código</button>
+    </div>
+  </div>
+</header>
 
-function renderizarCorridas(){
-  const lista = document.getElementById('corridas-lista');
+<div class="wrap">
+  <div id="config-warning" class="config-warning" style="display:none;">
+    ⚠ Serviço temporariamente indisponível. Tente novamente em alguns instantes.
+  </div>
 
-  const pendentes = todasCorridas.filter(c => c.status === 'pendente');
-  const andamento = todasCorridas.filter(c => c.status === 'aceita');
-  const historico = todasCorridas.filter(c => c.status === 'recusada' || c.status === 'finalizada');
+  <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro">🌙</button>
 
-  const badge = document.getElementById('badge-pendentes');
-  if(pendentes.length > 0){ badge.textContent = pendentes.length; badge.style.display = 'flex'; }
-  else badge.style.display = 'none';
+  <div class="contador-plataforma" id="contador-plataforma"></div>
 
-  const grupoAtual = abaCorridasAtual === 'pendentes' ? pendentes : abaCorridasAtual === 'andamento' ? andamento : historico;
+  <div class="busca-container">
+    <div class="busca-row">
+      <div class="busca-com-icone">
+        <span class="icone-lupa" onclick="render()">🔍</span>
+        <input id="search" placeholder="O que você procura? Ex: Dentista, Barbeiro..." aria-label="Buscar profissionais e empresas" oninput="render(); atualizarBotoesLimpar();">
+        <button type="button" class="btn-limpar-campo btn-limpar-busca" id="limpar-search" onclick="limparCampoFiltro('search')" style="display:none;">×</button>
+        <button type="button" id="btn-modo-voz-index" onclick="toggleModoVozIndex()" title="Buscar por voz, mãos livres" aria-hidden="true" tabindex="-1" style="display:none; background:#6b46c1; border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer; flex-shrink:0; margin-left:6px;">🎙️</button>
+      </div>
+    </div>
 
-  if(grupoAtual.length === 0){
-    const mensagens = { pendentes: 'Nenhuma corrida esperando resposta agora.', andamento: 'Nenhuma corrida em andamento.', historico: 'Nenhuma corrida no histórico ainda.' };
-    lista.innerHTML = `<div class="vazio-corridas"><div class="icone">🛵</div>${mensagens[abaCorridasAtual]}</div>`;
-    return;
-  }
+    <button type="button" class="btn-abrir-filtros" id="btn-abrir-filtros" onclick="toggleFiltrosAvancados()">🔧 Filtrar <span class="badge-filtros-ativos" id="badge-filtros-ativos" style="display:none;"></span></button>
 
-  lista.innerHTML = grupoAtual.map(cardCorrida).join('');
-}
+    <div id="filtros-avancados" class="filtros-avancados" style="display:none;">
+      <div class="field" style="margin-bottom:10px;">
+        <div class="campo-com-limpar">
+          <input id="filter-cep" placeholder="Buscar por CEP (opcional)" autocomplete="off" oninput="mascaraCep(event); atualizarBotoesLimpar();" onblur="buscarCepFiltro()">
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-cep" onclick="limparCampoFiltro('filter-cep')" style="display:none;">×</button>
+        </div>
+        <span class="cep-msg" id="filter-cep-msg"></span>
+      </div>
+      <div class="filtros">
+        <div class="campo-com-limpar">
+          <select id="filter-estado" onchange="onEstadoFiltroChange(); atualizarBotoesLimpar();"><option value="">Estado</option></select>
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-estado" onclick="limparCampoFiltro('filter-estado')" style="display:none;">×</button>
+        </div>
+        <div class="campo-com-limpar">
+          <select id="gz-localidade-busca" class="campo-nao-login" name="filtro_cidade_local" autocomplete="off" onchange="render(); atualizarBotoesLimpar(); onCidadeFiltroChange();">
+            <option value="">Cidade</option>
+          </select>
+          <button type="button" class="btn-limpar-campo" id="limpar-gz-localidade-busca" onclick="limparCampoFiltro('gz-localidade-busca')" style="display:none;">×</button>
+        </div>
+        <div class="campo-com-limpar">
+          <select id="filter-bairro" onchange="render(); atualizarBotoesLimpar();"><option value="">Bairro</option></select>
+          <button type="button" class="btn-limpar-campo" id="limpar-filter-bairro" onclick="limparCampoFiltro('filter-bairro')" style="display:none;">×</button>
+        </div>
+      </div>
+      <button type="button" id="btn-favoritos" class="btn-filtro-favoritos" onclick="toggleFiltroFavoritos()">❤️ Ver só favoritos</button>
+      <button type="button" id="btn-seguindo-filtro" class="btn-filtro-favoritos" style="display:none;" onclick="toggleFiltroSeguindo()">👥 Ver só quem eu sigo</button>
 
-async function responderCorrida(corridaId, palavra){
-  const corrida = todasCorridas.find(c => c.id === corridaId);
-  if(!corrida || !corrida.conversa_id) return;
+      <div class="filtros-rapidos">
+        <button type="button" class="chip-filtro-rapido" id="chip-proximos" onclick="toggleFiltroMaisProximos()">📍 Mais próximos</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-avaliados" onclick="toggleFiltroMelhorAvaliados()">⭐ Melhor avaliados</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-premium-rapido" onclick="toggleFiltroPremiumRapido()">👑 Premium</button>
+        <button type="button" class="chip-filtro-rapido" id="chip-aberto-agora" onclick="toggleFiltroAbertoAgora()">🕐 Aberto agora</button>
+      </div>
+    </div>
+  </div>
 
-  const { error } = await supabaseClientCorridas.from('mensagens_chat').insert({
-    conversa_id: corrida.conversa_id,
-    remetente_user_id: currentUserCorridas.id,
-    tipo: 'texto',
-    texto: palavra,
-    lida: false
-  });
-  if(error){ console.error(error); alert('Erro ao responder. Tenta de novo.'); return; }
+  <div id="trocar-senha-box" class="auth-box" style="display:none;">
+    <div class="auth-row">
+      <div class="campo-com-olho">
+        <input id="nova-senha" type="password" placeholder="Nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('nova-senha', this)">👁️</button>
+      </div>
+      <div class="campo-com-olho">
+        <input id="confirmar-nova-senha" type="password" placeholder="Confirme a nova senha">
+        <button type="button" class="btn-ver-senha" onclick="toggleVerSenha('confirmar-nova-senha', this)">👁️</button>
+      </div>
+    </div>
+    <div class="auth-actions">
+      <button type="button" class="btn-auth" onclick="trocarSenha()">Salvar nova senha</button>
+      <span class="auth-msg" id="trocar-senha-msg"></span>
+    </div>
+  </div>
 
-  await supabaseClientCorridas.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', corrida.conversa_id);
+  <div class="destaque-vitrine" id="destaque-videos-section" style="display:none;">
+    <div class="destaque-header">
+      <h2>🎥 Vídeos em destaque</h2>
+      <a href="videos.html" class="ver-vitrine-link">Ver todos →</a>
+    </div>
+    <div class="destaque-scroll" id="destaque-videos-lista">
+      <div class="destaque-carregando">carregando vídeos...</div>
+    </div>
+  </div>
 
-  setTimeout(carregarCorridas, 800);
-}
+  <div class="video-viewer" id="video-viewer">
+    <div class="video-viewer-conteudo">
+      <div class="video-viewer-segmentos" id="video-viewer-segmentos"></div>
+      <button class="story-fechar" onclick="fecharVideoViewer()">✕</button>
+      <div class="video-viewer-nome" id="video-viewer-nome"></div>
+      <div class="video-viewer-area">
+        <video id="video-viewer-player" playsinline controls></video>
+        <button type="button" class="video-viewer-seta esquerda" onclick="voltarVideoViewer()">‹</button>
+        <button type="button" class="video-viewer-seta direita" onclick="avancarVideoViewer()">›</button>
+      </div>
+      <div class="video-viewer-info">
+        <div class="video-viewer-titulo" id="video-viewer-titulo"></div>
+        <div class="video-viewer-meta" id="video-viewer-meta"></div>
+      </div>
+      <div class="story-acoes" id="video-viewer-acoes"></div>
+    </div>
+  </div>
 
-async function confirmarEntregaComCodigo(corridaId){
-  const codigo = prompt('Digite o código de confirmação que a pessoa te passou:');
-  if(!codigo || !codigo.trim()) return;
-  await responderCorrida(corridaId, codigo.trim());
-}
+  <div class="destaque-vitrine" id="destaque-produtos-section">
+    <div class="destaque-header">
+      <h2>🛍️ Produtos em destaque</h2>
+      <a href="vitrine.html" class="ver-vitrine-link">Ver vitrine completa →</a>
+    </div>
+    <div class="destaque-linhas" id="destaque-produtos-lista">
+      <div class="destaque-carregando">carregando produtos...</div>
+    </div>
+  </div>
 
-// ---------- MODO VOZ (aceitar/recusar de mãos livres, útil em cima da moto/carro) ----------
+  <a href="app.html" class="btn-baixar-app">Baixar o app do GuiaZap</a>
+  <a href="vagas.html" class="btn-baixar-app" style="background:#6b46c1;">💼 Contrata-se — Vagas de emprego</a>
+  <a href="banco-entregadores.html" class="btn-baixar-app" style="background:#1c1c1c;">🛵 Banco de Entregadores</a>
+  <a href="chamar-frete.html" class="btn-baixar-app" style="background:#0f766e;">📦 Chamar frete / corrida</a>
+  <a href="corridas.html" class="btn-baixar-app" style="background:#1c1c1c;">🛵 GuiaCorridas (pra entregadores)</a>
+  <a href="blog.html" class="btn-baixar-app" style="background:#0f766e;">📝 Blog — Dicas e novidades locais</a>
+  <button type="button" id="btn-instalar-pwa" class="btn-baixar-app" style="display:none; background:#0a4a6b; border:none; cursor:pointer; width:100%;" onclick="instalarPWA()">📲 Instalar o GuiaZap no seu celular</button>
+  <a href="chat.html?instalarApp=1" class="btn-baixar-app" style="background:var(--verde-whats);">📲 Baixar o GuiaPapo (app separado)</a>
+  <button type="button" id="btn-ativar-push" title="Ativar notificações" style="display:none; background:none; border:none; color:white; font-size:1.25rem; cursor:pointer; padding:2px;" onclick="ativarNotificacoesPush()">🛎️</button>
+  <a href="pedidos.html" class="btn-baixar-app" id="btn-meus-pedidos" style="display:none; background:#0f766e;">📦 Pedidos recebidos (empresa)</a>
+  <a href="meus-pedidos.html" class="btn-baixar-app" id="btn-minhas-compras" style="display:none; background:#6b46c1;">🛍️ Minhas compras</a>
+  <a href="pacotes.html" class="btn-cadastro" id="add-btn" style="display:block; text-align:center;">+ Cadastrar minha empresa</a>
 
-let _vozCorridasAtiva = false;
-let _vozCorridasReconhecimento = null;
-let _vozCorridasVigia = null;
-let _vozCorridasUltimoSinal = 0;
-const _vozCorridasSynth = window.speechSynthesis;
+  <form id="cadastro-form" onsubmit="return saveEntry(event)">
+    <input type="hidden" id="edit-id">
+    <div class="field">
+      <label for="f-name">Nome</label>
+      <input id="f-name" required placeholder="Ex: Ana Silva / Padaria Bom Pão" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="f-documento">CNPJ ou CPF</label>
+      <input id="f-documento" required placeholder="Só números" autocomplete="off" oninput="mascaraDocumento(event)" onblur="conferirDocumentoAoSair()">
+      <span class="cep-msg" id="f-documento-msg"></span>
+    </div>
+    <div class="field">
+      <label for="f-cat">Categoria principal</label>
+      <input id="f-cat" required placeholder="Ex: Dentista" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Outras categorias (opcional)</label>
+      <div id="categorias-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaCategoria()">+ Adicionar outra categoria</button>
+    </div>
+    <div class="field">
+      <label for="f-cep">CEP</label>
+      <input id="f-cep" placeholder="Ex: 01310-100" autocomplete="off" oninput="mascaraCep(event)" onblur="buscarCep()">
+      <span class="cep-msg" id="cep-msg"></span>
+    </div>
+    <div class="row2">
+      <div class="field" style="flex:2;">
+        <label for="f-rua">Rua</label>
+        <input id="f-rua" placeholder="Ex: Av. Paulista" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-numero">Número</label>
+        <input id="f-numero" placeholder="Ex: 1000" autocomplete="off">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="f-estado">Estado</label>
+        <select id="f-estado" required onchange="onEstadoCadastroChange()"><option value="">Selecione</option></select>
+      </div>
+      <div class="field">
+        <label for="f-cidade">Cidade</label>
+        <input id="f-cidade" required list="cidades-cadastro-list" placeholder="Digite ou selecione" autocomplete="address-level2">
+        <datalist id="cidades-cadastro-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="f-bairro">Bairro</label>
+        <input id="f-bairro" required placeholder="Ex: Vila Mariana" autocomplete="off">
+      </div>
+    </div>
+    <div class="field">
+      <label>📍 Localização exata (opcional, mas recomendado)</label>
+      <label class="foto-ou">Ajuda muito na entrega — especialmente no interior, sítios, ou endereços sem número. Arraste o marcador até a porta do seu estabelecimento.</label>
+      <button type="button" onclick="abrirMapaLocalizacao()" style="width:100%; padding:10px; border-radius:8px; border:1.5px solid var(--verde-escuro); background:white; color:var(--verde-escuro); font-weight:700; cursor:pointer; margin-top:6px;">📍 Marcar localização no mapa</button>
+      <span id="localizacao-confirmada-msg" style="display:block; font-size:0.78rem; color:var(--verde-escuro); margin-top:6px;"></span>
+      <input type="hidden" id="f-latitude-manual">
+      <input type="hidden" id="f-longitude-manual">
+    </div>
+    <div class="field">
+      <label for="f-whatsapp">WhatsApp (com DDD, só números)</label>
+      <input id="f-whatsapp" required placeholder="Ex: 11912345678" autocomplete="off">
+    </div>
+    <div class="field" id="campo-veiculo-entregador" style="display:none;">
+      <label>🚚 Quais veículos você tem? (pode marcar os dois)</label>
+      <div style="display:flex; gap:16px; margin:4px 0 10px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.9rem;">
+          <input type="checkbox" id="f-veiculo-tipo-moto" onchange="atualizarCamposVeiculoEntregador()" style="width:18px; height:18px;"> 🏍️ Moto
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.9rem;">
+          <input type="checkbox" id="f-veiculo-tipo-carro" onchange="atualizarCamposVeiculoEntregador()" style="width:18px; height:18px;"> 🚗 Carro
+        </label>
+      </div>
+      <div id="campo-veiculo-moto-separado" style="display:none;">
+        <label for="f-veiculo-modelo">🏍️ Modelo da moto</label>
+        <input id="f-veiculo-modelo" placeholder="Ex: Honda CG 160">
+        <label for="f-veiculo-placa" style="margin-top:8px;">🔖 Placa da moto</label>
+        <input id="f-veiculo-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
+      </div>
+      <div id="campo-veiculo-carro-separado" style="display:none; margin-top:14px; padding-top:14px; border-top:1px dashed #ccc;">
+        <label for="f-veiculo-modelo-carro">🚗 Modelo do carro</label>
+        <input id="f-veiculo-modelo-carro" placeholder="Ex: Fiat Uno">
+        <label for="f-veiculo-placa-carro" style="margin-top:8px;">🔖 Placa do carro</label>
+        <input id="f-veiculo-placa-carro" placeholder="Ex: ABC1D23" style="text-transform:uppercase;">
+      </div>
+      <label style="margin-top:10px;">🧰 Equipamentos que você tem (marque os que se aplicam)</label>
+      <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-bau" style="width:16px; height:16px;"> 📦 Baú (pra proteger a carga)
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-refrigerado" style="width:16px; height:16px;"> ❄️ Refrigerado (comida gelada/congelada)
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-espaco-grande" style="width:16px; height:16px;"> 📐 Espaço grande (peças/objetos maiores)
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-fragil" style="width:16px; height:16px;"> 🥚 Aceito transportar item frágil
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-carroceria-aberta" style="width:16px; height:16px;"> 🚚 Carro com carroceria aberta (caçamba)
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-equip-pesado" style="width:16px; height:16px;"> ⚖️ Aceito carga pesada
+        </label>
+      </div>
+      <label style="margin-top:14px;">📦 Que tipo de carga você aceita transportar?</label>
+      <p style="font-size:0.72rem; color:#888; margin:2px 0 6px;">Se não marcar nenhuma, quer dizer que você aceita qualquer tipo de carga.</p>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-comida" style="width:16px; height:16px;"> 🍔 Comida
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-documentos" style="width:16px; height:16px;"> 📄 Documentos
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-moveis" style="width:16px; height:16px;"> 🛋️ Móveis e eletrodomésticos
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-construcao" style="width:16px; height:16px;"> 🧱 Material de construção
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-eletronicos" style="width:16px; height:16px;"> 📱 Eletrônicos
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+          <input type="checkbox" id="f-carga-geral" style="width:16px; height:16px;"> 🛍️ Compras e itens gerais
+        </label>
+      </div>
+      <p style="font-size:0.72rem; color:#8a8270; margin-top:4px;">Esses dados ficam visíveis pra quem for te contratar — é uma camada de segurança pra evitar golpe.</p>
+    </div>
+    <div class="field">
+      <label>Horário de funcionamento (opcional)</label>
+      <div class="horario-dias-check">
+        <label><input type="checkbox" class="f-horario-dia" value="seg"> Seg</label>
+        <label><input type="checkbox" class="f-horario-dia" value="ter"> Ter</label>
+        <label><input type="checkbox" class="f-horario-dia" value="qua"> Qua</label>
+        <label><input type="checkbox" class="f-horario-dia" value="qui"> Qui</label>
+        <label><input type="checkbox" class="f-horario-dia" value="sex"> Sex</label>
+        <label><input type="checkbox" class="f-horario-dia" value="sab"> Sáb</label>
+        <label><input type="checkbox" class="f-horario-dia" value="dom"> Dom</label>
+      </div>
+      <div class="row2" style="margin-top:8px;">
+        <div class="field">
+          <label class="foto-ou" for="f-horario-abre">Abre às</label>
+          <input id="f-horario-abre" type="time">
+        </div>
+        <div class="field">
+          <label class="foto-ou" for="f-horario-fecha">Fecha às</label>
+          <input id="f-horario-fecha" type="time">
+        </div>
+      </div>
+      <label class="foto-ou">Preenchendo isso, seu cadastro aparece no filtro "Aberto agora" nos horários certos.</label>
+    </div>
+    <div class="field">
+      <label>Outros contatos (opcional)</label>
+      <div id="contatos-extra-list"></div>
+      <button type="button" class="btn-add-contato" onclick="adicionarLinhaContato()">+ Adicionar outro contato</button>
+    </div>
+    <div class="field">
+      <label>Foto (opcional)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="enviarFoto(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="foto-msg"></span>
+      <img id="foto-preview" class="foto-preview" style="display:none;">
+      <label class="foto-ou" for="f-foto">ou cole um link de foto já existente</label>
+      <input id="f-foto" placeholder="https://..." oninput="onFotoLinkChange()">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Salvar</button>
+      <button type="button" class="btn-cancelar" onclick="closeForm()">Cancelar</button>
+      <span class="form-msg" id="form-msg"></span>
+    </div>
+  </form>
 
-function toggleModoVozCorridas(){
-  if(_vozCorridasAtiva) pararModoVozCorridas();
-  else iniciarModoVozCorridas();
-}
+  <div id="overlay-mapa-localizacao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1400; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:white; width:100%; max-width:560px; border-radius:16px; overflow:hidden; display:flex; flex-direction:column;">
+      <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+        <b style="font-size:0.95rem;">📍 Arraste o marcador até o local exato</b>
+        <button type="button" onclick="fecharMapaLocalizacao()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#888;">✕</button>
+      </div>
+      <div id="mapa-localizacao-area" style="height:350px; width:100%;"></div>
+      <div style="padding:14px 16px;">
+        <p style="font-size:0.78rem; color:#666; margin-bottom:10px;">Toque no mapa ou arraste o marcador pra ajustar. Pode dar zoom pra ficar mais preciso.</p>
+        <button type="button" onclick="usarMinhaLocalizacaoAtual()" style="width:100%; padding:9px; border-radius:8px; border:1.5px solid #ddd; background:white; font-weight:600; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">📡 Usar minha localização atual (GPS)</button>
+        <button type="button" onclick="confirmarLocalizacaoMapa()" style="width:100%; padding:11px; border-radius:8px; border:none; background:var(--verde-whats); color:white; font-weight:700; cursor:pointer;">✅ Confirmar esse local</button>
+      </div>
+    </div>
+  </div>
 
-function iniciarModoVozCorridas(){
-  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+  <form id="story-form" onsubmit="return salvarStory(event)" style="display:none;">
+    <input type="hidden" id="story-profissional-id">
+    <input type="hidden" id="story-plano">
+    <div class="field">
+      <label>Fotos (<span id="story-limite-texto">1 foto — Pacote Básico</span>)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStory(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="story-foto-msg"></span>
+      <div id="story-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="story-texto-input" rows="3" placeholder="Ex: Chegou produto novo! Vem conferir 😍" maxlength="200" class="story-textarea-bonito"></textarea>
+    </div>
+    <div class="field" id="story-produto-campo" style="display:none;">
+      <label>Vincular a um produto da Vitrine (opcional)</label>
+      <select id="story-produto-id" onchange="onProdutoStoryChange()"><option value="">Nenhum</option></select>
+    </div>
+    <div class="field" id="story-notificar-campo" style="display:none;">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-notificar-seguidores" checked>
+        <span>📢 Notificar meus seguidores por e-mail sobre essa novidade</span>
+      </label>
+    </div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-publicar-no-papo">
+        <span>💬 Publicar também no Papo</span>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStory()">Cancelar</button>
+      <span class="form-msg" id="story-msg"></span>
+    </div>
+  </form>
 
-  _vozCorridasAtiva = true;
-  document.getElementById('btn-modo-voz-corridas').style.background = '#a4402f';
-  document.getElementById('painel-voz-corridas').style.display = 'block';
+  <form id="story-pessoal-form" onsubmit="return salvarStoryPessoal(event)" style="display:none;">
+    <div class="field">
+      <label>Foto (1 foto — grátis, some em 24h)</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          📷 Tirar foto
+          <input type="file" accept="image/*" capture="environment" onchange="adicionarFotoStoryPessoal(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="image/*" onchange="adicionarFotoStoryPessoal(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="story-pessoal-foto-msg"></span>
+      <div id="story-pessoal-fotos-preview" class="story-fotos-preview"></div>
+    </div>
+    <div class="field">
+      <label>Texto (opcional)</label>
+      <textarea id="story-pessoal-texto-input" rows="3" placeholder="Escreva algo pra sua novidade..." maxlength="200" class="story-textarea-bonito"></textarea>
+    </div>
+    <div id="minha-novidade-pessoal" class="minhas-novidades"></div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="story-pessoal-publicar-no-papo">
+        <span>💬 Publicar também no Papo</span>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar novidade</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormStoryPessoal()">Cancelar</button>
+      <span class="form-msg" id="story-pessoal-msg"></span>
+    </div>
+  </form>
 
-  _criarReconhecimentoCorridas(Api);
-  clearInterval(_vozCorridasVigia);
-  _vozCorridasVigia = setInterval(() => {
-    if(!_vozCorridasAtiva){ clearInterval(_vozCorridasVigia); return; }
-    if(Date.now() - _vozCorridasUltimoSinal > 8000){
-      try{ _vozCorridasReconhecimento.onend = null; _vozCorridasReconhecimento.abort(); } catch(e){}
-      _criarReconhecimentoCorridas(Api);
-    }
-  }, 4000);
 
-  falarVozCorridas('Modo voz ativado. Fala "aceito" ou "recuso" quando chegar uma corrida.');
-}
+  <form id="video-form" onsubmit="return salvarVideoEmpresa(event)" style="display:none;">
+    <input type="hidden" id="video-profissional-id">
+    <input type="hidden" id="video-plano">
+    <div class="field">
+      <label id="video-limite-texto">Limite do seu plano</label>
+      <div class="foto-botoes">
+        <label class="btn-foto-opcao">
+          🎥 Gravar agora
+          <input type="file" accept="video/*" capture="environment" onchange="selecionarArquivoVideo(event)" style="display:none;">
+        </label>
+        <label class="btn-foto-opcao">
+          🖼️ Escolher da galeria
+          <input type="file" accept="video/mp4,video/*" onchange="selecionarArquivoVideo(event)" style="display:none;">
+        </label>
+      </div>
+      <span class="foto-msg" id="video-arquivo-msg"></span>
+    </div>
+    <div class="field">
+      <label>Título do vídeo (obrigatório)</label>
+      <input type="text" id="video-titulo-input" placeholder="Ex: Como faço a instalação" maxlength="80">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Publicar vídeo</button>
+      <button type="button" class="btn-cancelar" onclick="fecharFormVideo()">Cancelar</button>
+      <span class="form-msg" id="video-msg"></span>
+    </div>
+  </form>
 
-function _criarReconhecimentoCorridas(Api){
-  _vozCorridasReconhecimento = new Api();
-  _vozCorridasReconhecimento.lang = 'pt-BR';
-  _vozCorridasReconhecimento.continuous = true;
-  _vozCorridasReconhecimento.interimResults = false;
+  <form id="atendimento-form" onsubmit="return salvarConfigAtendimento(event)" style="display:none;">
+    <input type="hidden" id="atendimento-profissional-id">
+    <h3 style="font-size:0.95rem; margin-bottom:10px;">🤖 Atendimento automático (sem precisar ficar online)</h3>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="atendimento-ativo">
+        <span>Ativar atendimento automático por menu no Papo</span>
+      </label>
+    </div>
+    <div class="field">
+      <label>Mensagem de boas-vindas</label>
+      <textarea id="atendimento-boas-vindas" rows="2" placeholder="Ex: Olá! Bem-vindo(a) à Lanchonete do João."></textarea>
+    </div>
+    <div class="field">
+      <label>Formas de pagamento aceitas</label>
+      <label class="checkbox-18mais"><input type="checkbox" id="atendimento-pix" checked><span>Pix</span></label>
+      <label class="checkbox-18mais"><input type="checkbox" id="atendimento-dinheiro" checked><span>Dinheiro</span></label>
+      <label class="checkbox-18mais"><input type="checkbox" id="atendimento-cartao" checked><span>Cartão</span></label>
+    </div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="atendimento-pagamento-entrega" checked>
+        <span>💵 Aceitar pagamento na entrega/retirada (além do pagamento online)</span>
+      </label>
+      <p style="font-size:0.75rem; color:#8a8270; margin-top:4px;">Se marcado, o cliente escolhe entre pagar agora pelo link do Mercado Pago, ou combinar pagamento (dinheiro, cartão ou Pix) direto na hora da entrega/retirada. Se desmarcar, todo pedido precisa ser pago online antes de ser confirmado.</p>
+    </div>
+    <div class="field">
+      <label class="checkbox-18mais">
+        <input type="checkbox" id="atendimento-faz-entrega" onchange="document.getElementById('atendimento-taxa-campo').style.display = this.checked ? 'block' : 'none'">
+        <span>Faz entrega</span>
+      </label>
+      <div id="atendimento-taxa-campo" style="display:none; margin-top:6px;">
+        <p style="font-size:0.75rem; color:#8a8270; margin-bottom:6px;">📏 O frete é calculado automaticamente pela distância real até o endereço do cliente: <b>taxa fixa + (km × valor por km)</b>.</p>
+        <label>Taxa fixa da entrega (R$)</label>
+        <input type="number" id="atendimento-taxa-base" min="0" step="0.5" placeholder="6.50">
+        <p style="font-size:0.68rem; color:#8a8270; margin-top:2px;">💡 Sugestão baseada no iFood: R$ 6,50 fixo + R$ 1,50/km — ajuste como preferir pra sua região.</p>
+        <label style="margin-top:8px;">Valor por km rodado (R$)</label>
+        <input type="number" id="atendimento-valor-km" min="0" step="0.1" placeholder="1.50">
+        <p style="font-size:0.7rem; color:#8a8270; margin-top:4px;">⚠️ Pra isso funcionar, sua empresa precisa ter localização cadastrada (é automático quando você preenche cidade/bairro no seu cadastro).</p>
+      </div>
+    </div>
+    <p style="font-size:0.75rem; color:#8a8270; margin-bottom:6px;">💡 O cardápio usado pelo robô é a sua Vitrine de produtos. Cadastre os itens lá pra eles aparecerem no menu automático.</p>
+    <div class="form-actions">
+      <button type="submit" class="btn-salvar">Salvar configuração</button>
+      <button type="button" class="btn-cancelar" onclick="fecharConfigAtendimento()">Cancelar</button>
+      <span class="form-msg" id="atendimento-msg"></span>
+    </div>
+  </form>
 
-  _vozCorridasReconhecimento.onstart = () => { _vozCorridasUltimoSinal = Date.now(); };
+  <div id="motoboys-form" style="display:none; background:white; border-radius:12px; padding:16px; margin-top:12px;">
+    <h3 style="margin-bottom:10px;">🛵 Gerenciar motoboys</h3>
+    <input type="hidden" id="motoboys-profissional-id">
+    <div class="field">
+      <label>Adicionar motoboy pelo código GuiaZap dele</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="motoboy-codigo-input" placeholder="GZ12345678" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px;">
+      </div>
+      <label style="margin-top:8px; display:block;">Cidade onde ele atua</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="motoboy-cidade-input" placeholder="Ex: Mangueirinha" style="flex:1; padding:9px; border:1px solid #ddd; border-radius:8px;">
+        <button type="button" class="btn-salvar" style="padding:9px 14px;" onclick="adicionarMotoboy()">Adicionar</button>
+      </div>
+      <p style="font-size:0.72rem; color:#8a8270; margin-top:4px;">Por padrão, só entregas dessa cidade avisam esse motoboy — evita chamar alguém de longe à toa.</p>
+      <span class="form-msg" id="motoboy-add-msg"></span>
+    </div>
+    <div id="lista-motoboys" style="margin-top:14px;"></div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+    <h3 style="margin-bottom:10px;">💰 Repasses pendentes</h3>
+    <p style="font-size:0.78rem; color:#8a8270; margin-bottom:10px;">Valores de taxa de entrega que os motoboys já receberam no pedido, mas que você ainda precisa acertar com eles por fora (Pix, dinheiro). O GuiaZap não guarda nem transfere esse dinheiro — é só um registro pra te ajudar a não esquecer. <a href="ajuda-mercadopago.html">Saiba mais sobre como o pagamento funciona.</a></p>
+    <div id="lista-repasses"></div>
+    <div class="form-actions" style="margin-top:10px;">
+      <button type="button" class="btn-cancelar" onclick="fecharGerenciarMotoboys()">Fechar</button>
+    </div>
+  </div>
 
-  _vozCorridasReconhecimento.onresult = (event) => {
-    _vozCorridasUltimoSinal = Date.now();
-    const texto = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
-    document.getElementById('voz-corridas-transcricao').textContent = '🗣️ "' + texto + '"';
-    processarComandoVozCorridas(texto);
-  };
+  <div class="result-header" id="count"></div>
+  <div id="list"></div>
+  <div class="loading" id="loading">carregando profissionais...</div>
 
-  _vozCorridasReconhecimento.onend = () => {
-    _vozCorridasUltimoSinal = Date.now();
-    if(_vozCorridasAtiva){ try{ _vozCorridasReconhecimento.start(); } catch(e){} }
-  };
+  <div class="rodape-legal">
+    <a href="sobre.html">Sobre / Como funciona</a> · <a href="mapa.html">Mapa</a> · <a href="chat.html">Papo</a> · <a href="videos.html">Vídeos</a> · <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a> · <a href="contato.html">Fale conosco</a> · <a href="app.html">Baixar app</a> · <a href="vitrine.html">Vitrine</a> · <a href="vagas.html">Contrata-se</a> · <a href="banco-entregadores.html">Entregadores</a> · <a href="depoimentos.html">Depoimentos</a> · <a href="feed.html">Novidades que sigo</a>
+  </div>
+</div>
 
-  _vozCorridasReconhecimento.onerror = (event) => {
-    if(event.error === 'not-allowed'){
-      falarVozCorridas('Preciso de permissão pro microfone.');
-      pararModoVozCorridas();
-      return;
-    }
-    _vozCorridasUltimoSinal = Date.now();
-    if(_vozCorridasAtiva){ setTimeout(() => { try{ _vozCorridasReconhecimento.start(); } catch(e){} }, 300); }
-  };
+  <div id="story-viewer" class="story-viewer" style="display:none;" onclick="fecharStoryViewer()">
+    <div class="story-viewer-conteudo" onclick="event.stopPropagation()">
+      <button type="button" class="story-fechar" onclick="fecharStoryViewer()">✕</button>
+      <div class="story-progresso"><div class="story-progresso-barra" id="story-progresso-barra"></div></div>
+      <div class="story-empresa-nome" id="story-empresa-nome"></div>
+      <div class="story-foto-area">
+        <div class="story-tap-esquerda" onclick="voltarStorySlide()"></div>
+        <div class="story-tap-direita" onclick="avancarStorySlide()"></div>
+        <img id="story-foto" class="story-foto">
+        <div class="story-texto" id="story-texto"></div>
+      </div>
+      <div class="story-acoes" id="story-acoes"></div>
+    </div>
+  </div>
 
-  try{ _vozCorridasReconhecimento.start(); } catch(e){}
-}
+  <a href="chat.html" class="btn-chat-flutuante" title="Papo" id="btn-chat-flutuante" style="display:none;">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 
-function pararModoVozCorridas(){
-  _vozCorridasAtiva = false;
-  clearInterval(_vozCorridasVigia);
-  if(_vozCorridasReconhecimento){
-    _vozCorridasReconhecimento.onresult = null;
-    _vozCorridasReconhecimento.onend = null;
-    _vozCorridasReconhecimento.onerror = null;
-    try{ _vozCorridasReconhecimento.abort(); } catch(e){}
-    _vozCorridasReconhecimento = null;
-  }
-  _vozCorridasSynth.cancel();
-  document.getElementById('btn-modo-voz-corridas').style.background = 'rgba(255,255,255,0.15)';
-  document.getElementById('painel-voz-corridas').style.display = 'none';
-}
-
-function falarVozCorridas(texto){
-  document.getElementById('voz-corridas-status').textContent = texto;
-  if(!('speechSynthesis' in window)) return;
-  _vozCorridasSynth.cancel();
-  const fala = new SpeechSynthesisUtterance(texto);
-  fala.lang = 'pt-BR';
-  _vozCorridasSynth.speak(fala);
-}
-
-function processarComandoVozCorridas(texto){
-  const pendente = todasCorridas.find(c => c.status === 'pendente');
-
-  if(texto.includes('aceito') || texto.includes('aceitar') || texto.includes('topo') || texto.includes('bora')){
-    if(!pendente){ falarVozCorridas('Nenhuma corrida esperando resposta agora.'); return; }
-    falarVozCorridas('Aceitando a corrida de ' + (pendente.empresaNome || 'entrega') + '.');
-    responderCorrida(pendente.id, 'aceito');
-    return;
-  }
-
-  if(texto.includes('recuso') || texto.includes('recusar') || texto.includes('nao posso') || texto.includes('não posso')){
-    if(!pendente){ falarVozCorridas('Nenhuma corrida esperando resposta agora.'); return; }
-    falarVozCorridas('Recusando a corrida de ' + (pendente.empresaNome || 'entrega') + '.');
-    responderCorrida(pendente.id, 'recuso');
-    return;
-  }
-
-  falarVozCorridas('Não entendi. Fala "aceito" ou "recuso".');
-}
-
-initCorridas();
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
-  });
-}
-
-// ---------- INSTALAÇÃO DO APP (PWA) ----------
-
-let promptInstalacaoCorridas = null;
-let vindoParaInstalarAppCorridas = new URLSearchParams(window.location.search).get('instalarApp') === '1';
-
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  promptInstalacaoCorridas = event;
-  document.getElementById('btn-instalar-corridas').style.display = 'flex';
-
-  if(vindoParaInstalarAppCorridas){
-    vindoParaInstalarAppCorridas = false;
-    instalarAppCorridas();
-  }
-});
-
-// Se a página veio com ?instalarApp=1 mas o navegador não ofereceu o
-// prompt automático depois de um tempo (app já instalado, ou navegador
-// sem suporte), mostra a dica manual mesmo assim — sem isso, a pessoa só
-// caía na tela normal sem entender por que nada aconteceu.
-if(vindoParaInstalarAppCorridas){
-  setTimeout(() => {
-    if(vindoParaInstalarAppCorridas){
-      vindoParaInstalarAppCorridas = false;
-      instalarAppCorridas();
-    }
-  }, 2500);
-}
-
-async function instalarAppCorridas(){
-  // Prioridade 1: baixar o .apk direto, se já existir — funciona em
-  // qualquer lugar, inclusive dentro de outro app instalado (GuiaZap ou
-  // GuiaPapo), porque é só um download de arquivo, sem depender do
-  // navegador oferecer instalação
-  try{
-    const respApk = await fetch('GuiaCorridas.apk', { method: 'GET', cache: 'no-store' });
-    if(respApk.ok){
-      const link = document.createElement('a');
-      link.href = 'GuiaCorridas.apk';
-      link.download = 'GuiaCorridas.apk';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      return;
-    }
-  } catch(e){ /* segue pro método de instalação PWA abaixo */ }
-
-  if(!promptInstalacaoCorridas){
-    const rodandoDentroDeAppInstalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-    if(rodandoDentroDeAppInstalado){
-      const link = 'https://guiazap.shop/corridas.html';
-      try{
-        await navigator.clipboard.writeText(link);
-        alert('📲 Você está dentro de um app instalado, então não dá pra instalar outro app por aqui.\n\nCopiei o link do GuiaCorridas — cola no navegador normal (Chrome), abre por lá, e instala usando o menu do navegador.');
-      } catch(e){
-        prompt('Você está dentro de um app instalado — copie esse link, cola no Chrome normal, e instala por lá:', link);
-      }
-      return;
-    }
-
-    const ehCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const dica = ehCelular
-      ? 'Toque no menu do navegador (⋮ ou o ícone de compartilhar) e procure "Adicionar à tela inicial" ou "Instalar app".'
-      : 'Procure o ícone de instalar (⊕ ou uma tela com seta) na barra de endereço do navegador.';
-    alert('📲 Pra instalar o GuiaCorridas:\n\n' + dica);
-    return;
-  }
-  promptInstalacaoCorridas.prompt();
-  const { outcome } = await promptInstalacaoCorridas.userChoice;
-  if(outcome === 'accepted'){
-    document.getElementById('btn-instalar-corridas').style.display = 'none';
-  }
-  promptInstalacaoCorridas = null;
-}
-
-window.addEventListener('appinstalled', () => {
-  document.getElementById('btn-instalar-corridas').style.display = 'none';
-});
-</script>
 <script src="js/modo-escuro.js"></script>
+<script src="js/notificacoes.js"></script>
+<script src="config.js"></script>
+<script src="js/comandos-navegacao-voz.js"></script>
+<script src="js/app.js"></script>
+<script src="js/voz-biometria.js"></script>
+<script src="js/voz-acesso-cego.js"></script>
+
+<!-- 🔧 TEMPORÁRIO — console de depuração pra achar o bug do microfone no
+     celular. Aparece uma bolinha flutuante na tela com um console de
+     erros. REMOVER esse bloco depois de resolver o problema. -->
 <script src="js/debug-console.js"></script>
+<script>document.addEventListener("DOMContentLoaded", function(){ if(typeof prepararAcessoVozCego==="function") prepararAcessoVozCego(function(){ if(typeof iniciarModoVozIndex==="function") iniciarModoVozIndex(true); }); });</script>
+<script>
+  if(localStorage.getItem('pin_login_configurado_neste_aparelho')){
+    const btn = document.getElementById('btn-welcome-entrar-pin');
+    if(btn) btn.style.display = 'block';
+  }
+</script>
 </body>
 </html>
