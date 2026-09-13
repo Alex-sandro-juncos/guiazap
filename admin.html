@@ -348,6 +348,7 @@ function renderDenunciasAgrupadas(busca){
     return `<div class="admin-item" style="${empresa && empresa.em_analise_por_denuncias ? 'border-left: 4px solid #a4402f;' : ''}">
       <div class="tipo den">🚩 ${nome} <span style="font-weight:400; color:#888;">— Empresa · ${denunciasDoAlvo.length} denúncia${denunciasDoAlvo.length > 1 ? 's' : ''}</span></div>
       ${empresa && empresa.em_analise_por_denuncias ? '<div style="background:#fdeaea; color:#a4402f; font-size:0.75rem; font-weight:700; padding:4px 8px; border-radius:6px; display:inline-block; margin-top:4px;">⚠️ Marcada como "em análise" — atingiu o limite, precisa da sua decisão</div>' : ''}
+      ${empresa && empresa.resumo_ia_denuncias ? `<div style="background:#eef2ff; color:#3730a3; font-size:0.78rem; padding:6px 8px; border-radius:6px; margin-top:6px;">🤖 <b>Resumo da IA:</b> ${escapeHtmlAdmin(empresa.resumo_ia_denuncias)}</div>` : ''}
       ${denunciasDoAlvo.map(d => `
         <div class="mensagem" style="margin-top:6px; padding-top:6px; border-top:1px solid #eee;">
           <b>${escapeHtmlAdmin(d.motivo)}</b>${d.descricao ? ' — ' + escapeHtmlAdmin(d.descricao) : ''}

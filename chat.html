@@ -586,6 +586,7 @@
     <div class="chat-input-area-wrap" id="chat-input-row-normal">
       <div class="chat-input-pill">
         <button type="button" class="btn-ferramenta-chat" onclick="togglePainel('painel-emoji')" title="Emoji">😀</button>
+        <button type="button" class="btn-ferramenta-chat" id="btn-sugerir-resposta-chat" onclick="sugerirRespostaIA()" title="Sugerir resposta com IA" style="display:none;">✨</button>
         <input type="text" id="chat-input-texto" placeholder="Mensagem" enterkeyhint="send" oninput="atualizarBotaoEnviarOuMic()" onkeydown="if(event.key==='Enter') enviarMensagemChat();">
         <button type="button" class="btn-ferramenta-chat" id="btn-mais-chat" onclick="toggleMenuMaisChat()" title="Mais opções" style="position:relative;">➕</button>
         <div id="menu-mais-chat" class="menu-mais-chat-papo" style="display:none;">
@@ -683,6 +684,7 @@ let _resolverProntoParaVozPapo;
 const _prontoParaVozPapo = new Promise(resolve => { _resolverProntoParaVozPapo = resolve; });
 let currentUserChat = null;
 let meusCadastrosChat = [];
+let _souEuAEmpresaNaConversaAtual = false;
 let conversaAtual = null;
 let souEuAEmpresaNaConversaAtual = false;
 let canalRealtimeAtual = null;
@@ -1702,6 +1704,8 @@ async function abrirConversa(conversaId){
   const { data: conversa } = await supabaseClientChat.from('conversas').select('*').eq('id', conversaId).single();
   const meusIdsEmpresa = meusCadastrosChat.map(c => c.id);
   const souEuAEmpresa = meusIdsEmpresa.includes(conversa.profissional_id);
+  _souEuAEmpresaNaConversaAtual = souEuAEmpresa;
+  document.getElementById('btn-sugerir-resposta-chat').style.display = souEuAEmpresa ? 'flex' : 'none';
 
   let empresaDaConversa = null;
   if(conversa.profissional_id){
@@ -2493,6 +2497,64 @@ function falarMensagemParaTexto(){
   try{ _reconhecimentoFalarMensagem.start(); } catch(e){ console.error(e); }
 }
 
+async function sugerirRespostaIA(){
+  if(!conversaAtual || !_souEuAEmpresaNaConversaAtual) return;
+
+  const btn = document.getElementById('btn-sugerir-resposta-chat');
+  const textoOriginalBtn = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+
+  try{
+    const { data: ultimasMsgs } = await supabaseClientChat
+      .from('mensagens_chat')
+      .select('texto, tipo, remetente_user_id, enviado_por_bot')
+      .eq('conversa_id', conversaAtual)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    const historico = (ultimasMsgs || []).reverse()
+      .filter(m => m.tipo === 'texto' && m.texto)
+      .map(m => ({
+        de: m.remetente_user_id === currentUserChat.id ? 'empresa' : 'cliente',
+        texto: m.texto
+      }));
+
+    if(historico.length === 0){
+      alert('Ainda não tem mensagem de texto suficiente nessa conversa pra sugerir uma resposta.');
+      return;
+    }
+
+    const { data: { session } } = await supabaseClientChat.auth.getSession();
+    const minhaEmpresaNaConversa = meusCadastrosChat.find(c => c.id === outroLadoProfissionalIdAtual);
+    const resp = await fetch('/.netlify/functions/sugerir-resposta-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ historico, nomeEmpresa: minhaEmpresaNaConversa ? minhaEmpresaNaConversa.name : '' })
+    });
+
+    if(!resp.ok){
+      alert('Não consegui sugerir uma resposta agora. Tenta de novo em instantes.');
+      return;
+    }
+
+    const resultado = await resp.json();
+    if(resultado.sugestao){
+      document.getElementById('chat-input-texto').value = resultado.sugestao;
+      atualizarBotaoEnviarOuMic();
+      document.getElementById('chat-input-texto').focus();
+    } else {
+      alert('Não consegui pensar numa sugestão boa agora.');
+    }
+  } catch(e){
+    console.error(e);
+    alert('Erro ao sugerir resposta.');
+  } finally {
+    btn.textContent = textoOriginalBtn;
+    btn.disabled = false;
+  }
+}
+
 async function enviarMensagemChat(){
   const input = document.getElementById('chat-input-texto');
   const texto = input.value.trim();
@@ -2668,6 +2730,41 @@ function confirmarLocalizacaoChat(){
 async function enviarQualquerMensagem(payload){
   if(!conversaAtual) return;
   if(bloqueadoNaConversaAtual){ alert('Não é possível enviar mensagens nessa conversa.'); return; }
+
+  // Se o robô de atendimento automático está esperando um NÚMERO do
+  // cardápio (etapa "escolhendo_produto") e a pessoa mandou um texto livre
+  // (tipo "quero um x-salada e uma coca"), tenta traduzir isso pro(s)
+  // número(s) certo(s) antes de mandar — assim o pedido natural funciona,
+  // em vez de cair direto no "não entendi" do robô numérico.
+  if(payload.tipo === 'texto' && payload.texto){
+    const textoLimpo = payload.texto.trim();
+    const jaENumeroOuPalavraChave = /^[\d,\s]+$/.test(textoLimpo) || ['menu', 'finalizar', 'sim', 'não', 'nao', '0'].includes(textoLimpo.toLowerCase());
+
+    if(!jaENumeroOuPalavraChave){
+      try{
+        const { data: estadoAtual } = await supabaseClientChat.from('atendimento_estado').select('estado, lista_atual').eq('conversa_id', conversaAtual).maybeSingle();
+        if(estadoAtual && estadoAtual.estado === 'escolhendo_produto' && Array.isArray(estadoAtual.lista_atual) && estadoAtual.lista_atual.length > 0){
+          const resp = await fetch('/.netlify/functions/interpretar-pedido-livre-ia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ texto: textoLimpo, cardapio: estadoAtual.lista_atual })
+          });
+          if(resp.ok){
+            const resultado = await resp.json();
+            if(resultado.identificado && resultado.numeros){
+              payload = { tipo: 'texto', texto: resultado.numeros };
+              if(resultado.observacao){
+                // O cardápio numerado de hoje não tem como guardar uma
+                // observação livre por item — melhor avisar aqui na hora
+                // do que fingir que foi anotado quando não foi
+                alert('Adicionei o(s) item(ns), mas o robô automático ainda não sabe registrar observações como "' + resultado.observacao + '" — melhor confirmar isso direto com a empresa pelo Papo.');
+              }
+            }
+          }
+        }
+      } catch(e){ console.error('erro ao tentar traduzir pedido livre', e); }
+    }
+  }
 
   const { error } = await supabaseClientChat.from('mensagens_chat').insert({
     conversa_id: conversaAtual,
