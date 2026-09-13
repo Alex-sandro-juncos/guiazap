@@ -305,7 +305,7 @@ function renderProdutos(){
   filtradosBase.forEach(p => {
     if(produtoFiltroId && p.id === produtoFiltroId){ grupoLink.push(p); return; }
     if(p.profissionais && seguindoEmpresasV.has(p.profissionais.id)){ grupoSeguindo.push(p); return; }
-    if(p.profissionais && p.profissionais.plano === 'premium'){ grupoPremium.push(p); return; }
+    if(p.profissionais && (p.profissionais.plano === 'premium' || p.profissionais.plano === 'vendas')){ grupoPremium.push(p); return; }
     grupoResto.push(p);
   });
 
@@ -362,7 +362,7 @@ function renderProdutos(){
         ${isDono ? `<div class="stat-visualizacoes">👁️ ${p.visualizacoes || 0} visualizaç${(p.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
         <div class="medida-produto">${textoMedida(p)}</div>
         ${p.preco ? `<div class="preco">R$ ${escapeHtmlV(p.preco)}</div>` : ''}
-        <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}${p.profissionais && p.profissionais.plano === 'premium' ? ' <span class="selo-premium">👑</span>' : ''}</div>
+        <div class="empresa">${p.profissionais ? escapeHtmlV(p.profissionais.name) : ''}${p.profissionais && (p.profissionais.plano === 'premium' || p.profissionais.plano === 'vendas') ? ' <span class="selo-premium">👑</span>' : ''}</div>
         <div class="stars-produto">
           ${mediaDeProduto(p.id).count > 0
             ? `${starStringV(mediaDeProduto(p.id).media)} <span class="num-produto">${mediaDeProduto(p.id).media.toFixed(1)}</span>`

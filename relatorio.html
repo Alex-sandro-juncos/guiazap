@@ -52,11 +52,11 @@ async function initRelatorio(){
     .from('profissionais')
     .select('id, name')
     .eq('user_id', session.user.id)
-    .eq('plano', 'premium')
+    .in('plano', ['premium', 'vendas'])
     .eq('status_pagamento', 'ativo');
 
   if(!perfis || perfis.length === 0){
-    mostrarUpsellRel(container, 'O relatório visual é exclusivo pro Pacote Premium. Faça upgrade pra ver gráficos de visualizações e cliques no WhatsApp.');
+    mostrarUpsellRel(container, 'O relatório visual é exclusivo pros Pacotes Premium ou Vendas. Faça upgrade pra ver gráficos de visualizações e cliques no WhatsApp.');
     return;
   }
 

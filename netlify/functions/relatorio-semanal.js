@@ -29,7 +29,7 @@ exports.handler = async function () {
 
     // Busca todas as empresas Premium ativas
     const empresasResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/profissionais?plano=eq.premium&status_pagamento=eq.ativo&select=id,name,user_email,visualizacoes`,
+      `${SUPABASE_URL}/rest/v1/profissionais?plano=in.(premium,vendas)&status_pagamento=eq.ativo&select=id,name,user_email,visualizacoes`,
       { headers }
     );
     const empresas = await empresasResp.json();

@@ -99,11 +99,11 @@ async function initTalentos(){
     .from('profissionais')
     .select('id')
     .eq('user_id', session.user.id)
-    .in('plano', ['completo', 'premium'])
+    .in('plano', ['completo', 'premium', 'vendas'])
     .eq('status_pagamento', 'ativo');
 
   if(!perfis || perfis.length === 0){
-    mostrarUpsell(container, 'O Banco de Talentos é exclusivo pra empresas do Pacote Completo ou Premium. Faça upgrade pra consultar currículos disponíveis.');
+    mostrarUpsell(container, 'O Banco de Talentos é exclusivo pra empresas do Pacote Completo, Premium ou Vendas. Faça upgrade pra consultar currículos disponíveis.');
     return;
   }
 

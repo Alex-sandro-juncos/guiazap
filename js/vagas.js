@@ -62,8 +62,8 @@ async function loadVagas(){
   vagas = (data || []).filter(v => v.profissionais && v.profissionais.status_pagamento === 'ativo');
 
   vagas.sort((a, b) => {
-    const premiumA = a.profissionais && a.profissionais.plano === 'premium' ? 1 : 0;
-    const premiumB = b.profissionais && b.profissionais.plano === 'premium' ? 1 : 0;
+    const premiumA = a.profissionais && (a.profissionais.plano === 'premium' || a.profissionais.plano === 'vendas') ? 1 : 0;
+    const premiumB = b.profissionais && (b.profissionais.plano === 'premium' || b.profissionais.plano === 'vendas') ? 1 : 0;
     return premiumB - premiumA;
   });
 
@@ -110,7 +110,7 @@ function renderVagas(){
   grid.innerHTML = lista.map(v => {
     const empresa = v.profissionais ? escapeHtmlVagas(v.profissionais.name) : '';
     const wa = v.profissionais && v.profissionais.whatsapp ? v.profissionais.whatsapp.replace(/\D/g, '') : '';
-    const premium = v.profissionais && v.profissionais.plano === 'premium';
+    const premium = v.profissionais && (v.profissionais.plano === 'premium' || v.profissionais.plano === 'vendas');
     const podeExcluir = currentUserVagas && meusCadastrosVagas.some(c => c.id === v.profissional_id);
 
     return `
