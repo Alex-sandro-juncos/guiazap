@@ -19,8 +19,15 @@ const EMAIL_REMETENTE = 'GuiaZap <contato@guiazap.shop>';
 function assinaturaValida(headers, dataId){
   const secret = process.env.MP_WEBHOOK_SECRET;
   if(!secret){
-    console.warn('MP_WEBHOOK_SECRET não configurado — pulando verificação de assinatura (configure pra maior segurança)');
-    return true; // não trava o funcionamento enquanto a chave não é configurada
+    // ANTES: sem a chave configurada, isso deixava passar QUALQUER aviso
+    // como se fosse verdadeiro — alguém poderia fingir um pagamento e
+    // ativar um plano de graça. Agora, sem a chave, o webhook RECUSA por
+    // segurança. Configure MP_WEBHOOK_SECRET no Netlify com a chave
+    // secreta que aparece no painel do Mercado Pago (Webhooks > sua
+    // notificação > "Chave secreta") — sem isso, pagamentos reais também
+    // vão parar de ativar o plano sozinhos.
+    console.error('MP_WEBHOOK_SECRET não configurado — recusando o webhook por segurança. Configure a chave no Netlify.');
+    return false;
   }
 
   const xSignature = headers['x-signature'] || headers['X-Signature'];
