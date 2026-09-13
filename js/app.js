@@ -2147,6 +2147,31 @@ async function conectarMercadoPago(profissionalId){
   }
 }
 
+async function abrirMensagemMassa(profissionalId, nomeEmpresa){
+  const mensagem = prompt(`Escreva o aviso que vai pra TODOS os contatos que já falaram com "${nomeEmpresa}" no Papo (máximo 500 caracteres). Cada mensagem já vem com um link pra pessoa parar de receber, caso não queira mais:`);
+  if(!mensagem || !mensagem.trim()) return;
+
+  if(!confirm(`Vai mandar essa mensagem pra todos os contatos de "${nomeEmpresa}":\n\n"${mensagem.trim()}"\n\nSó dá pra mandar de novo depois de 24h. Confirma o envio?`)) return;
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  try{
+    const resp = await fetch('/.netlify/functions/enviar-mensagem-massa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId, mensagem: mensagem.trim() })
+    });
+    const resultado = await resp.json();
+    if(!resp.ok){
+      alert(resultado.error || 'Erro ao enviar mensagem em massa.');
+      return;
+    }
+    alert(`✅ Mensagem enviada pra ${resultado.total} contato${resultado.total === 1 ? '' : 's'}!`);
+  } catch(e){
+    console.error(e);
+    alert('Erro ao enviar mensagem em massa. Tenta de novo.');
+  }
+}
+
 async function abrirGerenciarMotoboys(profissionalId){
   document.getElementById('motoboys-profissional-id').value = profissionalId;
   document.getElementById('motoboy-codigo-input').value = '';
@@ -3482,6 +3507,7 @@ function render(){
           ${isOwner && (e.plano === 'completo' || ehPremiumOuVendas(e.plano)) ? `<a href="talentos.html" class="link-ver-produtos" style="background:#6b46c1; text-decoration:none; display:inline-block;">🎯 Banco de Talentos</a>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#1c1c1c; border:none; cursor:pointer;" onclick="abrirGerenciarMotoboys('${e.id}')">🛵 Gerenciar motoboys</button>` : ''}
+          ${isOwner && !pendente ? `<button type="button" class="link-ver-produtos" style="background:#a4402f; border:none; cursor:pointer;" onclick="abrirMensagemMassa('${e.id}', '${e.name.replace(/'/g,"\\'")}')">📢 Avisar todos os contatos</button>` : ''}
           ${isOwner && e.plano === 'entregador' ? `<a href="corridas.html" class="link-ver-produtos" style="background:#1c1c1c; text-decoration:none; display:inline-block;">🛵 Ver minhas corridas (GuiaCorridas)</a>` : ''}
           ${isOwner && e.plano === 'entregador' ? `<a href="corridas.html?instalarApp=1" class="link-ver-produtos" style="background:#0f766e; text-decoration:none; display:inline-block;">📲 Instalar o GuiaCorridas</a>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" id="btn-mp-conectar-${e.id}" style="background:${e.mpConectado ? '#1a7a3c' : '#0f766e'}; border:none; cursor:pointer;" onclick="conectarMercadoPago('${e.id}')">${e.mpConectado ? '✅ Mercado Pago conectado' : '💳 Conectar Mercado Pago (receber direto)'}</button>` : ''}

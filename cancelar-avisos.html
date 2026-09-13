@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cancelar avisos — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .cancelar-wrap { max-width: 420px; margin: 60px auto; padding: 0 20px; text-align: center; }
+  .cancelar-wrap h1 { font-size: 1.3rem; margin-bottom: 14px; }
+  .cancelar-wrap p { font-size: 0.9rem; color: #555; margin-bottom: 18px; }
+  .btn-cancelar-avisos { background: #a4402f; color: white; border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+  .btn-cancelar-avisos:disabled { opacity: 0.6; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Avisos em massa</p></header>
+
+<div class="cancelar-wrap">
+  <div id="conteudo">Carregando...</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientCancelar = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function init(){
+  const params = new URLSearchParams(window.location.search);
+  const conversaId = params.get('conversa');
+  const container = document.getElementById('conteudo');
+
+  if(!conversaId){
+    container.innerHTML = '<p>Link inválido.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <h1>🔕 Parar de receber avisos</h1>
+    <p>Você deixará de receber mensagens de aviso/promoção dessa empresa. Isso não afeta o resto da conversa — você ainda pode falar com ela normalmente quando quiser.</p>
+    <button type="button" class="btn-cancelar-avisos" id="btn-confirmar">Confirmar, não quero mais receber</button>
+    <p id="msg-resultado" style="margin-top:14px; font-weight:700;"></p>
+  `;
+
+  document.getElementById('btn-confirmar').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar');
+    btn.disabled = true;
+    btn.textContent = 'Confirmando...';
+
+    const { error } = await supabaseClientCancelar.from('conversas').update({ aceita_mensagens_massa: false }).eq('id', conversaId);
+
+    const msg = document.getElementById('msg-resultado');
+    if(error){
+      msg.style.color = '#a4402f';
+      msg.textContent = 'Erro ao processar. Tenta de novo.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar, não quero mais receber';
+    } else {
+      msg.style.color = 'var(--verde-escuro)';
+      msg.textContent = '✓ Pronto! Você não vai mais receber avisos como esse dessa empresa.';
+      btn.style.display = 'none';
+    }
+  });
+}
+
+init();
+</script>
+<script src="js/debug-console.js"></script>
+</body>
+</html>
