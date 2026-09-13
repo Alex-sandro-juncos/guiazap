@@ -6,7 +6,12 @@
 const crypto = require('crypto');
 
 function hashPin(pin, userId){
-  return crypto.createHash('sha256').update(pin + ':' + userId).digest('hex');
+  // O "pepper" é um segredo que só existe nas variáveis de ambiente do
+  // servidor, nunca no banco de dados — mesmo que a tabela de PINs vaze
+  // inteira, quem pegar o vazamento não consegue testar PIN por PIN
+  // offline sem também ter essa chave (que não sai do Netlify).
+  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  return crypto.createHash('sha256').update(pepper + ':' + pin + ':' + userId).digest('hex');
 }
 
 exports.handler = async function (event) {
