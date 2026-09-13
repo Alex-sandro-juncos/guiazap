@@ -231,24 +231,27 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
 
   if(_aguardandoAtivacaoPapo){
     falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
-  } else if(conversaAtual){
-    falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
-  } else if(new URLSearchParams(window.location.search).get('empresa') || new URLSearchParams(window.location.search).get('pessoa')){
-    // Veio da URL pedindo uma conversa específica, mas ela ainda não
-    // terminou de abrir — em vez de arriscar dizer "zero conversas" (que
-    // seria uma informação errada), espera um pouco e confere de novo.
-    falarVozPapo('Só um instante, abrindo a conversa...');
-    setTimeout(() => {
-      if(conversaAtual){
-        falarVozPapo('Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
-      } else {
-        const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
-        falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir.');
-      }
-    }, 1800);
+    return;
+  }
+
+  // Espera o carregamento inicial da página terminar de verdade (inclusive
+  // abrir uma conversa específica vinda da URL, se for o caso) antes de
+  // decidir o que falar — sem isso, corria o risco de dizer "zero
+  // conversas" bem no instante em que uma conversa estava sendo aberta.
+  const _falarSaudacaoPapo = () => {
+    _estadoVozPapo.etapa = conversaAtual ? 'conversa' : 'lista';
+    if(conversaAtual){
+      falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
+    } else {
+      const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
+      falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Fala "guiazap" ou qualquer outro comando de navegação pra sair.');
+    }
+  };
+
+  if(typeof _prontoParaVozPapo !== 'undefined' && _prontoParaVozPapo){
+    _prontoParaVozPapo.then(_falarSaudacaoPapo);
   } else {
-    const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
-    falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Fala "guiazap" ou qualquer outro comando de navegação pra sair.');
+    _falarSaudacaoPapo();
   }
 }
 
@@ -444,12 +447,23 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  const _ehPararP = t === 'parar' || t === 'desligar' || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
+  const _emChamadaAtiva = typeof peerConnectionAtual !== 'undefined' && peerConnectionAtual !== null;
+
+  // Se tem uma ligação rolando agora, "desligar"/"encerrar" tem que
+  // encerrar a CHAMADA, não desligar o modo voz — são dois sentidos
+  // diferentes da mesma palavra, e a ligação sempre tem prioridade aqui.
+  if(_emChamadaAtiva && (t === 'desligar' || t.includes('encerrar') || t.includes('desligar a ligacao') || t.includes('desligar a chamada') || t.includes('encerrar a ligacao') || t.includes('encerrar a chamada'))){
+    falarVozPapo('Encerrando a ligação.');
+    if(typeof encerrarChamada === 'function') encerrarChamada(true);
+    return;
+  }
+
+  const _ehPararP = t === 'parar' || (!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
   if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
   }
 
-  if(t === 'desligar' || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
+  if((!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;
@@ -661,6 +675,7 @@ async function processarComandoVozPapo(transcricao){
     if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
       const textoParaEnviar = converterEscolhaFaladaEmNumeros(transcricao) || transcricao.trim();
       await enviarQualquerMensagem({ tipo: 'texto', texto: textoParaEnviar });
+      window._ultimaMensagemFoiDitadaLivre = true;
       // Não fala nada aqui de propósito — a resposta da empresa (bot ou
       // pessoa) chega pelo tempo real e já é lida sozinha, porque a
       // leitura automática vem ligada por padrão. Falar aqui também
@@ -679,6 +694,7 @@ async function processarComandoVozPapo(transcricao){
     }
     if(typeof enviarQualquerMensagem === 'function' && conversaAtual){
       await enviarQualquerMensagem({ tipo: 'texto', texto: transcricao.trim() });
+      window._ultimaMensagemFoiDitadaLivre = true;
       _estadoVozPapo.etapa = 'conversa';
       falarVozPapo('Mensagem enviada: ' + transcricao.trim());
     } else {

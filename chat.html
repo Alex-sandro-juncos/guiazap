@@ -672,6 +672,15 @@
 <script src="js/notificacoes.js"></script>
 <script>
 const supabaseClientChat = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Promessa que só resolve depois que o carregamento inicial (incluindo
+// abrir uma conversa específica vinda da URL, se for o caso) terminar de
+// verdade. O modo voz espera essa promessa antes de falar qualquer coisa
+// sobre "quantas conversas você tem" — sem isso, a saudação de voz podia
+// disparar num tempo fixo e ainda achar que não tinha conversa nenhuma
+// aberta, mesmo com uma sendo aberta bem naquele instante.
+let _resolverProntoParaVozPapo;
+const _prontoParaVozPapo = new Promise(resolve => { _resolverProntoParaVozPapo = resolve; });
 let currentUserChat = null;
 let meusCadastrosChat = [];
 let conversaAtual = null;
@@ -1173,6 +1182,8 @@ async function initChat(){
 
   const pessoaId = params.get('pessoa');
   if(pessoaId) await abrirOuCriarConversaComPessoa(pessoaId);
+
+  _resolverProntoParaVozPapo();
 
   const mensagemPreenchida = params.get('msg');
   if(mensagemPreenchida && (empresaId || pessoaId)){
@@ -1745,6 +1756,23 @@ async function abrirConversa(conversaId){
       document.getElementById('chat-mensagens').scrollTop = document.getElementById('chat-mensagens').scrollHeight;
       if(payload.new.remetente_user_id !== currentUserChat.id){
         tocarSomNotificacao();
+
+        // Se a última coisa que a gente mandou foi um texto DITADO
+        // livremente (não uma opção de menu escolhida), e o robô da
+        // empresa não entendeu (a mensagem dele é um menu numerado de
+        // "não entendi"), chama um atendente humano sozinho — sem isso a
+        // pessoa ficava presa tentando conversar naturalmente com um bot
+        // que só aceita números.
+        const _eraDitadoLivre = window._ultimaMensagemFoiDitadaLivre;
+        window._ultimaMensagemFoiDitadaLivre = false;
+        const _pareceMenuNaoEntendido = payload.new.enviado_por_bot && payload.new.texto && /não entendi/i.test(payload.new.texto) && /falar com atendente/i.test(payload.new.texto);
+
+        if(_eraDitadoLivre && _pareceMenuNaoEntendido && typeof _vozPapoAtiva !== 'undefined' && _vozPapoAtiva){
+          if(typeof falarVozPapo === 'function') falarVozPapo('O atendimento automático não entendeu. Chamando um atendente humano pra te ajudar.');
+          setTimeout(() => { if(typeof enviarQualquerMensagem === 'function') enviarQualquerMensagem({ tipo: 'texto', texto: '4' }); }, 1500);
+          return;
+        }
+
         if(payload.new.tipo === 'menu_interativo' && typeof iniciarNavegacaoCardapioPorVoz === 'function' && iniciarNavegacaoCardapioPorVoz(payload.new)){
           // Cardápio virou navegação item-por-item por voz — não lê o
           // texto bruto também, pra não duplicar a fala
