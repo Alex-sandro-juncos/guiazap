@@ -4670,9 +4670,15 @@ function buscarAmbiguidadesPorTermoIndex(termo){
   const n = normalizarTexto(termo);
   if(!n || n.length < 2) return { contatos: [], produtos: [], empresas: [] };
   const ativos = (entries || []).filter(e => e.status_pagamento === 'ativo');
+  const palavrasSignificativas = n.split(/\s+/).filter(w => w.length > 2);
   const contatos = ativos.filter(e => {
     const nn = normalizarTexto(e.name);
-    return nn.includes(n) || n.includes(nn) || n.split(/\s+/).filter(w => w.length > 2).every(w => nn.includes(w));
+    // Se sobrou pelo menos uma palavra "significativa" (mais de 2 letras),
+    // confere se TODAS aparecem no nome — se não sobrou nenhuma (a busca
+    // só tinha palavras bem curtas), não usa esse critério, senão
+    // ".every()" num array vazio sempre dá "verdadeiro" e bateria com
+    // QUALQUER empresa sem querer.
+    return nn.includes(n) || n.includes(nn) || (palavrasSignificativas.length > 0 && palavrasSignificativas.every(w => nn.includes(w)));
   });
   const produtos = (produtosParaBuscaPrincipal || []).filter(p => {
     const nn = normalizarTexto(p.nome);
