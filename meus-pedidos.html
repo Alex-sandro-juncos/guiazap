@@ -43,9 +43,21 @@
 </style>
 </head>
 <body>
-<header class="pedidos-header">
+<header class="pedidos-header" style="position:relative;">
   <h1>🛍️ Meus Pedidos</h1>
+  <button type="button" id="btn-modo-voz-meuspedidos" onclick="toggleModoVozMeusPedidos()" title="Ativar modo de voz" style="position:absolute; top:20px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
 </header>
+
+<div id="painel-modo-voz-meuspedidos" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:#0f766e;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-meuspedidos-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala "em andamento", "concluídos" ou "todos"</div>
+      <div id="voz-meuspedidos-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozMeusPedidos()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 
 <div class="pedidos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
@@ -242,6 +254,160 @@ function statusTextoMeusPedidos(status){
 
 initMeusPedidos();
 
+// ---------- MODO VOZ ----------
+
+let _vozMeusPedidosAtiva = false;
+let _vozMeusPedidosReconhecimento = null;
+let _vozMeusPedidosVigia = null;
+let _vozMeusPedidosUltimoSinal = 0;
+let _vozMeusPedidosFalando = false;
+const _vozMeusPedidosSynth = window.speechSynthesis;
+
+function toggleModoVozMeusPedidos(){
+  if(_vozMeusPedidosAtiva) pararModoVozMeusPedidos();
+  else iniciarModoVozMeusPedidos();
+}
+
+function iniciarModoVozMeusPedidos(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozMeusPedidosAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-meuspedidos').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-meuspedidos').style.display = 'block';
+
+  _criarReconhecimentoMeusPedidos(Api);
+  clearInterval(_vozMeusPedidosVigia);
+  _vozMeusPedidosVigia = setInterval(() => {
+    if(!_vozMeusPedidosAtiva){ clearInterval(_vozMeusPedidosVigia); return; }
+    if(_vozMeusPedidosFalando) return;
+    if(Date.now() - _vozMeusPedidosUltimoSinal > 8000){
+      try{ _vozMeusPedidosReconhecimento.onend = null; _vozMeusPedidosReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoMeusPedidos(Api);
+    }
+  }, 4000);
+
+  falarVozMeusPedidos('Modo voz ativado. Fala "todos", "em andamento", "concluídos", ou "aguardando pagamento" pra filtrar.');
+}
+
+function _criarReconhecimentoMeusPedidos(Api){
+  _vozMeusPedidosReconhecimento = new Api();
+  _vozMeusPedidosReconhecimento.lang = 'pt-BR';
+  _vozMeusPedidosReconhecimento.continuous = true;
+  _vozMeusPedidosReconhecimento.interimResults = false;
+
+  _vozMeusPedidosReconhecimento.onstart = () => { _vozMeusPedidosUltimoSinal = Date.now(); };
+
+  _vozMeusPedidosReconhecimento.onresult = (event) => {
+    _vozMeusPedidosUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-meuspedidos-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozMeusPedidos(texto);
+  };
+
+  _vozMeusPedidosReconhecimento.onend = () => {
+    _vozMeusPedidosUltimoSinal = Date.now();
+    if(_vozMeusPedidosAtiva){ try{ _vozMeusPedidosReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozMeusPedidosReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozMeusPedidos('Preciso de permissão pro microfone.');
+      pararModoVozMeusPedidos();
+      return;
+    }
+    _vozMeusPedidosUltimoSinal = Date.now();
+    if(_vozMeusPedidosAtiva){ setTimeout(() => { try{ _vozMeusPedidosReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozMeusPedidosReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozMeusPedidos(){
+  _vozMeusPedidosAtiva = false;
+  clearInterval(_vozMeusPedidosVigia);
+  if(_vozMeusPedidosReconhecimento){
+    _vozMeusPedidosReconhecimento.onresult = null;
+    _vozMeusPedidosReconhecimento.onend = null;
+    _vozMeusPedidosReconhecimento.onerror = null;
+    try{ _vozMeusPedidosReconhecimento.abort(); } catch(e){}
+    _vozMeusPedidosReconhecimento = null;
+  }
+  _vozMeusPedidosSynth.cancel();
+  document.getElementById('btn-modo-voz-meuspedidos').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-meuspedidos').style.display = 'none';
+}
+
+function falarVozMeusPedidos(texto){
+  document.getElementById('voz-meuspedidos-status').textContent = texto;
+  _vozMeusPedidosFalando = true;
+  _vozMeusPedidosSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozMeusPedidosFalando = false;
+    if(_vozMeusPedidosAtiva){ try{ _vozMeusPedidosReconhecimento.start(); } catch(e){} }
+  };
+  _vozMeusPedidosSynth.speak(fala);
+  setTimeout(() => {
+    _vozMeusPedidosFalando = false;
+    if(_vozMeusPedidosAtiva && _vozMeusPedidosReconhecimento){ try{ _vozMeusPedidosReconhecimento.start(); } catch(e){} }
+  }, 6000);
+}
+
+function _selecionarAbaMeusPedidosPorStatus(status){
+  const btn = document.querySelector(`.abas-pedidos button[data-status="${status}"]`);
+  if(btn) mudarAbaMeusPedidos(status, btn);
+}
+
+async function processarComandoVozMeusPedidos(transcricao){
+  const t = transcricao.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'meus-pedidos.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozMeusPedidos(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozMeusPedidos('Modo voz desativado.');
+    setTimeout(pararModoVozMeusPedidos, 1200);
+    return;
+  }
+  if(t === 'parar'){ falarVozMeusPedidos('Ok, modo voz continua ativo.'); return; }
+
+  if(t.includes('todos')){ _selecionarAbaMeusPedidosPorStatus(''); falarVozMeusPedidos('Mostrando todos os pedidos.'); return; }
+  if(t.includes('andamento')){ _selecionarAbaMeusPedidosPorStatus('aguardando_confirmacao,aceito,preparando,pronto,saiu_entrega'); falarVozMeusPedidos('Mostrando pedidos em andamento.'); return; }
+  if(t.includes('conclu')){ _selecionarAbaMeusPedidosPorStatus('concluido'); falarVozMeusPedidos('Mostrando pedidos concluídos.'); return; }
+  if(t.includes('aguardando pagamento') || t.includes('pagamento')){ _selecionarAbaMeusPedidosPorStatus('aguardando_pagamento'); falarVozMeusPedidos('Mostrando pedidos aguardando pagamento.'); return; }
+
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'meus-pedidos', [
+      { nome: 'TODOS', descricao: 'ver todos os pedidos' },
+      { nome: 'EM_ANDAMENTO', descricao: 'ver pedidos ainda em andamento' },
+      { nome: 'CONCLUIDOS', descricao: 'ver pedidos já concluídos' }
+    ], {});
+    if(resultadoIA){
+      if(resultadoIA.action === 'TODOS'){ _selecionarAbaMeusPedidosPorStatus(''); falarVozMeusPedidos(resultadoIA.voice_response || 'Mostrando todos.'); return; }
+      if(resultadoIA.action === 'EM_ANDAMENTO'){ _selecionarAbaMeusPedidosPorStatus('aguardando_confirmacao,aceito,preparando,pronto,saiu_entrega'); falarVozMeusPedidos(resultadoIA.voice_response || 'Mostrando em andamento.'); return; }
+      if(resultadoIA.action === 'CONCLUIDOS'){ _selecionarAbaMeusPedidosPorStatus('concluido'); falarVozMeusPedidos(resultadoIA.voice_response || 'Mostrando concluídos.'); return; }
+      if(resultadoIA.voice_response){ falarVozMeusPedidos(resultadoIA.voice_response); return; }
+    }
+  }
+
+  falarVozMeusPedidos('Não entendi. Fala "todos", "em andamento", ou "concluídos".');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozMeusPedidos(), 1000);
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('erro ao registrar service worker', err));
@@ -249,6 +415,7 @@ if('serviceWorker' in navigator){
 }
 </script>
 <script src="js/comandos-navegacao-voz.js"></script>
+<script src="js/captura-erros.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
 </html>

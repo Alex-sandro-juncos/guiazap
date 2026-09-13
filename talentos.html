@@ -45,9 +45,23 @@
 </head>
 <body>
 <header class="talentos-header">
-  <h1>🎯 Banco de Talentos</h1>
+  <div style="display:flex; justify-content:center; align-items:center; gap:10px; position:relative;">
+    <h1>🎯 Banco de Talentos</h1>
+    <button type="button" id="btn-modo-voz-talentos" onclick="toggleModoVozTalentos()" title="Ativar modo de voz" style="position:absolute; right:0; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+  </div>
   <p>Exclusivo do Pacote Completo — consulte currículos disponíveis</p>
 </header>
+
+<div id="painel-modo-voz-talentos" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:#6b46c1;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-talentos-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala um cargo, habilidade ou cidade que procura</div>
+      <div id="voz-talentos-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozTalentos()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 
 <div id="talentos-conteudo">
   <div style="text-align:center; padding:40px;">Carregando...</div>
@@ -186,7 +200,191 @@ function escapeHtmlTalentos(str){
 }
 
 initTalentos();
+
+// ---------- MODO VOZ ----------
+
+let _vozTalentosAtiva = false;
+let _vozTalentosReconhecimento = null;
+let _vozTalentosVigia = null;
+let _vozTalentosUltimoSinal = 0;
+let _vozTalentosFalando = false;
+const _vozTalentosSynth = window.speechSynthesis;
+
+function toggleModoVozTalentos(){
+  if(_vozTalentosAtiva) pararModoVozTalentos();
+  else iniciarModoVozTalentos();
+}
+
+function iniciarModoVozTalentos(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozTalentosAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-talentos').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-talentos').style.display = 'block';
+
+  _criarReconhecimentoTalentos(Api);
+  clearInterval(_vozTalentosVigia);
+  _vozTalentosVigia = setInterval(() => {
+    if(!_vozTalentosAtiva){ clearInterval(_vozTalentosVigia); return; }
+    if(_vozTalentosFalando) return;
+    if(Date.now() - _vozTalentosUltimoSinal > 8000){
+      try{ _vozTalentosReconhecimento.onend = null; _vozTalentosReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoTalentos(Api);
+    }
+  }, 4000);
+
+  falarVozTalentos('Modo voz ativado. Fala um cargo, habilidade, ou cidade que você procura, ou o nome de um candidato pra chamar direto.');
+}
+
+function _criarReconhecimentoTalentos(Api){
+  _vozTalentosReconhecimento = new Api();
+  _vozTalentosReconhecimento.lang = 'pt-BR';
+  _vozTalentosReconhecimento.continuous = true;
+  _vozTalentosReconhecimento.interimResults = false;
+
+  _vozTalentosReconhecimento.onstart = () => { _vozTalentosUltimoSinal = Date.now(); };
+
+  _vozTalentosReconhecimento.onresult = (event) => {
+    _vozTalentosUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-talentos-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozTalentos(texto);
+  };
+
+  _vozTalentosReconhecimento.onend = () => {
+    _vozTalentosUltimoSinal = Date.now();
+    if(_vozTalentosAtiva){ try{ _vozTalentosReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozTalentosReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozTalentos('Preciso de permissão pro microfone.');
+      pararModoVozTalentos();
+      return;
+    }
+    _vozTalentosUltimoSinal = Date.now();
+    if(_vozTalentosAtiva){ setTimeout(() => { try{ _vozTalentosReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozTalentosReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozTalentos(){
+  _vozTalentosAtiva = false;
+  clearInterval(_vozTalentosVigia);
+  if(_vozTalentosReconhecimento){
+    _vozTalentosReconhecimento.onresult = null;
+    _vozTalentosReconhecimento.onend = null;
+    _vozTalentosReconhecimento.onerror = null;
+    try{ _vozTalentosReconhecimento.abort(); } catch(e){}
+    _vozTalentosReconhecimento = null;
+  }
+  _vozTalentosSynth.cancel();
+  document.getElementById('btn-modo-voz-talentos').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-talentos').style.display = 'none';
+}
+
+function falarVozTalentos(texto){
+  document.getElementById('voz-talentos-status').textContent = texto;
+  _vozTalentosFalando = true;
+  _vozTalentosSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozTalentosFalando = false;
+    if(_vozTalentosAtiva){ try{ _vozTalentosReconhecimento.start(); } catch(e){} }
+  };
+  _vozTalentosSynth.speak(fala);
+  setTimeout(() => {
+    _vozTalentosFalando = false;
+    if(_vozTalentosAtiva && _vozTalentosReconhecimento){ try{ _vozTalentosReconhecimento.start(); } catch(e){} }
+  }, 6000);
+}
+
+function lerResultadosTalentosEmVoz(){
+  const cards = document.querySelectorAll('#t-grid .nome-talento');
+  const nomes = Array.from(cards).slice(0, 5).map(el => el.textContent.trim());
+  if(nomes.length === 0) return 'Nenhum currículo encontrado com isso.';
+  const sobrando = cards.length - nomes.length;
+  return `Encontrei ${cards.length} currículo${cards.length !== 1 ? 's' : ''}: ${nomes.join(', ')}${sobrando > 0 ? ', e mais ' + sobrando : ''}.`;
+}
+
+async function processarComandoVozTalentos(transcricao){
+  const t = normalizarTextoTalentos(transcricao);
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'talentos.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozTalentos(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozTalentos('Modo voz desativado.');
+    setTimeout(pararModoVozTalentos, 1200);
+    return;
+  }
+  if(t === 'parar'){
+    falarVozTalentos('Ok, modo voz continua ativo.');
+    return;
+  }
+
+  // Tenta achar um candidato pelo NOME direto
+  const achado = curriculosTodos.find(c => normalizarTextoTalentos(c.nome).includes(t) || t.includes(normalizarTextoTalentos(c.nome).split(' ')[0]));
+  if(achado && t.length > 2){
+    falarVozTalentos('Abrindo o Papo com ' + achado.nome + '.');
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    setTimeout(() => { window.location.href = 'chat.html?pessoa=' + achado.user_id; }, 1200);
+    return;
+  }
+
+  document.getElementById('t-search').value = transcricao.trim();
+  renderTalentos();
+  const cardsAgora = document.querySelectorAll('#t-grid .card-talento');
+  if(cardsAgora.length > 0){
+    falarVozTalentos(lerResultadosTalentosEmVoz());
+    return;
+  }
+
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'talentos', [
+      { nome: 'BUSCAR', descricao: 'buscar currículos por cargo, habilidade ou cidade', params: '{ "termo": "o que buscar" }' },
+      { nome: 'CHAMAR_CANDIDATO', descricao: 'abrir o Papo com um candidato específico da lista', params: '{ "userId": "user_id do candidato" }' }
+    ], { candidatosVisiveis: curriculosTodos.slice(0, 20).map(c => ({ userId: c.user_id, nome: c.nome, cidade: c.cidade })) });
+
+    if(resultadoIA){
+      if(resultadoIA.action === 'BUSCAR' && resultadoIA.params && resultadoIA.params.termo){
+        document.getElementById('t-search').value = resultadoIA.params.termo;
+        renderTalentos();
+        falarVozTalentos(lerResultadosTalentosEmVoz());
+        return;
+      }
+      if(resultadoIA.action === 'CHAMAR_CANDIDATO' && resultadoIA.params && resultadoIA.params.userId){
+        falarVozTalentos(resultadoIA.voice_response || 'Abrindo o Papo.');
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        setTimeout(() => { window.location.href = 'chat.html?pessoa=' + resultadoIA.params.userId; }, 1200);
+        return;
+      }
+      if(resultadoIA.voice_response){ falarVozTalentos(resultadoIA.voice_response); return; }
+    }
+  }
+
+  falarVozTalentos('Nenhum currículo encontrado com isso. Fala outro cargo, habilidade ou cidade.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozTalentos(), 1000);
+}
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
+<script src="js/captura-erros.js"></script>
+<script src="js/debug-console.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Chat">💬</a>
 </body>
 </html>
