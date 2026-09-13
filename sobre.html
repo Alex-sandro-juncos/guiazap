@@ -40,7 +40,7 @@
   }
   .passo-numerado .texto { font-size: 0.9rem; padding-top: 3px; }
   .recursos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
-  .recurso-card { background: var(--cinza-card); border-radius: 12px; padding: 14px; text-align: center; }
+  .recurso-card { background: var(--cinza-card); border-radius: 12px; padding: 14px; text-align: center; display: block; text-decoration: none; color: inherit; }
   .recurso-card .emoji { font-size: 1.6rem; }
   .recurso-card .titulo { font-size: 0.82rem; font-weight: 700; margin-top: 4px; color: var(--verde-escuro); }
   .cta-box { background: var(--cinza-card); border-radius: 14px; padding: 20px; text-align: center; margin-top: 24px; }
@@ -92,21 +92,22 @@
 
 <h2>✨ O que você encontra no GuiaZap</h2>
 <div class="recursos-grid">
-  <div class="recurso-card"><div class="emoji">🛍️</div><div class="titulo">Vitrine de produtos</div></div>
-  <div class="recurso-card"><div class="emoji">💬</div><div class="titulo">Papo com chamada de voz e vídeo</div></div>
-  <div class="recurso-card"><div class="emoji">📸</div><div class="titulo">Novidades (Stories)</div></div>
-  <div class="recurso-card"><div class="emoji">📰</div><div class="titulo">Feed de quem você segue</div></div>
-  <div class="recurso-card"><div class="emoji">✍️</div><div class="titulo">Blog da comunidade</div></div>
-  <div class="recurso-card"><div class="emoji">💼</div><div class="titulo">Vagas de emprego</div></div>
-  <div class="recurso-card"><div class="emoji">📄</div><div class="titulo">Montador de currículo</div></div>
-  <div class="recurso-card"><div class="emoji">🧑‍💼</div><div class="titulo">Banco de Talentos</div></div>
-  <div class="recurso-card"><div class="emoji">🛵</div><div class="titulo">Banco de Entregadores</div></div>
-  <div class="recurso-card"><div class="emoji">🗺️</div><div class="titulo">Mapa de profissionais</div></div>
-  <div class="recurso-card"><div class="emoji">🎬</div><div class="titulo">Vídeos das empresas</div></div>
+  <a href="vitrine.html" class="recurso-card"><div class="emoji">🛍️</div><div class="titulo">Vitrine de produtos</div></a>
+  <a href="chat.html" class="recurso-card"><div class="emoji">💬</div><div class="titulo">Papo com chamada de voz e vídeo</div></a>
+  <a href="feed.html" class="recurso-card"><div class="emoji">📸</div><div class="titulo">Novidades (Stories)</div></a>
+  <a href="feed.html" class="recurso-card"><div class="emoji">📰</div><div class="titulo">Feed de quem você segue</div></a>
+  <a href="blog.html" class="recurso-card"><div class="emoji">✍️</div><div class="titulo">Blog da comunidade</div></a>
+  <a href="vagas.html" class="recurso-card"><div class="emoji">💼</div><div class="titulo">Vagas de emprego</div></a>
+  <a href="curriculo.html" class="recurso-card"><div class="emoji">📄</div><div class="titulo">Montador de currículo</div></a>
+  <a href="talentos.html" class="recurso-card"><div class="emoji">🧑‍💼</div><div class="titulo">Banco de Talentos</div></a>
+  <a href="banco-entregadores.html" class="recurso-card"><div class="emoji">🛵</div><div class="titulo">Banco de Entregadores</div></a>
+  <a href="mapa.html" class="recurso-card"><div class="emoji">🗺️</div><div class="titulo">Mapa de profissionais</div></a>
+  <a href="videos.html" class="recurso-card"><div class="emoji">🎬</div><div class="titulo">Vídeos das empresas</div></a>
   <div class="recurso-card"><div class="emoji">🎙️</div><div class="titulo">Modo Voz (mãos livres)</div></div>
-  <div class="recurso-card"><div class="emoji">✅</div><div class="titulo">Selo Verificado</div></div>
-  <div class="recurso-card"><div class="emoji">👑</div><div class="titulo">Pacote Premium</div></div>
+  <a href="criterios-selo-verificado.html" class="recurso-card"><div class="emoji">✅</div><div class="titulo">Selo Verificado</div></a>
+  <a href="pacotes.html" class="recurso-card"><div class="emoji">👑</div><div class="titulo">Pacote Premium</div></a>
 </div>
+<p style="text-align:center; font-size:0.78rem; color:#888; margin-top:-6px;">👆 Toque em qualquer card acima pra ir direto pra aquele recurso.</p>
 
 <h2>❓ Perguntas frequentes</h2>
 <p><b>O GuiaZap cobra alguma coisa dos visitantes?</b><br>Não. Usar o GuiaZap pra buscar, navegar na Vitrine e conversar no Papo é 100% grátis, sempre — você paga só o preço normal do produto ou serviço, direto pra empresa, sem nenhuma taxa extra do GuiaZap em cima.</p>
