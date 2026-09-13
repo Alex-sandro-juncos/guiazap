@@ -3824,6 +3824,7 @@ async function ativarNotificacoesPush(){
 
 let _vozIndexReconhecimento = null;
 let _vozIndexAtiva = false;
+let _ultimoTextoFaladoIndex = '';
   window._vozIndexAtiva = false;
 let _vozIndexFalando = false;
 const _vozIndexSynth = window.speechSynthesis;
@@ -3991,6 +3992,7 @@ function pararModoVozIndex(){
 }
 
 function falarVozIndex(texto){
+  _ultimoTextoFaladoIndex = texto;
   _vozIndexFalando = true;
   _vozIndexSynth.cancel();
 
@@ -5331,6 +5333,11 @@ function executarAcaoVozIndex(resultado){
       setTimeout(() => { window.location.href = `chat.html?empresa=${empresa.id}`; }, 1200);
       return;
     }
+  }
+
+  if(action === 'REPETIR'){
+    falarVozIndex(_ultimoTextoFaladoIndex || voice_response || 'Não tenho nada pra repetir ainda.');
+    return;
   }
 
   falarVozIndex(voice_response || 'Feito.');

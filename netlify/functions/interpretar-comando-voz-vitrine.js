@@ -77,7 +77,7 @@ exports.handler = async function (event) {
     const promptSistema = `Você interpreta comandos de VOZ de um cliente comprando numa loja online (GuiaZap Vitrine), no modo "mãos livres". Responda APENAS com um JSON válido, sem texto antes/depois, sem markdown, no formato:
 {
   "voice_response": "resposta curta e natural, em português, pra ser lida em voz alta",
-  "action": "BUSCAR" | "ADICIONAR_CARRINHO" | "VER_CARRINHO" | "REMOVER_ITEM" | "REMOVER_EMPRESA_CARRINHO" | "ESVAZIAR_CARRINHO" | "FINALIZAR_PEDIDO" | "NENHUMA",
+  "action": "BUSCAR" | "ADICIONAR_CARRINHO" | "VER_CARRINHO" | "REMOVER_ITEM" | "REMOVER_EMPRESA_CARRINHO" | "ESVAZIAR_CARRINHO" | "FINALIZAR_PEDIDO" | "VER_OUTRAS_OPCOES" | "MAIS_BARATO" | "MAIS_CARO" | "VOLTAR_INICIO" | "REPETIR" | "NENHUMA",
   "params": { ... }
 }
 
@@ -89,6 +89,11 @@ Regras:
 - REMOVER_EMPRESA_CARRINHO: quando quiser descartar/excluir/tirar os itens de UMA empresa específica do carrinho (ex: "exclui o pedido da tal empresa", "tira os itens de X", "não quero mais o de Y"). params = { "empresaNome": "nome da empresa, EXATAMENTE como aparece na lista de empresas no carrinho abaixo" }. Preste atenção a erros de transcrição de voz em nomes de empresa (ex: "Bocosal"/"Macosal"/"Bocozão" provavelmente é "Bocosão") e escolha a empresa mais parecida da lista.
 - ESVAZIAR_CARRINHO: quando quiser descartar TUDO do carrinho, sem especificar uma empresa (ex: "descarta tudo", "esvazia o carrinho", "cancela o pedido inteiro").
 - FINALIZAR_PEDIDO: só quando o cliente claramente disser que quer finalizar/fechar o pedido.
+- VER_OUTRAS_OPCOES: quando quiser ouvir mais opções parecidas com a busca atual, além do primeiro resultado.
+- MAIS_BARATO: quando quiser a opção mais barata entre as encontradas.
+- MAIS_CARO: quando quiser a opção mais cara entre as encontradas.
+- VOLTAR_INICIO: quando quiser voltar pra página principal do GuiaZap.
+- REPETIR: quando pedir pra repetir a última coisa que foi dita, ou disser que não entendeu.
 - Se não entender ou for só conversa, action = "NENHUMA" e responda naturalmente.
 - Nunca invente produto_id que não esteja na lista, nem empresaNome que não esteja na lista de empresas no carrinho.
 

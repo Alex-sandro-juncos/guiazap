@@ -844,10 +844,16 @@ async function processarComandoVozPapo(transcricao){
     const resultadoIA = await chamarIAGenericaVoz(transcricao, 'papo', [
       { nome: 'ABRIR_CONVERSA', descricao: 'abrir uma conversa existente pelo nome da pessoa/empresa', params: '{ "id": "id da conversa da lista" }' },
       { nome: 'MEU_CODIGO', descricao: 'ouvir/repetir o próprio código GuiaZap', params: '{}' },
-      { nome: 'ADICIONAR_CONTATO', descricao: 'adicionar um novo contato usando um código GuiaZap', params: '{}' }
-    ], { conversas: listaConversasContexto });
+      { nome: 'ADICIONAR_CONTATO', descricao: 'adicionar um novo contato usando um código GuiaZap', params: '{}' },
+      { nome: 'ENCERRAR_CHAMADA', descricao: 'encerrar/desligar/cortar/finalizar a ligação que está rolando AGORA (só faz sentido se "emChamadaAtiva" no contexto for true)', params: '{}' }
+    ], { conversas: listaConversasContexto, emChamadaAtiva: typeof peerConnectionAtual !== 'undefined' && peerConnectionAtual !== null });
 
     if(resultadoIA){
+      if(resultadoIA.action === 'ENCERRAR_CHAMADA' && typeof encerrarChamada === 'function'){
+        falarVozPapo(resultadoIA.voice_response || 'Encerrando a ligação.');
+        encerrarChamada(true);
+        return;
+      }
       if(resultadoIA.action === 'ABRIR_CONVERSA' && resultadoIA.params && resultadoIA.params.id && typeof abrirConversa === 'function'){
         await abrirConversa(resultadoIA.params.id);
         _estadoVozPapo.etapa = 'conversa';

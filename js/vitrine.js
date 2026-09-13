@@ -2831,6 +2831,7 @@ function toggleModoVozVitrine(){
 
 let _aguardandoAtivacaoVitrine = false;
 let _aguardandoEscolhaPedidoOuCardapio = false;
+let _ultimoTextoFaladoVitrine = '';
 let _vozVitrineUltimoSinalDeVida = 0;
 let _vozVitrineVigia = null;
 let _vozVitrineTentativasReconexao = 0;
@@ -3015,6 +3016,7 @@ function pararModoVozVitrine(){
 }
 
 function falarVozVitrine(texto){
+  _ultimoTextoFaladoVitrine = texto;
   // Pausa a escuta enquanto fala — sem isso, o microfone "ouviria" a
   // própria voz do site e ficaria confuso (efeito eco)
   _vozVitrineFalando = true;
@@ -3856,6 +3858,24 @@ function executarAcaoVozVitrine(resultado){
   } else if(action === 'FINALIZAR_PEDIDO'){
     falarVozVitrine(voice_response || 'Ok, vamos finalizar.');
     setTimeout(dispararFinalizarPorVoz, 1800);
+    return;
+  } else if(action === 'MAIS_BARATO' || action === 'MAIS_CARO'){
+    const opcoes = _ultimaBuscaVozVitrineComOpcoes;
+    const escolhido = opcoes ? (action === 'MAIS_BARATO' ? opcoes.maisBarato : opcoes.maisCaro) : null;
+    if(escolhido){
+      adicionarAoCarrinho(escolhido.id);
+      falarVozVitrine(voice_response || (descreverProdutoVoz(escolhido) + '. Coloquei no carrinho.'));
+    } else {
+      falarVozVitrine('Não tenho uma lista de opções pra comparar agora. Faz uma busca primeiro.');
+    }
+    return;
+  } else if(action === 'VOLTAR_INICIO'){
+    falarVozVitrine(voice_response || 'Voltando ao GuiaZap...');
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    return;
+  } else if(action === 'REPETIR'){
+    falarVozVitrine(_ultimoTextoFaladoVitrine || voice_response || 'Não tenho nada pra repetir ainda.');
     return;
   }
 
