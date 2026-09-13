@@ -68,6 +68,9 @@ async function initRelatorio(){
       <div class="rel-card"><div class="numero" id="rel-total-views">-</div><div class="label">👁️ Visualizações (30 dias)</div></div>
       <div class="rel-card"><div class="numero" id="rel-total-clicks">-</div><div class="label">💬 Cliques no WhatsApp (30 dias)</div></div>
     </div>
+    <div class="rel-cards">
+      <div class="rel-card" style="grid-column: 1 / -1;"><div class="numero" id="rel-taxa-conversao">-</div><div class="label">📊 Taxa de conversão (de cada 100 visualizações, quantas viraram clique)</div></div>
+    </div>
     <div class="rel-grafico-box">
       <h3>📈 Últimos 30 dias</h3>
       <canvas id="rel-grafico" height="200"></canvas>
@@ -92,6 +95,7 @@ async function carregarRelatorio(profissionalId){
 
   document.getElementById('rel-total-views').textContent = views.length;
   document.getElementById('rel-total-clicks').textContent = clicks.length;
+  document.getElementById('rel-taxa-conversao').textContent = views.length > 0 ? Math.round((clicks.length / views.length) * 100) + '%' : '—';
 
   // Monta os últimos 30 dias, contando quantos eventos de cada tipo teve em cada dia
   const dias = [];

@@ -3466,7 +3466,8 @@ function render(){
           ${count > 0 ? `<button type="button" class="link-avaliar" onclick="toggleVerAvaliacoes('${e.id}')">Ver avaliações</button>` : ''}
         </div>
         <div class="lista-avaliacoes" id="lista-avaliacoes-${e.id}" style="display:none;"></div>
-        ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'} no total <span id="vistas-hoje-${e.id}" style="color:#888;"></span></div>` : ''}
+        ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'} no total <span id="vistas-hoje-${e.id}" style="color:#888;"></span></div>
+        <div class="stat-visualizacoes" id="cliques-whatsapp-${e.id}" style="display:none;"></div>` : ''}
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
@@ -3570,19 +3571,37 @@ async function carregarVisualizacoesHoje(){
 
   const inicioHoje = new Date();
   inicioHoje.setHours(0, 0, 0, 0);
+  const trintaDiasAtras = new Date();
+  trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
 
   for(const e of meusCadastros){
     const el = document.getElementById('vistas-hoje-' + e.id);
-    if(!el) continue;
-    try{
-      const { count } = await supabaseClient
-        .from('eventos_analytics')
-        .select('id', { count: 'exact', head: true })
-        .eq('profissional_id', e.id)
-        .eq('tipo', 'visualizacao')
-        .gte('created_at', inicioHoje.toISOString());
-      if(count > 0) el.textContent = `— 👀 ${count} hoje`;
-    } catch(err){ /* silencioso, é só um detalhe a mais */ }
+    if(el){
+      try{
+        const { count } = await supabaseClient
+          .from('eventos_analytics')
+          .select('id', { count: 'exact', head: true })
+          .eq('profissional_id', e.id)
+          .eq('tipo', 'visualizacao')
+          .gte('created_at', inicioHoje.toISOString());
+        if(count > 0) el.textContent = `— 👀 ${count} hoje`;
+      } catch(err){ /* silencioso, é só um detalhe a mais */ }
+    }
+
+    // Visão básica de cliques no WhatsApp (últimos 30 dias) — pra TODO
+    // mundo ter alguma noção de interesse, não só quem tem Premium (que
+    // tem o relatório visual completo com gráfico e taxa de conversão)
+    const elCliques = document.getElementById('cliques-whatsapp-' + e.id);
+    if(elCliques){
+      try{
+        const { count: totalViews } = await supabaseClient.from('eventos_analytics').select('id', { count: 'exact', head: true }).eq('profissional_id', e.id).eq('tipo', 'visualizacao').gte('created_at', trintaDiasAtras.toISOString());
+        const { count: totalCliques } = await supabaseClient.from('eventos_analytics').select('id', { count: 'exact', head: true }).eq('profissional_id', e.id).eq('tipo', 'whatsapp_click').gte('created_at', trintaDiasAtras.toISOString());
+        if((totalViews || 0) > 0 || (totalCliques || 0) > 0){
+          elCliques.textContent = `💬 ${totalCliques || 0} clique${(totalCliques || 0) === 1 ? '' : 's'} no WhatsApp nos últimos 30 dias`;
+          elCliques.style.display = 'block';
+        }
+      } catch(err){ /* silencioso */ }
+    }
   }
 }
 
