@@ -1404,6 +1404,48 @@ function adicionarAoCarrinho(produtoId, varianteEscolhida, adicionaisEscolhidos)
     badge.style.transform = 'scale(1.4)';
     setTimeout(() => { badge.style.transform = 'scale(1)'; }, 200);
   }
+
+  sugerirComplementoCarrinho(p.profissional_id);
+}
+
+let _ultimaEmpresaSugerida = null;
+async function sugerirComplementoCarrinho(profissionalId){
+  // Não repete sugestão pra mesma empresa toda vez que adiciona mais um
+  // item — só uma vez por "sessão" de compras naquela empresa
+  if(_ultimaEmpresaSugerida === profissionalId) return;
+  _ultimaEmpresaSugerida = profissionalId;
+
+  try{
+    const itensDessaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
+    const produtosDessaEmpresa = produtos.filter(x => x.profissional_id === profissionalId).map(x => ({ id: x.id, nome: x.nome, preco: x.preco }));
+
+    const resp = await fetch('/.netlify/functions/sugerir-complemento-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itensNoCarrinho: itensDessaEmpresa, produtosDaEmpresa: produtosDessaEmpresa })
+    });
+    if(!resp.ok) return;
+    const resultado = await resp.json();
+    if(resultado.sugestao){
+      mostrarBannerSugestaoComplemento(resultado.sugestao);
+    }
+  } catch(e){ /* silencioso — é só uma sugestão a mais, não pode travar nada */ }
+}
+
+function mostrarBannerSugestaoComplemento(sugestao){
+  let banner = document.getElementById('banner-sugestao-complemento');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'banner-sugestao-complemento';
+    banner.style.cssText = 'position:fixed; bottom:80px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#0f766e; color:white; border-radius:12px; padding:12px 14px; z-index:1600; box-shadow:0 4px 16px rgba(0,0,0,0.2); display:flex; align-items:center; gap:10px; font-size:0.85rem;';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `
+    <span style="flex:1;">🤖 ${escapeHtmlV(sugestao.frase || ('Que tal ' + sugestao.nome + '?'))}</span>
+    <button type="button" onclick="adicionarAoCarrinho('${sugestao.id}'); document.getElementById('banner-sugestao-complemento').remove();" style="background:white; color:#0f766e; border:none; border-radius:8px; padding:6px 10px; font-weight:700; font-size:0.8rem; cursor:pointer; white-space:nowrap;">Adicionar</button>
+    <button type="button" onclick="document.getElementById('banner-sugestao-complemento').remove();" style="background:transparent; border:none; color:white; font-size:1rem; cursor:pointer;">✕</button>
+  `;
+  setTimeout(() => { const b = document.getElementById('banner-sugestao-complemento'); if(b) b.remove(); }, 12000);
 }
 
 function removerDoCarrinho(chaveItem){

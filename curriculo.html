@@ -184,6 +184,8 @@
       <p>🎯 <b>Quer que empresas te encontrem?</b> Envie seu currículo pro Banco de Talentos do GuiaZap — empresas cadastradas podem consultar diretamente, mesmo sem você precisar se candidatar a uma vaga específica.</p>
       <button type="button" class="btn-baixar-cv" style="background:#6b46c1;" onclick="enviarParaBancoTalentos()">📤 Enviar para o Banco de Talentos</button>
       <button type="button" id="cv-btn-excluir" class="btn-baixar-cv" style="background:#a4402f; display:none;" onclick="excluirMeuCurriculo()">🗑️ Excluir currículo do banco</button>
+      <button type="button" id="cv-btn-dicas-ia" class="btn-baixar-cv" style="background:#3730a3; display:none; margin-top:8px;" onclick="verDicasCurriculoIA()">🤖 Ver dicas de melhoria</button>
+      <div id="cv-dicas-ia-box" style="display:none; background:#eef2ff; color:#3730a3; border-radius:10px; padding:12px; margin-top:8px; font-size:0.85rem;"></div>
       <div id="cv-banco-msg" style="text-align:center; font-size:0.78rem; margin-top:6px;"></div>
     </div>
 
@@ -390,6 +392,7 @@ atualizarPreviewCv();
 </script>
 <script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
+<script src="js/captura-erros.js"></script>
 <script>
 let supabaseClientCv = null;
 let currentUserCv = null;
@@ -536,6 +539,42 @@ async function enviarParaBancoTalentos(){
   msg.textContent = meuCurriculoId ? 'Currículo salvo/atualizado! Empresas do Pacote Completo já podem consultar.' : 'Currículo enviado!';
   msg.style.color = 'var(--verde-escuro)';
   document.getElementById('cv-btn-excluir').style.display = 'block';
+  document.getElementById('cv-btn-dicas-ia').style.display = 'block';
+}
+
+async function verDicasCurriculoIA(){
+  const btn = document.getElementById('cv-btn-dicas-ia');
+  const box = document.getElementById('cv-dicas-ia-box');
+  btn.disabled = true;
+  btn.textContent = '⏳ Pensando...';
+
+  try{
+    const resp = await fetch('/.netlify/functions/dicas-curriculo-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        objetivo: document.getElementById('cv-input-objetivo').value.trim(),
+        experiencia: document.getElementById('cv-input-experiencia').value.trim(),
+        formacao: document.getElementById('cv-input-formacao').value.trim(),
+        habilidades: document.getElementById('cv-input-habilidades').value.trim()
+      })
+    });
+    const resultado = await resp.json();
+    if(resultado.dicas && resultado.dicas.length > 0){
+      box.innerHTML = '<b>🤖 Dicas pra melhorar seu currículo:</b><ul style="margin:8px 0 0 18px; padding:0;">' +
+        resultado.dicas.map(d => `<li style="margin-bottom:4px;">${d.replace(/</g,'&lt;')}</li>`).join('') + '</ul>';
+      box.style.display = 'block';
+    } else {
+      box.innerHTML = 'Não consegui pensar em dicas agora. Tenta de novo daqui a pouco.';
+      box.style.display = 'block';
+    }
+  } catch(e){
+    box.innerHTML = 'Erro ao buscar dicas. Tenta de novo.';
+    box.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 Ver dicas de melhoria';
+  }
 }
 
 async function excluirMeuCurriculo(){

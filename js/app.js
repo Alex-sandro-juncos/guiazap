@@ -670,8 +670,9 @@ function toggleVerAvaliacoes(profissionalId){
 
   const isOwnerDesse = currentUser && entries.find(e => e.id === profissionalId)?.user_id === currentUser.id;
   const lista = avaliacoesDetalhadas[profissionalId] || [];
+  const comComentario = lista.filter(a => a.comentario && a.comentario.trim().length > 0);
 
-  box.innerHTML = lista.map(a => `
+  box.innerHTML = (comComentario.length >= 3 ? `<div class="avaliacao-item" id="resumo-ia-avaliacoes-${profissionalId}" style="background:#eef2ff; color:#3730a3;">🤖 Resumindo as avaliações...</div>` : '') + lista.map(a => `
     <div class="avaliacao-item">
       <div class="avaliacao-estrelas">${starString(a.nota)}</div>
       ${a.comentario ? `<div class="avaliacao-comentario">${escapeHtml(a.comentario)}</div>` : ''}
@@ -692,6 +693,28 @@ function toggleVerAvaliacoes(profissionalId){
   `).join('') || '<div class="avaliacao-item">Nenhuma avaliação com detalhes ainda.</div>';
 
   box.style.display = 'block';
+
+  if(comComentario.length >= 3){
+    fetch('/.netlify/functions/resumir-avaliacoes-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comentarios: comComentario.map(a => ({ nota: a.nota, comentario: a.comentario })) })
+    })
+      .then(r => r.json())
+      .then(resultado => {
+        const el = document.getElementById('resumo-ia-avaliacoes-' + profissionalId);
+        if(!el) return;
+        if(resultado.resumo){
+          el.innerHTML = '🤖 <b>Resumo das avaliações:</b> ' + escapeHtml(resultado.resumo);
+        } else {
+          el.style.display = 'none';
+        }
+      })
+      .catch(() => {
+        const el = document.getElementById('resumo-ia-avaliacoes-' + profissionalId);
+        if(el) el.style.display = 'none';
+      });
+  }
 }
 
 function abrirResponderAvaliacao(avaliacaoId){
