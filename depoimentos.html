@@ -74,13 +74,24 @@ async function enviarDepoimento(){
   if(!nome || !mensagem){ msg.textContent = 'Preencha seu nome e o depoimento.'; msg.style.color = '#a4402f'; return; }
 
   msg.textContent = 'enviando...';
-  const { error } = await supabaseClientDepo.from('depoimentos').insert({ nome, tipo, mensagem });
+  const { data: inserido, error } = await supabaseClientDepo.from('depoimentos').insert({ nome, tipo, mensagem }).select('id').single();
   if(error){ console.error(error); msg.textContent = 'Erro ao enviar. Tente de novo.'; msg.style.color = '#a4402f'; return; }
 
   msg.textContent = '✓ Enviado! Seu depoimento aparece aqui assim que for aprovado.';
   msg.style.color = 'var(--verde-escuro)';
   document.getElementById('depo-nome').value = '';
   document.getElementById('depo-mensagem').value = '';
+
+  // Moderação automática — se a IA achar que está tudo bem, aprova sozinho
+  // na hora; senão, fica esperando revisão manual normalmente. Não trava a
+  // tela esperando isso, e não muda nada se der erro.
+  if(inserido && inserido.id){
+    fetch('/.netlify/functions/moderar-depoimento-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ depoimentoId: inserido.id })
+    }).then(() => { loadDepoimentos(); }).catch(() => {});
+  }
 }
 
 async function loadDepoimentos(){
