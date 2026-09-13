@@ -3405,7 +3405,7 @@ function render(){
           ${count > 0 ? `<button type="button" class="link-avaliar" onclick="toggleVerAvaliacoes('${e.id}')">Ver avaliações</button>` : ''}
         </div>
         <div class="lista-avaliacoes" id="lista-avaliacoes-${e.id}" style="display:none;"></div>
-        ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'}</div>` : ''}
+        ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'} no total <span id="vistas-hoje-${e.id}" style="color:#888;"></span></div>` : ''}
         ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
@@ -3498,6 +3498,29 @@ function render(){
   entries.filter(e => e.user_id === (currentUser && currentUser.id)).forEach(e => renderMinhasNovidades(e.id));
   entries.filter(e => e.user_id === (currentUser && currentUser.id) && !e.verificado).forEach(e => renderPainelVerificacao(e.id));
   renderStoriesLinha();
+  carregarVisualizacoesHoje();
+}
+
+async function carregarVisualizacoesHoje(){
+  const meusCadastros = entries.filter(e => currentUser && e.user_id === currentUser.id);
+  if(meusCadastros.length === 0) return;
+
+  const inicioHoje = new Date();
+  inicioHoje.setHours(0, 0, 0, 0);
+
+  for(const e of meusCadastros){
+    const el = document.getElementById('vistas-hoje-' + e.id);
+    if(!el) continue;
+    try{
+      const { count } = await supabaseClient
+        .from('eventos_analytics')
+        .select('id', { count: 'exact', head: true })
+        .eq('profissional_id', e.id)
+        .eq('tipo', 'visualizacao')
+        .gte('created_at', inicioHoje.toISOString());
+      if(count > 0) el.textContent = `— 👀 ${count} hoje`;
+    } catch(err){ /* silencioso, é só um detalhe a mais */ }
+  }
 }
 
 function validarCPF(cpf){

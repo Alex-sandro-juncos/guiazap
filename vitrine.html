@@ -555,6 +555,11 @@ Content-Type: application/json
     </div>
   </div>
   <div class="field">
+    <label for="p-estoque">📦 Controle de estoque (opcional) — deixe vazio se não quiser controlar</label>
+    <input id="p-estoque" type="number" min="0" step="1" placeholder="Ex: 20 unidades disponíveis">
+    <p style="font-size:0.72rem; color:#888; margin-top:4px;">Cada venda baixa 1 automaticamente. Quando chegar a zero, o produto fica indisponível sozinho.</p>
+  </div>
+  <div class="field">
     <label for="p-preco">Valor (R$) — usado se o produto não tiver variações de tamanho</label>
     <div class="campo-com-prefixo">
       <span class="prefixo-rs">R$</span>
@@ -809,6 +814,7 @@ Content-Type: application/json
 
 <script src="js/modo-escuro.js"></script>
 <script src="config.js"></script>
+<script src="js/captura-erros.js"></script>
 <script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/vitrine.js"></script>
 

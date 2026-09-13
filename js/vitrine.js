@@ -380,6 +380,9 @@ function renderProdutos(){
           </div>
         </div>
         <div class="acoes-produto-coluna">
+          ${(p.estoque_quantidade !== null && p.estoque_quantidade !== undefined && p.estoque_quantidade > 0 && p.estoque_quantidade <= 5)
+            ? `<span style="display:inline-block; background:#fff3cd; color:#7c4a03; font-size:0.72rem; font-weight:700; padding:4px 9px; border-radius:50px; margin-bottom:6px;">🔥 Últimas ${p.estoque_quantidade} unidade${p.estoque_quantidade > 1 ? 's' : ''}!</span>`
+            : ''}
           ${p.disponivel_venda === false
             ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
             : p.link_externo
@@ -788,6 +791,7 @@ function fecharFormProduto(){
   document.getElementById('p-descricao').value = '';
   document.getElementById('p-unidade-medida').value = 'unidade';
   document.getElementById('p-quantidade').value = '1';
+  document.getElementById('p-estoque').value = '';
   document.getElementById('p-preco').value = '';
   document.getElementById('p-foto').value = '';
   document.getElementById('p-link-externo').value = '';
@@ -902,6 +906,7 @@ function editarProduto(id){
   document.getElementById('p-descricao').value = p.descricao || '';
   document.getElementById('p-unidade-medida').value = p.unidade_medida || 'unidade';
   document.getElementById('p-quantidade').value = p.quantidade || 1;
+  document.getElementById('p-estoque').value = (p.estoque_quantidade === null || p.estoque_quantidade === undefined) ? '' : p.estoque_quantidade;
   document.getElementById('p-preco').value = p.preco || '';
   document.getElementById('p-foto').value = p.foto || '';
   document.getElementById('p-link-externo').value = p.link_externo || '';
@@ -1140,6 +1145,7 @@ async function salvarProduto(e){
     categoria: document.getElementById('p-categoria').value.trim() || null,
     unidade_medida: document.getElementById('p-unidade-medida').value,
     quantidade: parseFloat(document.getElementById('p-quantidade').value) || 1,
+    estoque_quantidade: document.getElementById('p-estoque').value.trim() === '' ? null : parseInt(document.getElementById('p-estoque').value, 10),
     preco: document.getElementById('p-preco').value.trim() || null,
     foto: document.getElementById('p-foto').value.trim() || null,
     codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,

@@ -77,8 +77,13 @@ const _DESTINOS_NAVEGACAO_VOZ = [
   },
   {
     arquivo: 'pedidos.html',
-    fala: 'Indo pra tela de pedidos...',
-    gatilhos: ['=pedidos', 'ir para pedidos', 'ir pra pedidos', 'ver meus pedidos', 'meus pedidos']
+    fala: 'Indo pra tela de pedidos recebidos...',
+    gatilhos: ['=pedidos', 'pedidos recebidos', 'gerenciar pedidos', 'pedidos da minha empresa', 'ver pedidos recebidos', 'pedidos da empresa']
+  },
+  {
+    arquivo: 'meus-pedidos.html',
+    fala: 'Indo pra suas compras...',
+    gatilhos: ['=minhas compras', 'minhas compras', 'meus pedidos', 'ver meus pedidos', 'ir para meus pedidos', 'ir pra meus pedidos', 'historico de compras', 'histórico de compras', 'acompanhar pedido', 'acompanhar meu pedido']
   },
   {
     arquivo: 'vagas.html',

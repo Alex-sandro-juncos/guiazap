@@ -101,6 +101,8 @@
     <button type="button" data-status="concluido" onclick="mudarAbaPedidos('concluido', this)">✅ Concluídos</button>
   </div>
 
+  <button type="button" onclick="exportarPedidosCsv()" style="display:block; width:100%; margin-bottom:14px; padding:9px; border-radius:8px; border:1.5px solid #0f766e; background:white; color:#0f766e; font-weight:700; font-size:0.82rem; cursor:pointer;">📥 Exportar histórico (CSV)</button>
+
   <div id="lista-pedidos">Carregando...</div>
 </div>
 
@@ -109,6 +111,7 @@
 <script src="js/modo-escuro.js"></script>
 <script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
+<script src="js/captura-erros.js"></script>
 <script>
 const supabaseClientPedidos = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUserPedidos = null;
@@ -182,6 +185,47 @@ async function carregarPedidos(){
 
   todosPedidos = data || [];
   renderPedidos();
+}
+
+function exportarPedidosCsv(){
+  const empresaFiltro = document.getElementById('filtro-empresa-pedidos').value;
+  const statusFiltro = abaStatusAtual ? abaStatusAtual.split(',') : null;
+
+  const lista = todosPedidos.filter(p => {
+    if(empresaFiltro && p.profissional_id !== empresaFiltro) return false;
+    if(statusFiltro && !statusFiltro.includes(p.status)) return false;
+    return true;
+  });
+
+  if(lista.length === 0){ alert('Não tem pedido nenhum pra exportar com esse filtro.'); return; }
+
+  const cabecalho = ['Data', 'Empresa', 'Código', 'Status', 'Subtotal', 'Frete', 'Total', 'Forma de pagamento', 'Endereço de entrega'];
+  const linhasCsv = [cabecalho.join(';')];
+
+  lista.forEach(p => {
+    const data = new Date(p.created_at).toLocaleString('pt-BR');
+    const empresa = p.profissionais ? p.profissionais.name : '';
+    const linha = [
+      data, empresa, p.codigo_confirmacao || '', p.status || '',
+      (p.subtotal || 0).toString().replace('.', ','),
+      (p.taxa_entrega || 0).toString().replace('.', ','),
+      (p.total || 0).toString().replace('.', ','),
+      p.forma_pagamento || '', (p.endereco_entrega || 'Retirada no local').replace(/;/g, ',')
+    ];
+    linhasCsv.push(linha.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';'));
+  });
+
+  // BOM no início ajuda o Excel a ler acento certinho quando abrir o CSV
+  const conteudo = '\uFEFF' + linhasCsv.join('\r\n');
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'pedidos-guiazap-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function mudarAbaPedidos(status, btn){
@@ -365,7 +409,7 @@ async function mudarStatusPedidoPorVoz(pedidoId, novoStatus){
 }
 
 async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
-  const { data: motoboysDaEmpresa } = await supabaseClientPedidos.from('motoboys').select('user_id, preferido, cidade').eq('profissional_id', pedido.profissional_id).eq('ativo', true);
+  const { data: motoboysDaEmpresa } = await supabaseClientPedidos.from('motoboys').select('id, user_id, preferido, cidade, nome_exibicao').eq('profissional_id', pedido.profissional_id).eq('ativo', true);
   if(!motoboysDaEmpresa || motoboysDaEmpresa.length === 0) return;
 
   const cidadeEmpresa = pedido.profissionais ? pedido.profissionais.cidade : null;
@@ -382,7 +426,31 @@ async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
     destinatarios = preferidosDaCidade.length > 0 ? preferidosDaCidade : (daMesmaCidade.length > 0 ? daMesmaCidade : motoboysDaEmpresa);
   }
 
+  // Só chama quem estiver LIVRE agora (sem corrida em andamento) — reaproveita
+  // a mesma regra do robô automático, pra não empilhar corrida em cima de
+  // corrida pro mesmo motoboy
+  const { data: ocupados } = await supabaseClientPedidos.from('corridas_motoboy').select('motoboy_id').eq('status', 'aceita').in('motoboy_id', destinatarios.map(m => m.id));
+  const idsOcupados = new Set((ocupados || []).map(o => o.motoboy_id));
+  destinatarios = destinatarios.filter(m => !idsOcupados.has(m.id));
+
   if(destinatarios.length === 0) return;
+
+  // Cria o "chamado" de verdade pra cada motoboy notificado — sem isso, a
+  // notificação só aparecia como um push solto, sem nenhuma corrida
+  // registrada pra eles aceitarem no GuiaCorridas ou no Papo. Reaproveita a
+  // mesma function SQL usada quando o cliente escolhe um motoboy específico
+  // no robô automático — só que aqui chama pra vários de uma vez (corrida
+  // em paralelo); quem aceitar primeiro fica com ela.
+  for(const m of destinatarios){
+    supabaseClientPedidos.rpc('guiazap_notificar_motoboy_corrida', {
+      p_pedido_id: pedido.id,
+      p_profissional_id: pedido.profissional_id,
+      p_motoboy_id: m.id,
+      p_endereco: pedido.endereco_entrega,
+      p_taxa_entrega: pedido.taxa_entrega,
+      p_codigo: pedido.codigo_confirmacao
+    }).then(({ error }) => { if(error) console.error('erro ao notificar motoboy', error); });
+  }
 
   fetch('/.netlify/functions/enviar-push', {
     method: 'POST',
@@ -390,7 +458,7 @@ async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
     body: JSON.stringify({
       titulo: '🛵 Nova entrega disponível!',
       mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
-      url: '/entregas.html',
+      url: '/corridas.html',
       userIds: destinatarios.map(m => m.user_id)
     })
   }).catch(e => console.error('erro ao notificar motoboys', e));
