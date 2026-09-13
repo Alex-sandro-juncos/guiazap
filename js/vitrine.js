@@ -3831,7 +3831,14 @@ async function _processarComandoVozVitrineInterno(transcricao){
     const resultado = await resp.json();
 
     if(!resp.ok){
-      // Fallback: busca o termo falado
+      // 401 = precisa estar logado pra essa IA mais esperta — avisa isso
+      // em vez de simplesmente tratar a fala como busca, sem explicar nada
+      if(resp.status === 401){
+        document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
+        renderProdutos();
+        falarVozVitrine('Pra comandos mais espertos tipo carrinho e finalizar, entra na sua conta. Por enquanto, ' + lerResultadosBuscaVitrine());
+        return;
+      }
       document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
       renderProdutos();
       falarVozVitrine(lerResultadosBuscaVitrine());
@@ -3839,6 +3846,21 @@ async function _processarComandoVozVitrineInterno(transcricao){
     }
 
     if(resultado.action === 'NENHUMA'){
+      // Antes de desistir e virar busca cega, tenta a navegação universal
+      // com IA — pode ser que a pessoa só quisesse ir pra outra página
+      if(typeof verificarNavegacaoUniversalPorVozComIA === 'function'){
+        const destinoIA = await verificarNavegacaoUniversalPorVozComIA(textoNormalizado, transcricao, 'vitrine.html');
+        if(destinoIA && destinoIA.url){
+          localStorage.setItem('retomarModoVozAoCarregar', '1');
+          falarVozVitrine(destinoIA.fala);
+          setTimeout(() => { window.location.href = destinoIA.url; }, 1200);
+          return;
+        }
+        if(destinoIA && destinoIA.fala){
+          falarVozVitrine(destinoIA.fala);
+          return;
+        }
+      }
       document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
       renderProdutos();
       falarVozVitrine(lerResultadosBuscaVitrine());

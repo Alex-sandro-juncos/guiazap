@@ -5166,8 +5166,10 @@ async function processarComandoVozIndex(transcricao){
     return;
   }
 
-  // Comando de navegação universal — funciona igual em todas as páginas
-  // com modo voz (a lista fica em js/comandos-navegacao-voz.js)
+  // Comando de navegação universal (versão rápida, só lista local) —
+  // tenta primeiro aqui pra não gastar IA em pedidos óbvios. Se não bater
+  // com nada, mais adiante (perto do final) tenta de novo com a versão
+  // que usa IA, antes de desistir e cair na busca cega.
   if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
     const destinoUniversal = verificarNavegacaoUniversalPorVoz(textoNormalizado, 'index.html');
     if(destinoUniversal){
@@ -5443,11 +5445,29 @@ async function processarComandoVozIndex(transcricao){
       return;
     }
 
-    // Se a IA disse que não entendeu, ainda assim tenta buscar o termo falado
-    if(resultado.action === 'NENHUMA' && termoBuscaLocal.length >= 2){
-      document.getElementById('search').value = termoBuscaLocal;
-      render();
-      falarVozIndex(lerResultadosBuscaIndex());
+    // Se a IA de busca/produto não entendeu, tenta a navegação universal
+    // COM IA antes de desistir — sem isso, frases tipo "obrigado" ou "tá
+    // bom" (que não são busca nem navegação) acabavam virando uma busca
+    // cega e mostrando resultado aleatório sem sentido nenhum.
+    if(resultado.action === 'NENHUMA'){
+      if(typeof verificarNavegacaoUniversalPorVozComIA === 'function'){
+        const destinoIA = await verificarNavegacaoUniversalPorVozComIA(textoNormalizado, transcricao, 'index.html');
+        if(destinoIA && destinoIA.url){
+          irPara(destinoIA.url, destinoIA.fala);
+          return;
+        }
+        if(destinoIA && destinoIA.fala){
+          falarVozIndex(destinoIA.fala);
+          return;
+        }
+      }
+      if(termoBuscaLocal.length >= 2){
+        document.getElementById('search').value = termoBuscaLocal;
+        render();
+        falarVozIndex(lerResultadosBuscaIndex());
+        return;
+      }
+      falarVozIndex('Não entendi. Pode repetir de outro jeito?');
       return;
     }
 
