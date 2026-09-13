@@ -626,6 +626,18 @@ async function processarComandoVozBlog(transcricao){
       setTimeout(() => { window.location.href = destinoUniversal.url; }, 1200);
       return;
     }
+    // Não bateu na lista fixa — tenta a versão com IA antes de seguir pro
+    // resto dos comandos, cobrindo frases formais/soltas tipo "gostaria
+    // de acessar a vitrine" que a lista local sozinha não reconheceria
+    if(typeof verificarNavegacaoUniversalPorVozComIA === 'function'){
+      const destinoIA = await verificarNavegacaoUniversalPorVozComIA(textoNorm, transcricao, 'blog.html');
+      if(destinoIA && destinoIA.url){
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        falarVozBlog(destinoIA.fala);
+        setTimeout(() => { window.location.href = destinoIA.url; }, 1200);
+        return;
+      }
+    }
   }
 
   // Comandos globais. "desligar"/"sair" desliga o modo voz de vez —
