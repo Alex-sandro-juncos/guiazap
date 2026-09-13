@@ -19,7 +19,18 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Mapa de profissionais</p></header>
+<header style="position:relative;"><div class="logo">GuiaZap</div><p>Mapa de profissionais</p>
+  <button type="button" id="btn-modo-voz-mapa" onclick="toggleModoVozMapa()" title="Ativar modo de voz" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+</header>
+<div id="painel-modo-voz-mapa" style="display:none; position:fixed; bottom:70px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:#6b46c1;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-mapa-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala uma categoria ou cidade que procura</div>
+    </div>
+    <button type="button" onclick="pararModoVozMapa()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 <div id="mapa-area"></div>
 <a href="index.html" class="voltar-mapa">← Voltar ao GuiaZap</a>
 
@@ -33,6 +44,10 @@ function escapeHtmlMapa(str){
   return d.innerHTML;
 }
 
+let mapaLeaflet = null;
+let marcadoresMapa = [];
+let todosComCoordenadas = [];
+
 async function initMapa(){
   const { data, error } = await supabaseClientMapa
     .from('profissionais')
@@ -40,20 +55,32 @@ async function initMapa(){
     .eq('status_pagamento', 'ativo');
 
   const comCoordenadas = (data || []).filter(e => e.latitude != null && e.longitude != null);
+  todosComCoordenadas = comCoordenadas;
 
   // Centraliza no meio de todos os pins, ou no Brasil todo se não tiver nenhum
   const centroLat = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.latitude, 0) / comCoordenadas.length : -15.78;
   const centroLng = comCoordenadas.length > 0 ? comCoordenadas.reduce((s, e) => s + e.longitude, 0) / comCoordenadas.length : -47.93;
 
-  const mapa = L.map('mapa-area').setView([centroLat, centroLng], comCoordenadas.length > 0 ? 12 : 4);
+  mapaLeaflet = L.map('mapa-area').setView([centroLat, centroLng], comCoordenadas.length > 0 ? 12 : 4);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(mapa);
+  }).addTo(mapaLeaflet);
 
-  comCoordenadas.forEach(e => {
+  desenharMarcadoresMapa(comCoordenadas);
+
+  if(comCoordenadas.length === 0){
+    document.getElementById('mapa-area').insertAdjacentHTML('afterbegin', '<p style="text-align:center; padding:20px; position:absolute; z-index:1000; background:white; left:50%; transform:translateX(-50%); top:20px; border-radius:8px;">Ainda não temos localização suficiente cadastrada pra mostrar no mapa.</p>');
+  }
+}
+
+function desenharMarcadoresMapa(lista){
+  marcadoresMapa.forEach(m => mapaLeaflet.removeLayer(m));
+  marcadoresMapa = [];
+
+  lista.forEach(e => {
     const icone = e.plano === 'premium' ? '👑' : '📍';
-    const marker = L.marker([e.latitude, e.longitude]).addTo(mapa);
+    const marker = L.marker([e.latitude, e.longitude]).addTo(mapaLeaflet);
     marker.bindPopup(`
       <div class="popup-mapa">
         <div class="nome-popup">${icone} ${escapeHtmlMapa(e.name)}</div>
@@ -62,15 +89,184 @@ async function initMapa(){
         <a href="https://wa.me/55${(e.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no mapa do GuiaZap e gostaria de falar com você.')}" target="_blank">Chamar no WhatsApp</a>
       </div>
     `);
+    marcadoresMapa.push(marker);
   });
-
-  if(comCoordenadas.length === 0){
-    document.getElementById('mapa-area').insertAdjacentHTML('afterbegin', '<p style="text-align:center; padding:20px; position:absolute; z-index:1000; background:white; left:50%; transform:translateX(-50%); top:20px; border-radius:8px;">Ainda não temos localização suficiente cadastrada pra mostrar no mapa.</p>');
-  }
 }
 
 initMapa();
+
+// ---------- MODO VOZ ----------
+
+let _vozMapaAtiva = false;
+let _vozMapaReconhecimento = null;
+let _vozMapaVigia = null;
+let _vozMapaUltimoSinal = 0;
+let _vozMapaFalando = false;
+const _vozMapaSynth = window.speechSynthesis;
+
+function toggleModoVozMapa(){
+  if(_vozMapaAtiva) pararModoVozMapa();
+  else iniciarModoVozMapa();
+}
+
+function iniciarModoVozMapa(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozMapaAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-mapa').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-mapa').style.display = 'block';
+
+  _criarReconhecimentoMapa(Api);
+  clearInterval(_vozMapaVigia);
+  _vozMapaVigia = setInterval(() => {
+    if(!_vozMapaAtiva){ clearInterval(_vozMapaVigia); return; }
+    if(_vozMapaFalando) return;
+    if(Date.now() - _vozMapaUltimoSinal > 8000){
+      try{ _vozMapaReconhecimento.onend = null; _vozMapaReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoMapa(Api);
+    }
+  }, 4000);
+
+  falarVozMapa('Modo voz ativado. Fala uma categoria ou cidade que procura, ou "ver tudo" pra mostrar todo mundo de novo.');
+}
+
+function _criarReconhecimentoMapa(Api){
+  _vozMapaReconhecimento = new Api();
+  _vozMapaReconhecimento.lang = 'pt-BR';
+  _vozMapaReconhecimento.continuous = true;
+  _vozMapaReconhecimento.interimResults = false;
+
+  _vozMapaReconhecimento.onstart = () => { _vozMapaUltimoSinal = Date.now(); };
+
+  _vozMapaReconhecimento.onresult = (event) => {
+    _vozMapaUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    processarComandoVozMapa(texto);
+  };
+
+  _vozMapaReconhecimento.onend = () => {
+    _vozMapaUltimoSinal = Date.now();
+    if(_vozMapaAtiva){ try{ _vozMapaReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozMapaReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozMapa('Preciso de permissão pro microfone.');
+      pararModoVozMapa();
+      return;
+    }
+    _vozMapaUltimoSinal = Date.now();
+    if(_vozMapaAtiva){ setTimeout(() => { try{ _vozMapaReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozMapaReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozMapa(){
+  _vozMapaAtiva = false;
+  clearInterval(_vozMapaVigia);
+  if(_vozMapaReconhecimento){
+    _vozMapaReconhecimento.onresult = null;
+    _vozMapaReconhecimento.onend = null;
+    _vozMapaReconhecimento.onerror = null;
+    try{ _vozMapaReconhecimento.abort(); } catch(e){}
+    _vozMapaReconhecimento = null;
+  }
+  _vozMapaSynth.cancel();
+  document.getElementById('btn-modo-voz-mapa').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-mapa').style.display = 'none';
+}
+
+function falarVozMapa(texto){
+  document.getElementById('voz-mapa-status').textContent = texto;
+  _vozMapaFalando = true;
+  _vozMapaSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozMapaFalando = false;
+    if(_vozMapaAtiva){ try{ _vozMapaReconhecimento.start(); } catch(e){} }
+  };
+  _vozMapaSynth.speak(fala);
+  setTimeout(() => {
+    _vozMapaFalando = false;
+    if(_vozMapaAtiva && _vozMapaReconhecimento){ try{ _vozMapaReconhecimento.start(); } catch(e){} }
+  }, Math.max(6000, (texto || '').length * 90));
+}
+
+function normalizarTextoMapa(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+async function processarComandoVozMapa(transcricao){
+  const t = normalizarTextoMapa(transcricao);
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'mapa.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozMapa(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozMapa('Modo voz desativado.');
+    setTimeout(pararModoVozMapa, 1200);
+    return;
+  }
+  if(t === 'parar'){ falarVozMapa('Ok, modo voz continua ativo.'); return; }
+
+  if(t.includes('ver tudo') || t.includes('mostrar tudo') || t.includes('limpar filtro')){
+    desenharMarcadoresMapa(todosComCoordenadas);
+    falarVozMapa('Mostrando todos os ' + todosComCoordenadas.length + ' profissionais no mapa.');
+    return;
+  }
+
+  const filtrados = todosComCoordenadas.filter(e =>
+    normalizarTextoMapa(e.cat).includes(t) || normalizarTextoMapa(e.cidade).includes(t) || normalizarTextoMapa(e.bairro).includes(t) || t.includes(normalizarTextoMapa(e.cat))
+  );
+
+  if(filtrados.length > 0){
+    desenharMarcadoresMapa(filtrados);
+    if(filtrados.length === 1){
+      mapaLeaflet.setView([filtrados[0].latitude, filtrados[0].longitude], 15);
+    } else {
+      const grupo = L.featureGroup(marcadoresMapa);
+      mapaLeaflet.fitBounds(grupo.getBounds().pad(0.2));
+    }
+    falarVozMapa('Encontrei ' + filtrados.length + ' no mapa pra "' + transcricao.trim() + '".');
+    return;
+  }
+
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'mapa', [
+      { nome: 'FILTRAR', descricao: 'filtrar o mapa por categoria, cidade ou bairro', params: '{ "termo": "o que buscar" }' },
+      { nome: 'VER_TUDO', descricao: 'mostrar todos os profissionais de novo, sem filtro' }
+    ], {});
+    if(resultadoIA){
+      if(resultadoIA.action === 'VER_TUDO'){ desenharMarcadoresMapa(todosComCoordenadas); falarVozMapa(resultadoIA.voice_response || 'Mostrando todos.'); return; }
+      if(resultadoIA.action === 'FILTRAR' && resultadoIA.params && resultadoIA.params.termo){
+        return processarComandoVozMapa(resultadoIA.params.termo);
+      }
+      if(resultadoIA.voice_response){ falarVozMapa(resultadoIA.voice_response); return; }
+    }
+  }
+
+  falarVozMapa('Não encontrei ninguém com isso no mapa. Fala outra categoria ou cidade.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozMapa(), 1500);
+}
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
+<script src="js/captura-erros.js"></script>
+<script src="js/debug-console.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 </body>
 </html>
