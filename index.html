@@ -95,6 +95,17 @@
   </div>
 </div>
 
+<div id="tutorial-primeiro-acesso" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1100; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:white; border-radius:18px; padding:28px 22px; max-width:340px; width:100%; text-align:center;">
+    <div id="tutorial-icone" style="font-size:3rem; margin-bottom:10px;"></div>
+    <h2 id="tutorial-titulo" style="font-size:1.15rem; color:var(--verde-escuro); margin-bottom:10px;"></h2>
+    <p id="tutorial-texto" style="font-size:0.9rem; color:#555; line-height:1.5; margin-bottom:18px;"></p>
+    <div id="tutorial-pontos" style="margin-bottom:16px;"></div>
+    <button type="button" id="tutorial-btn-proximo" onclick="tutorialProximo()" style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--verde-escuro); color:white; font-weight:700; font-size:0.9rem; cursor:pointer;"></button>
+    <button type="button" onclick="fecharTutorial()" style="width:100%; margin-top:8px; padding:8px; border:none; background:transparent; color:#888; font-size:0.8rem; cursor:pointer;">Pular tutorial</button>
+  </div>
+</div>
+
 <header>
   <div class="logo">GuiaZap</div>
   <p>Conectando você ao que sua cidade tem de melhor</p>

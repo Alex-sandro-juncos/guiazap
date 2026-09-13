@@ -3734,7 +3734,13 @@ function escapeHtml(str){
 })();
 
 function mostrarWelcomeGateSeNecessario(){
-  if(localStorage.getItem('jaVisitouGuiaZap') === '1') return;
+  if(localStorage.getItem('jaVisitouGuiaZap') === '1'){
+    // Pessoa que já visitou antes (não vê o aviso de boas-vindas de novo)
+    // ainda pode nunca ter visto o tutorial — mostra pra ela também,
+    // só que sem a pausa de precisar fechar o aviso primeiro.
+    mostrarTutorialSeNecessario();
+    return;
+  }
   if(localStorage.getItem('abrirCadastroPapoAoCarregar') === '1') return;
   document.getElementById('welcome-gate').style.display = 'flex';
 }
@@ -3742,10 +3748,54 @@ function mostrarWelcomeGateSeNecessario(){
 function fecharWelcomeGate(){
   localStorage.setItem('jaVisitouGuiaZap', '1');
   document.getElementById('welcome-gate').style.display = 'none';
+  mostrarTutorialSeNecessario();
 }
 
 function pularWelcomeGate(){
   fecharWelcomeGate();
+}
+
+// ---------- TUTORIAL DE PRIMEIRO ACESSO ----------
+
+const _SLIDES_TUTORIAL = [
+  { icone: '🔍', titulo: 'Busque qualquer coisa', texto: 'Digite o que você precisa (tipo "dentista" ou "eletricista") e veja quem está perto de você — ou use o 🎙️ pra buscar falando.' },
+  { icone: '🛍️', titulo: 'Compre na Vitrine', texto: 'Empresas cadastradas vendem produtos direto pelo site. Adicione ao carrinho e finalize o pedido pelo Papo, sem sair do GuiaZap.' },
+  { icone: '💬', titulo: 'Converse pelo Papo', texto: 'Fale com qualquer empresa direto pelo chat do GuiaZap — com áudio, chamada de vídeo, e tudo sem precisar de número de telefone.' },
+  { icone: '🎙️', titulo: 'Use a voz o tempo todo', texto: 'Quase todo o site funciona de mãos livres — busque, compre e navegue só falando. Ótimo pra quem não pode digitar ou tocar na tela.' },
+  { icone: '🏪', titulo: 'Tem uma empresa?', texto: 'Cadastre grátis e apareça pras pessoas da sua região. Toque em "Cadastrar minha empresa" quando quiser começar.' }
+];
+let _slideTutorialAtual = 0;
+
+function mostrarTutorialSeNecessario(){
+  if(localStorage.getItem('jaViuTutorialGuiaZap') === '1') return;
+  _slideTutorialAtual = 0;
+  _renderSlideTutorial();
+  document.getElementById('tutorial-primeiro-acesso').style.display = 'flex';
+}
+
+function _renderSlideTutorial(){
+  const slide = _SLIDES_TUTORIAL[_slideTutorialAtual];
+  document.getElementById('tutorial-icone').textContent = slide.icone;
+  document.getElementById('tutorial-titulo').textContent = slide.titulo;
+  document.getElementById('tutorial-texto').textContent = slide.texto;
+  document.getElementById('tutorial-pontos').innerHTML = _SLIDES_TUTORIAL.map((s, i) =>
+    `<span style="width:8px; height:8px; border-radius:50%; display:inline-block; margin:0 3px; background:${i === _slideTutorialAtual ? 'var(--verde-escuro)' : '#ddd'};"></span>`
+  ).join('');
+  document.getElementById('tutorial-btn-proximo').textContent = _slideTutorialAtual === _SLIDES_TUTORIAL.length - 1 ? 'Vamos lá!' : 'Próximo';
+}
+
+function tutorialProximo(){
+  if(_slideTutorialAtual < _SLIDES_TUTORIAL.length - 1){
+    _slideTutorialAtual++;
+    _renderSlideTutorial();
+  } else {
+    fecharTutorial();
+  }
+}
+
+function fecharTutorial(){
+  localStorage.setItem('jaViuTutorialGuiaZap', '1');
+  document.getElementById('tutorial-primeiro-acesso').style.display = 'none';
 }
 
 async function welcomeSignIn(){
