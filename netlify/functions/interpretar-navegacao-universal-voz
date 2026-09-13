@@ -91,6 +91,10 @@ const DESCRICAO_PAGINAS = `
 - chamar-frete.html: pedir um frete/corrida/motoboy pra buscar ou entregar algo
 - corridas.html: "GuiaCorridas", tela do entregador pra ver e aceitar corridas
 - banco-entregadores.html: lista de entregadores/motoboys disponíveis pra contratar direto
+- talentos.html: banco de talentos, currículos de candidatos disponíveis pra empresa contratar
+- feed.html: feed de novidades das empresas que a pessoa segue
+- videos.html: vídeos publicados pelas empresas
+- pacotes.html: planos/pacotes pra cadastrar uma empresa no GuiaZap
 `;
 
 exports.handler = async function (event) {

@@ -5,6 +5,9 @@
 [functions."verificar-pagamentos"]
   schedule = "0 * * * *"
 
+[functions."verificar-timeout-corridas"]
+  schedule = "*/2 * * * *"
+
 [functions."cancelar-pedidos-esquecidos"]
   schedule = "0 * * * *"
 
