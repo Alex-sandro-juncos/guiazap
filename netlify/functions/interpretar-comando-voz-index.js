@@ -77,11 +77,6 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ error: 'texto é obrigatório' }) };
     }
 
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada' }) };
-    }
-
     const listaEmpresas = (empresasVisiveis || []).map(e => `- id:${e.id} | ${e.name} | categoria:${e.cat} | ${e.cidade}`).join('\n');
 
     const promptSistema = `Você interpreta comandos de VOZ de um visitante usando o GuiaZap (diretório de empresas/profissionais), no modo "mãos livres". Responda APENAS com um JSON válido, sem texto antes/depois, sem markdown, no formato:
@@ -103,38 +98,26 @@ Regras:
 Empresas visíveis agora na tela:
 ${listaEmpresas || '(nenhuma empresa na tela no momento)'}`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 500,
-        system: promptSistema,
-        messages: [{ role: 'user', content: texto }]
-      })
-    });
+    // Usa o mesmo helper barato (Gemini Flash-Lite → Claude Haiku) e o
+    // mesmo cache das outras functions — antes essa era a única que ia
+    // direto no Sonnet sem cache, saindo bem mais cara sem necessidade
+    // (é um comando curto, não precisa do modelo mais caro).
+    const { chamarIABarata } = require('./ia-barata-helper');
+    const { normalizarTexto, buscarCache, salvarPending, salvarAprovado } = require('./comandos-voz-cache');
 
-    const data = await resp.json();
-    if (!resp.ok) {
-      console.error('erro da API da Anthropic:', JSON.stringify(data));
-      return { statusCode: 500, body: JSON.stringify({ error: 'erro ao interpretar comando' }) };
+    const textoNorm = normalizarTexto('index::' + texto + '::' + listaEmpresas.length);
+    const cache = await buscarCache('index', textoNorm);
+    if (cache) {
+      return { statusCode: 200, body: JSON.stringify(cache) };
     }
+    await salvarPending('index', textoNorm, texto);
 
-    const textoResposta = data.content && data.content[0] ? data.content[0].text : '';
-    let resultado;
-    try {
-      let textoLimpo = textoResposta.replace(/```json|```/g, '').trim();
-      const inicioJson = textoLimpo.indexOf('{');
-      const fimJson = textoLimpo.lastIndexOf('}');
-      if (inicioJson !== -1 && fimJson !== -1) textoLimpo = textoLimpo.slice(inicioJson, fimJson + 1);
-      resultado = JSON.parse(textoLimpo);
-    } catch (e) {
-      resultado = { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };
-    }
+    const ia = await chamarIABarata(promptSistema, texto, 500);
+    const resultado = ia.ok
+      ? ia.json
+      : { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };
+
+    if (ia.ok) await salvarAprovado('index', textoNorm, resultado);
 
     return { statusCode: 200, body: JSON.stringify(resultado) };
   } catch (err) {

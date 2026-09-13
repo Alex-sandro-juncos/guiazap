@@ -22,6 +22,13 @@ function resultadoTemIdDinamico(resultado) {
 function ehCacheavel(resultado) {
   if (!resultado || typeof resultado !== 'object') return false;
   if (resultadoTemIdDinamico(resultado)) return false;
+  // Nunca guarda uma resposta de "não entendi"/"não achei página nenhuma"
+  // — se um bug for corrigido depois, a mesma frase precisa ter uma nova
+  // chance de funcionar, em vez de ficar presa repetindo a falha antiga.
+  // Cobre os dois formatos usados no projeto: { action: 'NENHUMA' } (ações
+  // de tela) e { pagina: null } (navegação entre páginas).
+  if (resultado.action === 'NENHUMA') return false;
+  if ('pagina' in resultado && !resultado.pagina) return false;
   return true;
 }
 
