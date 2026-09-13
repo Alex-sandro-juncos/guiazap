@@ -63,6 +63,7 @@
   <div class="admin-abas">
     <button class="admin-aba-btn ativa" id="aba-feedback" onclick="mostrarAbaAdmin('feedback')">💬 Feedback</button>
     <button class="admin-aba-btn" id="aba-denuncias" onclick="mostrarAbaAdmin('denuncias')">🚩 Denúncias</button>
+    <button class="admin-aba-btn" id="aba-disputas" onclick="mostrarAbaAdmin('disputas')">⚖️ Disputas</button>
     <button class="admin-aba-btn" id="aba-mensagens" onclick="mostrarAbaAdmin('mensagens')">📩 Msgs empresas</button>
     <button class="admin-aba-btn" id="aba-empresas" onclick="mostrarAbaAdmin('empresas')">🏢 Empresas</button>
     <button class="admin-aba-btn" id="aba-produtos" onclick="mostrarAbaAdmin('produtos')">📦 Produtos</button>
@@ -137,7 +138,7 @@ async function carregarDadosAdmin(){
 
 function mostrarAbaAdmin(aba){
   abaAtual = aba;
-  ['feedback','denuncias','mensagens','empresas','produtos','verificacao','depoimentos','blog','contagem'].forEach(a => {
+  ['feedback','denuncias','disputas','mensagens','empresas','produtos','verificacao','depoimentos','blog','contagem'].forEach(a => {
     document.getElementById('aba-' + a).classList.toggle('ativa', aba === a);
   });
   document.getElementById('btn-exportar-emails').style.display = aba === 'empresas' ? 'block' : 'none';
@@ -313,6 +314,49 @@ function renderVerificacoesAdmin(busca){
   `).join('');
 }
 
+async function renderDisputasAdmin(busca){
+  const lista = document.getElementById('admin-lista');
+  lista.innerHTML = 'Carregando disputas...';
+
+  const { data: disputas, error } = await supabaseClientAdmin
+    .from('disputas')
+    .select('*, profissionais(name)')
+    .order('created_at', { ascending: false });
+
+  if(error){ lista.innerHTML = 'Erro ao carregar disputas.'; return; }
+
+  const filtradas = (disputas || []).filter(d =>
+    !busca || (d.motivo || '').toLowerCase().includes(busca.toLowerCase()) || (d.profissionais && d.profissionais.name.toLowerCase().includes(busca.toLowerCase()))
+  );
+
+  if(filtradas.length === 0){ lista.innerHTML = '<p style="text-align:center; color:#888; margin-top:20px;">Nenhuma disputa registrada.</p>'; return; }
+
+  const nomesStatus = { aberta: '🟡 Aguardando empresa responder', respondida: '🔵 Pronta pra você decidir', resolvida: '✅ Resolvida' };
+
+  lista.innerHTML = filtradas.map(d => `
+    <div class="admin-item" style="${d.status === 'respondida' ? 'border-left: 4px solid #1565c0;' : ''}">
+      <div class="tipo den">⚖️ ${escapeHtmlAdmin(d.motivo)} <span style="font-weight:400; color:#888;">— ${escapeHtmlAdmin(d.profissionais ? d.profissionais.name : 'Empresa')}</span></div>
+      <div style="font-size:0.82rem; margin-top:6px;"><b>Cliente disse:</b> ${escapeHtmlAdmin(d.descricao_cliente)}</div>
+      ${d.descricao_empresa ? `<div style="font-size:0.82rem; margin-top:6px;"><b>Empresa disse:</b> ${escapeHtmlAdmin(d.descricao_empresa)}</div>` : ''}
+      ${d.resolucao ? `<div style="font-size:0.82rem; margin-top:6px; color:var(--verde-escuro);"><b>Resolução:</b> ${escapeHtmlAdmin(d.resolucao)}</div>` : ''}
+      <div class="meta" style="margin-top:6px;">${nomesStatus[d.status] || d.status} · ${formatarData(d.created_at)}</div>
+      ${d.status !== 'resolvida' ? `<div class="admin-acoes" style="margin-top:8px;"><button class="admin-btn-ativar" onclick="resolverDisputaAdmin('${d.id}')">✓ Marcar como resolvida</button></div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function resolverDisputaAdmin(disputaId){
+  const resolucao = prompt('Como foi resolvida essa disputa? (isso fica registrado, você pode compartilhar com as duas partes se quiser)');
+  if(resolucao === null) return;
+
+  const { error } = await supabaseClientAdmin.from('disputas').update({
+    status: 'resolvida', resolucao: resolucao.trim() || 'Resolvida sem detalhes adicionais.', resolvido_em: new Date().toISOString()
+  }).eq('id', disputaId);
+
+  if(error){ console.error(error); alert('Erro ao marcar como resolvida.'); return; }
+  renderDisputasAdmin(document.getElementById('admin-busca').value);
+}
+
 function renderDenunciasAgrupadas(busca){
   const lista = document.getElementById('admin-lista');
   if(!dadosAdmin) { lista.innerHTML = ''; return; }
@@ -486,6 +530,7 @@ function renderAdmin(){
   let itens = [];
   if(abaAtual === 'feedback') itens = dadosAdmin.feedbackSite;
   if(abaAtual === 'denuncias'){ renderDenunciasAgrupadas(busca); return; }
+  if(abaAtual === 'disputas'){ renderDisputasAdmin(busca); return; }
   if(abaAtual === 'mensagens') itens = dadosAdmin.mensagensEmpresa;
   if(abaAtual === 'empresas') itens = dadosAdmin.profissionais;
   if(abaAtual === 'produtos') itens = dadosAdmin.produtos;

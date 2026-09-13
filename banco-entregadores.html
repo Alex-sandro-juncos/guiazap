@@ -224,7 +224,7 @@ function falarVozBanco(texto){
   setTimeout(() => {
     _vozBancoFalando = false;
     if(_vozBancoAtiva && _vozBancoReconhecimento){ try{ _vozBancoReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function lerResultadosBancoEmVoz(){

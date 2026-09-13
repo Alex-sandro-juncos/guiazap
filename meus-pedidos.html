@@ -182,6 +182,7 @@ function renderMeusPedidos(){
         ${p.forma_pagamento ? `<div class="data-pedido">💳 ${escapeHtmlMeusPedidos(p.forma_pagamento)}</div>` : ''}
         ${p.codigo_confirmacao && !['concluido', 'recusado', 'cancelado'].includes(p.status) ? `<div style="background:#fff3cd; color:#7c4a03; font-weight:800; padding:6px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem;">🔑 Código de confirmação: ${escapeHtmlMeusPedidos(p.codigo_confirmacao)}</div>` : ''}
         <div class="data-pedido">${dataFormatada}</div>
+        ${p.status === 'concluido' ? `<button type="button" class="btn-continuar-papo" style="background:#a4402f; border:none; cursor:pointer; margin-top:8px;" onclick="abrirDisputaPedido('${p.id}', '${p.profissional_id}')">⚠️ Tive um problema com esse pedido</button>` : ''}
         ${p.status === 'saiu_entrega' ? `<button type="button" class="btn-continuar-papo" style="background:#0f766e; border:none; cursor:pointer; margin-top:8px;" onclick="rastrearEntrega('${p.id}')">📍 Ver localização do entregador</button>
         <div id="mapa-rastreio-${p.id}" style="display:none; margin-top:8px;"></div>` : ''}
         <div class="acoes-pedido">
@@ -193,6 +194,32 @@ function renderMeusPedidos(){
 }
 
 let _canalRastreioAtivo = null;
+
+async function abrirDisputaPedido(pedidoId, profissionalId){
+  const { data: jaTemDisputa } = await supabaseClientMeusPedidos.from('disputas').select('id, status').eq('pedido_id', pedidoId).maybeSingle();
+  if(jaTemDisputa){
+    alert(`Você já abriu uma disputa pra esse pedido (status: ${jaTemDisputa.status === 'aberta' ? 'aguardando resposta da empresa' : jaTemDisputa.status === 'respondida' ? 'empresa já respondeu, aguardando análise' : 'resolvida'}). A empresa e o GuiaZap vão analisar.`);
+    return;
+  }
+
+  const motivo = prompt('Qual foi o problema? (ex: "produto não chegou", "veio diferente do combinado", "cobrança errada")');
+  if(!motivo || !motivo.trim()) return;
+
+  const descricao = prompt('Conta com mais detalhes o que aconteceu:');
+  if(!descricao || !descricao.trim()) return;
+
+  const { error } = await supabaseClientMeusPedidos.from('disputas').insert({
+    pedido_id: pedidoId,
+    profissional_id: profissionalId,
+    cliente_user_id: currentUserMeusPedidos.id,
+    motivo: motivo.trim(),
+    descricao_cliente: descricao.trim()
+  });
+
+  if(error){ console.error(error); alert('Erro ao abrir a disputa. Tenta de novo.'); return; }
+
+  alert('✅ Disputa registrada! A empresa vai ser avisada e tem chance de responder. Se não resolver, o GuiaZap pode intervir.');
+}
 
 async function rastrearEntrega(pedidoId){
   const container = document.getElementById('mapa-rastreio-' + pedidoId);
@@ -353,7 +380,7 @@ function falarVozMeusPedidos(texto){
   setTimeout(() => {
     _vozMeusPedidosFalando = false;
     if(_vozMeusPedidosAtiva && _vozMeusPedidosReconhecimento){ try{ _vozMeusPedidosReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function _selecionarAbaMeusPedidosPorStatus(status){

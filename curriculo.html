@@ -753,7 +753,7 @@ function falarVozCv(texto){
   setTimeout(function(){
     _vozCvFalando = false;
     if(_vozCvReconhecimento){ try{ _vozCvReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function normalizarTextoCv(str){

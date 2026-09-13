@@ -383,12 +383,16 @@ function falarVozPapo(texto, aoTerminar){
   };
   fala.onerror = () => { _vozPapoFalando = false; };
   _vozPapoSynth.speak(fala);
+  // Rede de segurança caso o "onend" da fala não dispare (acontece às
+  // vezes) — calculado pelo tamanho do texto, senão falas longas (tipo
+  // listar várias conversas) religavam o microfone ainda no meio da fala,
+  // fazendo o site "ouvir" a própria voz e confundir tudo.
   setTimeout(() => {
     _vozPapoFalando = false;
     if(_vozPapoAtiva && _vozPapoReconhecimento){
       try{ _vozPapoReconhecimento.start(); } catch(e){}
     }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function listarConversasEmVoz(){
@@ -458,12 +462,12 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
-  const _ehPararP = t === 'parar' || (!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
+  const _ehPararP = t === 'parar' || (!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t === 'desativar' || t.includes('desativar modo voz') || t.includes('desativar o modo voz') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
   if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
   }
 
-  if((!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t.includes('desativar modo voz') || t.includes('desativar') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
+  if((!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t === 'desativar' || t.includes('desativar modo voz') || t.includes('desativar o modo voz') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto')){
     falarVozPapo('Modo voz desligado.');
     setTimeout(pararModoVozPapo, 1200);
     return;

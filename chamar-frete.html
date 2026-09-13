@@ -672,7 +672,7 @@ function falarVozFrete(texto){
   setTimeout(() => {
     _vozFreteFalando = false;
     if(_vozFreteAtiva && _vozFreteReconhecimento){ try{ _vozFreteReconhecimento.start(); } catch(e){} }
-  }, 7000);
+  }, Math.max(7000, (texto || '').length * 90));
 }
 
 function extrairApenasDigitosFrete(texto){

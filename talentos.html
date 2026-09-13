@@ -306,7 +306,7 @@ function falarVozTalentos(texto){
   setTimeout(() => {
     _vozTalentosFalando = false;
     if(_vozTalentosAtiva && _vozTalentosReconhecimento){ try{ _vozTalentosReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function lerResultadosTalentosEmVoz(){

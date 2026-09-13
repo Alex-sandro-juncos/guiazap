@@ -103,6 +103,7 @@
 
   <button type="button" onclick="exportarPedidosCsv()" style="display:block; width:100%; margin-bottom:14px; padding:9px; border-radius:8px; border:1.5px solid #0f766e; background:white; color:#0f766e; font-weight:700; font-size:0.82rem; cursor:pointer;">📥 Exportar histórico (CSV)</button>
 
+  <div id="disputas-pendentes" style="display:none; margin-bottom:16px;"></div>
   <div id="lista-pedidos">Carregando...</div>
 </div>
 
@@ -147,6 +148,7 @@ async function initPedidos(){
   document.getElementById('chk-impressao-automatica').checked = localStorage.getItem('impressao_automatica_pedidos') === '1';
 
   await carregarPedidos();
+  await carregarDisputasPendentes();
 
   // Escuta pedidos novos em tempo real — quando um pedido é CONFIRMADO
   // (pago, esperando a empresa aceitar), imprime o cupom automaticamente
@@ -185,6 +187,49 @@ async function carregarPedidos(){
 
   todosPedidos = data || [];
   renderPedidos();
+}
+
+async function carregarDisputasPendentes(){
+  const container = document.getElementById('disputas-pendentes');
+  const idsEmpresas = minhasEmpresasPedidos.map(e => e.id);
+  if(idsEmpresas.length === 0){ container.style.display = 'none'; return; }
+
+  const { data: disputas } = await supabaseClientPedidos
+    .from('disputas')
+    .select('*, profissionais(name)')
+    .in('profissional_id', idsEmpresas)
+    .in('status', ['aberta', 'respondida'])
+    .order('created_at', { ascending: false });
+
+  if(!disputas || disputas.length === 0){ container.style.display = 'none'; return; }
+
+  container.innerHTML = '<h2 style="font-size:1rem; color:#a4402f; margin-bottom:10px;">⚠️ Disputas em aberto</h2>' +
+    disputas.map(d => `
+      <div class="card-pedido" style="border-left:4px solid #a4402f;">
+        <b style="font-size:0.85rem;">${escapeHtmlPedidos(d.motivo)}</b>
+        <div style="font-size:0.82rem; color:#555; margin-top:6px;"><b>Cliente disse:</b> ${escapeHtmlPedidos(d.descricao_cliente)}</div>
+        ${d.descricao_empresa ? `<div style="font-size:0.82rem; color:#555; margin-top:6px;"><b>Sua resposta:</b> ${escapeHtmlPedidos(d.descricao_empresa)}</div>` : ''}
+        <span class="status-pedido" style="background:${d.status === 'aberta' ? '#fff3cd' : '#e0f2fe'}; color:${d.status === 'aberta' ? '#7c4a03' : '#075985'}; margin-top:8px; display:inline-block;">${d.status === 'aberta' ? 'Aguardando sua resposta' : 'Você já respondeu — em análise'}</span>
+        ${d.status === 'aberta' ? `<button type="button" class="btn-continuar-papo" style="background:#0f766e; border:none; cursor:pointer; margin-top:8px;" onclick="responderDisputa('${d.id}')">💬 Dar minha versão</button>` : ''}
+      </div>
+    `).join('');
+  container.style.display = 'block';
+}
+
+async function responderDisputa(disputaId){
+  const resposta = prompt('Explique a sua versão do que aconteceu (isso vai ajudar o GuiaZap a entender a situação):');
+  if(!resposta || !resposta.trim()) return;
+
+  const { error } = await supabaseClientPedidos.from('disputas').update({
+    descricao_empresa: resposta.trim(),
+    status: 'respondida',
+    respondido_em: new Date().toISOString()
+  }).eq('id', disputaId);
+
+  if(error){ console.error(error); alert('Erro ao responder. Tenta de novo.'); return; }
+
+  alert('✅ Resposta enviada! O GuiaZap vai analisar os dois lados.');
+  carregarDisputasPendentes();
 }
 
 function exportarPedidosCsv(){
@@ -654,7 +699,7 @@ function falarVozPedidos(texto){
   setTimeout(function(){
     _vozPedidosFalando = false;
     if(_vozPedidosReconhecimento){ try{ _vozPedidosReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 function lerPedidosNovosEmVoz(){

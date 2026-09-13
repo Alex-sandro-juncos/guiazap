@@ -922,7 +922,7 @@ function falarVozAgenda(texto){
   setTimeout(() => {
     _vozAgendaFalando = false;
     if(_vozAgendaAtiva && _vozAgendaReconhecimento){ try{ _vozAgendaReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 async function processarComandoVozAgenda(transcricao){

@@ -3092,7 +3092,7 @@ function falarVozVitrine(texto){
     if(_vozVitrineReconhecimento){
       try{ _vozVitrineReconhecimento.start(); } catch(e){}
     }
-  }, 6000);;
+  }, Math.max(6000, (texto || '').length * 90));;
 }
 
 let _estadoPessoaEmpresaVoz = null;

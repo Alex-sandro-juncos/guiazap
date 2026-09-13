@@ -3423,7 +3423,7 @@ function render(){
       <img class="avatar" src="${e.foto ? escapeHtml(e.foto) : 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(e.name)}" alt="${escapeHtml(e.name)}">
       <div class="info">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
-          <h3>${escapeHtml(e.name)}${e.verificado && ehPremiumOuVendas(e.plano) ? ' <span title="Empresa Verificada e Premium" class="selo-verificado-premium">✅👑 Verificada Premium</span>' : e.verificado ? ' <span title="Empresa verificada pelo GuiaZap" class="selo-verificado">✅ Empresa verificada</span>' : ''}${ehPremiumOuVendas(e.plano) && !e.verificado ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
+          <h3>${escapeHtml(e.name)}${e.verificado && ehPremiumOuVendas(e.plano) ? ' <a href="criterios-selo-verificado.html" target="_blank" title="Empresa Verificada e Premium — clique pra entender o que isso significa" class="selo-verificado-premium" style="text-decoration:none;">✅👑 Verificada Premium</a>' : e.verificado ? ' <a href="criterios-selo-verificado.html" target="_blank" title="Empresa verificada pelo GuiaZap — clique pra entender o que isso significa" class="selo-verificado" style="text-decoration:none;">✅ Empresa verificada</a>' : ''}${ehPremiumOuVendas(e.plano) && !e.verificado ? ' <span title="Empresa Premium" class="selo-premium">👑 Premium</span>' : ''}</h3>
           ${e.impulsionado_ate && new Date(e.impulsionado_ate) > new Date() ? '<div class="selo-impulsionado">🚀 Impulsionado — no topo agora</div>' : ''}
           <div class="selo-disponibilidade ${e.status_disponibilidade === 'atendimento' ? 'atendimento' : 'disponivel'}" ${isOwner ? `onclick="toggleStatusDisponibilidade('${e.id}')" style="cursor:pointer;"` : ''}>
             ${e.status_disponibilidade === 'atendimento' ? '🟡 Em atendimento' : '🟢 Disponível agora'}
@@ -4196,7 +4196,7 @@ function falarVozIndex(texto){
     if(typeof _vozIndexReconhecimento !== 'undefined' && _vozIndexReconhecimento){
       try{ _vozIndexReconhecimento.start(); } catch(e){}
     }
-  }, 6000);;
+  }, Math.max(6000, (texto || '').length * 90));;
 }
 
 let _modoSomenteVozAtivoIndex = false;

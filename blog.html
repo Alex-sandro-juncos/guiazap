@@ -461,7 +461,7 @@ function falarVozBlog(texto){
   setTimeout(function(){
     _vozBlogFalando = false;
     if(_vozBlogReconhecimento){ try{ _vozBlogReconhecimento.start(); } catch(e){} }
-  }, 6000);
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 // Última tentativa antes de desistir: manda pra IA ver se o que a pessoa
