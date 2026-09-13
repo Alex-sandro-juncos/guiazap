@@ -57,6 +57,7 @@
     <button type="button" data-status="concluido" onclick="mudarAbaMeusPedidos('concluido', this)">✅ Concluídos</button>
   </div>
 
+  <div id="fidelidade-progresso" style="display:none; margin-bottom:16px;"></div>
   <div id="lista-meus-pedidos">Carregando...</div>
 </div>
 
@@ -95,6 +96,45 @@ async function carregarMeusPedidos(){
 
   todosMeusPedidos = data || [];
   renderMeusPedidos();
+  carregarProgressoFidelidade();
+}
+
+async function carregarProgressoFidelidade(){
+  const container = document.getElementById('fidelidade-progresso');
+  if(!container) return;
+
+  const idsEmpresas = [...new Set(todosMeusPedidos.map(p => p.profissional_id).filter(Boolean))];
+  if(idsEmpresas.length === 0){ container.style.display = 'none'; return; }
+
+  const { data: configs } = await supabaseClientMeusPedidos.from('fidelidade_config').select('*').in('profissional_id', idsEmpresas).eq('ativo', true);
+  if(!configs || configs.length === 0){ container.style.display = 'none'; return; }
+
+  const { data: progressos } = await supabaseClientMeusPedidos.from('fidelidade_progresso').select('*').eq('cliente_user_id', currentUserMeusPedidos.id).in('profissional_id', idsEmpresas);
+  const progressoPorEmpresa = {};
+  (progressos || []).forEach(p => { progressoPorEmpresa[p.profissional_id] = p; });
+
+  const cards = configs.map(cfg => {
+    const empresa = todosMeusPedidos.find(p => p.profissional_id === cfg.profissional_id)?.profissionais;
+    const prog = progressoPorEmpresa[cfg.profissional_id] || { contador_pedidos: 0, valor_acumulado: 0 };
+    const atual = cfg.tipo === 'valor' ? prog.valor_acumulado : prog.contador_pedidos;
+    const percentual = Math.min(100, Math.round((atual / cfg.meta) * 100));
+    const faltamTexto = cfg.tipo === 'valor'
+      ? `Faltam R$ ${Math.max(0, cfg.meta - atual).toFixed(2).replace('.', ',')} pra ganhar: ${cfg.recompensa}`
+      : `Faltam ${Math.max(0, cfg.meta - atual)} pedido${(cfg.meta - atual) !== 1 ? 's' : ''} pra ganhar: ${cfg.recompensa}`;
+
+    return `
+      <div class="card-pedido" style="border-left:4px solid #b8860b;">
+        <b style="font-size:0.85rem;">🎁 ${escapeHtmlMeusPedidos(empresa ? empresa.name : 'Empresa')}</b>
+        <div style="background:#eee; border-radius:50px; height:8px; margin:8px 0; overflow:hidden;">
+          <div style="background:#b8860b; height:100%; width:${percentual}%;"></div>
+        </div>
+        <div style="font-size:0.78rem; color:#666;">${faltamTexto}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = '<h2 style="font-size:1rem; color:var(--verde-escuro); margin:10px 0;">🎁 Seus programas de fidelidade</h2>' + cards;
+  container.style.display = 'block';
 }
 
 function mudarAbaMeusPedidos(status, btn){

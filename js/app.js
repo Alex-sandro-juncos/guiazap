@@ -2147,6 +2147,42 @@ async function conectarMercadoPago(profissionalId){
   }
 }
 
+async function abrirConfigFidelidade(profissionalId){
+  const { data: configAtual } = await supabaseClient.from('fidelidade_config').select('*').eq('profissional_id', profissionalId).maybeSingle();
+
+  const resumoAtual = configAtual
+    ? `Hoje está configurado: a cada ${configAtual.meta} ${configAtual.tipo === 'valor' ? 'reais gastos' : 'pedidos'}, o cliente ganha "${configAtual.recompensa}".`
+    : 'Você ainda não tem um programa de fidelidade configurado.';
+
+  const tipoEscolhido = prompt(`${resumoAtual}\n\nQuer que a meta seja por QUANTIDADE de pedidos, ou por VALOR total gasto?\n\nDigite "pedidos" ou "valor" (ou deixe vazio pra desativar o programa):`, configAtual ? configAtual.tipo : 'pedidos');
+
+  if(tipoEscolhido === null) return;
+
+  if(tipoEscolhido.trim() === ''){
+    if(configAtual){
+      await supabaseClient.from('fidelidade_config').update({ ativo: false }).eq('profissional_id', profissionalId);
+      alert('Programa de fidelidade desativado.');
+    }
+    return;
+  }
+
+  const tipo = tipoEscolhido.trim().toLowerCase().includes('valor') ? 'valor' : 'pedidos';
+  const metaTexto = prompt(tipo === 'valor' ? 'Depois de quantos reais gastos (somados) o cliente ganha a recompensa?' : 'A cada quantos pedidos o cliente ganha a recompensa?', configAtual ? configAtual.meta : (tipo === 'valor' ? '200' : '10'));
+  if(metaTexto === null) return;
+  const meta = parseFloat(metaTexto.replace(',', '.'));
+  if(isNaN(meta) || meta <= 0){ alert('Número inválido.'); return; }
+
+  const recompensa = prompt('Qual é a recompensa? (ex: "10% de desconto no próximo pedido", "1 refrigerante grátis")', configAtual ? configAtual.recompensa : '10% de desconto no próximo pedido');
+  if(!recompensa || !recompensa.trim()) return;
+
+  const { error } = await supabaseClient.from('fidelidade_config').upsert({
+    profissional_id: profissionalId, tipo, meta, recompensa: recompensa.trim(), ativo: true, updated_at: new Date().toISOString()
+  });
+
+  if(error){ console.error(error); alert('Erro ao salvar o programa de fidelidade.'); return; }
+  alert(`✅ Programa de fidelidade ativado! A cada ${meta} ${tipo === 'valor' ? 'reais gastos' : 'pedidos'}, o cliente ganha: ${recompensa.trim()}`);
+}
+
 async function abrirMensagemMassa(profissionalId, nomeEmpresa){
   const mensagem = prompt(`Escreva o aviso que vai pra TODOS os contatos que já falaram com "${nomeEmpresa}" no Papo (máximo 500 caracteres). Cada mensagem já vem com um link pra pessoa parar de receber, caso não queira mais:`);
   if(!mensagem || !mensagem.trim()) return;
@@ -3508,6 +3544,7 @@ function render(){
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#0f766e; border:none; cursor:pointer;" onclick="abrirConfigAtendimento('${e.id}')">🤖 Atendimento automático</button>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" style="background:#1c1c1c; border:none; cursor:pointer;" onclick="abrirGerenciarMotoboys('${e.id}')">🛵 Gerenciar motoboys</button>` : ''}
           ${isOwner && !pendente ? `<button type="button" class="link-ver-produtos" style="background:#a4402f; border:none; cursor:pointer;" onclick="abrirMensagemMassa('${e.id}', '${e.name.replace(/'/g,"\\'")}')">📢 Avisar todos os contatos</button>` : ''}
+          ${isOwner && !pendente ? `<button type="button" class="link-ver-produtos" style="background:#b8860b; border:none; cursor:pointer;" onclick="abrirConfigFidelidade('${e.id}')">🎁 Programa de fidelidade</button>` : ''}
           ${isOwner && e.plano === 'entregador' ? `<a href="corridas.html" class="link-ver-produtos" style="background:#1c1c1c; text-decoration:none; display:inline-block;">🛵 Ver minhas corridas (GuiaCorridas)</a>` : ''}
           ${isOwner && e.plano === 'entregador' ? `<a href="corridas.html?instalarApp=1" class="link-ver-produtos" style="background:#0f766e; text-decoration:none; display:inline-block;">📲 Instalar o GuiaCorridas</a>` : ''}
           ${isOwner && e.plano === 'vendas' ? `<button type="button" class="link-ver-produtos" id="btn-mp-conectar-${e.id}" style="background:${e.mpConectado ? '#1a7a3c' : '#0f766e'}; border:none; cursor:pointer;" onclick="conectarMercadoPago('${e.id}')">${e.mpConectado ? '✅ Mercado Pago conectado' : '💳 Conectar Mercado Pago (receber direto)'}</button>` : ''}
