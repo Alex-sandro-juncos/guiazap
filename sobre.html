@@ -236,6 +236,53 @@
     }
   }
 
+  async function _tentarIAFallbackSobre(texto){
+    // A pessoa pode nem estar logada nessa página (é pública) — a IA
+    // genérica exige login, então nesse caso ela simplesmente não
+    // responde nada (retorna null) e cai direto na mensagem padrão.
+    if(typeof chamarIAGenericaVoz === 'function'){
+      const resultadoIA = await chamarIAGenericaVoz(texto, 'sobre', [
+        { nome: 'VOLTAR', descricao: 'voltar pro GuiaZap' },
+        { nome: 'REPETIR', descricao: 'ouvir a explicação de novo' },
+        { nome: 'CADASTRAR_EMPRESA', descricao: 'ir pra tela de cadastrar empresa' }
+      ], {});
+      if(resultadoIA){
+        if(resultadoIA.action === 'VOLTAR'){
+          const fala = new SpeechSynthesisUtterance(resultadoIA.voice_response || 'Voltando...');
+          fala.lang = 'pt-BR';
+          fala.onend = () => { localStorage.setItem('retomarModoVozAoCarregar', '1'); window.location.href = 'index.html'; };
+          speechSynthesis.speak(fala);
+          return;
+        }
+        if(resultadoIA.action === 'REPETIR'){
+          const fala = new SpeechSynthesisUtterance(resultadoIA.voice_response || 'Repetindo...');
+          fala.lang = 'pt-BR';
+          fala.onend = () => { cancelado = false; indice = 0; falarProximoTrecho(); };
+          speechSynthesis.speak(fala);
+          return;
+        }
+        if(resultadoIA.action === 'CADASTRAR_EMPRESA'){
+          const fala = new SpeechSynthesisUtterance(resultadoIA.voice_response || 'Abrindo cadastro...');
+          fala.lang = 'pt-BR';
+          fala.onend = () => { window.location.href = 'pacotes.html'; };
+          speechSynthesis.speak(fala);
+          return;
+        }
+        if(resultadoIA.voice_response){
+          const fala = new SpeechSynthesisUtterance(resultadoIA.voice_response);
+          fala.lang = 'pt-BR';
+          fala.onend = escutarComandoSobre;
+          speechSynthesis.speak(fala);
+          return;
+        }
+      }
+    }
+    const aviso = new SpeechSynthesisUtterance('Não entendi. Fala "voltar" pra sair, ou "repetir" pra ouvir de novo.');
+    aviso.lang = 'pt-BR';
+    aviso.onend = escutarComandoSobre;
+    speechSynthesis.speak(aviso);
+  }
+
   function escutarComandoSobre(){
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if(!SpeechRecognition) return;
@@ -265,10 +312,7 @@
       } else if(texto.includes('cadastrar empresa') || texto.includes('cadastrar minha empresa')){
         window.location.href = 'pacotes.html';
       } else {
-        const aviso = new SpeechSynthesisUtterance('Não entendi. Fala "voltar" pra sair, ou "repetir" pra ouvir de novo.');
-        aviso.lang = 'pt-BR';
-        aviso.onend = escutarComandoSobre;
-        speechSynthesis.speak(aviso);
+        _tentarIAFallbackSobre(texto);
       }
     };
 
@@ -291,6 +335,7 @@
   setTimeout(falarProximoTrecho, 600);
 })();
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
 </html>
