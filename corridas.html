@@ -201,6 +201,42 @@ function trocarAbaCorridas(aba){
 
 const NOMES_STATUS = { pendente: 'Esperando resposta', aceita: 'Aceita — a caminho', recusada: 'Recusada', finalizada: 'Entregue' };
 
+let _compartilhandoLocalizacaoCorridaId = null;
+let _watchIdLocalizacaoCorrida = null;
+
+function toggleCompartilharLocalizacaoCorrida(corridaId){
+  if(_compartilhandoLocalizacaoCorridaId === corridaId){
+    pararCompartilharLocalizacaoCorrida();
+  } else {
+    iniciarCompartilharLocalizacaoCorrida(corridaId);
+  }
+}
+
+function iniciarCompartilharLocalizacaoCorrida(corridaId){
+  if(!navigator.geolocation){ alert('Seu navegador não suporta localização.'); return; }
+  pararCompartilharLocalizacaoCorrida(); // garante que só compartilha uma corrida por vez
+
+  _compartilhandoLocalizacaoCorridaId = corridaId;
+  renderizarCorridas();
+
+  _watchIdLocalizacaoCorrida = navigator.geolocation.watchPosition(async (pos) => {
+    await supabaseClientCorridas.from('corridas_motoboy').update({
+      latitude_atual: pos.coords.latitude,
+      longitude_atual: pos.coords.longitude,
+      localizacao_atualizada_em: new Date().toISOString()
+    }).eq('id', corridaId);
+  }, (e) => console.error('erro ao compartilhar localização', e), { enableHighAccuracy: true, maximumAge: 10000 });
+}
+
+function pararCompartilharLocalizacaoCorrida(){
+  if(_watchIdLocalizacaoCorrida !== null){
+    navigator.geolocation.clearWatch(_watchIdLocalizacaoCorrida);
+    _watchIdLocalizacaoCorrida = null;
+  }
+  _compartilhandoLocalizacaoCorridaId = null;
+  renderizarCorridas();
+}
+
 function abrirRotaNoMapa(corridaId){
   const c = todasCorridas.find(x => x.id === corridaId);
   if(!c) return;
@@ -241,9 +277,13 @@ function cardCorrida(c){
     const btnEntregar = c.pedido
       ? `<button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>`
       : `<button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>`;
+    const compartilhandoEssa = _compartilhandoLocalizacaoCorridaId === c.id;
     botoes = `
       <div class="card-corrida-acoes">
         <button type="button" class="btn-corrida" style="background:#0f766e; color:white;" onclick="abrirRotaNoMapa('${c.id}')">🗺️ Ver rota</button>
+      </div>
+      <div class="card-corrida-acoes">
+        <button type="button" class="btn-corrida" style="background:${compartilhandoEssa ? '#a4402f' : '#3730a3'}; color:white;" onclick="toggleCompartilharLocalizacaoCorrida('${c.id}')">${compartilhandoEssa ? '🛑 Parar de compartilhar localização' : '📍 Compartilhar localização com o cliente'}</button>
       </div>
       <div class="card-corrida-acoes">
         ${btnEntregar}
@@ -287,6 +327,13 @@ function renderizarCorridas(){
 async function responderCorrida(corridaId, palavra){
   const corrida = todasCorridas.find(c => c.id === corridaId);
   if(!corrida || !corrida.conversa_id) return;
+
+  // Se essa resposta está encerrando a entrega (código de confirmação ou
+  // "entreguei"), para de compartilhar localização — não faz sentido
+  // continuar mandando GPS depois que já terminou
+  if(_compartilhandoLocalizacaoCorridaId === corridaId && (palavra === 'entreguei' || /^\d+$/.test(palavra))){
+    pararCompartilharLocalizacaoCorrida();
+  }
 
   const { error } = await supabaseClientCorridas.from('mensagens_chat').insert({
     conversa_id: corrida.conversa_id,
