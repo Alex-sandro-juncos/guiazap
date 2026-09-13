@@ -473,7 +473,7 @@ async function processarComandoVozVagas(transcricao){
   }
 
   if(estado.etapa === 'tipo'){
-    let tipoLabel = 'CLT';
+    let tipoLabel = null;
     if(t.includes('clt')) tipoLabel = 'CLT';
     else if(t.includes('pj') || t.includes('pessoa juridica') || t.includes('pessoa jurídica')) tipoLabel = 'PJ';
     else if(t.includes('meio') || t.includes('parcial')) tipoLabel = 'Meio período';
@@ -481,6 +481,26 @@ async function processarComandoVozVagas(transcricao){
     else if(t.includes('freelancer') || t.includes('free lancer') || t.includes('autonom')) tipoLabel = 'Freelancer';
     else if(t.includes('estagio') || t.includes('estágio')) tipoLabel = 'Estágio';
     else if(t.includes('diarista') || t.includes('diaria') || t.includes('diária')) tipoLabel = 'Diarista';
+
+    if(!tipoLabel && typeof chamarIAGenericaVoz === 'function'){
+      // Não bateu com nenhuma palavra-chave direta — em vez de "chutar"
+      // CLT sem avisar, pergunta pra IA qual das opções reais é mais
+      // parecida com o que a pessoa quis dizer (ex: "bico" -> Freelancer)
+      const resultadoIA = await chamarIAGenericaVoz(transcricao, 'vagas-tipo-contrato', [
+        { nome: 'CLT', descricao: 'contrato CLT, carteira assinada' },
+        { nome: 'PJ', descricao: 'contrato PJ, pessoa jurídica' },
+        { nome: 'MEIO_PERIODO', descricao: 'meio período, meio turno, parcial' },
+        { nome: 'TEMPORARIO', descricao: 'temporário, contrato por tempo determinado' },
+        { nome: 'FREELANCER', descricao: 'freelancer, autônomo, bico, trabalho avulso' },
+        { nome: 'ESTAGIO', descricao: 'estágio' },
+        { nome: 'DIARISTA', descricao: 'diarista, diária' }
+      ], {});
+      const mapaAcaoParaLabel = { CLT: 'CLT', PJ: 'PJ', MEIO_PERIODO: 'Meio período', TEMPORARIO: 'Temporário', FREELANCER: 'Freelancer', ESTAGIO: 'Estágio', DIARISTA: 'Diarista' };
+      if(resultadoIA && mapaAcaoParaLabel[resultadoIA.action]) tipoLabel = mapaAcaoParaLabel[resultadoIA.action];
+    }
+
+    if(!tipoLabel) tipoLabel = 'CLT'; // segurança final, se nem a IA conseguir decidir
+
     estado.dados.tipo = tipoLabel;
     const sel = document.getElementById('vg-tipo');
     if(sel){

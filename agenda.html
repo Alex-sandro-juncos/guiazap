@@ -160,9 +160,23 @@
 </head>
 <body>
 <header class="agenda-header">
-  <h1>📇 Minha Agenda</h1>
+  <div style="display:flex; justify-content:center; align-items:center; gap:10px; position:relative;">
+    <h1>📇 Minha Agenda</h1>
+    <button type="button" id="btn-modo-voz-agenda" onclick="toggleModoVozAgenda()" title="Ativar modo de voz" aria-label="Ativar modo de voz da Agenda" style="position:absolute; right:0; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+  </div>
   <p>Seus contatos e novidades do Papo</p>
 </header>
+
+<div id="painel-modo-voz-agenda" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div id="voz-agenda-indicador" style="width:14px;height:14px;border-radius:50%;background:#6b46c1;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-agenda-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala o nome de um contato, ou "bloqueados" pra trocar de aba</div>
+      <div id="voz-agenda-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozAgenda()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 
 <a href="chat.html" class="voltar-guiazap voltar-fixo">← Voltar ao Papo</a>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙</button>
@@ -801,7 +815,211 @@ function fecharStoryPapoViewer(){
 }
 
 initAgenda();
+
+// ---------- MODO VOZ (mãos livres) ----------
+
+let _vozAgendaAtiva = false;
+let _vozAgendaReconhecimento = null;
+let _vozAgendaVigia = null;
+let _vozAgendaUltimoSinal = 0;
+let _vozAgendaFalando = false;
+const _vozAgendaSynth = window.speechSynthesis;
+
+function toggleModoVozAgenda(){
+  if(_vozAgendaAtiva) pararModoVozAgenda();
+  else iniciarModoVozAgenda();
+}
+
+function iniciarModoVozAgenda(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozAgendaAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-agenda').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-agenda').style.display = 'block';
+
+  _criarReconhecimentoAgenda(Api);
+  clearInterval(_vozAgendaVigia);
+  _vozAgendaVigia = setInterval(() => {
+    if(!_vozAgendaAtiva){ clearInterval(_vozAgendaVigia); return; }
+    if(_vozAgendaFalando) return;
+    if(Date.now() - _vozAgendaUltimoSinal > 8000){
+      try{ _vozAgendaReconhecimento.onend = null; _vozAgendaReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoAgenda(Api);
+    }
+  }, 4000);
+
+  falarVozAgenda('Modo voz ativado. Fala o nome de um contato pra abrir a conversa, ou "bloqueados" pra ver essa lista.');
+}
+
+function _criarReconhecimentoAgenda(Api){
+  _vozAgendaReconhecimento = new Api();
+  _vozAgendaReconhecimento.lang = 'pt-BR';
+  _vozAgendaReconhecimento.continuous = true;
+  _vozAgendaReconhecimento.interimResults = false;
+
+  _vozAgendaReconhecimento.onstart = () => { _vozAgendaUltimoSinal = Date.now(); };
+
+  _vozAgendaReconhecimento.onresult = (event) => {
+    _vozAgendaUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-agenda-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozAgenda(texto);
+  };
+
+  _vozAgendaReconhecimento.onend = () => {
+    _vozAgendaUltimoSinal = Date.now();
+    if(_vozAgendaAtiva){ try{ _vozAgendaReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozAgendaReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozAgenda('Preciso de permissão pro microfone.');
+      pararModoVozAgenda();
+      return;
+    }
+    _vozAgendaUltimoSinal = Date.now();
+    if(_vozAgendaAtiva){ setTimeout(() => { try{ _vozAgendaReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozAgendaReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozAgenda(){
+  _vozAgendaAtiva = false;
+  clearInterval(_vozAgendaVigia);
+  if(_vozAgendaReconhecimento){
+    _vozAgendaReconhecimento.onresult = null;
+    _vozAgendaReconhecimento.onend = null;
+    _vozAgendaReconhecimento.onerror = null;
+    try{ _vozAgendaReconhecimento.abort(); } catch(e){}
+    _vozAgendaReconhecimento = null;
+  }
+  _vozAgendaSynth.cancel();
+  document.getElementById('btn-modo-voz-agenda').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-agenda').style.display = 'none';
+}
+
+function falarVozAgenda(texto){
+  document.getElementById('voz-agenda-status').textContent = texto;
+  _vozAgendaFalando = true;
+  _vozAgendaSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozAgendaFalando = false;
+    if(_vozAgendaAtiva){ try{ _vozAgendaReconhecimento.start(); } catch(e){} }
+  };
+  _vozAgendaSynth.speak(fala);
+  setTimeout(() => {
+    _vozAgendaFalando = false;
+    if(_vozAgendaAtiva && _vozAgendaReconhecimento){ try{ _vozAgendaReconhecimento.start(); } catch(e){} }
+  }, 6000);
+}
+
+async function processarComandoVozAgenda(transcricao){
+  const t = normalizarBusca(transcricao);
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'agenda.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozAgenda(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozAgenda('Modo voz desativado.');
+    setTimeout(pararModoVozAgenda, 1200);
+    return;
+  }
+  if(t === 'parar'){
+    falarVozAgenda('Ok, modo voz continua ativo.');
+    return;
+  }
+  if(t.includes('voltar')){
+    falarVozAgenda('Voltando ao Papo...');
+    setTimeout(() => { window.location.href = 'chat.html'; }, 1000);
+    return;
+  }
+  if(t.includes('bloqueado')){
+    trocarAba('bloqueados');
+    falarVozAgenda('Mostrando seus contatos bloqueados. ' + (bloqueadosCarregados.length === 0 ? 'Não tem ninguém bloqueado.' : bloqueadosCarregados.length + ' pessoa' + (bloqueadosCarregados.length > 1 ? 's' : '') + ' bloqueada' + (bloqueadosCarregados.length > 1 ? 's' : '') + '.'));
+    return;
+  }
+  if(t.includes('contato') && t.length < 20){
+    trocarAba('contatos');
+    falarVozAgenda('Mostrando seus contatos. ' + (contatosCarregados.length === 0 ? 'Você ainda não salvou nenhum.' : 'Você tem ' + contatosCarregados.length + ' salvos.'));
+    return;
+  }
+  if(t.includes('postar') || t.includes('nova novidade') || t.includes('publicar novidade')){
+    abrirFormStoryPapo();
+    falarVozAgenda('Abri o formulário de nova novidade — a foto precisa ser escolhida na tela, por toque.');
+    return;
+  }
+  if(t.includes('notificaç') || t.includes('notificac')){
+    falarVozAgenda('Pra ativar notificações, toca no botão que aparece no topo da tela — isso o navegador exige por toque.');
+    return;
+  }
+
+  // Tenta achar um contato pelo NOME direto
+  if(abaAtual !== 'contatos'){ trocarAba('contatos'); }
+  const achado = contatosCarregados.find(c => normalizarBusca(c.nome_salvo).includes(t) || t.includes(normalizarBusca(c.nome_salvo).split(' ')[0]));
+  if(achado && t.length > 2){
+    falarVozAgenda('Abrindo a conversa com ' + achado.nome_salvo + '.');
+    const linkChat = achado.profissional_id ? `chat.html?empresa=${achado.profissional_id}` : `chat.html?pessoa=${achado.contato_user_id}`;
+    setTimeout(() => { window.location.href = linkChat; }, 1200);
+    return;
+  }
+
+  document.getElementById('agenda-busca').value = transcricao.trim();
+  renderListaAtual();
+  const cardsAgora = document.querySelectorAll('#agenda-lista .card-contato');
+  if(cardsAgora.length > 0){
+    falarVozAgenda('Achei ' + cardsAgora.length + ' contato' + (cardsAgora.length > 1 ? 's' : '') + ' parecido' + (cardsAgora.length > 1 ? 's' : '') + '. Fala o nome certinho pra abrir a conversa.');
+    return;
+  }
+
+  // Nada bateu — última rede de segurança: IA genérica
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'agenda', [
+      { nome: 'ABRIR_CONTATO', descricao: 'abrir a conversa com um contato salvo', params: '{ "id": "id do registro de contato da lista" }' },
+      { nome: 'VER_BLOQUEADOS', descricao: 'trocar pra aba de contatos bloqueados' },
+      { nome: 'VER_CONTATOS', descricao: 'trocar pra aba de contatos normais' }
+    ], { contatos: contatosCarregados.slice(0, 30).map(c => ({ id: c.id, nome: c.nome_salvo })) });
+
+    if(resultadoIA){
+      if(resultadoIA.action === 'ABRIR_CONTATO' && resultadoIA.params && resultadoIA.params.id){
+        const alvo = contatosCarregados.find(c => c.id === resultadoIA.params.id);
+        if(alvo){
+          falarVozAgenda(resultadoIA.voice_response || ('Abrindo a conversa com ' + alvo.nome_salvo + '.'));
+          const linkChat = alvo.profissional_id ? `chat.html?empresa=${alvo.profissional_id}` : `chat.html?pessoa=${alvo.contato_user_id}`;
+          setTimeout(() => { window.location.href = linkChat; }, 1200);
+          return;
+        }
+      }
+      if(resultadoIA.action === 'VER_BLOQUEADOS'){ trocarAba('bloqueados'); falarVozAgenda(resultadoIA.voice_response || 'Mostrando bloqueados.'); return; }
+      if(resultadoIA.action === 'VER_CONTATOS'){ trocarAba('contatos'); falarVozAgenda(resultadoIA.voice_response || 'Mostrando contatos.'); return; }
+      if(resultadoIA.voice_response){ falarVozAgenda(resultadoIA.voice_response); return; }
+    }
+  }
+
+  falarVozAgenda('Não achei esse contato. Fala o nome de novo, ou "bloqueados" pra trocar de aba.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozAgenda(), 1000);
+}
+
+window.addEventListener('pagehide', function(){
+  if(_vozAgendaAtiva) localStorage.setItem('retomarModoVozAoCarregar', '1');
+});
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
 </html>

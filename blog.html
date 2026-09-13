@@ -464,20 +464,69 @@ function falarVozBlog(texto){
 // que "não entendi", fala essa resposta; em último caso, fala o texto
 // padrão que foi passado.
 async function _tentarNavegacaoPorIABlog(textoOriginal, textoPadraoSeNaoEntender){
-  if(typeof verificarNavegacaoUniversalPorVozComIA !== 'function'){
-    falarVozBlog(textoPadraoSeNaoEntender);
-    return;
+  if(typeof verificarNavegacaoUniversalPorVozComIA === 'function'){
+    const destino = await verificarNavegacaoUniversalPorVozComIA(normalizarTextoBlog(textoOriginal), textoOriginal, 'blog.html');
+    if(destino && destino.url){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozBlog(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+    if(destino && destino.fala){
+      falarVozBlog(destino.fala);
+      return;
+    }
   }
-  const destino = await verificarNavegacaoUniversalPorVozComIA(normalizarTextoBlog(textoOriginal), textoOriginal, 'blog.html');
-  if(destino && destino.url){
-    localStorage.setItem('retomarModoVozAoCarregar', '1');
-    falarVozBlog(destino.fala);
-    setTimeout(() => { window.location.href = destino.url; }, 1200);
-  } else if(destino && destino.fala){
-    falarVozBlog(destino.fala);
-  } else {
-    falarVozBlog(textoPadraoSeNaoEntender);
+
+  // Segunda rede de segurança: nem era navegação pra outra página, então
+  // tenta a IA genérica com as ações que fazem sentido dentro do próprio
+  // Blog, considerando em que etapa a pessoa está agora.
+  if(typeof chamarIAGenericaVoz === 'function' && _estadoRedacaoBlog){
+    const resultadoIA = await chamarIAGenericaVoz(textoOriginal, 'blog', [
+      { nome: 'IR_LER', descricao: 'quer ouvir/ler um artigo do blog' },
+      { nome: 'IR_ESCREVER', descricao: 'quer escrever/publicar um artigo novo' },
+      { nome: 'BUSCAR_TEMA', descricao: 'escolher buscar artigos por tema', params: '{ "valor": "o tema escolhido, se a pessoa já disse" }' },
+      { nome: 'BUSCAR_TITULO', descricao: 'escolher buscar artigos por título', params: '{ "valor": "palavra do título, se a pessoa já disse" }' },
+      { nome: 'BUSCAR_AUTOR', descricao: 'escolher buscar artigos por autor', params: '{ "valor": "nome do autor, se a pessoa já disse" }' }
+    ], { etapaAtual: _estadoRedacaoBlog.etapa });
+
+    if(resultadoIA){
+      if(resultadoIA.action === 'IR_LER'){
+        _estadoRedacaoBlog.etapa = 'ler_escolher_busca';
+        falarVozBlog(resultadoIA.voice_response || 'Quer buscar por tema, título ou autor?');
+        return;
+      }
+      if(resultadoIA.action === 'IR_ESCREVER'){
+        _estadoRedacaoBlog.etapa = 'nome';
+        falarVozBlog(resultadoIA.voice_response || 'Vamos escrever um artigo novo. Qual o seu nome de autor?');
+        return;
+      }
+      if(resultadoIA.action === 'BUSCAR_TEMA'){
+        _estadoRedacaoBlog.etapa = 'ler_por_tema';
+        falarVozBlog(resultadoIA.voice_response || 'Qual tema você quer?');
+        if(resultadoIA.params && resultadoIA.params.valor) await processarComandoVozBlog(resultadoIA.params.valor);
+        return;
+      }
+      if(resultadoIA.action === 'BUSCAR_TITULO'){
+        _estadoRedacaoBlog.etapa = 'ler_por_titulo';
+        falarVozBlog(resultadoIA.voice_response || 'Fala uma palavra do título.');
+        if(resultadoIA.params && resultadoIA.params.valor) await processarComandoVozBlog(resultadoIA.params.valor);
+        return;
+      }
+      if(resultadoIA.action === 'BUSCAR_AUTOR'){
+        _estadoRedacaoBlog.etapa = 'ler_por_autor';
+        falarVozBlog(resultadoIA.voice_response || 'Qual autor você quer ouvir?');
+        if(resultadoIA.params && resultadoIA.params.valor) await processarComandoVozBlog(resultadoIA.params.valor);
+        return;
+      }
+      if(resultadoIA.voice_response){
+        falarVozBlog(resultadoIA.voice_response);
+        return;
+      }
+    }
   }
+
+  falarVozBlog(textoPadraoSeNaoEntender);
 }
 
 function _tratarResultadoBuscaVozBlog(encontrados, estado, textoNorm){

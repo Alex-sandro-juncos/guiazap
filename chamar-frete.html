@@ -45,8 +45,22 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Chamar frete / corrida</p></header>
+<header style="position:relative;"><div class="logo">GuiaZap</div><p>Chamar frete / corrida</p>
+  <button type="button" id="btn-modo-voz-frete" onclick="toggleModoVozFrete()" title="Preencher por voz" aria-label="Preencher o chamado de frete por voz" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+</header>
 <a href="index.html" class="voltar" style="display:block; max-width:560px; margin:10px auto 0; padding:0 15px;">← Voltar</a>
+
+<div id="painel-modo-voz-frete" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div id="voz-frete-indicador" style="width:14px;height:14px;border-radius:50%;background:#0f766e;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-frete-status" style="color:white;font-weight:700;font-size:0.85rem;">Iniciando...</div>
+      <div id="voz-frete-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozFrete()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
+
 
 <div class="frete-wrap">
 
@@ -543,8 +557,317 @@ async function chamarTodosEntregadores(){
 }
 
 initFrete();
+
+// ---------- MODO VOZ (assistente passo-a-passo pra preencher tudo falando) ----------
+
+let _vozFreteAtiva = false;
+let _vozFreteReconhecimento = null;
+let _vozFreteVigia = null;
+let _vozFreteUltimoSinal = 0;
+let _vozFreteFalando = false;
+const _vozFreteSynth = window.speechSynthesis;
+let _estadoVozFrete = { etapa: 'inicio' };
+
+function normalizarVozFrete(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function ehSimVozFrete(t){ return t === 'sim' || t === 's' || t.includes('isso') || t.includes('correto') || t.includes('certo') || t.includes('pode'); }
+function ehNaoVozFrete(t){ return t === 'nao' || t === 'n' || t.includes('errado') || t.includes('de novo'); }
+function ehPularVozFrete(t){ return t.includes('pular') || t.includes('nao sei') || t.includes('não sei') || t.includes('nenhum') || t.includes('nao tenho') || t.includes('não tenho') || t.includes('qualquer'); }
+
+function toggleModoVozFrete(){
+  if(_vozFreteAtiva) pararModoVozFrete();
+  else iniciarModoVozFrete();
+}
+
+function iniciarModoVozFrete(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozFreteAtiva = true;
+  _estadoVozFrete = { etapa: 'cep_retirada' };
+  document.getElementById('btn-modo-voz-frete').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-frete').style.display = 'block';
+
+  _criarReconhecimentoFrete(Api);
+  clearInterval(_vozFreteVigia);
+  _vozFreteVigia = setInterval(() => {
+    if(!_vozFreteAtiva){ clearInterval(_vozFreteVigia); return; }
+    if(_vozFreteFalando) return;
+    if(Date.now() - _vozFreteUltimoSinal > 8000){
+      try{ _vozFreteReconhecimento.onend = null; _vozFreteReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoFrete(Api);
+    }
+  }, 4000);
+
+  falarVozFrete('Vamos montar o chamado de frete. Qual o CEP de onde vai ser retirado? Se não souber, fala "não sei".');
+}
+
+function _criarReconhecimentoFrete(Api){
+  _vozFreteReconhecimento = new Api();
+  _vozFreteReconhecimento.lang = 'pt-BR';
+  _vozFreteReconhecimento.continuous = true;
+  _vozFreteReconhecimento.interimResults = false;
+
+  _vozFreteReconhecimento.onstart = () => { _vozFreteUltimoSinal = Date.now(); };
+
+  _vozFreteReconhecimento.onresult = (event) => {
+    _vozFreteUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-frete-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozFrete(texto);
+  };
+
+  _vozFreteReconhecimento.onend = () => {
+    _vozFreteUltimoSinal = Date.now();
+    if(_vozFreteAtiva){ try{ _vozFreteReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozFreteReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozFrete('Preciso de permissão pro microfone.');
+      pararModoVozFrete();
+      return;
+    }
+    _vozFreteUltimoSinal = Date.now();
+    if(_vozFreteAtiva){ setTimeout(() => { try{ _vozFreteReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozFreteReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozFrete(){
+  _vozFreteAtiva = false;
+  clearInterval(_vozFreteVigia);
+  if(_vozFreteReconhecimento){
+    _vozFreteReconhecimento.onresult = null;
+    _vozFreteReconhecimento.onend = null;
+    _vozFreteReconhecimento.onerror = null;
+    try{ _vozFreteReconhecimento.abort(); } catch(e){}
+    _vozFreteReconhecimento = null;
+  }
+  _vozFreteSynth.cancel();
+  document.getElementById('btn-modo-voz-frete').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-frete').style.display = 'none';
+}
+
+function falarVozFrete(texto){
+  document.getElementById('voz-frete-status').textContent = texto;
+  _vozFreteFalando = true;
+  _vozFreteSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozFreteFalando = false;
+    if(_vozFreteAtiva){ try{ _vozFreteReconhecimento.start(); } catch(e){} }
+  };
+  _vozFreteSynth.speak(fala);
+  setTimeout(() => {
+    _vozFreteFalando = false;
+    if(_vozFreteAtiva && _vozFreteReconhecimento){ try{ _vozFreteReconhecimento.start(); } catch(e){} }
+  }, 7000);
+}
+
+function extrairApenasDigitosFrete(texto){
+  return (texto.match(/\d+/g) || []).join('');
+}
+
+async function processarComandoVozFrete(transcricao){
+  const t = normalizarVozFrete(transcricao);
+  const estado = _estadoVozFrete;
+
+  if(t === 'cancelar' || t === 'parar' || t === 'sair' || t === 'desligar' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozFrete('Modo voz desligado.');
+    setTimeout(pararModoVozFrete, 1200);
+    return;
+  }
+
+  if(estado.etapa === 'cep_retirada'){
+    if(ehPularVozFrete(t)){
+      estado.etapa = 'rua_retirada';
+      falarVozFrete('Sem problema. Fala o nome da rua de retirada.');
+      return;
+    }
+    const digitos = extrairApenasDigitosFrete(transcricao);
+    if(digitos.length === 8){
+      document.getElementById('ret-cep').value = digitos.slice(0,5) + '-' + digitos.slice(5);
+      await buscarCepFrete('ret');
+      estado.etapa = 'numero_retirada';
+      falarVozFrete('CEP encontrado: ' + (document.getElementById('ret-rua').value || 'endereço') + '. Qual o número?');
+    } else {
+      falarVozFrete('Não entendi o CEP. Fala os 8 números de novo, ou "não sei" pra digitar o endereço na mão.');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'rua_retirada'){
+    document.getElementById('ret-rua').value = transcricao.trim();
+    estado.etapa = 'numero_retirada';
+    falarVozFrete('Rua ' + transcricao.trim() + '. Qual o número?');
+    return;
+  }
+
+  if(estado.etapa === 'numero_retirada'){
+    const digitos = extrairApenasDigitosFrete(transcricao) || transcricao.trim();
+    document.getElementById('ret-numero').value = digitos;
+    if(!document.getElementById('ret-bairro').value){
+      estado.etapa = 'bairro_retirada';
+      falarVozFrete('Qual o bairro da retirada?');
+    } else {
+      estado.etapa = 'cep_entrega';
+      falarVozFrete('Retirada anotada. Agora, qual o CEP de entrega? Se não souber, fala "não sei".');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'bairro_retirada'){
+    document.getElementById('ret-bairro').value = transcricao.trim();
+    if(!document.getElementById('ret-cidade').value){
+      estado.etapa = 'cidade_retirada';
+      falarVozFrete('Qual a cidade?');
+    } else {
+      estado.etapa = 'cep_entrega';
+      falarVozFrete('Retirada anotada. Agora, qual o CEP de entrega? Se não souber, fala "não sei".');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'cidade_retirada'){
+    document.getElementById('ret-cidade').value = transcricao.trim();
+    estado.etapa = 'cep_entrega';
+    falarVozFrete('Retirada anotada. Agora, qual o CEP de entrega? Se não souber, fala "não sei".');
+    return;
+  }
+
+  if(estado.etapa === 'cep_entrega'){
+    if(ehPularVozFrete(t)){
+      estado.etapa = 'rua_entrega';
+      falarVozFrete('Sem problema. Fala o nome da rua de entrega.');
+      return;
+    }
+    const digitos = extrairApenasDigitosFrete(transcricao);
+    if(digitos.length === 8){
+      document.getElementById('ent-cep').value = digitos.slice(0,5) + '-' + digitos.slice(5);
+      await buscarCepFrete('ent');
+      estado.etapa = 'numero_entrega';
+      falarVozFrete('CEP encontrado: ' + (document.getElementById('ent-rua').value || 'endereço') + '. Qual o número?');
+    } else {
+      falarVozFrete('Não entendi o CEP. Fala os 8 números de novo, ou "não sei" pra digitar o endereço na mão.');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'rua_entrega'){
+    document.getElementById('ent-rua').value = transcricao.trim();
+    estado.etapa = 'numero_entrega';
+    falarVozFrete('Rua ' + transcricao.trim() + '. Qual o número?');
+    return;
+  }
+
+  if(estado.etapa === 'numero_entrega'){
+    const digitos = extrairApenasDigitosFrete(transcricao) || transcricao.trim();
+    document.getElementById('ent-numero').value = digitos;
+    if(!document.getElementById('ent-bairro').value){
+      estado.etapa = 'bairro_entrega';
+      falarVozFrete('Qual o bairro da entrega?');
+    } else {
+      estado.etapa = 'local_entrega';
+      falarVozFrete('Entrega anotada. Vai entregar no portão, ou na porta (dentro do prédio, com acréscimo de 5 reais)?');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'bairro_entrega'){
+    document.getElementById('ent-bairro').value = transcricao.trim();
+    if(!document.getElementById('ent-cidade').value){
+      estado.etapa = 'cidade_entrega';
+      falarVozFrete('Qual a cidade?');
+    } else {
+      estado.etapa = 'local_entrega';
+      falarVozFrete('Entrega anotada. Vai entregar no portão, ou na porta (dentro do prédio, com acréscimo de 5 reais)?');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'cidade_entrega'){
+    document.getElementById('ent-cidade').value = transcricao.trim();
+    estado.etapa = 'local_entrega';
+    falarVozFrete('Entrega anotada. Vai entregar no portão, ou na porta (dentro do prédio, com acréscimo de 5 reais)?');
+    return;
+  }
+
+  if(estado.etapa === 'local_entrega'){
+    if(t.includes('porta') && !t.includes('portao') && !t.includes('portão')){
+      document.getElementById('entrega-porta').checked = true;
+    } else {
+      document.getElementById('entrega-portao').checked = true;
+    }
+    atualizarPreviewValorTotalFrete();
+    estado.etapa = 'tipo_veiculo';
+    falarVozFrete('Precisa de moto, carro, ou qualquer um serve?');
+    return;
+  }
+
+  if(estado.etapa === 'tipo_veiculo'){
+    document.getElementById('tipo-moto').checked = t.includes('moto');
+    document.getElementById('tipo-carro').checked = t.includes('carro');
+    estado.etapa = 'valor';
+    falarVozFrete('Anotado. Qual valor você quer oferecer pelo frete? Fala o número, ou "calcular" pra eu sugerir um valor de carro.');
+    return;
+  }
+
+  if(estado.etapa === 'valor'){
+    if(t.includes('calcular') || t.includes('sugerir') || t.includes('sugestao') || t.includes('sugestão')){
+      await calcularSugestaoFreteCarro();
+      const valorAtual = document.getElementById('frete-valor').value;
+      estado.etapa = 'confirmar_final';
+      falarVozFrete('Calculei R$ ' + valorAtual + '. Posso já buscar os entregadores disponíveis? Fala sim ou não.');
+      return;
+    }
+    const numeroTexto = transcricao.replace(/[^\d,.]/g, '').replace(',', '.');
+    const numero = parseFloat(numeroTexto);
+    if(!isNaN(numero) && numero > 0){
+      document.getElementById('frete-valor').value = numero.toFixed(2).replace('.', ',');
+      atualizarPreviewValorTotalFrete();
+      estado.etapa = 'confirmar_final';
+      falarVozFrete('Valor de R$ ' + numero.toFixed(2).replace('.', ',') + ' anotado. Posso já buscar os entregadores disponíveis? Fala sim ou não.');
+    } else {
+      falarVozFrete('Não entendi o valor. Fala só o número, tipo "vinte reais", ou "calcular" pra eu sugerir.');
+    }
+    return;
+  }
+
+  if(estado.etapa === 'confirmar_final'){
+    if(ehSimVozFrete(t)){
+      falarVozFrete('Buscando entregadores disponíveis...');
+      buscarEntregadoresCompativeis();
+      pararModoVozFrete();
+    } else if(ehNaoVozFrete(t)){
+      falarVozFrete('Tudo bem, os dados ficaram preenchidos na tela. Toca em "Ver entregadores disponíveis" quando quiser.');
+      pararModoVozFrete();
+    } else {
+      falarVozFrete('Não entendi. Fala sim pra buscar agora, ou não pra deixar só preenchido.');
+    }
+    return;
+  }
+
+  // Última rede de segurança: IA genérica, pra quando a resposta não bate
+  // com o formato esperado da etapa atual
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'chamar-frete', [
+      { nome: 'CONTINUAR', descricao: 'usar o texto dito como resposta pra etapa atual do formulário' }
+    ], { etapaAtual: estado.etapa });
+    if(resultadoIA && resultadoIA.voice_response){
+      falarVozFrete(resultadoIA.voice_response);
+      return;
+    }
+  }
+
+  falarVozFrete('Não entendi. Pode repetir?');
+}
 </script>
 <script src="js/modo-escuro.js"></script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/debug-console.js"></script>
 </body>
 </html>

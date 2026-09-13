@@ -30,9 +30,23 @@
 </head>
 <body>
 <header class="banco-header">
-  <h1>🛵 Banco de Entregadores</h1>
+  <div style="display:flex; justify-content:center; align-items:center; gap:10px; position:relative;">
+    <h1>🛵 Banco de Entregadores</h1>
+    <button type="button" id="btn-modo-voz-banco" onclick="toggleModoVozBanco()" title="Ativar modo de voz" aria-label="Ativar modo de voz, buscar entregadores sem tocar na tela" style="position:absolute; right:0; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+  </div>
   <p>Encontre e chame um entregador direto — sem comissão, sem intermediário</p>
 </header>
+
+<div id="painel-modo-voz-banco" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div id="voz-banco-indicador" style="width:14px;height:14px;border-radius:50%;background:#22c55e;flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-banco-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala a cidade ou bairro que procura</div>
+      <div id="voz-banco-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozBanco()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 
 <div class="banco-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
@@ -45,6 +59,7 @@
 </div>
 
 <script src="js/modo-escuro.js"></script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="config.js"></script>
 <script>
 const supabaseClientBanco = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -102,6 +117,205 @@ function renderBancoEntregadores(){
 }
 
 carregarBancoEntregadores();
+
+// ---------- MODO VOZ (mãos livres) ----------
+
+let _vozBancoAtiva = false;
+let _vozBancoReconhecimento = null;
+let _vozBancoVigia = null;
+let _vozBancoUltimoSinal = 0;
+let _vozBancoFalando = false;
+const _vozBancoSynth = window.speechSynthesis;
+
+function toggleModoVozBanco(){
+  if(_vozBancoAtiva) pararModoVozBanco();
+  else iniciarModoVozBanco();
+}
+
+function iniciarModoVozBanco(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozBancoAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-banco').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-banco').style.display = 'block';
+
+  _criarReconhecimentoBanco(Api);
+  clearInterval(_vozBancoVigia);
+  _vozBancoVigia = setInterval(() => {
+    if(!_vozBancoAtiva){ clearInterval(_vozBancoVigia); return; }
+    if(_vozBancoFalando) return;
+    if(Date.now() - _vozBancoUltimoSinal > 8000){
+      try{ _vozBancoReconhecimento.onend = null; _vozBancoReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoBanco(Api);
+    }
+  }, 4000);
+
+  falarVozBanco('Modo voz ativado. Fala a cidade ou bairro que você procura, ou o nome de um entregador pra chamar.');
+}
+
+function _criarReconhecimentoBanco(Api){
+  _vozBancoReconhecimento = new Api();
+  _vozBancoReconhecimento.lang = 'pt-BR';
+  _vozBancoReconhecimento.continuous = true;
+  _vozBancoReconhecimento.interimResults = false;
+
+  _vozBancoReconhecimento.onstart = () => { _vozBancoUltimoSinal = Date.now(); };
+
+  _vozBancoReconhecimento.onresult = (event) => {
+    _vozBancoUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-banco-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozBanco(texto);
+  };
+
+  _vozBancoReconhecimento.onend = () => {
+    _vozBancoUltimoSinal = Date.now();
+    if(_vozBancoAtiva){ try{ _vozBancoReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozBancoReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozBanco('Preciso de permissão pro microfone.');
+      pararModoVozBanco();
+      return;
+    }
+    _vozBancoUltimoSinal = Date.now();
+    if(_vozBancoAtiva){ setTimeout(() => { try{ _vozBancoReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozBancoReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozBanco(){
+  _vozBancoAtiva = false;
+  clearInterval(_vozBancoVigia);
+  if(_vozBancoReconhecimento){
+    _vozBancoReconhecimento.onresult = null;
+    _vozBancoReconhecimento.onend = null;
+    _vozBancoReconhecimento.onerror = null;
+    try{ _vozBancoReconhecimento.abort(); } catch(e){}
+    _vozBancoReconhecimento = null;
+  }
+  _vozBancoSynth.cancel();
+  document.getElementById('btn-modo-voz-banco').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-banco').style.display = 'none';
+}
+
+function falarVozBanco(texto){
+  document.getElementById('voz-banco-status').textContent = texto;
+  _vozBancoFalando = true;
+  _vozBancoSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozBancoFalando = false;
+    if(_vozBancoAtiva){ try{ _vozBancoReconhecimento.start(); } catch(e){} }
+  };
+  _vozBancoSynth.speak(fala);
+  setTimeout(() => {
+    _vozBancoFalando = false;
+    if(_vozBancoAtiva && _vozBancoReconhecimento){ try{ _vozBancoReconhecimento.start(); } catch(e){} }
+  }, 6000);
+}
+
+function lerResultadosBancoEmVoz(){
+  const cards = document.querySelectorAll('#lista-banco-entregadores .card-entregador .nome-entregador');
+  const nomes = Array.from(cards).slice(0, 5).map(el => el.textContent.trim());
+  if(nomes.length === 0) return 'Nenhum entregador encontrado com isso.';
+  const sobrando = cards.length - nomes.length;
+  return `Encontrei ${cards.length} entregador${cards.length !== 1 ? 'es' : ''}: ${nomes.join(', ')}${sobrando > 0 ? ', e mais ' + sobrando : ''}. Fala o nome de quem você quer chamar.`;
+}
+
+async function processarComandoVozBanco(transcricao){
+  const t = normalizarTextoBanco(transcricao);
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'banco-entregadores.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozBanco(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozBanco('Modo voz desativado.');
+    setTimeout(pararModoVozBanco, 1200);
+    return;
+  }
+  if(t === 'parar'){
+    falarVozBanco('Ok, modo voz continua ativo.');
+    return;
+  }
+  if(t.includes('voltar')){
+    falarVozBanco('Voltando ao GuiaZap...');
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+    return;
+  }
+
+  // Tenta achar um entregador pelo NOME direto entre os resultados atuais
+  const achadoPorNome = todosEntregadoresBanco.find(e => normalizarTextoBanco(e.name).includes(t) || t.includes(normalizarTextoBanco(e.name).split(' ')[0]));
+  if(achadoPorNome && t.length > 2){
+    falarVozBanco('Abrindo o Papo com ' + achadoPorNome.name + '.');
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    setTimeout(() => { window.location.href = 'chat.html?empresa=' + achadoPorNome.id + '&msg=' + encodeURIComponent('Olá! Vi seu contato no Banco de Entregadores e preciso de uma entrega.'); }, 1200);
+    return;
+  }
+
+  // Busca por cidade/bairro (comportamento padrão da tela)
+  document.getElementById('banco-busca').value = transcricao.trim();
+  renderBancoEntregadores();
+  const cardsAgora = document.querySelectorAll('#lista-banco-entregadores .card-entregador');
+  if(cardsAgora.length > 0){
+    falarVozBanco(lerResultadosBancoEmVoz());
+    return;
+  }
+
+  // Nada bateu — última rede de segurança: IA genérica
+  if(typeof chamarIAGenericaVoz === 'function'){
+    const resultadoIA = await chamarIAGenericaVoz(transcricao, 'banco-entregadores', [
+      { nome: 'BUSCAR_LOCAL', descricao: 'buscar entregadores por cidade ou bairro', params: '{ "termo": "cidade ou bairro" }' },
+      { nome: 'CHAMAR_ENTREGADOR', descricao: 'abrir o Papo com um entregador específico da lista', params: '{ "id": "id do entregador" }' }
+    ], { entregadoresVisiveis: todosEntregadoresBanco.slice(0, 20).map(e => ({ id: e.id, nome: e.name, cidade: e.cidade, bairro: e.bairro })) });
+
+    if(resultadoIA){
+      if(resultadoIA.action === 'BUSCAR_LOCAL' && resultadoIA.params && resultadoIA.params.termo){
+        document.getElementById('banco-busca').value = resultadoIA.params.termo;
+        renderBancoEntregadores();
+        falarVozBanco(lerResultadosBancoEmVoz());
+        return;
+      }
+      if(resultadoIA.action === 'CHAMAR_ENTREGADOR' && resultadoIA.params && resultadoIA.params.id){
+        const alvo = todosEntregadoresBanco.find(e => e.id === resultadoIA.params.id);
+        if(alvo){
+          falarVozBanco(resultadoIA.voice_response || ('Abrindo o Papo com ' + alvo.name + '.'));
+          localStorage.setItem('retomarModoVozAoCarregar', '1');
+          setTimeout(() => { window.location.href = 'chat.html?empresa=' + alvo.id; }, 1200);
+          return;
+        }
+      }
+      if(resultadoIA.voice_response){
+        falarVozBanco(resultadoIA.voice_response);
+        return;
+      }
+    }
+  }
+
+  falarVozBanco('Nenhum entregador encontrado com isso. Fala outra cidade ou bairro.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozBanco(), 800);
+}
+
+window.addEventListener('pagehide', function(){
+  if(_vozBancoAtiva) localStorage.setItem('retomarModoVozAoCarregar', '1');
+});
 </script>
 <script src="js/debug-console.js"></script>
 </body>
