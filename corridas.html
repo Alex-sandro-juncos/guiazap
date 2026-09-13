@@ -449,6 +449,16 @@ function falarVozCorridas(texto){
 async function processarComandoVozCorridas(texto){
   const pendente = todasCorridas.find(c => c.status === 'pendente');
 
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(texto, 'corridas.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozCorridas(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
   if(texto.includes('aceito') || texto.includes('aceitar') || texto.includes('topo') || texto.includes('bora')){
     if(!pendente){ falarVozCorridas('Nenhuma corrida esperando resposta agora.'); return; }
     falarVozCorridas('Aceitando a corrida de ' + (pendente.empresaNome || 'entrega') + '.');

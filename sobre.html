@@ -238,6 +238,23 @@
   }
 
   async function _tentarIAFallbackSobre(texto){
+    // Antes de tentar a IA, confere se é só um pedido de navegação pra
+    // outra página do site (lista local, sem gastar IA)
+    if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+      const textoNormalizadoSobre = (texto || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const destinoLocal = verificarNavegacaoUniversalPorVoz(textoNormalizadoSobre, 'sobre.html');
+      if(destinoLocal){
+        cancelado = true;
+        speechSynthesis.cancel();
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        const fala = new SpeechSynthesisUtterance(destinoLocal.fala);
+        fala.lang = 'pt-BR';
+        fala.onend = () => { window.location.href = destinoLocal.url; };
+        speechSynthesis.speak(fala);
+        return;
+      }
+    }
+
     // A pessoa pode nem estar logada nessa página (é pública) — a IA
     // genérica exige login, então nesse caso ela simplesmente não
     // responde nada (retorna null) e cai direto na mensagem padrão.

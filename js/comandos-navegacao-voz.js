@@ -54,16 +54,31 @@ async function chamarIAGenericaVoz(texto, contexto, acoesDisponiveis, dadosConte
   }
 }
 
+// Verbos/frases que indicam "quero ir pra algum lugar" — usados junto com
+// a palavra-chave de cada destino (ver função de match abaixo), pra cobrir
+// MUITO mais jeitos de pedir a mesma coisa sem precisar listar frase por
+// frase (ex: "vai pra vitrine", "abre o blog", "me leva pro mapa").
+const _VERBOS_NAVEGACAO_VOZ = [
+  'ir pra', 'ir para', 'ir pro', 'ir ao', 'ir a', 'vai pra', 'vai para', 'vai pro',
+  'abre', 'abrir', 'volta pra', 'volta para', 'voltar pra', 'voltar para',
+  'bora pra', 'bora para', 'bora pro', 'me leva pra', 'me leva para', 'me leva pro',
+  'leva pra', 'leva para', 'mostra', 'mostrar', 'cade', 'cadê', 'acessar',
+  'quero acessar', 'quero ir', 'quero ver', 'gostaria de acessar', 'gostaria de ir',
+  'poderia abrir', 'preciso ir', 'preciso acessar', 'entrar em', 'entrar na', 'entrar no'
+];
+
 const _DESTINOS_NAVEGACAO_VOZ = [
   {
     arquivo: 'index.html',
     fala: 'Voltando pra página inicial...',
-    gatilhos: ['=inicio', '=início', '=guiazap', 'pagina inicial', 'página inicial', 'voltar pro guiazap', 'voltar para o guiazap', 'ir pro guiazap', 'ir para o guiazap', 'ir para pagina inicial', 'ir para página inicial']
+    gatilhos: ['=inicio', '=início', '=guiazap', 'pagina inicial', 'página inicial', 'voltar pro guiazap', 'voltar para o guiazap', 'ir pro guiazap', 'ir para o guiazap', 'ir para pagina inicial', 'ir para página inicial', 'volta pro guiazap', 'volta pro inicio', 'volta ao inicio', 'me leva pro guiazap'],
+    palavrasChave: ['guiazap', 'inicio', 'início', 'pagina inicial', 'página inicial']
   },
   {
     arquivo: 'vitrine.html',
     fala: 'Indo pra Vitrine...',
-    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine', 'quero comprar', 'fazer compras', 'fazer uma compra', 'ir para compras', 'ir pra compras', 'quero ir para compras', 'quero ir pra compras', 'ir as compras', 'ir às compras', 'ver produtos']
+    gatilhos: ['=vitrine', 'ir para vitrine', 'ir pra vitrine', 'ver vitrine', 'abrir vitrine', 'quero comprar', 'fazer compras', 'fazer uma compra', 'ir para compras', 'ir pra compras', 'quero ir para compras', 'quero ir pra compras', 'ir as compras', 'ir às compras', 'ver produtos', 'tô afim de comprar', 'to afim de comprar'],
+    palavrasChave: ['vitrine', 'produtos', 'loja']
   },
   {
     arquivo: 'blog.html',
@@ -73,44 +88,87 @@ const _DESTINOS_NAVEGACAO_VOZ = [
       // O reconhecimento de voz às vezes entende "ler blog" errado, como se
       // fosse inglês — cobre essas variações também
       'learn blog', 'lair blog', 'blair blog'
-    ]
+    ],
+    palavrasChave: ['blog']
   },
   {
     arquivo: 'pedidos.html',
     fala: 'Indo pra tela de pedidos recebidos...',
-    gatilhos: ['=pedidos', 'pedidos recebidos', 'gerenciar pedidos', 'pedidos da minha empresa', 'ver pedidos recebidos', 'pedidos da empresa']
+    gatilhos: ['=pedidos', 'pedidos recebidos', 'gerenciar pedidos', 'pedidos da minha empresa', 'ver pedidos recebidos', 'pedidos da empresa', 'desejo gerenciar os pedidos', 'gerenciar os pedidos recebidos'],
+    palavrasChave: ['pedidos recebidos', 'pedidos da empresa', 'gerenciar pedidos']
   },
   {
     arquivo: 'meus-pedidos.html',
     fala: 'Indo pra suas compras...',
-    gatilhos: ['=minhas compras', 'minhas compras', 'meus pedidos', 'ver meus pedidos', 'ir para meus pedidos', 'ir pra meus pedidos', 'historico de compras', 'histórico de compras', 'acompanhar pedido', 'acompanhar meu pedido']
+    gatilhos: ['=minhas compras', 'minhas compras', 'meus pedidos', 'ver meus pedidos', 'ir para meus pedidos', 'ir pra meus pedidos', 'historico de compras', 'histórico de compras', 'acompanhar pedido', 'acompanhar meu pedido', 'cade minhas compras', 'cadê minhas compras', 'quero visualizar o historico de compras', 'quero visualizar o histórico de compras'],
+    palavrasChave: ['minhas compras', 'meus pedidos', 'historico de compras', 'histórico de compras']
   },
   {
     arquivo: 'vagas.html',
     fala: 'Indo pra tela de vagas...',
-    gatilhos: ['=vagas', 'ir para vagas', 'ir pra vagas', 'ver vagas', 'abrir vagas', 'contrata se', 'contrata-se']
+    gatilhos: ['=vagas', 'ir para vagas', 'ir pra vagas', 'ver vagas', 'abrir vagas', 'contrata se', 'contrata-se', 'quero ver vagas', 'peço que abra a secao de vagas', 'peço que abra a seção de vagas', 'tem vaga ai'],
+    palavrasChave: ['vagas', 'vagas de emprego', 'contrata se']
   },
   {
     arquivo: 'curriculo.html',
     fala: 'Indo pro montador de currículo...',
-    gatilhos: ['=curriculo', '=currículo', 'ir para curriculo', 'ir pra curriculo', 'ir para currículo', 'ir pra currículo', 'montar curriculo', 'montar currículo', 'montador de curriculo', 'montador de currículo']
+    gatilhos: ['=curriculo', '=currículo', 'ir para curriculo', 'ir pra curriculo', 'ir para currículo', 'ir pra currículo', 'montar curriculo', 'montar currículo', 'montar o curriculo', 'montar meu curriculo', 'montar um curriculo', 'montador de curriculo', 'montador de currículo', 'gostaria de montar o meu curriculo', 'gostaria de montar meu curriculo'],
+    palavrasChave: ['curriculo', 'currículo']
   },
   {
     arquivo: 'sobre.html',
     fala: 'Indo pra página sobre o GuiaZap...',
-    gatilhos: ['=sobre', 'como funciona', 'sobre o guiazap', 'o que e o guiazap', 'o que é o guiazap']
+    gatilhos: ['=sobre', 'como funciona', 'sobre o guiazap', 'o que e o guiazap', 'o que é o guiazap', 'poderia explicar como funciona', 'como que funciona isso', 'como funciona isso'],
+    palavrasChave: ['como funciona', 'sobre o guiazap']
   },
   {
     arquivo: 'chat.html',
     fala: 'Indo pro Papo...',
-    gatilhos: ['=papo', 'ir para o papo', 'ir pro papo', 'abrir papo', 'ir para o chat', 'ir pro chat', 'abrir chat']
+    gatilhos: ['=papo', 'ir para o papo', 'ir pro papo', 'abrir papo', 'abrir o papo', 'ir para o chat', 'ir pro chat', 'abrir chat', 'abrir o chat', 'quero conversar', 'favor abrir o papo', 'chama o chat', 'chama o papo'],
+    palavrasChave: ['papo', 'chat']
   },
   {
     arquivo: 'mapa.html',
     fala: 'Indo pro mapa...',
-    gatilhos: ['=mapa', 'ir para o mapa', 'ir pro mapa', 'abrir mapa', 'ver mapa', 'ver no mapa']
+    gatilhos: ['=mapa', 'ir para o mapa', 'ir pro mapa', 'abrir mapa', 'ver mapa', 'ver no mapa', 'desejo visualizar o mapa', 'mostra o mapa'],
+    palavrasChave: ['mapa']
+  },
+  {
+    arquivo: 'agenda.html',
+    fala: 'Indo pra sua Agenda...',
+    gatilhos: ['=agenda', 'ir para agenda', 'ir pra agenda', 'ver agenda', 'abrir agenda', 'minha agenda', 'ver meus contatos', 'meus contatos'],
+    palavrasChave: ['agenda', 'meus contatos']
+  },
+  {
+    arquivo: 'chamar-frete.html',
+    fala: 'Indo chamar um frete...',
+    gatilhos: ['=chamar frete', 'chamar frete', 'quero um frete', 'preciso de um frete', 'chamar uma corrida', 'preciso de uma moto', 'preciso de um motoboy', 'quero um motoboy', 'preciso de um carreto'],
+    palavrasChave: ['chamar frete', 'chamar corrida']
+  },
+  {
+    arquivo: 'corridas.html',
+    fala: 'Indo pro GuiaCorridas...',
+    gatilhos: ['=guiacorridas', '=corridas', 'guia corridas', 'guiacorridas', 'minhas corridas', 'ver minhas corridas'],
+    palavrasChave: ['guiacorridas', 'minhas corridas']
+  },
+  {
+    arquivo: 'banco-entregadores.html',
+    fala: 'Indo pro Banco de Entregadores...',
+    gatilhos: ['=banco de entregadores', 'banco de entregadores', 'ver entregadores', 'buscar entregador', 'buscar entregadores'],
+    palavrasChave: ['banco de entregadores', 'entregadores']
   }
 ];
+
+// Confere se o texto tem um VERBO de navegação junto com a PALAVRA-CHAVE
+// de algum destino — cobre "vai pra X", "abre X", "me leva pro X" etc. sem
+// precisar listar cada combinação de frase manualmente.
+function _bateuPorVerboEChave(textoNormalizado, destino){
+  if(!destino.palavrasChave) return false;
+  const temChave = destino.palavrasChave.some(chave => textoNormalizado.includes(chave));
+  if(!temChave) return false;
+  return _VERBOS_NAVEGACAO_VOZ.some(verbo => textoNormalizado.includes(verbo));
+}
+
 
 // ---------- MODO VOZ PERMANENTE ----------
 // Diferente do "retomarModoVozAoCarregar" (que é usado só UMA vez, ao
@@ -155,12 +213,14 @@ function verificarNavegacaoUniversalPorVoz(textoNormalizado, paginaAtual){
   for(const destino of _DESTINOS_NAVEGACAO_VOZ){
     if(destino.arquivo === paginaAtual) continue; // já está lá, não faz nada
 
-    const bateu = destino.gatilhos.some(gatilho => {
+    const bateuGatilhoExato = destino.gatilhos.some(gatilho => {
       if(gatilho.startsWith('=')) return textoNormalizado === gatilho.slice(1);
       return textoNormalizado.includes(gatilho);
     });
 
-    if(bateu) return { url: destino.arquivo, fala: destino.fala };
+    if(bateuGatilhoExato || _bateuPorVerboEChave(textoNormalizado, destino)){
+      return { url: destino.arquivo, fala: destino.fala };
+    }
   }
 
   return null;

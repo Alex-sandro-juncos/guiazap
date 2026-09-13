@@ -81,11 +81,16 @@ const DESCRICAO_PAGINAS = `
 - vitrine.html: loja/vitrine de produtos, onde a pessoa compra coisas, vê carrinho, faz pedido
 - blog.html: blog do site, artigos escritos pela comunidade
 - pedidos.html: tela de pedidos (pra dono de empresa gerenciar pedidos recebidos)
+- meus-pedidos.html: histórico de compras da própria pessoa (como cliente, não como empresa)
 - vagas.html: vagas de emprego, tanto pra ver vagas quanto pra publicar uma
 - curriculo.html: montador de currículo
 - sobre.html: página explicando o que é o GuiaZap e como funciona
 - chat.html: o "Papo", chat de atendimento com uma empresa específica
 - mapa.html: mapa com os profissionais e empresas perto da pessoa
+- agenda.html: agenda de contatos salvos no Papo
+- chamar-frete.html: pedir um frete/corrida/motoboy pra buscar ou entregar algo
+- corridas.html: "GuiaCorridas", tela do entregador pra ver e aceitar corridas
+- banco-entregadores.html: lista de entregadores/motoboys disponíveis pra contratar direto
 `;
 
 exports.handler = async function (event) {

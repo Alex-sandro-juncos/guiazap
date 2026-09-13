@@ -683,6 +683,20 @@ async function processarComandoVozFrete(transcricao){
     return;
   }
 
+  // Navegação universal só fora das etapas de DITADO livre (endereço) —
+  // senão o nome de uma rua parecido com "vitrine"/"blog" etc. poderia
+  // disparar navegação sem querer no meio do preenchimento
+  const etapasDeDitadoLivre = ['rua_retirada', 'bairro_retirada', 'cidade_retirada', 'rua_entrega', 'bairro_entrega', 'cidade_entrega'];
+  if(!etapasDeDitadoLivre.includes(estado.etapa) && typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'chamar-frete.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozFrete(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
   if(estado.etapa === 'cep_retirada'){
     if(ehPularVozFrete(t)){
       estado.etapa = 'rua_retirada';
