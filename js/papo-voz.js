@@ -233,6 +233,19 @@ function iniciarModoVozPapo(retomandoAutomaticamente){
     falarVozPapo('Modo voz em espera. Fala "ativar" pra começar.');
   } else if(conversaAtual){
     falarVozPapo('Papo. Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
+  } else if(new URLSearchParams(window.location.search).get('empresa') || new URLSearchParams(window.location.search).get('pessoa')){
+    // Veio da URL pedindo uma conversa específica, mas ela ainda não
+    // terminou de abrir — em vez de arriscar dizer "zero conversas" (que
+    // seria uma informação errada), espera um pouco e confere de novo.
+    falarVozPapo('Só um instante, abrindo a conversa...');
+    setTimeout(() => {
+      if(conversaAtual){
+        falarVozPapo('Conversa aberta com ' + (outroLadoNomeAtual || 'contato') + '. Diga atendimento por voz pra fazer um pedido falando naturalmente, ou falar, ouvir, ligar, voltar.');
+      } else {
+        const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
+        falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir.');
+      }
+    }, 1800);
   } else {
     const n = (typeof conversasCarregadasCache !== 'undefined' && conversasCarregadasCache) ? conversasCarregadasCache.length : 0;
     falarVozPapo('Papo. Você tem ' + n + ' conversas. Diga listar, ou o nome da pessoa para abrir. Fala "guiazap" ou qualquer outro comando de navegação pra sair.');

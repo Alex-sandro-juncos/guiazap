@@ -16,6 +16,13 @@ function prepararAcessoVozCego(iniciarFn){
 
   localStorage.removeItem('retomarModoVozAoCarregar');
   if(typeof iniciarFn === 'function'){
-    setTimeout(iniciarFn, 800);
+    // Se a URL já pede pra abrir uma conversa/empresa específica, isso
+    // envolve buscar dados no banco (mais lento que só carregar a página)
+    // — sem esperar mais aqui, a saudação de voz podia disparar ANTES da
+    // conversa terminar de abrir, e falar "zero conversas" mesmo com uma
+    // conversa específica sendo aberta bem naquele instante.
+    const params = new URLSearchParams(window.location.search);
+    const abrindoAlgoEspecifico = params.get('empresa') || params.get('pessoa');
+    setTimeout(iniciarFn, abrindoAlgoEspecifico ? 2200 : 800);
   }
 }
