@@ -112,6 +112,7 @@ function renderVagas(){
     const wa = v.profissionais && v.profissionais.whatsapp ? v.profissionais.whatsapp.replace(/\D/g, '') : '';
     const premium = v.profissionais && (v.profissionais.plano === 'premium' || v.profissionais.plano === 'vendas');
     const podeExcluir = currentUserVagas && meusCadastrosVagas.some(c => c.id === v.profissional_id);
+    const podeVerCandidatos = podeExcluir && v.profissionais && ['completo', 'premium', 'vendas'].includes(v.profissionais.plano);
 
     return `
       <div class="card-vaga${premium ? ' card-premium' : ''}">
@@ -124,6 +125,8 @@ function renderVagas(){
         </div>
         ${v.descricao ? `<div class="card-vaga-desc">${escapeHtmlVagas(v.descricao)}</div>` : ''}
         ${v.requisitos ? `<div class="card-vaga-req"><b>Requisitos:</b> ${escapeHtmlVagas(v.requisitos)}</div>` : ''}
+        ${podeVerCandidatos ? `<button type="button" class="btn-whats" style="background:#6b46c1; border:none; cursor:pointer; margin-top:6px;" onclick="toggleCandidatosCompativeis('${v.id}')">🎯 Ver candidatos compatíveis</button>
+        <div class="candidatos-compativeis-box" id="candidatos-compativeis-${v.id}" style="display:none; margin-top:8px;"></div>` : ''}
         <div class="card-vaga-acoes">
           ${wa ? `<a class="btn-whats" href="https://wa.me/55${wa}?text=${encodeURIComponent('Olá! Vi a vaga de ' + v.titulo + ' no GuiaZap e tenho interesse.')}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
           ${podeExcluir ? `<button type="button" class="btn-cancelar" onclick="excluirVaga('${v.id}')">Excluir</button>` : ''}
@@ -199,6 +202,63 @@ async function salvarVaga(e){
   }).catch(err => console.error('erro ao enviar push', err));
 
   return false;
+}
+
+function normalizarTextoVagas(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+async function toggleCandidatosCompativeis(vagaId){
+  const box = document.getElementById('candidatos-compativeis-' + vagaId);
+  if(!box) return;
+
+  if(box.style.display === 'block'){
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<p style="font-size:0.8rem; color:#888;">Buscando candidatos...</p>';
+
+  const vaga = vagas.find(v => v.id === vagaId);
+  if(!vaga){ box.innerHTML = ''; return; }
+
+  const { data: curriculos } = await supabaseClientVagas.from('banco_curriculos').select('*');
+
+  if(!curriculos || curriculos.length === 0){
+    box.innerHTML = '<p style="font-size:0.8rem; color:#888;">Nenhum currículo no banco ainda.</p>';
+    return;
+  }
+
+  // Mesma lógica de "sacola de palavras" usada em curriculo.html, só que
+  // invertida: aqui é a vaga procurando currículo, lá é o currículo
+  // procurando vaga — pra não ter dois sistemas de pontuação diferentes
+  const textoVaga = normalizarTextoVagas([vaga.titulo, vaga.descricao, vaga.requisitos].filter(Boolean).join(' '));
+  const palavrasVaga = new Set(textoVaga.split(/\s+/).filter(p => p.length > 3));
+
+  const candidatosComPontuacao = curriculos.map(c => {
+    const textoCv = normalizarTextoVagas([c.objetivo, c.experiencia, c.formacao, c.habilidades, c.cidade].filter(Boolean).join(' '));
+    const palavrasCv = textoCv.split(/\s+/).filter(p => p.length > 3);
+    const pontuacao = palavrasCv.filter(p => palavrasVaga.has(p)).length;
+    return { curriculo: c, pontuacao };
+  }).filter(item => item.pontuacao > 0)
+    .sort((a, b) => b.pontuacao - a.pontuacao)
+    .slice(0, 5);
+
+  if(candidatosComPontuacao.length === 0){
+    box.innerHTML = '<p style="font-size:0.8rem; color:#888;">Nenhum currículo bateu com essa vaga ainda.</p>';
+    return;
+  }
+
+  box.innerHTML = '<p style="font-size:0.78rem; color:#666; margin-bottom:6px;">🎯 Candidatos que combinam com essa vaga:</p>' +
+    candidatosComPontuacao.map(item => `
+      <div style="background:var(--cinza-card); border-radius:10px; padding:10px; margin-bottom:6px;">
+        <b style="font-size:0.85rem;">${escapeHtmlVagas(item.curriculo.nome)}</b>
+        ${item.curriculo.cidade ? `<span style="font-size:0.78rem; color:#888;"> — ${escapeHtmlVagas(item.curriculo.cidade)}</span>` : ''}
+        ${item.curriculo.objetivo ? `<div style="font-size:0.8rem; color:#555; margin-top:4px;">${escapeHtmlVagas(item.curriculo.objetivo.slice(0, 120))}${item.curriculo.objetivo.length > 120 ? '...' : ''}</div>` : ''}
+        <a href="talentos.html" style="font-size:0.78rem; color:#6b46c1; font-weight:700;">Ver no Banco de Talentos →</a>
+      </div>
+    `).join('');
 }
 
 async function excluirVaga(id){
