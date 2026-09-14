@@ -468,7 +468,21 @@ async function processarComandoVozPapo(transcricao){
   // meio, que aí é conteúdo mesmo, não comando). Sem isso, pedir "liga pro
   // Zé" enquanto está no meio de ditar um endereço virava texto do
   // endereço, em vez de realmente iniciar a ligação.
+  //
+  // Exceção: se a pessoa está DITANDO uma mensagem livre (onde ela pode
+  // genuinamente querer ESCREVER a palavra "ligar", tipo "pode ligar pra
+  // mim depois"), uma palavra sozinha e ambígua não decide sozinha — pergunta.
   if(!_emChamadaAtiva && transcricao.trim().split(/\s+/).length <= 4){
+    const _ehSoAPalavraAmbigua = t === 'ligar' || t === 'liga';
+    const _precisaConfirmar = _ehSoAPalavraAmbigua && _estadoVozPapo.etapa === 'ditando';
+
+    if(_precisaConfirmar){
+      _estadoVozPapo.etapaAnterior = _estadoVozPapo.etapa;
+      _estadoVozPapo.etapa = 'confirmar_ligar_ou_texto';
+      falarVozPapo('Você quer que eu ligue agora, ou é pra escrever "ligar" na mensagem?');
+      return;
+    }
+
     if(t === 'ligar' || t === 'liga' || t === 'me liga' || t === 'faz uma ligacao' || t === 'faz a ligacao' || t === 'chamada de voz' || t === 'quero ligar'){
       if(!conversaAtual){
         falarVozPapo('Abra uma conversa primeiro.');
@@ -740,6 +754,26 @@ async function processarComandoVozPapo(transcricao){
     } else {
       falarVozPapo('Não consegui enviar. Tente de novo.');
     }
+    return;
+  }
+
+  if(_estadoVozPapo.etapa === 'confirmar_ligar_ou_texto'){
+    if(t.includes('ligue') || t.includes('liga') || t.includes('ligar') || t.includes('chamada') || t.includes('agora')){
+      _estadoVozPapo.etapa = 'conversa';
+      if(!conversaAtual){
+        falarVozPapo('Abra uma conversa primeiro.');
+      } else if(typeof iniciarChamada === 'function'){
+        falarVozPapo('Ligando.');
+        iniciarChamada(false);
+      }
+      return;
+    }
+    if(t.includes('escrev') || t.includes('texto') || t.includes('mensagem') || t.includes('nao') || t.includes('não')){
+      _estadoVozPapo.etapa = _estadoVozPapo.etapaAnterior || 'ditando';
+      falarVozPapo('Entendido. Pode continuar ditando a mensagem — a palavra "ligar" vai entrar no texto.');
+      return;
+    }
+    falarVozPapo('Não entendi. Fala "ligar" pra eu ligar agora, ou "é texto" pra escrever a palavra na mensagem.');
     return;
   }
 
