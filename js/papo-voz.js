@@ -462,6 +462,59 @@ async function processarComandoVozPapo(transcricao){
     return;
   }
 
+  // "Ligar"/"vídeo" tem prioridade ALTA, mesmo no meio de outra coisa (tipo
+  // ditando uma mensagem ou fazendo um pedido natural) — SE for dito como
+  // frase curta e clara (não uma sentença longa que só contém a palavra no
+  // meio, que aí é conteúdo mesmo, não comando). Sem isso, pedir "liga pro
+  // Zé" enquanto está no meio de ditar um endereço virava texto do
+  // endereço, em vez de realmente iniciar a ligação.
+  if(!_emChamadaAtiva && transcricao.trim().split(/\s+/).length <= 4){
+    if(t === 'ligar' || t === 'liga' || t === 'me liga' || t === 'faz uma ligacao' || t === 'faz a ligacao' || t === 'chamada de voz' || t === 'quero ligar'){
+      if(!conversaAtual){
+        falarVozPapo('Abra uma conversa primeiro.');
+      } else if(typeof iniciarChamada === 'function'){
+        _estadoVozPapo.etapa = 'conversa';
+        falarVozPapo('Ligando.');
+        iniciarChamada(false);
+      }
+      return;
+    }
+    if(t === 'video' || t === 'vídeo' || t === 'chamada de video' || t === 'chamada de vídeo' || t === 'liga com video' || t === 'liga com vídeo'){
+      if(!conversaAtual){
+        falarVozPapo('Abra uma conversa primeiro.');
+      } else if(typeof iniciarChamada === 'function'){
+        _estadoVozPapo.etapa = 'conversa';
+        falarVozPapo('Iniciando chamada de vídeo.');
+        iniciarChamada(true);
+      }
+      return;
+    }
+
+    // "Cancelar"/"esquece isso"/"deixa pra lá", curtos, também interrompem
+    // QUALQUER etapa (ditando, endereço, cardápio, atendimento) — igual
+    // duas pessoas conversando de verdade: dá pra mudar de assunto no meio
+    // sem o que foi dito virar "dado" gravado por engano.
+    if(t === 'cancelar' || t === 'esquece isso' || t === 'deixa pra la' || t === 'deixa pra lá' || t === 'muda de assunto'){
+      _estadoVozPapo.etapa = conversaAtual ? 'conversa' : 'lista';
+      falarVozPapo('Ok, cancelado. Pode pedir outra coisa.');
+      return;
+    }
+
+    // Pedido claro de navegar pra outra página — mesma prioridade, mesmo
+    // no meio de preencher algo. Sem isso, falar "abre a vitrine" no meio
+    // de ditar o endereço virava o nome da rua.
+    if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+      const destinoInterrupt = verificarNavegacaoUniversalPorVoz(t, 'chat.html');
+      if(destinoInterrupt){
+        _estadoVozPapo.etapa = conversaAtual ? 'conversa' : 'lista';
+        localStorage.setItem('retomarModoVozAoCarregar', '1');
+        falarVozPapo(destinoInterrupt.fala);
+        setTimeout(() => { window.location.href = destinoInterrupt.url; }, 1200);
+        return;
+      }
+    }
+  }
+
   const _ehPararP = t === 'parar' || (!_emChamadaAtiva && t === 'desligar') || t === 'sair do modo voz' || t === 'desativar' || t.includes('desativar modo voz') || t.includes('desativar o modo voz') || t.includes('cala boca') || t.includes('fica quieto') || t.includes('fique quieto');
   if(!_ehPararP && typeof comandoDeVozAutorizado === 'function' && !comandoDeVozAutorizado()){
     return;
