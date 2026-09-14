@@ -1188,6 +1188,14 @@ async function initChat(){
 
   _resolverProntoParaVozPapo();
 
+  // Veio de um comando de voz tipo "liga pra fulano" direto de outra
+  // página (ex: Index) — a intenção já era ligar, não só abrir a
+  // conversa, então completa a ação sozinho em vez de parar no chat
+  const querLigarDireto = params.get('ligar') === '1';
+  if(querLigarDireto && conversaAtual && typeof iniciarChamada === 'function'){
+    setTimeout(() => { iniciarChamada(false); }, 1200);
+  }
+
   const mensagemPreenchida = params.get('msg');
   if(mensagemPreenchida && (empresaId || pessoaId)){
     const inputTexto = document.getElementById('chat-input-texto');

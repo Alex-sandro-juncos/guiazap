@@ -4787,23 +4787,28 @@ function empresaTemProdutoNoIndex(empresaId){
   return (produtosParaBuscaPrincipal || []).some(p => p.profissional_id === empresaId || (p.profissionais && p.profissionais.id === empresaId));
 }
 
-function abrirPapoIndexVoz(empresa, fala){
+function abrirPapoIndexVoz(empresa, fala, ligarDireto){
   localStorage.setItem('retomarModoVozAoCarregar', '1');
   localStorage.setItem('guiazap_quer_voz', '1');
   if(typeof marcarRetomarModoVozDireto === 'function') marcarRetomarModoVozDireto();
-  falarVozIndex(fala || ('Abrindo o Papo com ' + empresa.name + '.'));
-  setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id; }, 1100);
+  falarVozIndex(fala || (ligarDireto ? ('Ligando pra ' + empresa.name + '.') : ('Abrindo o Papo com ' + empresa.name + '.')));
+  const paramLigar = ligarDireto ? '&ligar=1' : '';
+  setTimeout(() => { window.location.href = 'chat.html?empresa=' + empresa.id + paramLigar; }, 1100);
 }
 
 async function tratarPapoOuCompraNoIndex(transcricao, textoNormalizado){
   const t = textoNormalizado;
-  const querPapo = t.includes('papo') || t.includes('conversar') || t.includes('falar com') || (t.includes('chamar') && !t.includes('whatsapp'));
+  // "ligar"/"telefonar" sozinho (sem "whatsapp" junto) indica que a pessoa
+  // quer mesmo uma CHAMADA de voz do Papo, não só abrir a conversa —
+  // completa a ação direto, em vez de só levar até o Papo e parar aí
+  const querLigarDireto = (t.includes('ligar') || t.includes('telefonar') || t.includes('fazer uma ligacao') || t.includes('fazer uma chamada')) && !t.includes('whatsapp');
+  const querPapo = querLigarDireto || t.includes('papo') || t.includes('conversar') || t.includes('falar com') || (t.includes('chamar') && !t.includes('whatsapp'));
 
   if(_estadoPessoaIndexVoz && _estadoPessoaIndexVoz.etapa === 'compra_ou_conversar'){
     if(querPapo || t.includes('conversar') || t.includes('falar')){
       const emp = _estadoPessoaIndexVoz.empresa;
       _estadoPessoaIndexVoz = null;
-      abrirPapoIndexVoz(emp);
+      abrirPapoIndexVoz(emp, null, querLigarDireto);
       return true;
     }
     if(t.includes('comprar') || t.includes('compra') || t.includes('produto') || t.includes('cardapio') || t.includes('cardápio')){
@@ -4826,11 +4831,11 @@ async function tratarPapoOuCompraNoIndex(transcricao, textoNormalizado){
       alvo = (entries || []).find(e => e.id === cadastroCompartilhadoId) || null;
     }
     if(!alvo){
-      const nome = t.replace(/chamar|no papo|papo|conversar|falar com|com/g, ' ').replace(/\s+/g, ' ').trim();
+      const nome = t.replace(/ligar|telefonar|chamar|no papo|papo|conversar|falar com|com/g, ' ').replace(/\s+/g, ' ').trim();
       if(nome.length >= 3) alvo = acharProfissionalPorNomeVozIndex(nome);
     }
     if(alvo){
-      abrirPapoIndexVoz(alvo);
+      abrirPapoIndexVoz(alvo, null, querLigarDireto);
       return true;
     }
     falarVozIndex('Não sei com quem abrir o Papo. Fala o nome da pessoa ou empresa.');
