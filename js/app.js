@@ -1978,7 +1978,9 @@ function tocarVideoViewerAtual(){
 
   const acoes = document.getElementById('video-viewer-acoes');
   const msgZap = encodeURIComponent(`Olá! Vi seu vídeo "${v.titulo}" no GuiaZap e tenho interesse.`);
-  acoes.innerHTML = `<a href="https://wa.me/55${(v.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Falar no WhatsApp</a>`;
+  acoes.innerHTML = v.profissionais.whatsapp
+    ? `<a href="https://wa.me/55${(v.profissionais.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Falar no WhatsApp</a>`
+    : `<a href="chat.html?empresa=${v.profissionais.id}" class="story-btn-comprar" style="background:#6b46c1;">💬 Falar pelo Papo</a>`;
 
   renderVideoViewerSegmentos();
 
@@ -3134,6 +3136,9 @@ function renderStorySlideAtual(){
   const botaoContato = slide.tipo === 'pessoa'
     ? `<a href="chat.html?pessoa=${slide.pessoaUserId}" class="story-btn-comprar">💬 Falar pelo Papo</a>`
     : (() => {
+        if(!slide.whatsapp){
+          return `<a href="chat.html?empresa=${slide.profissionalId || slide.profissional_id || ''}" class="story-btn-comprar" style="background:#6b46c1;">💬 Falar pelo Papo</a>`;
+        }
         const msgZap = encodeURIComponent(`Olá! Vi sua novidade no GuiaZap${infoProduto} e tenho interesse. Foto que vi: ${slide.foto}`);
         return `<a href="https://wa.me/55${(slide.whatsapp || '').replace(/\D/g,'')}?text=${msgZap}" target="_blank" class="story-btn-comprar">💬 Comprar / Falar no WhatsApp</a>`;
       })();
@@ -3526,14 +3531,14 @@ function render(){
         </div>
         <div class="acoes-empresa-coluna">
           <div class="contatos-row">
-            <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>
+            ${e.whatsapp ? `<a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">Chamar no WhatsApp</a>` : ''}
             ${!isOwner ? `<a href="chat.html?empresa=${e.id}" class="btn-zap" style="background:#6b46c1;">💬 Chat pelo Papo</a>` : ''}
             ${renderContatosExtra(e.contatos_extra)}
           </div>
           <div class="orcamento-bloco">
             <button type="button" class="btn-zap btn-orcamento" onclick="toggleOrcamentoOpcoes('${e.id}')">💰 Pedir orçamento</button>
             <div class="orcamento-opcoes" id="orcamento-opcoes-${e.id}" style="display:none;">
-              <a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">📱 Pelo WhatsApp</a>
+              ${e.whatsapp ? `<a class="btn-zap" href="https://wa.me/55${escapeHtml((e.whatsapp || '').replace(/\D/g,''))}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de pedir um orçamento.')}" target="_blank" onclick="registrarCliqueWhatsapp('${e.id}')">📱 Pelo WhatsApp</a>` : ''}
               <a class="btn-zap" style="background:#6b46c1;" href="chat.html?empresa=${e.id}">💬 Pelo Papo</a>
             </div>
           </div>
@@ -5521,6 +5526,11 @@ function executarAcaoVozIndex(resultado){
   if(action === 'ABRIR_WHATSAPP' && params && params.id){
     const empresa = entries.find(e => e.id === params.id);
     if(empresa){
+      if(!empresa.whatsapp){
+        falarVozIndex(empresa.name + ' não tem WhatsApp cadastrado. Vou abrir o Papo com essa empresa.');
+        setTimeout(() => { abrirPapoIndexVoz(empresa); }, 1200);
+        return;
+      }
       falarVozIndex(voice_response || `Abrindo o WhatsApp de ${empresa.name}.`);
       setTimeout(() => {
         window.open(`https://wa.me/55${(empresa.whatsapp || '').replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Vi seu contato no GuiaZap e gostaria de falar com você.')}`, '_blank');

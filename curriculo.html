@@ -805,7 +805,7 @@ async function processarEtapaPreenchimentoCv(transcricao){
   if(estado.etapa === 'telefone'){
     const digitos = extrairDigitosDaFalaCv(transcricao);
     if(digitos.length < 10){ falarVozCv('Não entendi o telefone direito, precisa ter DDD e o número completo. Fala de novo.'); return; }
-    document.getElementById('cv-input-telefone').value = digitos;
+    document.getElementById('cv-input-telefone').value = formatarTelefoneComMascara(digitos);
     atualizarPreviewCv();
     estado.etapa = 'cidade';
     falarVozCv('Qual sua cidade?');
@@ -871,6 +871,16 @@ async function processarEtapaPreenchimentoCv(transcricao){
     }
     return;
   }
+}
+
+function formatarTelefoneComMascara(digitos){
+  // (46) 99999-9999 pra celular (11 dígitos) ou (46) 9999-9999 pra fixo
+  // (10 dígitos) — sem isso, o telefone ditado por voz ficava só com os
+  // números crus, sem parênteses nem traço, diferente de quem digita.
+  const d = (digitos || '').replace(/\D/g, '');
+  if(d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if(d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return d;
 }
 
 function extrairDigitosDaFalaCv(texto){
