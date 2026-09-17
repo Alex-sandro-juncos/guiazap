@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ativar cadastro — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .ativar-wrap { max-width: 420px; margin: 60px auto; padding: 0 20px; text-align: center; }
+  .ativar-wrap .card { background: var(--cinza-card); border-radius: 16px; padding: 32px 24px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .ativar-wrap .icone { font-size: 2.6rem; margin-bottom: 10px; }
+  .ativar-wrap h1 { font-size: 1.2rem; margin-bottom: 8px; color: #1c1c1c; }
+  .ativar-wrap p { font-size: 0.9rem; color: #555; line-height: 1.5; }
+  .ativar-wrap a.voltar { display: inline-block; margin-top: 18px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Ativação de cadastro</p></header>
+<div class="ativar-wrap">
+  <div class="card" id="ativar-conteudo">
+    <div class="icone">⏳</div>
+    <h1>Ativando seu cadastro...</h1>
+    <p>Só um instante.</p>
+  </div>
+  <a href="index.html" class="voltar">← Ir pro GuiaZap</a>
+</div>
+
+<script>
+async function ativarPorLink(){
+  const container = document.getElementById('ativar-conteudo');
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+
+  if(!token){
+    container.innerHTML = '<div class="icone">⚠️</div><h1>Link inválido</h1><p>Esse link de ativação está incompleto. Confere se copiou o link inteiro do e-mail.</p>';
+    return;
+  }
+
+  try{
+    const resp = await fetch('/.netlify/functions/ativar-por-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok){
+      container.innerHTML = `<div class="icone">⚠️</div><h1>Não consegui ativar</h1><p>${(data.error || 'Erro desconhecido.').replace(/</g,'&lt;')}</p>`;
+      return;
+    }
+
+    container.innerHTML = `<div class="icone">✅</div><h1>Cadastro ativado!</h1><p>${data.nomeEmpresa ? 'O cadastro de <b>' + data.nomeEmpresa.replace(/</g,'&lt;') + '</b> já está' : 'Seu cadastro já está'} aparecendo na busca do GuiaZap.</p>`;
+  } catch(e){
+    console.error(e);
+    container.innerHTML = '<div class="icone">⚠️</div><h1>Erro de conexão</h1><p>Não consegui falar com o servidor agora. Tenta de novo em alguns instantes.</p>';
+  }
+}
+ativarPorLink();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>
