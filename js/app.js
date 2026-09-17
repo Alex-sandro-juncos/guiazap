@@ -3473,7 +3473,10 @@ function render(){
         <div class="lista-avaliacoes" id="lista-avaliacoes-${e.id}" style="display:none;"></div>
         ${isOwner ? `<div class="stat-visualizacoes">👁️ ${e.visualizacoes || 0} visualizaç${(e.visualizacoes || 0) === 1 ? 'ão' : 'ões'} no total <span id="vistas-hoje-${e.id}" style="color:#888;"></span></div>
         <div class="stat-visualizacoes" id="cliques-whatsapp-${e.id}" style="display:none;"></div>` : ''}
-        ${isOwner && !pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
+        ${isOwner ? `<div class="acoes-conta-owner">
+          ${!pendente ? `<button type="button" class="link-cancelar" onclick="cancelarAssinatura()">Desativar cadastro</button>` : ''}
+          <a href="excluir-conta.html" class="link-cancelar">Excluir conta e dados</a>
+        </div>` : ''}
         ${isOwner ? `<button type="button" class="link-ver-denuncias" onclick="toggleDenunciasRecebidas('${e.id}')">🚩 Ver denúncias recebidas</button>
         <div class="denuncias-recebidas-box" id="denuncias-recebidas-${e.id}" style="display:none;"></div>` : ''}
         ${isOwner && !pendente && e.plano !== 'completo' && !ehPremiumOuVendas(e.plano) ? `<a href="${LINK_ASSINATURA_COMPLETO}" class="link-migrar">✨ Migrar para o Pacote Completo (R$10/mês)</a>` : ''}

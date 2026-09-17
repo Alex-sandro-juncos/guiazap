@@ -420,6 +420,17 @@
   display: block;
 }
 
+.acoes-conta-owner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.acoes-conta-owner .link-cancelar {
+  display: inline-block;
+  margin-top: 4px;
+}
+
 .link-denunciar {
   background: none;
   border: none;
