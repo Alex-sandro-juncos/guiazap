@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excluir conta e dados — GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .legal-wrap { max-width: 700px; margin: 0 auto; padding: 30px 20px 60px; line-height: 1.6; color: #333; }
+  .legal-wrap h1 { font-size: 1.6rem; margin-bottom: 6px; color: var(--verde-escuro); }
+  .legal-wrap .atualizado { font-size: 0.8rem; color: #888; margin-bottom: 24px; }
+  .legal-wrap h2 { font-size: 1.1rem; margin: 26px 0 8px; color: var(--verde-escuro); }
+  .legal-wrap p, .legal-wrap li { font-size: 0.92rem; margin-bottom: 8px; }
+  .legal-wrap ul, .legal-wrap ol { padding-left: 20px; }
+  .legal-wrap .voltar { display: inline-block; margin-bottom: 20px; color: var(--verde-escuro); font-weight: 600; text-decoration: none; }
+  .caixa {
+    background: var(--cinza-card);
+    border-radius: 14px;
+    padding: 18px 16px;
+    margin: 16px 0 22px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .caixa label { display: block; font-size: 0.82rem; font-weight: 600; margin: 10px 0 4px; }
+  .caixa input, .caixa textarea, .caixa select {
+    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;
+  }
+  .btn-excluir {
+    display: inline-block;
+    background: #a4402f;
+    color: #fff;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  .aviso { font-size: 0.82rem; color: #7c4a03; background: #fff3cd; border-radius: 10px; padding: 12px 14px; }
+  #form-msg { font-size: 0.85rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header><div class="logo">GuiaZap</div><p>Exclusão de conta e dados</p></header>
+<button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙</button>
+<div class="legal-wrap">
+<a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
+<h1>Solicitar exclusão da conta e dos dados</h1>
+<p class="atualizado">Última atualização: 17 de setembro de 2026</p>
+
+<p>Esta página é o canal oficial para pedir a exclusão da sua conta no GuiaZap e dos dados pessoais associados a ela, em conformidade com a LGPD e com as regras da Google Play.</p>
+
+<div class="aviso">A exclusão é permanente. Depois de concluída, você precisará se cadastrar de novo para voltar a usar a plataforma.</div>
+
+<h2>1. Como excluir pelo próprio app ou site</h2>
+<p>Se você ainda consegue entrar na conta:</p>
+<ol>
+  <li>Acesse o GuiaZap e faça login;</li>
+  <li>Abra o seu cadastro / perfil;</li>
+  <li>Use a opção de excluir o cadastro (quando disponível na plataforma).</li>
+</ol>
+<p>Isso remove o perfil público e os dados vinculados à sua conta, nos termos da <a href="privacidade.html">Política de Privacidade</a>.</p>
+
+<h2>2. Como solicitar por este formulário</h2>
+<p>Se você não consegue entrar na conta, ou prefere que a equipe faça a exclusão, preencha o formulário abaixo. Também é possível pedir por e-mail: <strong>contato@guiazap.shop</strong>.</p>
+
+<div class="caixa">
+  <label for="exc-nome">Nome</label>
+  <input id="exc-nome" type="text" autocomplete="name" placeholder="Seu nome">
+
+  <label for="exc-email">E-mail da conta</label>
+  <input id="exc-email" type="email" autocomplete="email" placeholder="email@exemplo.com">
+
+  <label for="exc-whats">WhatsApp ou telefone cadastrado (opcional)</label>
+  <input id="exc-whats" type="tel" placeholder="DDD + número">
+
+  <label for="exc-motivo">Motivo (opcional)</label>
+  <select id="exc-motivo">
+    <option value="nao_uso">Não uso mais o GuiaZap</option>
+    <option value="privacidade">Quero remover meus dados</option>
+    <option value="conta_duplicada">Conta duplicada</option>
+    <option value="nao_acesso">Não consigo acessar a conta</option>
+    <option value="outro">Outro</option>
+  </select>
+
+  <label for="exc-msg">Detalhes para localizarmos a conta</label>
+  <textarea id="exc-msg" rows="4" placeholder="Cidade, nome da empresa/profissional, ou qualquer dado que ajude a identificar o cadastro."></textarea>
+
+  <button type="button" class="btn-excluir" onclick="enviarPedidoExclusao()">Enviar pedido de exclusão</button>
+  <div id="form-msg"></div>
+</div>
+
+<p>Prazo de atendimento: em até <strong>30 dias</strong> após a confirmação da identidade do titular.</p>
+
+<h2>3. O que é excluído</h2>
+<ul>
+  <li>Conta de autenticação (login);</li>
+  <li>Cadastro público (nome, foto, categoria, endereço, WhatsApp exibido);</li>
+  <li>Currículo no Banco de Talentos, quando existir;</li>
+  <li>Conteúdos vinculados à conta que não precisem ser guardados por lei (avaliações feitas por você, recados, itens da vitrine associados ao cadastro, conforme viável tecnicamente).</li>
+</ul>
+
+<h2>4. O que pode ser retido</h2>
+<ul>
+  <li>Registros fiscais e de pagamento exigidos por lei (ex.: comprovantes processados pelo Mercado Pago), pelo prazo legal;</li>
+  <li>Registros mínimos de segurança ou de denúncias, quando a legislação exigir conservação;</li>
+  <li>Dados já publicados por terceiros de forma independente (por exemplo, um comentário de outra pessoa que cite o nome da empresa), quando não for razoável removê-los sem afetar o histórico de outros usuários.</li>
+</ul>
+
+<h2>5. Contato</h2>
+<p>Dúvidas: <a href="contato.html">Fale conosco</a> ou e-mail <strong>contato@guiazap.shop</strong>.</p>
+</div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const supabaseExclusao = window.supabase && window.SUPABASE_URL
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+async function enviarPedidoExclusao(){
+  const nome = document.getElementById('exc-nome').value.trim();
+  const email = document.getElementById('exc-email').value.trim();
+  const whats = document.getElementById('exc-whats').value.trim();
+  const motivo = document.getElementById('exc-motivo').value;
+  const detalhes = document.getElementById('exc-msg').value.trim();
+  const msg = document.getElementById('form-msg');
+
+  if(!nome || !email){
+    msg.textContent = 'Informe pelo menos nome e e-mail da conta.';
+    msg.style.color = '#a4402f';
+    return;
+  }
+
+  const corpo = [
+    'PEDIDO DE EXCLUSÃO DE CONTA E DADOS',
+    'Nome: ' + nome,
+    'E-mail: ' + email,
+    'WhatsApp: ' + (whats || '(não informado)'),
+    'Motivo: ' + motivo,
+    'Detalhes: ' + (detalhes || '(nenhum)')
+  ].join('\n');
+
+  msg.textContent = 'enviando...';
+  msg.style.color = '#555';
+
+  if(supabaseExclusao){
+    const { error } = await supabaseExclusao.from('feedback_site').insert({
+      tipo: 'exclusao_conta',
+      mensagem: corpo
+    });
+    if(error){
+      console.error(error);
+      window.location.href = 'mailto:contato@guiazap.shop?subject=' + encodeURIComponent('Exclusão de conta GuiaZap') + '&body=' + encodeURIComponent(corpo);
+      return;
+    }
+    msg.textContent = 'Pedido enviado. Vamos confirmar a identidade e concluir a exclusão em até 30 dias.';
+    msg.style.color = 'var(--verde-escuro)';
+    document.getElementById('exc-nome').value = '';
+    document.getElementById('exc-email').value = '';
+    document.getElementById('exc-whats').value = '';
+    document.getElementById('exc-msg').value = '';
+    return;
+  }
+
+  window.location.href = 'mailto:contato@guiazap.shop?subject=' + encodeURIComponent('Exclusão de conta GuiaZap') + '&body=' + encodeURIComponent(corpo);
+}
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>
