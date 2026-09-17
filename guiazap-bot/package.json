@@ -1,0 +1,14 @@
+{
+  "name": "guiazap-bot-intermediador",
+  "version": "1.0.0",
+  "description": "Robô que faz a ponte entre o Papo do GuiaZap e o WhatsApp de lojas sem cadastro",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

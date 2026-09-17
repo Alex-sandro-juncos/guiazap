@@ -97,6 +97,20 @@ const DESCRICAO_PAGINAS = `
 - pacotes.html: planos/pacotes pra cadastrar uma empresa no GuiaZap
 `;
 
+// Lista dos arquivos que a IA tem permissão de escolher — extraída da
+// descrição acima, então sempre fica sincronizada sem precisar duplicar
+// a lista à mão. Qualquer "pagina" que a IA devolver e não estiver aqui
+// é jogada fora (vira null), mesmo que pareça um nome de arquivo válido.
+// Sem essa trava, um texto malicioso dito por voz (tentando confundir a
+// IA barata) poderia, em teoria, fazer o navegador ir pra uma URL que a
+// IA "inventou" — como o front usa window.location.href direto no valor
+// que essa function devolve, isso é a única barreira entre "a IA disse"
+// e "o navegador foi".
+const PAGINAS_PERMITIDAS = DESCRICAO_PAGINAS
+  .split('\n')
+  .map(linha => { const m = linha.match(/^-\s*([a-z0-9_-]+\.html)\s*:/i); return m ? m[1].toLowerCase() : null; })
+  .filter(Boolean);
+
 exports.handler = async function (event) {
   try {
     if (event.httpMethod !== 'POST') {
@@ -149,6 +163,15 @@ Regras:
 
     // Nunca deixa a IA mandar pra própria página atual, mesmo que ela erre
     if (resultado.pagina === paginaAtual) resultado.pagina = null;
+
+    // Nunca deixa passar um "pagina" que não esteja na lista de arquivos
+    // conhecidos do site — mesmo que a IA erre, alucine, ou seja enganada
+    // por uma fala malformada, o navegador nunca recebe uma URL inventada
+    if (resultado.pagina && !PAGINAS_PERMITIDAS.includes(String(resultado.pagina).toLowerCase())) {
+      console.warn('IA devolveu página fora da lista permitida, descartando:', resultado.pagina);
+      resultado.pagina = null;
+      resultado.resposta_falada = 'Não entendi. Pode repetir de outro jeito?';
+    }
 
     if (ia.ok) await salvarAprovado(ESCOPO, textoNorm, resultado);
 

@@ -12,8 +12,12 @@ const crypto = require('crypto');
 function assinaturaValida(headers, dataId){
   const secret = process.env.MP_WEBHOOK_SECRET;
   if(!secret){
-    console.warn('MP_WEBHOOK_SECRET não configurado — pulando verificação de assinatura (configure pra maior segurança)');
-    return true; // não trava o funcionamento enquanto a chave não é configurada
+    // Mesma correção feita em mp-webhook.js — sem a chave configurada, isso
+    // deixava passar QUALQUER aviso como se fosse verdadeiro, permitindo
+    // fingir que um pedido foi pago sem realmente pagar. Agora recusa por
+    // segurança. Configure MP_WEBHOOK_SECRET no Netlify.
+    console.error('MP_WEBHOOK_SECRET não configurado — recusando o webhook de pedido por segurança.');
+    return false;
   }
 
   const xSignature = headers['x-signature'] || headers['X-Signature'];
