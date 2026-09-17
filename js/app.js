@@ -4758,7 +4758,7 @@ async function processarComandoDesativarSomenteVozIndex(transcricao){
     const data = await resp.json();
 
     if(!data.valido){
-      falarVozIndex('PIN incorreto. Fala de novo.');
+      falarVozIndex(data.mensagem || 'PIN incorreto. Fala de novo.');
       return;
     }
 

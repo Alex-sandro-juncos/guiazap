@@ -4067,7 +4067,7 @@ async function processarComandoDesativarSomenteVoz(transcricao){
     }
 
     if(!data.valido){
-      falarVozVitrine('PIN incorreto. Fala de novo.');
+      falarVozVitrine(data.mensagem || 'PIN incorreto. Fala de novo.');
       return;
     }
 
@@ -4496,7 +4496,7 @@ async function processarConfirmacaoPinVoz(transcricao){
     }
 
     if(!data.valido){
-      falarVozVitrine('PIN incorreto. Fala de novo, com calma.');
+      falarVozVitrine(data.mensagem || 'PIN incorreto. Fala de novo, com calma.');
       return;
     }
 

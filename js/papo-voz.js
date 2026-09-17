@@ -82,7 +82,7 @@ async function desativarModoInterpretePapoPorToque(){
     }
 
     if(!data.valido){
-      alert('PIN incorreto.');
+      alert(data.mensagem || 'PIN incorreto.');
       return;
     }
 
@@ -167,7 +167,7 @@ async function processarComandoDesativarInterpretePapo(transcricao){
     }
 
     if(!data.valido){
-      falarVozPapo('PIN incorreto. Fala de novo.');
+      falarVozPapo(data.mensagem || 'PIN incorreto. Fala de novo.');
       return;
     }
 

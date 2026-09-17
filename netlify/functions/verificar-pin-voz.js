@@ -1,6 +1,10 @@
 // Confere se o PIN falado pelo usuário bate com o PIN dele guardado (nunca
 // compara texto puro — refaz o hash e compara). Usado como trava de
 // segurança antes de qualquer pagamento gerado pelo modo voz da Vitrine.
+//
+// ⚠️ SEGURANÇA: bloqueia por 15 minutos depois de 5 tentativas erradas,
+// igual o PIN de login — sem isso, um PIN de 4-6 números pode ser
+// adivinhado por tentativa e erro sem limite algum.
 
 const crypto = require('crypto');
 
@@ -46,17 +50,46 @@ exports.handler = async function (event) {
       'Content-Type': 'application/json'
     };
 
-    const perfilResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}&select=pin_voz_hash`, { headers });
+    const perfilResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}&select=pin_voz_hash,pin_voz_tentativas_erradas,pin_voz_bloqueado_ate`, { headers });
     const perfilData = await perfilResp.json();
 
     if (!perfilData[0] || !perfilData[0].pin_voz_hash) {
       return { statusCode: 200, body: JSON.stringify({ valido: false, motivo: 'sem_pin_cadastrado' }) };
     }
 
-    const hashDigitado = hashPin(pin, usuario.id);
-    const valido = hashDigitado === perfilData[0].pin_voz_hash;
+    const perfil = perfilData[0];
 
-    return { statusCode: 200, body: JSON.stringify({ valido }) };
+    // Confere se está bloqueado por muitas tentativas erradas
+    if (perfil.pin_voz_bloqueado_ate && new Date(perfil.pin_voz_bloqueado_ate) > new Date()) {
+      const minutosRestantes = Math.ceil((new Date(perfil.pin_voz_bloqueado_ate) - new Date()) / 60000);
+      return { statusCode: 429, body: JSON.stringify({ valido: false, motivo: 'bloqueado', mensagem: `Muitas tentativas erradas. Tenta de novo em ${minutosRestantes} minuto(s).` }) };
+    }
+
+    const hashDigitado = hashPin(pin, usuario.id);
+    const valido = hashDigitado === perfil.pin_voz_hash;
+
+    if (!valido) {
+      const novasTentativas = (perfil.pin_voz_tentativas_erradas || 0) + 1;
+      const bloquear = novasTentativas >= 5;
+      await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          pin_voz_tentativas_erradas: novasTentativas,
+          pin_voz_bloqueado_ate: bloquear ? new Date(Date.now() + 15 * 60000).toISOString() : null
+        })
+      });
+      return { statusCode: 200, body: JSON.stringify({ valido: false, motivo: bloquear ? 'bloqueado' : 'pin_errado', mensagem: bloquear ? 'PIN errado muitas vezes. Bloqueado por 15 minutos.' : null }) };
+    }
+
+    // PIN certo — zera as tentativas
+    await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ pin_voz_tentativas_erradas: 0, pin_voz_bloqueado_ate: null })
+    });
+
+    return { statusCode: 200, body: JSON.stringify({ valido: true }) };
   } catch (err) {
     console.error(err);
     return { statusCode: 500, body: JSON.stringify({ error: 'erro ao conferir PIN' }) };
