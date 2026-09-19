@@ -65,60 +65,100 @@ function extrairJson(texto) {
   }
 }
 
+// Cada chamarX devolve sempre o mesmo formato — { json, recusado, textoBruto }
+// — pra quem chama conseguir diferenciar dois tipos de "não deu":
+// - recusado=true: a API respondeu de verdade (chave certa, sem erro de
+//   rede), só que não veio um JSON válido — o mais comum disso é a
+//   política de segurança do próprio provedor (Anthropic/Google) ter
+//   barrado ou desviado a resposta (ex: assunto sensível/tentativa de
+//   jailbreak), então ela devolveu texto solto em vez do JSON pedido, ou
+//   nem devolveu nada (bloqueio silencioso). Nesse caso NÃO é bug do
+//   GuiaZap — é a IA de baixo recusando, e quem chama deve mostrar uma
+//   mensagem de "isso eu não posso ajudar" em vez de "deu erro".
+// - recusado=false: falha técnica de verdade (sem chave configurada, API
+//   fora do ar, erro de rede) — aí sim é "deu ruim aqui do meu lado".
+function _semResultado(recusado, textoBruto) {
+  return { json: null, recusado, textoBruto: textoBruto || null };
+}
+
 async function chamarGemini(system, user, maxTokens) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  if (!key) return _semResultado(false);
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELO}:generateContent?key=${key}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: maxTokens || 500,
-        responseMimeType: 'application/json'
-      }
-    })
-  });
-  const data = await resp.json();
+  let resp, data;
+  try {
+    resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELO}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: maxTokens || 500,
+          responseMimeType: 'application/json'
+        }
+      })
+    });
+    data = await resp.json();
+  } catch (eRede) {
+    console.error('erro de rede chamando Gemini:', eRede);
+    return _semResultado(false);
+  }
   if (!resp.ok) {
     console.error('erro Gemini:', JSON.stringify(data));
-    return null;
+    return _semResultado(false);
   }
-  const texto = data.candidates && data.candidates[0] && data.candidates[0].content
-    ? data.candidates[0].content.parts.map(p => p.text || '').join('')
-    : '';
-  return extrairJson(texto);
+  // Bloqueio de segurança do próprio Gemini — respondeu, mas recusou.
+  const motivoBloqueio = data.promptFeedback && data.promptFeedback.blockReason;
+  const candidato = data.candidates && data.candidates[0];
+  if (motivoBloqueio || (candidato && candidato.finishReason === 'SAFETY')) {
+    console.warn('Gemini recusou por segurança:', motivoBloqueio || candidato.finishReason);
+    return _semResultado(true);
+  }
+  const texto = candidato && candidato.content ? candidato.content.parts.map(p => p.text || '').join('') : '';
+  const json = extrairJson(texto);
+  return json ? { json, recusado: false, textoBruto: texto } : _semResultado(true, texto);
 }
 
 async function chamarHaiku(system, user, maxTokens) {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+  if (!key) return _semResultado(false);
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: HAIKU_MODELO,
-      max_tokens: maxTokens || 500,
-      system,
-      messages: [{ role: 'user', content: user }]
-    })
-  });
-  const data = await resp.json();
+  let resp, data;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: HAIKU_MODELO,
+        max_tokens: maxTokens || 500,
+        system,
+        messages: [{ role: 'user', content: user }]
+      })
+    });
+    data = await resp.json();
+  } catch (eRede) {
+    console.error('erro de rede chamando Haiku:', eRede);
+    return _semResultado(false);
+  }
   if (!resp.ok) {
     console.error('erro Haiku:', JSON.stringify(data));
-    return null;
+    return _semResultado(false);
+  }
+  // stop_reason "refusal" é o sinal explícito da Anthropic de que o
+  // modelo recusou por política própria (não é erro técnico).
+  if (data.stop_reason === 'refusal') {
+    console.warn('Haiku recusou por política própria (stop_reason=refusal)');
+    return _semResultado(true);
   }
   const texto = data.content && data.content[0] ? data.content[0].text : '';
-  return extrairJson(texto);
+  const json = extrairJson(texto);
+  return json ? { json, recusado: false, textoBruto: texto } : _semResultado(true, texto);
 }
 
 // comPersona: true injeta a personalidade do Zeca antes do prompt de
@@ -132,12 +172,16 @@ async function chamarIABarata(system, user, maxTokens, comPersona) {
   const systemFinal = comPersona ? (PERSONA_ZECA + system) : system;
 
   const haiku = await chamarHaiku(systemFinal, user, maxTokens);
-  if (haiku) return { ok: true, json: haiku, provedor: 'haiku' };
+  if (haiku.json) return { ok: true, json: haiku.json, provedor: 'haiku', recusado: false };
 
   const gemini = await chamarGemini(systemFinal, user, maxTokens);
-  if (gemini) return { ok: true, json: gemini, provedor: 'gemini' };
+  if (gemini.json) return { ok: true, json: gemini.json, provedor: 'gemini', recusado: false };
 
-  return { ok: false, json: null, provedor: null };
+  // Nenhum dos dois deu um JSON válido. Se QUALQUER um dos dois chegou a
+  // responder de verdade (não foi falha de rede/chave), trata como
+  // recusa de política, não como bug — evita a mensagem genérica de erro
+  // pra algo que na real é a IA dizendo "isso eu não faço".
+  return { ok: false, json: null, provedor: null, recusado: haiku.recusado || gemini.recusado };
 }
 
 module.exports = { chamarIABarata, extrairJson, PERSONA_ZECA };

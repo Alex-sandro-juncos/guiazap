@@ -22,6 +22,17 @@ const { resolverNivelZeca, consumirLimiteZeca } = require('./zeca-limites-helper
 const { memoriaAtivada, carregarHistoricoConversa, salvarTrocaDeMensagens } = require('./zeca-memoria');
 const JSZip = require('jszip');
 
+// Quando nenhum dos dois provedores (Haiku/Gemini) devolve um JSON
+// válido, isso pode ser falha técnica de verdade (API fora do ar) OU a
+// IA de baixo recusando por política própria (ex: assunto sensível) —
+// ia.recusado (setado em ia-barata-helper.js) diferencia os dois casos,
+// pra não parecer que o GuiaZap "quebrou" quando na real é uma recusa.
+function _mensagemFalhaIA(ia) {
+  return (ia && ia.recusado)
+    ? 'Essa aqui eu não posso ajudar — foge do que eu consigo fazer por aqui. Quer perguntar outra coisa?'
+    : 'Deu ruim aqui do meu lado agora. Tenta de novo em instantes?';
+}
+
 // E-mail do criador do GuiaZap — só ele, confirmado pelo LOGIN (nunca por
 // frase digitada no chat, que qualquer um poderia copiar), ganha: sem
 // limite diário no modo geral/imagem/zip, limite bem maior de zip, e
@@ -485,7 +496,7 @@ ${extraido.texto}`;
 
       const iaZip = await chamarIABarata(promptZip, mensagem || 'Dá uma olhada nesse projeto e me diz o que acha.', 1800, true);
       if (!iaZip.ok || !iaZip.json || !iaZip.json.resposta) {
-        return { statusCode: 200, body: JSON.stringify({ resposta: 'Deu ruim pra analisar esse zip agora. Tenta de novo?' }) };
+        return { statusCode: 200, body: JSON.stringify({ resposta: _mensagemFalhaIA(iaZip) }) };
       }
 
       await consumirLimiteZeca(nivel);
@@ -580,7 +591,7 @@ Regras:
     const ia = await chamarIABarata(promptIntencao, mensagem, 500, true);
 
     if (!ia.ok || !ia.json) {
-      return { statusCode: 200, body: JSON.stringify({ resposta: 'Deu ruim aqui do meu lado agora. Tenta de novo em instantes?' }) };
+      return { statusCode: 200, body: JSON.stringify({ resposta: _mensagemFalhaIA(ia) }) };
     }
 
     const decisao = ia.json;
@@ -655,7 +666,7 @@ Responda APENAS com um JSON válido: {"resposta": "sua resposta completa aqui"}$
 
       const iaGeral = await chamarIABarata(promptGeral, mensagem, 1800, true);
       if (!iaGeral.ok || !iaGeral.json || !iaGeral.json.resposta) {
-        return { statusCode: 200, body: JSON.stringify({ resposta: 'Deu ruim pra pensar nessa agora. Tenta de novo?' }) };
+        return { statusCode: 200, body: JSON.stringify({ resposta: _mensagemFalhaIA(iaGeral) }) };
       }
 
       await consumirLimiteZeca(nivel);
