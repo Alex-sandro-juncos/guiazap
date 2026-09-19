@@ -12,6 +12,7 @@
 // pelo login.
 
 const { chamarIABarata } = require('./ia-barata-helper');
+const { verificarCreditoZeca, consumirCreditoZeca } = require('./zeca-limites-helper');
 
 const ADMIN_EMAIL_AUDIO = 'contato@guiazap.shop';
 
@@ -145,6 +146,7 @@ exports.handler = async function (event) {
     const authHeader = event.headers.authorization || event.headers.Authorization;
     let chaveLimite;
     let limiteDoDia;
+    let usuarioIdLogado = null;
 
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
@@ -156,6 +158,7 @@ exports.handler = async function (event) {
       }
       const usuario = await usuarioResp.json();
       chaveLimite = 'gerar-audio-zeca:user:' + usuario.id;
+      usuarioIdLogado = usuario.id;
 
       if ((usuario.email || '').toLowerCase() === ADMIN_EMAIL_AUDIO.toLowerCase()) {
         limiteDoDia = null;
@@ -181,6 +184,7 @@ exports.handler = async function (event) {
     }
 
     let registroLimiteAtual = null;
+    let usandoCredito = false;
     if (limiteDoDia !== null) {
       const buscaLimiteResp = await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico?chave=eq.${encodeURIComponent(chaveLimite)}`, { headers: headersServico });
       const registrosLimite = await buscaLimiteResp.json();
@@ -189,10 +193,22 @@ exports.handler = async function (event) {
       if (registroLimiteAtual) {
         const horasPassadas = (new Date() - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
         if (horasPassadas < 24 && registroLimiteAtual.contagem >= limiteDoDia) {
-          return {
-            statusCode: 429,
-            body: JSON.stringify({ error: `Você já usou seu limite de ${limiteDoDia} áudio${limiteDoDia > 1 ? 's' : ''} hoje. ${authHeader ? 'Um pacote maior dá mais áudios por dia.' : 'Cria uma conta grátis ou volta amanhã.'}` })
-          };
+          let saldoCredito = 0;
+          if (usuarioIdLogado) {
+            const credito = await verificarCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+            saldoCredito = credito.saldo;
+          }
+          if (saldoCredito > 0) {
+            usandoCredito = true;
+          } else {
+            return {
+              statusCode: 429,
+              body: JSON.stringify({
+                error: `Você já usou seu limite de ${limiteDoDia} áudio${limiteDoDia > 1 ? 's' : ''} hoje. ${authHeader ? 'Você pode comprar um pacote de créditos extras pra continuar usando hoje mesmo.' : 'Cria uma conta grátis ou volta amanhã.'}`,
+                comprarCreditos: !!authHeader
+              })
+            };
+          }
         }
       }
     }
@@ -252,7 +268,9 @@ Responda APENAS com JSON válido: {"texto": "..."}`;
     // Só desconta do limite diário DEPOIS que o áudio saiu com sucesso —
     // mesmo padrão do resto do Zeca, pra não gastar a vez da pessoa se
     // algo falhar no meio do caminho.
-    if (limiteDoDia !== null) {
+    if (usandoCredito) {
+      await consumirCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+    } else if (limiteDoDia !== null) {
       const agora = new Date();
       if (registroLimiteAtual) {
         const horasPassadas = (agora - new Date(registroLimiteAtual.janela_inicio)) / 3600000;

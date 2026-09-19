@@ -204,6 +204,57 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: `impulsionamento processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
       }
 
+      // Pacote de créditos extras do Zeca (R$7, valor fixo — 5 usos extras
+      // de imagem/áudio/etc pra quem já estourou o limite diário do plano).
+      const VALOR_CREDITOS_ZECA = 7;
+      const QUANTIDADE_CREDITOS_ZECA = 5;
+      if (proximoDe(valorPago, VALOR_CREDITOS_ZECA)) {
+        try {
+          const usuarioResp = await fetch(
+            `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(payerEmail)}`,
+            { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+          );
+          const usuarioData = await usuarioResp.json();
+          const usuarioEncontrado = (usuarioData && usuarioData.users && usuarioData.users[0]) || null;
+          if (!usuarioEncontrado) {
+            console.error('pagamento de créditos do Zeca aprovado, mas não achei usuário com esse e-mail:', payerEmail);
+            return { statusCode: 200, body: 'crédito do Zeca: usuário não encontrado pelo e-mail do pagamento' };
+          }
+
+          const saldoAtualResp = await fetch(
+            `${SUPABASE_URL}/rest/v1/zeca_creditos_extras?user_id=eq.${usuarioEncontrado.id}`,
+            { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+          );
+          const saldoAtualLista = await saldoAtualResp.json();
+          const registroSaldo = saldoAtualLista && saldoAtualLista[0];
+
+          if (registroSaldo) {
+            await fetch(`${SUPABASE_URL}/rest/v1/zeca_creditos_extras?user_id=eq.${usuarioEncontrado.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ saldo: (registroSaldo.saldo || 0) + QUANTIDADE_CREDITOS_ZECA, updated_at: new Date().toISOString() })
+            });
+          } else {
+            await fetch(`${SUPABASE_URL}/rest/v1/zeca_creditos_extras`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ user_id: usuarioEncontrado.id, saldo: QUANTIDADE_CREDITOS_ZECA, updated_at: new Date().toISOString() })
+            });
+          }
+
+          await enviarEmail(
+            payerEmail,
+            'Créditos extras do Zeca liberados — GuiaZap',
+            `<p>Olá!</p>
+             <p>Recebemos seu pagamento e liberamos <b>${QUANTIDADE_CREDITOS_ZECA} créditos extras</b> pro Zeca (imagem, áudio e outras gerações), além do limite diário normal do seu plano.</p>
+             <p>Já pode usar — acesse <a href="https://guiazap.shop">guiazap.shop</a>.</p>`
+          );
+        } catch (erroCreditos) {
+          console.error('erro ao processar crédito extra do Zeca', erroCreditos);
+        }
+        return { statusCode: 200, body: 'créditos extras do Zeca processados' };
+      }
+
       // Pagamento do Selo Verificado (R$15, valor fixo — não é assinatura de plano)
       // CORRIGIDO: a checagem anterior (>= 15 && < 10) era matematicamente
       // impossível e nunca disparava — pagamentos do Selo caíam por engano na

@@ -27,6 +27,11 @@ const _zecaSynth = window.speechSynthesis;
 // recarrega essa mesma conversa em vez de começar do zero.
 const _CHAVE_CONVERSA_SESSAO_ZECA = 'zeca_conversa_sessao';
 
+// Pagamento único de R$7 no Mercado Pago = 5 créditos extras do Zeca (ver
+// mp-webhook.js: VALOR_CREDITOS_ZECA / QUANTIDADE_CREDITOS_ZECA — se mudar
+// o preço lá, atualiza o texto do botão abaixo também).
+const LINK_CREDITOS_ZECA = 'https://mpago.la/2yREdfg';
+
 function _zecaSalvarConversaNaSessao(conversaId){
   try{
     if(conversaId) sessionStorage.setItem(_CHAVE_CONVERSA_SESSAO_ZECA, conversaId);
@@ -90,6 +95,20 @@ function _adicionarMensagemZeca(de, texto){
     container.appendChild(linkPdf);
   }
 
+  container.scrollTop = container.scrollHeight;
+}
+
+// Botão "comprar créditos" — aparece na conversa quando o limite diário
+// do plano estourou e a pessoa (logada) não tem crédito extra sobrando.
+function _mostrarBotaoComprarCreditosZeca(){
+  const container = document.getElementById('zeca-mensagens');
+  const link = document.createElement('a');
+  link.href = LINK_CREDITOS_ZECA;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.className = 'zeca-link-pdf';
+  link.textContent = '💳 comprar mais créditos (R$7 = 5 usos extras)';
+  container.appendChild(link);
   container.scrollTop = container.scrollHeight;
 }
 
@@ -835,10 +854,15 @@ async function enviarMensagemZeca(){
     // checagem, travando o chat numa mensagem de erro genérica de conexão.
     if (!resp.ok) {
       document.getElementById('zeca-digitando')?.remove();
+      let dadosErro = null;
+      try { dadosErro = await resp.json(); } catch (e) { /* corpo vazio/não-JSON, ex: bloqueio do próprio Netlify */ }
       const msgErro = resp.status === 413
         ? 'Esse arquivo é grande demais pro servidor aceitar de uma vez (limite da hospedagem, não é o Zeca) — tenta um arquivo menor.'
-        : `Deu erro aqui (${resp.status}). Tenta de novo?`;
+        : (dadosErro && dadosErro.resposta) || `Deu erro aqui (${resp.status}). Tenta de novo?`;
       _adicionarMensagemZeca('zeca', msgErro);
+      if (dadosErro && dadosErro.comprarCreditos) {
+        _mostrarBotaoComprarCreditosZeca();
+      }
       input.disabled = false;
       input.focus();
       return;
@@ -882,6 +906,7 @@ async function enviarMensagemZeca(){
           _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoImagem, token);
         } else {
           _adicionarMensagemZeca('zeca', dadosImagem.error || 'Não consegui gerar a imagem agora. Tenta de novo?');
+          if(dadosImagem.comprarCreditos){ _mostrarBotaoComprarCreditosZeca(); }
         }
       } catch(eImg){
         console.error(eImg);
@@ -907,6 +932,7 @@ async function enviarMensagemZeca(){
           _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoAudio, token);
         } else {
           _adicionarMensagemZeca('zeca', dadosAudio.error || 'Não consegui gerar o áudio agora. Tenta de novo?');
+          if(dadosAudio.comprarCreditos){ _mostrarBotaoComprarCreditosZeca(); }
         }
       } catch(eAudio){
         console.error(eAudio);

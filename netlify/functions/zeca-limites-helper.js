@@ -24,6 +24,7 @@ async function resolverNivelZeca(event, prefixoChave, limites) {
   let chaveLimite;
   let limiteDoDia;
   let nomeEmpresaParaMensagem = null;
+  let usuarioIdLogado = null;
 
   if (authHeader) {
     const token = authHeader.replace('Bearer ', '');
@@ -35,6 +36,7 @@ async function resolverNivelZeca(event, prefixoChave, limites) {
     }
     const usuario = await usuarioResp.json();
     chaveLimite = `${prefixoChave}:user:` + usuario.id;
+    usuarioIdLogado = usuario.id;
 
     const empresasResp = await fetch(
       `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=name,plano`,
@@ -71,10 +73,30 @@ async function resolverNivelZeca(event, prefixoChave, limites) {
     if (registroLimiteAtual) {
       const horasPassadas = (new Date() - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
       if (horasPassadas < 24 && registroLimiteAtual.contagem >= limiteDoDia) {
+        // Estourou o limite diário do plano — antes de bloquear de vez,
+        // confere se a pessoa (só quem tá logado, visitante não compra
+        // crédito) tem saldo de créditos extras comprados avulso.
+        if (usuarioIdLogado) {
+          const credito = await verificarCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+          if (credito.saldo > 0) {
+            return {
+              autorizado: true,
+              limiteDoDia,
+              chaveLimite,
+              registroLimiteAtual,
+              nomeEmpresaParaMensagem,
+              headersServico,
+              SUPABASE_URL,
+              usandoCredito: true,
+              usuarioIdLogado
+            };
+          }
+        }
         return {
           autorizado: false,
           limiteDoDia,
-          logado: !!authHeader
+          logado: !!authHeader,
+          semCredito: !!usuarioIdLogado
         };
       }
     }
@@ -91,10 +113,34 @@ async function resolverNivelZeca(event, prefixoChave, limites) {
   };
 }
 
+// Créditos extras comprados avulso (pacote fixo via Mercado Pago) — usados
+// só como fallback quando o limite diário normal do plano já estourou.
+async function verificarCreditoZeca(usuarioId, headersServico, SUPABASE_URL) {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_creditos_extras?user_id=eq.${usuarioId}`, { headers: headersServico });
+  const lista = await resp.json();
+  const registro = (lista && lista[0]) || null;
+  return { saldo: registro ? registro.saldo : 0, registro };
+}
+
+// Só chama isso DEPOIS que o recurso foi entregue com sucesso, igual o
+// consumirLimiteZeca normal — desconta 1 crédito do saldo da pessoa.
+async function consumirCreditoZeca(usuarioId, headersServico, SUPABASE_URL) {
+  const { saldo, registro } = await verificarCreditoZeca(usuarioId, headersServico, SUPABASE_URL);
+  const novoSaldo = Math.max(0, saldo - 1);
+  if (registro) {
+    await fetch(`${SUPABASE_URL}/rest/v1/zeca_creditos_extras?user_id=eq.${usuarioId}`, {
+      method: 'PATCH', headers: headersServico, body: JSON.stringify({ saldo: novoSaldo, updated_at: new Date().toISOString() })
+    });
+  }
+}
+
 // Só chama isso DEPOIS que o recurso foi entregue com sucesso — nunca
 // antes, senão a pessoa perde a vez em caso de erro do lado de fora
 // (ex: a IA ou a geração de imagem falhar).
-async function consumirLimiteZeca({ limiteDoDia, chaveLimite, registroLimiteAtual, headersServico, SUPABASE_URL }) {
+async function consumirLimiteZeca({ limiteDoDia, chaveLimite, registroLimiteAtual, headersServico, SUPABASE_URL, usandoCredito, usuarioIdLogado }) {
+  if (usandoCredito && usuarioIdLogado) {
+    return consumirCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+  }
   if (limiteDoDia === null) return; // Pacote Vendas — nada pra descontar
 
   const agora = new Date();
@@ -112,4 +158,4 @@ async function consumirLimiteZeca({ limiteDoDia, chaveLimite, registroLimiteAtua
   }
 }
 
-module.exports = { resolverNivelZeca, consumirLimiteZeca };
+module.exports = { resolverNivelZeca, consumirLimiteZeca, verificarCreditoZeca, consumirCreditoZeca };

@@ -15,6 +15,8 @@
 // Reaproveita o mesmo motor de geração (OpenAI) e o mesmo bucket "fotos"
 // que o gerar-foto-produto-ia.js já usa.
 
+const { verificarCreditoZeca, consumirCreditoZeca } = require('./zeca-limites-helper');
+
 const LIMITE_VISITANTE = 1;
 const LIMITE_GRATIS = 1;
 const LIMITE_COMPLETO = 3;
@@ -51,6 +53,7 @@ exports.handler = async function (event) {
     let chaveLimite;
     let limiteDoDia;
     let nomeEmpresaParaMensagem = null;
+    let usuarioIdLogado = null;
 
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
@@ -62,6 +65,7 @@ exports.handler = async function (event) {
       }
       const usuario = await usuarioResp.json();
       chaveLimite = 'gerar-imagem-zeca:user:' + usuario.id;
+      usuarioIdLogado = usuario.id;
 
       // O criador do GuiaZap (reconhecido pelo login, mesmo e-mail admin
       // do painel) não passa por esse limite — nunca por senha no chat
@@ -102,6 +106,7 @@ exports.handler = async function (event) {
     // só acontece depois que a imagem sai com sucesso, lá no fim da
     // function. Assim, se a geração falhar, a pessoa não perde a vez.
     let registroLimiteAtual = null;
+    let usandoCredito = false;
     if (limiteDoDia !== null) {
       const buscaLimiteResp = await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico?chave=eq.${encodeURIComponent(chaveLimite)}`, { headers: headersServico });
       const registrosLimite = await buscaLimiteResp.json();
@@ -110,10 +115,23 @@ exports.handler = async function (event) {
       if (registroLimiteAtual) {
         const horasPassadas = (new Date() - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
         if (horasPassadas < 24 && registroLimiteAtual.contagem >= limiteDoDia) {
-          return {
-            statusCode: 429,
-            body: JSON.stringify({ error: `Você já usou seu limite de ${limiteDoDia} imagem${limiteDoDia > 1 ? 'ns' : ''} hoje. ${authHeader ? 'Um pacote maior dá mais imagens por dia.' : 'Cria uma conta grátis ou volta amanhã.'}` })
-          };
+          // Estourou o limite do plano — se tiver login, confere crédito extra comprado avulso antes de bloquear.
+          let saldoCredito = 0;
+          if (usuarioIdLogado) {
+            const credito = await verificarCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+            saldoCredito = credito.saldo;
+          }
+          if (saldoCredito > 0) {
+            usandoCredito = true;
+          } else {
+            return {
+              statusCode: 429,
+              body: JSON.stringify({
+                error: `Você já usou seu limite de ${limiteDoDia} imagem${limiteDoDia > 1 ? 'ns' : ''} hoje. ${authHeader ? 'Você pode comprar um pacote de créditos extras pra continuar usando hoje mesmo.' : 'Cria uma conta grátis ou volta amanhã.'}`,
+                comprarCreditos: !!authHeader
+              })
+            };
+          }
         }
       }
     }
@@ -159,7 +177,10 @@ exports.handler = async function (event) {
     const urlPublica = `${SUPABASE_URL}/storage/v1/object/public/fotos/${nomeArquivo}`;
 
     // Só agora, com a imagem já salva de verdade, desconta do limite diário
-    if (limiteDoDia !== null) {
+    // (ou do crédito extra, se foi ele que liberou essa geração)
+    if (usandoCredito) {
+      await consumirCreditoZeca(usuarioIdLogado, headersServico, SUPABASE_URL);
+    } else if (limiteDoDia !== null) {
       const agora = new Date();
       if (registroLimiteAtual) {
         const horasPassadas = (agora - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
