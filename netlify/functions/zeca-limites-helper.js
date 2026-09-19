@@ -39,18 +39,27 @@ async function resolverNivelZeca(event, prefixoChave, limites) {
     usuarioIdLogado = usuario.id;
 
     const empresasResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=name,plano`,
+      `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=name,plano,zeca_plano_pago`,
       { headers: headersServico }
     );
     const empresas = await empresasResp.json();
 
     const ordemPlanos = { vendas: 4, premium: 3, completo: 2, basico: 1 };
     const melhorEmpresa = (empresas || []).sort((a, b) => (ordemPlanos[b.plano] || 0) - (ordemPlanos[a.plano] || 0))[0];
-    const plano = melhorEmpresa ? melhorEmpresa.plano : null;
+    // Plano ativado MANUALMENTE ou por cupom (zeca_plano_pago = false) não
+    // dá a liberdade paga no Zeca, mesmo aparecendo como pagante no resto
+    // do site — só pagamento de verdade via Mercado Pago libera isso.
+    // Evita, por exemplo, uma campanha de cadastro grátis (plano Vendas
+    // dado de graça) virar um rombo de custo de API sem ninguém ter pago.
+    const plano = melhorEmpresa && melhorEmpresa.zeca_plano_pago ? melhorEmpresa.plano : null;
     nomeEmpresaParaMensagem = melhorEmpresa ? melhorEmpresa.name : null;
 
     if (plano === 'vendas') {
-      limiteDoDia = null;
+      // Vendas tem o teto mais alto, mas NUNCA "sem limite" de verdade —
+      // mesmo o plano mais caro precisa de um teto diário generoso, senão
+      // uma conta comprometida (ou um uso fora do normal) vira um rombo
+      // de custo de API sem fim.
+      limiteDoDia = limites.vendas;
     } else if (plano === 'premium') {
       limiteDoDia = limites.premium;
     } else if (plano === 'completo') {
@@ -123,10 +132,12 @@ async function verificarCreditoZeca(usuarioId, headersServico, SUPABASE_URL) {
 }
 
 // Só chama isso DEPOIS que o recurso foi entregue com sucesso, igual o
-// consumirLimiteZeca normal — desconta 1 crédito do saldo da pessoa.
-async function consumirCreditoZeca(usuarioId, headersServico, SUPABASE_URL) {
+// consumirLimiteZeca normal — desconta créditos do saldo da pessoa.
+// "quantidade" existe porque recursos mais caros (vídeo) consomem mais de
+// 1 crédito por uso — o padrão (1) serve pra imagem/áudio.
+async function consumirCreditoZeca(usuarioId, headersServico, SUPABASE_URL, quantidade) {
   const { saldo, registro } = await verificarCreditoZeca(usuarioId, headersServico, SUPABASE_URL);
-  const novoSaldo = Math.max(0, saldo - 1);
+  const novoSaldo = Math.max(0, saldo - (quantidade || 1));
   if (registro) {
     await fetch(`${SUPABASE_URL}/rest/v1/zeca_creditos_extras?user_id=eq.${usuarioId}`, {
       method: 'PATCH', headers: headersServico, body: JSON.stringify({ saldo: novoSaldo, updated_at: new Date().toISOString() })

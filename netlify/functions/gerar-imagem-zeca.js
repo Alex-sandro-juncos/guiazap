@@ -1,13 +1,15 @@
 // Geração de imagem geral do Zeca — diferente do gerar-foto-produto-ia.js
 // (que é preso a um produto/empresa específica do Pacote Vendas), este
 // aqui é pro pedido solto dentro da conversa ("Zeca, gera uma imagem de
-// X"), disponível pra qualquer um, com limite diário por nível de conta:
+// X"), disponível pra qualquer um, com limite SEMANAL por nível de conta
+// (calculado pra nunca custar mais do que a mensalidade do plano rende,
+// mesmo se a pessoa usar o máximo toda semana, o mês inteiro):
 //
-//   Visitante (sem login)  → 1 por dia (controlado por IP)
-//   Grátis / sem empresa   → 1 por dia
-//   Pacote Completo        → 3 por dia
-//   Pacote Premium         → 7 por dia
-//   Pacote Vendas          → sem limite
+//   Visitante (sem login)  → 1 por semana (controlado por IP)
+//   Grátis / sem empresa   → 1 por semana
+//   Pacote Completo        → 1 por semana
+//   Pacote Premium         → 2 por semana
+//   Pacote Vendas          → 3 por semana
 //
 // "Visitante" controlado por IP, não por um identificador do aparelho —
 // um identificador mandado pelo navegador dá pra apagar/trocar fácil,
@@ -17,11 +19,12 @@
 
 const { verificarCreditoZeca, consumirCreditoZeca } = require('./zeca-limites-helper');
 
+const JANELA_LIMITE_HORAS = 24 * 7;
 const LIMITE_VISITANTE = 1;
 const LIMITE_GRATIS = 1;
-const LIMITE_COMPLETO = 3;
-const LIMITE_PREMIUM = 7;
-// Vendas não passa por essa checagem — sem limite.
+const LIMITE_COMPLETO = 1;
+const LIMITE_PREMIUM = 2;
+const LIMITE_VENDAS = 3;
 
 exports.handler = async function (event) {
   try {
@@ -75,19 +78,21 @@ exports.handler = async function (event) {
       } else {
 
       const empresasResp = await fetch(
-        `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=name,plano&order=plano.desc`,
+        `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=name,plano,zeca_plano_pago&order=plano.desc`,
         { headers: headersServico }
       );
       const empresas = await empresasResp.json();
 
-      // Pega a empresa do maior nível que a pessoa tiver ativa
+      // Pega a empresa do maior nível que a pessoa tiver ativa. Plano
+      // ativado manualmente/por cupom (zeca_plano_pago=false) não dá a
+      // liberdade paga no Zeca — só pagamento de verdade via Mercado Pago.
       const ordemPlanos = { vendas: 4, premium: 3, completo: 2, basico: 1 };
       const melhorEmpresa = (empresas || []).sort((a, b) => (ordemPlanos[b.plano] || 0) - (ordemPlanos[a.plano] || 0))[0];
-      const plano = melhorEmpresa ? melhorEmpresa.plano : null;
+      const plano = melhorEmpresa && melhorEmpresa.zeca_plano_pago ? melhorEmpresa.plano : null;
       nomeEmpresaParaMensagem = melhorEmpresa ? melhorEmpresa.name : null;
 
       if (plano === 'vendas') {
-        limiteDoDia = null; // sem limite
+        limiteDoDia = LIMITE_VENDAS;
       } else if (plano === 'premium') {
         limiteDoDia = LIMITE_PREMIUM;
       } else if (plano === 'completo') {
@@ -114,7 +119,7 @@ exports.handler = async function (event) {
 
       if (registroLimiteAtual) {
         const horasPassadas = (new Date() - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
-        if (horasPassadas < 24 && registroLimiteAtual.contagem >= limiteDoDia) {
+        if (horasPassadas < JANELA_LIMITE_HORAS && registroLimiteAtual.contagem >= limiteDoDia) {
           // Estourou o limite do plano — se tiver login, confere crédito extra comprado avulso antes de bloquear.
           let saldoCredito = 0;
           if (usuarioIdLogado) {
@@ -127,7 +132,7 @@ exports.handler = async function (event) {
             return {
               statusCode: 429,
               body: JSON.stringify({
-                error: `Você já usou seu limite de ${limiteDoDia} imagem${limiteDoDia > 1 ? 'ns' : ''} hoje. ${authHeader ? 'Você pode comprar um pacote de créditos extras pra continuar usando hoje mesmo.' : 'Cria uma conta grátis ou volta amanhã.'}`,
+                error: `Você já usou seu limite de ${limiteDoDia} imagem${limiteDoDia > 1 ? 'ns' : ''} essa semana. ${authHeader ? 'Você pode comprar um pacote de créditos extras pra continuar usando hoje mesmo.' : 'Cria uma conta grátis pra ter direito a isso.'}`,
                 comprarCreditos: !!authHeader
               })
             };
@@ -184,8 +189,8 @@ exports.handler = async function (event) {
       const agora = new Date();
       if (registroLimiteAtual) {
         const horasPassadas = (agora - new Date(registroLimiteAtual.janela_inicio)) / 3600000;
-        const novaContagem = horasPassadas >= 24 ? 1 : registroLimiteAtual.contagem + 1;
-        const novaJanela = horasPassadas >= 24 ? agora.toISOString() : registroLimiteAtual.janela_inicio;
+        const novaContagem = horasPassadas >= JANELA_LIMITE_HORAS ? 1 : registroLimiteAtual.contagem + 1;
+        const novaJanela = horasPassadas >= JANELA_LIMITE_HORAS ? agora.toISOString() : registroLimiteAtual.janela_inicio;
         await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico?chave=eq.${encodeURIComponent(chaveLimite)}`, {
           method: 'PATCH', headers: headersServico, body: JSON.stringify({ contagem: novaContagem, janela_inicio: novaJanela })
         });

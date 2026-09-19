@@ -16,11 +16,16 @@ const { verificarCreditoZeca, consumirCreditoZeca } = require('./zeca-limites-he
 
 const ADMIN_EMAIL_AUDIO = 'contato@guiazap.shop';
 
+// Áudio é o recurso mais barato do Zeca (TTS é barato) — por isso continua
+// com limite DIÁRIO, mas os números foram recalculados pra nunca custar
+// mais do que a mensalidade do plano rende, mesmo usando o máximo todo dia.
 const LIMITE_VISITANTE = 1;
 const LIMITE_GRATIS = 1;
-const LIMITE_COMPLETO = 3;
-const LIMITE_PREMIUM = 7;
-// Vendas e o criador não passam por essa checagem — sem limite.
+const LIMITE_COMPLETO = 2;
+const LIMITE_PREMIUM = 3;
+// Vendas tem o teto mais alto, mas nunca ilimitado de verdade — só o
+// criador (você) passa sem checagem nenhuma.
+const LIMITE_VENDAS = 4;
 
 // Vozes disponíveis na API de TTS da OpenAI, mapeadas pros termos que a
 // pessoa pode pedir em português (ver campo voz_pedida no zeca-chat.js).
@@ -164,15 +169,17 @@ exports.handler = async function (event) {
         limiteDoDia = null;
       } else {
         const empresasResp = await fetch(
-          `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=plano`,
+          `${SUPABASE_URL}/rest/v1/profissionais?user_id=eq.${usuario.id}&status_pagamento=eq.ativo&select=plano,zeca_plano_pago`,
           { headers: headersServico }
         );
         const empresas = await empresasResp.json();
         const ordemPlanos = { vendas: 4, premium: 3, completo: 2, basico: 1 };
         const melhorEmpresa = (empresas || []).sort((a, b) => (ordemPlanos[b.plano] || 0) - (ordemPlanos[a.plano] || 0))[0];
-        const plano = melhorEmpresa ? melhorEmpresa.plano : null;
+        // Plano manual/cupom (zeca_plano_pago=false) não libera o Zeca —
+        // só pagamento de verdade via Mercado Pago.
+        const plano = melhorEmpresa && melhorEmpresa.zeca_plano_pago ? melhorEmpresa.plano : null;
 
-        if (plano === 'vendas') limiteDoDia = null;
+        if (plano === 'vendas') limiteDoDia = LIMITE_VENDAS;
         else if (plano === 'premium') limiteDoDia = LIMITE_PREMIUM;
         else if (plano === 'completo') limiteDoDia = LIMITE_COMPLETO;
         else limiteDoDia = LIMITE_GRATIS;

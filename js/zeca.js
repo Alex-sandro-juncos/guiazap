@@ -98,6 +98,41 @@ function _adicionarMensagemZeca(de, texto){
   container.scrollTop = container.scrollHeight;
 }
 
+// Vídeo com avatar gerado pela HeyGen — vem como URL direta (não base64,
+// diferente do áudio), então o player só aponta pra ela.
+function _renderizarVideoGeradoZeca(url, roteiro){
+  const container = document.getElementById('zeca-mensagens');
+  const bolha = document.createElement('div');
+  bolha.className = 'zeca-msg zeca-msg-zeca';
+  bolha.style.padding = '10px';
+
+  const player = document.createElement('video');
+  player.controls = true;
+  player.src = url;
+  player.style.cssText = 'display:block; width:100%; max-width:280px; border-radius:8px; margin-bottom:8px;';
+  bolha.appendChild(player);
+
+  if(roteiro){
+    const textoRoteiro = document.createElement('div');
+    textoRoteiro.style.cssText = 'font-size:0.82rem; color:#555; white-space:pre-wrap; margin-bottom:8px;';
+    textoRoteiro.textContent = roteiro;
+    bolha.appendChild(textoRoteiro);
+  }
+
+  const baixar = document.createElement('a');
+  baixar.href = url;
+  baixar.download = 'video-zeca.mp4';
+  baixar.target = '_blank';
+  baixar.rel = 'noopener';
+  baixar.textContent = '⬇️ baixar vídeo (mp4)';
+  baixar.className = 'zeca-link-pdf';
+  baixar.style.cssText = 'display:inline-block; text-decoration:none;';
+  bolha.appendChild(baixar);
+
+  container.appendChild(bolha);
+  container.scrollTop = container.scrollHeight;
+}
+
 // Botão "comprar créditos" — aparece na conversa quando o limite diário
 // do plano estourou e a pessoa (logada) não tem crédito extra sobrando.
 function _mostrarBotaoComprarCreditosZeca(){
@@ -532,6 +567,52 @@ async function _gerarAudioViaZeca(tema, formato, vozPedida, voz2Pedida, duracaoP
   return respAudio.json();
 }
 
+// Vídeo é diferente: gerar-video-zeca.js só INICIA a geração (devolve um
+// videoId na hora) — o vídeo em si demora minutos na HeyGen. Essa função
+// inicia e já fica perguntando pra verificar-video-zeca.js de tempos em
+// tempos até vir pronto (ou falhar), chamando onProgresso a cada tentativa
+// pra quem chamou poder atualizar a mensagem "gerando..." na tela.
+async function _gerarVideoViaZeca(tema, duracaoPedida, generoPedido, token, onProgresso){
+  const respInicio = await fetch('/.netlify/functions/gerar-video-zeca', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ tema, duracaoPedida, generoPedido })
+  });
+  const dadosInicio = await respInicio.json();
+  if(!dadosInicio.videoId){
+    return dadosInicio; // tem .error (e talvez .comprarCreditos) pra quem chamou tratar
+  }
+
+  const ESPERA_ENTRE_TENTATIVAS_MS = 6000;
+  const MAX_TENTATIVAS = 50; // ~5 minutos de teto
+  for(let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++){
+    await new Promise(r => setTimeout(r, ESPERA_ENTRE_TENTATIVAS_MS));
+    if(onProgresso) onProgresso(tentativa);
+    try{
+      const respStatus = await fetch('/.netlify/functions/verificar-video-zeca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: dadosInicio.videoId })
+      });
+      const dadosStatus = await respStatus.json();
+      if(dadosStatus.status === 'completed' && dadosStatus.url){
+        return { url: dadosStatus.url, roteiro: dadosInicio.roteiro };
+      }
+      if(dadosStatus.status === 'failed'){
+        return { error: dadosStatus.erro || 'A geração do vídeo falhou. Tenta de novo?' };
+      }
+      // "pending"/"processing" — continua esperando
+    } catch(eStatus){
+      console.error('erro consultando status do vídeo', eStatus);
+      // erro de rede pontual na consulta — não desiste, tenta de novo na próxima volta
+    }
+  }
+  return { error: 'O vídeo tá demorando demais pra ficar pronto. Confere de novo daqui a pouco, ou tenta de novo.' };
+}
+
 // --- Memória "silenciosa" pra tipos de resposta especiais ---
 // gerar_imagem/gerar_audio/executar_codigo e edição de imagem respondem
 // direto de OUTRA function (gerar-audio-zeca.js etc.), sem voltar a
@@ -938,6 +1019,35 @@ async function enviarMensagemZeca(){
         console.error(eAudio);
         document.getElementById('zeca-gerando-audio')?.remove();
         _adicionarMensagemZeca('zeca', 'Deu erro gerando o áudio. Tenta de novo?');
+      }
+    }
+    if(data.tipo === 'gerar_video'){
+      const gerandoVideo = document.createElement('div');
+      gerandoVideo.className = 'zeca-msg zeca-msg-zeca';
+      gerandoVideo.id = 'zeca-gerando-video';
+      gerandoVideo.textContent = '🎬 Gerando vídeo... isso leva alguns minutos. Não fecha essa aba/navegador enquanto isso, senão perco o andamento.';
+      document.getElementById('zeca-mensagens').appendChild(gerandoVideo);
+      document.getElementById('zeca-mensagens').scrollTop = 999999;
+
+      try{
+        const dadosVideo = await _gerarVideoViaZeca(data.temaVideo, data.duracaoVideo, data.generoVideo, token, (tentativa) => {
+          const elGerando = document.getElementById('zeca-gerando-video');
+          if(elGerando) elGerando.textContent = `🎬 Gerando vídeo... ainda processando (${tentativa * 6}s), só mais um pouco`;
+        });
+        document.getElementById('zeca-gerando-video')?.remove();
+        if(dadosVideo.url){
+          _renderizarVideoGeradoZeca(dadosVideo.url, dadosVideo.roteiro);
+          const resumoVideo = `[Gerei um vídeo sobre "${data.temaVideo}". Roteiro: "${(dadosVideo.roteiro || '').slice(0, 600)}"]`;
+          _zecaRegistrarHistoricoSilencioso('zeca', resumoVideo);
+          _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoVideo, token);
+        } else {
+          _adicionarMensagemZeca('zeca', dadosVideo.error || 'Não consegui gerar o vídeo agora. Tenta de novo?');
+          if(dadosVideo.comprarCreditos){ _mostrarBotaoComprarCreditosZeca(); }
+        }
+      } catch(eVideo){
+        console.error(eVideo);
+        document.getElementById('zeca-gerando-video')?.remove();
+        _adicionarMensagemZeca('zeca', 'Deu erro gerando o vídeo. Tenta de novo?');
       }
     }
     if(data.tipo === 'executar_codigo'){
