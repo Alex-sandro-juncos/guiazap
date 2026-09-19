@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "pdf-lib": "^1.17.1",
+    "jszip": "^3.10.1"
   }
 }

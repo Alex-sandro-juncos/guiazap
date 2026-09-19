@@ -74,7 +74,7 @@
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <script>
 function copiarEmail(){
   navigator.clipboard.writeText('contato@guiazap.shop').then(() => {
@@ -101,5 +101,26 @@ async function enviarFeedbackSite(){
 }
 </script>
 <script src="js/modo-escuro.js"></script>
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
+<script src="js/zeca.js"></script>
 </body>
 </html>

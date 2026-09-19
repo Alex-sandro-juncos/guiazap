@@ -1476,3 +1476,201 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   font-weight: 800;
   letter-spacing: -0.2px;
 }
+
+/* CORRIGIDO: ficava empilhado em cima do Papo (bottom: 88px com o mesmo
+   "right" do Papo). Agora fica na mesma altura (bottom: 24px) e deslocado
+   pra esquerda (right maior) pra sobrar espaço do Papo do lado direito. */
+.btn-zeca-flutuante {
+  position: fixed;
+  bottom: 24px;
+  right: max(190px, calc(50vw - 240px + 190px));
+  height: 52px;
+  padding: 0 20px 0 16px;
+  border-radius: 50px;
+  background: #f59e0b;
+  color: white;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 1.6rem;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(245,158,11,0.7);
+  z-index: 99999;
+  border: 3px solid white;
+  cursor: pointer;
+}
+.btn-zeca-flutuante-label {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+#painel-zeca {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: max(24px, calc(50vw - 240px + 24px));
+  width: min(360px, calc(100vw - 48px));
+  height: min(520px, calc(100vh - 100px));
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 100000;
+  flex-direction: column;
+  overflow: hidden;
+}
+#painel-zeca .zeca-cabecalho {
+  background: #f59e0b;
+  color: white;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 800;
+}
+#painel-zeca .zeca-cabecalho small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+#painel-zeca .zeca-fechar {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+}
+#zeca-mensagens {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f7f5f0;
+}
+.zeca-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.zeca-msg-zeca {
+  background: white;
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.zeca-msg-pessoa {
+  background: #f59e0b;
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+#painel-zeca .zeca-rodape {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #eee;
+  background: white;
+}
+#zeca-input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  outline: none;
+}
+#zeca-enviar {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.zeca-mic-btn {
+  background: #eee;
+  color: #555;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.zeca-mic-btn.zeca-mic-ativo {
+  background: #a4402f;
+  color: white;
+  animation: zeca-pulso 1s infinite;
+}
+@keyframes zeca-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(164,64,47,0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(164,64,47,0); }
+}
+
+.zeca-link-pdf {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid #f59e0b;
+  color: #f59e0b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  margin: -6px 0 4px;
+}
+
+.zeca-resultados {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: flex-start;
+  max-width: 85%;
+}
+.zeca-card-resultado {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.zeca-card-nome {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #1c1c1c;
+}
+.zeca-card-info {
+  font-size: 0.75rem;
+  color: #888;
+  margin: 2px 0 8px;
+}
+.zeca-card-btn {
+  display: inline-block;
+  background: #25D366;
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+  text-decoration: none;
+}
+
+#painel-zeca.zeca-arrastando {
+  outline: 3px dashed #f59e0b;
+  outline-offset: -6px;
+}

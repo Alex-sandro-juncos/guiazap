@@ -56,8 +56,8 @@ async function estourouLimite(ip){
     });
     return false;
   } catch(e){
-    console.warn('erro ao checar limite de uso, deixando passar por segurança', e);
-    return false; // se der erro no controle, não trava a experiência do visitante
+    console.warn('erro ao checar limite de uso, bloqueando por segurança', e);
+    return true; // fail-closed: erro no controle bloqueia, não libera — evita gastar IA sem limite numa instabilidade
   }
 }
 
@@ -112,7 +112,7 @@ ${listaEmpresas || '(nenhuma empresa na tela no momento)'}`;
     }
     await salvarPending('index', textoNorm, texto);
 
-    const ia = await chamarIABarata(promptSistema, texto, 500);
+    const ia = await chamarIABarata(promptSistema, texto, 500, true);
     const resultado = ia.ok
       ? ia.json
       : { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };

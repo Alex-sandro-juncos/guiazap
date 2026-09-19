@@ -83,6 +83,30 @@ exports.handler = async function (event) {
       return { statusCode: 401, body: 'assinatura inválida' };
     }
 
+    const SUPABASE_URL_CHECK = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY_CHECK = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // Trava de idempotência: tenta "reservar" esse evento com um INSERT
+    // numa tabela com chave única (tipo + data_id). Se o Mercado Pago
+    // reenviar o mesmo aviso (retry deles, normal), o INSERT falha aqui
+    // e a gente devolve 200 sem reprocessar nada — sem risco de corrida,
+    // porque o próprio banco garante que só um INSERT com essa chave passa.
+    const reservaResp = await fetch(`${SUPABASE_URL_CHECK}/rest/v1/mp_webhook_processados`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_SERVICE_ROLE_KEY_CHECK,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY_CHECK}`,
+        Prefer: 'resolution=ignore-duplicates,return=representation'
+      },
+      body: JSON.stringify({ tipo: type || 'desconhecido', data_id: String(dataId) })
+    });
+    const reservaData = await reservaResp.json();
+    if (!Array.isArray(reservaData) || reservaData.length === 0) {
+      // Já tinha uma linha com essa chave — evento repetido, não reprocessa
+      return { statusCode: 200, body: 'evento já processado antes (repetição do Mercado Pago, ignorado)' };
+    }
+
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

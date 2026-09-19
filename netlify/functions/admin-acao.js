@@ -44,6 +44,25 @@ exports.handler = async function (event) {
       return { statusCode: 403, body: JSON.stringify({ error: 'acesso negado' }) };
     }
 
+    // Registra a tentativa no log de auditoria — antes mesmo de executar,
+    // pra ficar registrado mesmo que a ação falhe depois. Espera terminar
+    // (em vez de disparar e esquecer) porque a function pode encerrar antes
+    // de uma chamada em segundo plano terminar — e um log de auditoria só
+    // serve pra algo se ele realmente for gravado.
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/admin_audit_log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ admin_email: userData.email, acao, tabela, registro_id: String(id) })
+      });
+    } catch (eLog) {
+      console.warn('falha ao gravar log de auditoria (não crítico, ação continua)', eLog);
+    }
+
     if (acao === 'excluir') {
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?id=eq.${id}`, {
         method: 'DELETE',

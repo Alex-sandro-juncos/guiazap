@@ -11,7 +11,7 @@
 <meta property="og:image" content="https://guiazap.shop/favicon-512.png">
 
 <meta name="description" content="Empresas do GuiaZap consultam currículos de candidatos disponíveis na região e conversam pelo Papo.">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <style>
@@ -380,6 +380,15 @@ async function processarComandoVozTalentos(transcricao){
     }
   }
 
+  try{
+    const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensagem: transcricao })
+    });
+    const dadosZeca = await respZeca.json();
+    if(respZeca.ok && dadosZeca.resposta){ falarVozTalentos(dadosZeca.resposta); return; }
+  } catch(eZeca){ console.warn('Zeca nao respondeu no modo voz', eZeca); }
+
   falarVozTalentos('Nenhum currículo encontrado com isso. Fala outro cargo, habilidade ou cidade.');
 }
 
@@ -393,5 +402,26 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPe
 <script src="js/debug-console.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Chat">💬</a>
 <script src="js/voz-acesso-cego.js"></script>
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
+<script src="js/zeca.js"></script>
 </body>
 </html>

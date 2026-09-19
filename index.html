@@ -24,9 +24,9 @@
 <meta name="twitter:title" content="GuiaZap — Conectando você ao que sua cidade tem de melhor">
 <meta name="twitter:description" content="Busque profissionais, compre na vitrine e converse direto pelo Papo — tudo no diretório da sua cidade.">
 <meta name="twitter:image" content="https://guiazap.shop/favicon-512.png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -673,7 +673,28 @@
 
   <a href="chat.html" class="btn-chat-flutuante" title="Papo" id="btn-chat-flutuante" style="display:none;">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem ou .zip">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
 <script src="js/modo-escuro.js"></script>
+<script src="js/zeca.js"></script>
 <script src="js/notificacoes.js"></script>
 <script src="config.js"></script>
 <script src="js/captura-erros.js"></script>

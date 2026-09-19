@@ -73,7 +73,21 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Escolha seu pacote</p></header>
+<header style="position:relative;">
+  <div class="logo">GuiaZap</div><p>Escolha seu pacote</p>
+  <button type="button" id="btn-modo-voz-pacotes" onclick="toggleModoVozPacotes()" title="Ativar modo de voz" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+</header>
+
+<div id="painel-modo-voz-pacotes" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:var(--verde-whats);flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-pacotes-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala o nome do pacote que quer escolher, ou "ler pacotes"</div>
+      <div id="voz-pacotes-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozPacotes()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙</button> <a href="chat.html" class="btn-chat-perto-modo-escuro" title="Papo">💬 Papo</a>
 <div class="pacotes-wrap">
   <h1>Como você quer aparecer no GuiaZap?</h1>
@@ -179,7 +193,7 @@
 
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <script src="config.js"></script>
 <script>
 async function carregarContadorCampanha(){
@@ -200,9 +214,191 @@ async function carregarContadorCampanha(){
   }
 }
 carregarContadorCampanha();
+
+// ---------- MODO VOZ (mãos livres) ----------
+
+let _vozPacotesAtiva = false;
+let _vozPacotesReconhecimento = null;
+let _vozPacotesVigia = null;
+let _vozPacotesUltimoSinal = 0;
+let _vozPacotesFalando = false;
+const _vozPacotesSynth = window.speechSynthesis;
+
+function toggleModoVozPacotes(){
+  if(_vozPacotesAtiva) pararModoVozPacotes();
+  else iniciarModoVozPacotes();
+}
+
+function iniciarModoVozPacotes(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozPacotesAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-pacotes').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-pacotes').style.display = 'block';
+
+  _criarReconhecimentoPacotes(Api);
+  clearInterval(_vozPacotesVigia);
+  _vozPacotesVigia = setInterval(() => {
+    if(!_vozPacotesAtiva){ clearInterval(_vozPacotesVigia); return; }
+    if(_vozPacotesFalando) return;
+    if(Date.now() - _vozPacotesUltimoSinal > 8000){
+      try{ _vozPacotesReconhecimento.onend = null; _vozPacotesReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoPacotes(Api);
+    }
+  }, 4000);
+
+  falarVozPacotes('Modo voz ativado. Fala o nome do pacote que quer, tipo "completo" ou "premium", ou "ler pacotes" pra eu explicar cada um.');
+}
+
+function _criarReconhecimentoPacotes(Api){
+  _vozPacotesReconhecimento = new Api();
+  _vozPacotesReconhecimento.lang = 'pt-BR';
+  _vozPacotesReconhecimento.continuous = true;
+  _vozPacotesReconhecimento.interimResults = false;
+
+  _vozPacotesReconhecimento.onstart = () => { _vozPacotesUltimoSinal = Date.now(); };
+
+  _vozPacotesReconhecimento.onresult = (event) => {
+    _vozPacotesUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-pacotes-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozPacotes(texto);
+  };
+
+  _vozPacotesReconhecimento.onend = () => {
+    _vozPacotesUltimoSinal = Date.now();
+    if(_vozPacotesAtiva){ try{ _vozPacotesReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozPacotesReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozPacotes('Preciso de permissão pro microfone.');
+      pararModoVozPacotes();
+      return;
+    }
+    _vozPacotesUltimoSinal = Date.now();
+    if(_vozPacotesAtiva){ setTimeout(() => { try{ _vozPacotesReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozPacotesReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozPacotes(){
+  _vozPacotesAtiva = false;
+  _vozPacotesFalando = false;
+  clearInterval(_vozPacotesVigia);
+  if(_vozPacotesReconhecimento){
+    _vozPacotesReconhecimento.onresult = null;
+    _vozPacotesReconhecimento.onend = null;
+    _vozPacotesReconhecimento.onerror = null;
+    try{ _vozPacotesReconhecimento.abort(); } catch(e){}
+    _vozPacotesReconhecimento = null;
+  }
+  _vozPacotesSynth.cancel();
+  document.getElementById('btn-modo-voz-pacotes').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-pacotes').style.display = 'none';
+}
+
+function falarVozPacotes(texto){
+  document.getElementById('voz-pacotes-status').textContent = texto;
+  _vozPacotesFalando = true;
+  _vozPacotesSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozPacotesFalando = false;
+    if(_vozPacotesAtiva){ try{ _vozPacotesReconhecimento.start(); } catch(e){} }
+  };
+  _vozPacotesSynth.speak(fala);
+  setTimeout(() => {
+    _vozPacotesFalando = false;
+    if(_vozPacotesAtiva && _vozPacotesReconhecimento){ try{ _vozPacotesReconhecimento.start(); } catch(e){} }
+  }, Math.max(6000, (texto || '').length * 90));
+}
+
+async function processarComandoVozPacotes(texto){
+  const t = texto.toLowerCase().trim();
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'pacotes.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozPacotes(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozPacotes('Modo voz desativado.');
+    setTimeout(pararModoVozPacotes, 1200);
+    return;
+  }
+
+  if(t.includes('ler pacote') || t.includes('quais sao os pacotes') || t.includes('quais são os pacotes')){
+    falarVozPacotes('Tem o Contato, grátis. Completo por 10 reais o mês, com Banco de Talentos. Premium por 25, com selo dourado e seguidores. Vendas por 40, com vitrine e carrinho. E Corridas e Fretes por 10, pra entregadores.');
+    return;
+  }
+
+  const mapaPacotes = {
+    'contato': 'index.html?plano=basico', 'gratis': 'index.html?plano=basico', 'grátis': 'index.html?plano=basico', 'basico': 'index.html?plano=basico', 'básico': 'index.html?plano=basico',
+    'completo': 'index.html?plano=completo',
+    'premium': 'index.html?plano=premium',
+    'vendas': 'index.html?plano=vendas',
+    'corridas': 'index.html?plano=entregador', 'frete': 'index.html?plano=entregador', 'entregador': 'index.html?plano=entregador'
+  };
+  const escolha = Object.keys(mapaPacotes).find(chave => t.includes(chave));
+  if(escolha){
+    localStorage.setItem('retomarModoVozAoCarregar', '1');
+    falarVozPacotes('Beleza, indo pro pacote ' + escolha + '.');
+    setTimeout(() => { window.location.href = mapaPacotes[escolha]; }, 1200);
+    return;
+  }
+
+  try{
+    const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensagem: texto })
+    });
+    const dadosZeca = await respZeca.json();
+    if(respZeca.ok && dadosZeca.resposta){ falarVozPacotes(dadosZeca.resposta); return; }
+  } catch(eZeca){ console.warn('Zeca nao respondeu no modo voz', eZeca); }
+
+  falarVozPacotes('Não entendi. Fala o nome de um pacote, tipo "completo" ou "premium", ou "ler pacotes" pra eu explicar.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozPacotes(), 1000);
+}
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬</a>
 <script src="js/voz-acesso-cego.js"></script>
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
+<script src="js/zeca.js"></script>
 </body>
 </html>

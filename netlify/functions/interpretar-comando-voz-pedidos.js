@@ -54,7 +54,7 @@ Regras:
 Pedidos visíveis agora:
 ${listaPedidos || '(nenhum pedido no momento)'}`;
 
-    const ia = await chamarIABarata(promptSistema, texto, 500);
+    const ia = await chamarIABarata(promptSistema, texto, 500, true);
     const resultado = ia.ok
       ? ia.json
       : { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };

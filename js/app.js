@@ -2516,7 +2516,7 @@ async function abrirFormStory(profissionalId, plano){
     campoProduto.style.display = 'block';
     const { data: produtos } = await supabaseClient.from('produtos').select('id, nome').eq('profissional_id', profissionalId);
     const sel = document.getElementById('story-produto-id');
-    sel.innerHTML = '<option value="">Nenhum</option>' + (produtos || []).map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join('');
+    sel.innerHTML = '<option value="">Nenhum</option>' + (produtos || []).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.nome)}</option>`).join('');
   } else {
     campoProduto.style.display = 'none';
   }
@@ -5474,6 +5474,27 @@ async function processarComandoVozIndex(transcricao){
           return;
         }
       }
+
+      // Antes de cair na busca cega, tenta o Zeca completo — ele sabe
+      // achar empresa de verdade no banco, dar dica de currículo, tirar
+      // dúvida sobre pacotes etc. É o último recurso antes de desistir,
+      // então só roda quando nada mais específico da tela reconheceu o
+      // comando (não troca nada do que já funcionava antes).
+      try{
+        const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mensagem: transcricao })
+        });
+        const dadosZeca = await respZeca.json();
+        if(respZeca.ok && dadosZeca.resposta){
+          falarVozIndex(dadosZeca.resposta);
+          return;
+        }
+      } catch(eZeca){
+        console.warn('Zeca não respondeu no modo voz, caindo pra busca local', eZeca);
+      }
+
       if(termoBuscaLocal.length >= 2){
         document.getElementById('search').value = termoBuscaLocal;
         render();

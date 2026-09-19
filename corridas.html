@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GuiaCorridas">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
   body { background: #f0f2f5; padding-bottom: 30px; }
@@ -367,6 +367,7 @@ let _vozCorridasAtiva = false;
 let _vozCorridasReconhecimento = null;
 let _vozCorridasVigia = null;
 let _vozCorridasUltimoSinal = 0;
+let _vozCorridasFalando = false;
 const _vozCorridasSynth = window.speechSynthesis;
 
 function toggleModoVozCorridas(){
@@ -386,6 +387,7 @@ function iniciarModoVozCorridas(){
   clearInterval(_vozCorridasVigia);
   _vozCorridasVigia = setInterval(() => {
     if(!_vozCorridasAtiva){ clearInterval(_vozCorridasVigia); return; }
+    if(_vozCorridasFalando) return;
     if(Date.now() - _vozCorridasUltimoSinal > 8000){
       try{ _vozCorridasReconhecimento.onend = null; _vozCorridasReconhecimento.abort(); } catch(e){}
       _criarReconhecimentoCorridas(Api);
@@ -430,6 +432,7 @@ function _criarReconhecimentoCorridas(Api){
 
 function pararModoVozCorridas(){
   _vozCorridasAtiva = false;
+  _vozCorridasFalando = false;
   clearInterval(_vozCorridasVigia);
   if(_vozCorridasReconhecimento){
     _vozCorridasReconhecimento.onresult = null;
@@ -446,10 +449,19 @@ function pararModoVozCorridas(){
 function falarVozCorridas(texto){
   document.getElementById('voz-corridas-status').textContent = texto;
   if(!('speechSynthesis' in window)) return;
+  _vozCorridasFalando = true;
   _vozCorridasSynth.cancel();
   const fala = new SpeechSynthesisUtterance(texto);
   fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozCorridasFalando = false;
+    if(_vozCorridasAtiva){ try{ _vozCorridasReconhecimento.start(); } catch(e){} }
+  };
   _vozCorridasSynth.speak(fala);
+  setTimeout(() => {
+    _vozCorridasFalando = false;
+    if(_vozCorridasAtiva && _vozCorridasReconhecimento){ try{ _vozCorridasReconhecimento.start(); } catch(e){} }
+  }, Math.max(6000, (texto || '').length * 90));
 }
 
 async function processarComandoVozCorridas(texto){

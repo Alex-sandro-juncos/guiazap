@@ -1423,12 +1423,11 @@ async function sugerirComplementoCarrinho(profissionalId){
 
   try{
     const itensDessaEmpresa = carrinhoV.filter(i => i.profissionalId === profissionalId);
-    const produtosDessaEmpresa = produtos.filter(x => x.profissional_id === profissionalId).map(x => ({ id: x.id, nome: x.nome, preco: x.preco }));
 
     const resp = await fetch('/.netlify/functions/sugerir-complemento-ia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itensNoCarrinho: itensDessaEmpresa, produtosDaEmpresa: produtosDessaEmpresa })
+      body: JSON.stringify({ profissionalId, itensNoCarrinho: itensDessaEmpresa })
     });
     if(!resp.ok) return;
     const resultado = await resp.json();
@@ -3861,6 +3860,24 @@ async function _processarComandoVozVitrineInterno(transcricao){
           return;
         }
       }
+
+      // Último recurso antes da busca cega: tenta o Zeca completo (acha
+      // empresa de verdade, dica de currículo, dúvida de pacote etc.)
+      try{
+        const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mensagem: transcricao })
+        });
+        const dadosZeca = await respZeca.json();
+        if(respZeca.ok && dadosZeca.resposta){
+          falarVozVitrine(dadosZeca.resposta);
+          return;
+        }
+      } catch(eZeca){
+        console.warn('Zeca não respondeu no modo voz, caindo pra busca local', eZeca);
+      }
+
       document.getElementById('v-search').value = (typeof termoLimpo !== 'undefined' && termoLimpo) ? termoLimpo : transcricao.trim();
       renderProdutos();
       falarVozVitrine(lerResultadosBuscaVitrine());
@@ -4507,6 +4524,7 @@ async function processarConfirmacaoPinVoz(transcricao){
       return;
     }
 
+    estado.pin = pinFalado;
     estado.etapa = 'cvv';
     falarVozVitrine('PIN confirmado! Agora fala o código de segurança, o CVV, os 3 números de trás do cartão salvo.');
   } catch(e){
@@ -4533,6 +4551,7 @@ async function processarConfirmacaoCvvVoz(transcricao){
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({
+        pin: estado.pin,
         cvv: cvvFalado,
         profissionalId: estado.profissionalId,
         itens: estado.itensPayload,

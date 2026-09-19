@@ -69,8 +69,8 @@ async function estourouLimite(ip){
     });
     return false;
   } catch(e){
-    console.warn('erro ao checar limite de uso, deixando passar por segurança', e);
-    return false;
+    console.warn('erro ao checar limite de uso, bloqueando por segurança', e);
+    return true; // fail-closed: bloqueia em vez de liberar se o controle falhar
   }
 }
 
@@ -155,7 +155,7 @@ Regras:
 - Se não tiver certeza, ou não for pedido de navegação nenhum, pagina = null, e a resposta_falada explica rapidamente que não entendeu e o que ela pode fazer.
 - resposta_falada deve ser curta (1 frase), natural, sem soar robótica.`;
 
-    const ia = await chamarIABarata(promptSistema, texto, 300);
+    const ia = await chamarIABarata(promptSistema, texto, 300, true);
     let resultado = ia.ok ? ia.json : null;
     if (!resultado || typeof resultado !== 'object') {
       resultado = { pagina: null, resposta_falada: 'Não entendi. Pode repetir de outro jeito?' };

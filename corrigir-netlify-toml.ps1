@@ -1,0 +1,100 @@
+$conteudo = @'
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+# Headers de segurança aplicados em todas as páginas. O CSP restringe de
+# quais domínios o navegador aceita carregar script/imagem/CSS/conexão —
+# mesmo que um XSS consiga injetar HTML na página, isso limita bastante o
+# que um invasor consegue fazer com isso (não consegue carregar um script
+# de um domínio de fora da lista, por exemplo).
+#
+# 'unsafe-inline' em script-src ainda está liberado porque várias páginas
+# têm <script> solto no próprio HTML (modo voz, PIN, etc.) — tirar isso
+# exige mover cada um pra arquivo .js separado, o que é um projeto à parte.
+# Mesmo assim, o CSP já barra a parte mais comum de um ataque: carregar
+# script de um domínio estranho.
+#
+# TEMPORARIAMENTE DESATIVADO — só pra testar local com netlify dev.
+# Antes de subir pro Git de verdade, tira o # de cada linha de novo.
+#[[headers]]
+#  for = "/*"
+#  [headers.values]
+#    X-Frame-Options = "DENY"
+#    X-Content-Type-Options = "nosniff"
+#    Referrer-Policy = "strict-origin-when-cross-origin"
+#    Permissions-Policy = "geolocation=(self), microphone=(self), camera=()"
+#    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://sdk.mercadopago.com https://cdnjs.cloudflare.com https://www.mercadopago.com https://www.mercadopago.com.br https://storage.googleapis.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://api.dicebear.com https://api.qrserver.com https://via.placeholder.com https://unpkg.com https://xtalrhnkttsnayrowwyz.supabase.co; connect-src 'self' https://xtalrhnkttsnayrowwyz.supabase.co wss://xtalrhnkttsnayrowwyz.supabase.co https://viacep.com.br https://servicodados.ibge.gov.br https://nominatim.openstreetmap.org https://router.project-osrm.org https://api.qrserver.com https://api.mercadopago.com https://sdk.mercadopago.com https://www.mercadopago.com https://www.mercadopago.com.br https://http2.mlstatic.com https://secure-fields.mercadopago.com; frame-src 'self' https://www.mercadopago.com https://www.mercadopago.com.br https://api.mercadopago.com https://sdk.mercadopago.com https://secure.mlstatic.com https://www.mercadolibre.com https://secure-fields.mercadopago.com; media-src 'self' https://xtalrhnkttsnayrowwyz.supabase.co blob: data:; object-src 'none'; base-uri 'self'"
+#    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+# Evita que o navegador de alguém fique preso numa versão antiga do site
+# depois de você atualizar o código — sempre confere com o servidor antes
+# de usar uma cópia salva (o site continua rápido, só confirma primeiro)
+#
+# TEMPORARIAMENTE DESATIVADO — mesma coisa, reativa antes de subir pro Git.
+#[[headers]]
+#  for = "/*.js"
+#  [headers.values]
+#    Cache-Control = "no-cache"
+
+#[[headers]]
+#  for = "/*.html"
+#  [headers.values]
+#    Cache-Control = "no-cache"
+
+#[[headers]]
+#  for = "/*.css"
+#  [headers.values]
+#    Cache-Control = "no-cache"
+
+[functions."verificar-pagamentos"]
+  schedule = "0 * * * *"
+
+[functions."verificar-timeout-corridas"]
+  schedule = "*/2 * * * *"
+
+[functions."cancelar-pedidos-esquecidos"]
+  schedule = "0 * * * *"
+
+[functions."relatorio-semanal"]
+  schedule = "0 9 * * 1"
+
+# Bloqueia acesso ao histórico do Git — mesmo que o Netlify já ignore isso
+# por padrão na maioria dos casos, isso garante que ninguém nunca consiga
+# baixar /.git/* pela web (o histórico pode ter chave antiga que já foi
+# removida do código, mas continua existindo nos commits antigos)
+[[redirects]]
+  from = "/.git/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+# Gera o sitemap.xml na hora (com todas as combinações de categoria+cidade
+# reais do banco), em vez de usar um arquivo fixo desatualizado
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap-dinamico"
+  status = 200
+
+# Mostra um artigo específico do blog (ex: /blog/como-escolher-eletricista)
+[[redirects]]
+  from = "/blog/*"
+  to = "/blog-post.html"
+  status = 200
+
+# Redireciona URLs bonitas de categoria (ex: /eletricistas-mangueirinha) pra
+# página que interpreta o endereço e mostra os resultados certos. Como o
+# Netlify sempre prioriza arquivos reais (index.html, vitrine.html, etc) antes
+# de aplicar redirecionamentos, isso só entra em ação pra endereços que não
+# batem com nenhuma página existente do site. Fica por último, pra não
+# atropelar os redirecionamentos mais específicos de cima.
+[[redirects]]
+  from = "/*"
+  to = "/categoria.html"
+  status = 200
+
+'@
+# Escreve sem BOM (marca invisivel que o Set-Content -Encoding UTF8 do
+# Windows PowerShell adiciona sozinho, e que o leitor de TOML nao aceita)
+[System.IO.File]::WriteAllText("$PWD\netlify.toml", $conteudo, (New-Object System.Text.UTF8Encoding $false))
+Write-Host 'Pronto! netlify.toml recriado sem os headers, sem BOM, com acentuacao correta.'

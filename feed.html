@@ -11,7 +11,7 @@
 <meta property="og:image" content="https://guiazap.shop/favicon-512.png">
 
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
   .feed-wrap { max-width: 600px; margin: 0 auto; padding: 20px 15px 50px; }
@@ -27,7 +27,21 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Novidades de quem você segue</p></header>
+<header style="position:relative;">
+  <div class="logo">GuiaZap</div><p>Novidades de quem você segue</p>
+  <button type="button" id="btn-modo-voz-feed" onclick="toggleModoVozFeed()" title="Ativar modo de voz" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+</header>
+
+<div id="painel-modo-voz-feed" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:var(--verde-whats);flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-feed-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala "ler novidades" ou o nome de uma página pra ir</div>
+      <div id="voz-feed-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozFeed()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙</button>
 <div class="feed-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
@@ -118,9 +132,183 @@ async function initFeed(){
 }
 
 initFeed();
+
+// ---------- MODO VOZ (mãos livres) ----------
+
+let _vozFeedAtiva = false;
+let _vozFeedReconhecimento = null;
+let _vozFeedVigia = null;
+let _vozFeedUltimoSinal = 0;
+let _vozFeedFalando = false;
+const _vozFeedSynth = window.speechSynthesis;
+
+function toggleModoVozFeed(){
+  if(_vozFeedAtiva) pararModoVozFeed();
+  else iniciarModoVozFeed();
+}
+
+function iniciarModoVozFeed(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozFeedAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-feed').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-feed').style.display = 'block';
+
+  _criarReconhecimentoFeed(Api);
+  clearInterval(_vozFeedVigia);
+  _vozFeedVigia = setInterval(() => {
+    if(!_vozFeedAtiva){ clearInterval(_vozFeedVigia); return; }
+    if(_vozFeedFalando) return;
+    if(Date.now() - _vozFeedUltimoSinal > 8000){
+      try{ _vozFeedReconhecimento.onend = null; _vozFeedReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoFeed(Api);
+    }
+  }, 4000);
+
+  falarVozFeed('Modo voz ativado. Fala "ler novidades" pra eu ler as últimas, ou o nome de outra página pra ir.');
+}
+
+function _criarReconhecimentoFeed(Api){
+  _vozFeedReconhecimento = new Api();
+  _vozFeedReconhecimento.lang = 'pt-BR';
+  _vozFeedReconhecimento.continuous = true;
+  _vozFeedReconhecimento.interimResults = false;
+
+  _vozFeedReconhecimento.onstart = () => { _vozFeedUltimoSinal = Date.now(); };
+
+  _vozFeedReconhecimento.onresult = (event) => {
+    _vozFeedUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-feed-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozFeed(texto);
+  };
+
+  _vozFeedReconhecimento.onend = () => {
+    _vozFeedUltimoSinal = Date.now();
+    if(_vozFeedAtiva){ try{ _vozFeedReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozFeedReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozFeed('Preciso de permissão pro microfone.');
+      pararModoVozFeed();
+      return;
+    }
+    _vozFeedUltimoSinal = Date.now();
+    if(_vozFeedAtiva){ setTimeout(() => { try{ _vozFeedReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozFeedReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozFeed(){
+  _vozFeedAtiva = false;
+  _vozFeedFalando = false;
+  clearInterval(_vozFeedVigia);
+  if(_vozFeedReconhecimento){
+    _vozFeedReconhecimento.onresult = null;
+    _vozFeedReconhecimento.onend = null;
+    _vozFeedReconhecimento.onerror = null;
+    try{ _vozFeedReconhecimento.abort(); } catch(e){}
+    _vozFeedReconhecimento = null;
+  }
+  _vozFeedSynth.cancel();
+  document.getElementById('btn-modo-voz-feed').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-feed').style.display = 'none';
+}
+
+function falarVozFeed(texto){
+  document.getElementById('voz-feed-status').textContent = texto;
+  _vozFeedFalando = true;
+  _vozFeedSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozFeedFalando = false;
+    if(_vozFeedAtiva){ try{ _vozFeedReconhecimento.start(); } catch(e){} }
+  };
+  _vozFeedSynth.speak(fala);
+  setTimeout(() => {
+    _vozFeedFalando = false;
+    if(_vozFeedAtiva && _vozFeedReconhecimento){ try{ _vozFeedReconhecimento.start(); } catch(e){} }
+  }, Math.max(6000, (texto || '').length * 90));
+}
+
+function lerNovidadesEmVoz(){
+  const empresas = Array.from(document.querySelectorAll('#feed-lista .empresa-feed')).slice(0, 5).map(el => el.textContent.trim());
+  if(empresas.length === 0) return 'Nenhuma novidade por aqui ainda.';
+  return `Últimas novidades de: ${empresas.join(', ')}.`;
+}
+
+async function processarComandoVozFeed(texto){
+  const t = texto.toLowerCase().trim();
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'feed.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozFeed(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozFeed('Modo voz desativado.');
+    setTimeout(pararModoVozFeed, 1200);
+    return;
+  }
+
+  if(t.includes('ler novidade') || t.includes('ler tudo') || t.includes('o que tem') || t.includes('atualizar')){
+    if(t.includes('atualizar')) initFeed();
+    falarVozFeed(lerNovidadesEmVoz());
+    return;
+  }
+
+  try{
+    const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensagem: texto })
+    });
+    const dadosZeca = await respZeca.json();
+    if(respZeca.ok && dadosZeca.resposta){ falarVozFeed(dadosZeca.resposta); return; }
+  } catch(eZeca){ console.warn('Zeca nao respondeu no modo voz', eZeca); }
+
+  falarVozFeed('Não entendi. Fala "ler novidades" ou o nome de uma página, tipo "ir pra vitrine".');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozFeed(), 1000);
+}
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 <script src="js/voz-acesso-cego.js"></script>
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
+<script src="js/zeca.js"></script>
 </body>
 </html>

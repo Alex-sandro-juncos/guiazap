@@ -12,7 +12,7 @@
 
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <meta name="description" content="Veja vídeos de empresas e profissionais locais no GuiaZap.">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/style.css">
 <style>
   .videos-wrap { max-width: 500px; margin: 0 auto; padding: 15px 15px 50px; }
@@ -34,7 +34,21 @@
 </style>
 </head>
 <body>
-<header><div class="logo">GuiaZap</div><p>Vídeos das Empresas</p></header>
+<header style="position:relative;">
+  <div class="logo">GuiaZap</div><p>Vídeos das Empresas</p>
+  <button type="button" id="btn-modo-voz-videos" onclick="toggleModoVozVideos()" title="Ativar modo de voz" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; color:white; width:38px; height:38px; border-radius:50%; font-size:1.1rem; cursor:pointer;">🎙️</button>
+</header>
+
+<div id="painel-modo-voz-videos" style="display:none; position:fixed; bottom:16px; left:12px; right:12px; max-width:420px; margin:0 auto; background:#1c1c2e; border-radius:16px; padding:14px; z-index:1700; box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+  <div style="display:flex; gap:10px; align-items:flex-start;">
+    <div style="width:14px;height:14px;border-radius:50%;background:var(--verde-whats);flex-shrink:0;margin-top:4px;"></div>
+    <div style="flex:1;min-width:0;">
+      <div id="voz-videos-status" style="color:white;font-weight:700;font-size:0.85rem;">Fala "mais vistos", "mais recentes" ou "ler vídeos"</div>
+      <div id="voz-videos-transcricao" style="color:#aaa;font-size:0.75rem;margin-top:4px;"></div>
+    </div>
+    <button type="button" onclick="pararModoVozVideos()" style="background:#a4402f;color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+</div>
 <button type="button" class="btn-modo-escuro-solto" onclick="toggleModoEscuro()" id="btn-modo-escuro" style="display:block; margin:10px auto 0;">🌙</button>
 <div class="videos-wrap">
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
@@ -93,7 +107,7 @@ async function initVideos(){
 
   const { data, error } = await supabaseClientVideos
     .from('videos_empresa')
-    .select('*, profissionais(name, cat, plano, verificado, status_pagamento)')
+    .select('*, profissionais(name, cat, plano, verificado, status_pagamento, user_id)')
     .order('created_at', { ascending: false });
 
   if(error){ console.error(error); document.getElementById('videos-lista').innerHTML = '<div class="vazio-videos">Erro ao carregar vídeos.</div>'; return; }
@@ -146,6 +160,7 @@ async function renderVideos(){
   container.innerHTML = lista.map((v, i) => {
     const votoMeu = meusVotosVideos[v.id];
     const { aprovados, naoGostei } = contagens[i];
+    const souDono = usuarioAtualVideos && v.profissionais.user_id === usuarioAtualVideos.id;
     return `
     <div class="card-video">
       <video src="${escapeHtmlVideos(v.video_url)}" controls playsinline onplay="registrarViewVideo('${v.id}')"></video>
@@ -158,7 +173,9 @@ async function renderVideos(){
           <button type="button" class="btn-voto nao-gostei${votoMeu === 'nao_gostei' ? ' ativo' : ''}" onclick="votarVideo('${v.id}', 'nao_gostei')">– Não gostei (${naoGostei})</button>
           <button type="button" class="btn-acao-video" onclick="compartilharVideoWhatsapp('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Compartilhar no WhatsApp">📤</button>
           <button type="button" class="btn-acao-video" onclick="compartilharVideoNoChat('${v.id}', '${escapeHtmlVideos(v.titulo).replace(/'/g,"\\'")}')" title="Enviar no Papo do GuiaZap">💬</button>
-          <button type="button" class="btn-acao-video" onclick="denunciarVideo('${v.id}')" title="Denunciar">🚩</button>
+          ${souDono
+            ? `<button type="button" class="btn-acao-video" onclick="excluirVideo('${v.id}')" title="Excluir meu vídeo">🗑</button>`
+            : `<button type="button" class="btn-acao-video" onclick="denunciarVideo('${v.id}')" title="Denunciar">🚩</button>`}
         </div>
       </div>
     </div>
@@ -222,6 +239,14 @@ async function denunciarVideo(videoId){
   alert('Denúncia enviada. Nossa equipe vai analisar.');
 }
 
+async function excluirVideo(videoId){
+  if(!confirm('Excluir esse vídeo? Não tem como desfazer.')) return;
+  // O RLS garante que só o dono consegue apagar mesmo — isso aqui é só a chamada
+  const { error } = await supabaseClientVideos.from('videos_empresa').delete().eq('id', videoId);
+  if(error){ console.error(error); alert('Erro ao excluir. Confere se esse vídeo é mesmo seu.'); return; }
+  await initVideos();
+}
+
 function irPostarVideo(){
   const btn = document.getElementById('btn-postar-video-aqui');
   localStorage.setItem('abrirFormVideoAoCarregar', JSON.stringify({ profissionalId: btn.dataset.profissionalId, plano: btn.dataset.plano }));
@@ -229,9 +254,234 @@ function irPostarVideo(){
 }
 
 initVideos();
+
+// ---------- MODO VOZ (mãos livres) ----------
+
+let _vozVideosAtiva = false;
+let _videoPendenteExclusaoVoz = null; // { id, titulo } — aguardando "sim"/"não" de confirmação
+let _vozVideosReconhecimento = null;
+let _vozVideosVigia = null;
+let _vozVideosUltimoSinal = 0;
+let _vozVideosFalando = false;
+const _vozVideosSynth = window.speechSynthesis;
+
+function toggleModoVozVideos(){
+  if(_vozVideosAtiva) pararModoVozVideos();
+  else iniciarModoVozVideos();
+}
+
+function iniciarModoVozVideos(){
+  const Api = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Api){ alert('Seu navegador não suporta comando de voz. Tenta pelo Chrome.'); return; }
+
+  _vozVideosAtiva = true;
+  if(typeof ativarModoVozPermanente === 'function') ativarModoVozPermanente();
+  document.getElementById('btn-modo-voz-videos').style.background = '#a4402f';
+  document.getElementById('painel-modo-voz-videos').style.display = 'block';
+
+  _criarReconhecimentoVideos(Api);
+  clearInterval(_vozVideosVigia);
+  _vozVideosVigia = setInterval(() => {
+    if(!_vozVideosAtiva){ clearInterval(_vozVideosVigia); return; }
+    if(_vozVideosFalando) return;
+    if(Date.now() - _vozVideosUltimoSinal > 8000){
+      try{ _vozVideosReconhecimento.onend = null; _vozVideosReconhecimento.abort(); } catch(e){}
+      _criarReconhecimentoVideos(Api);
+    }
+  }, 4000);
+
+  falarVozVideos('Modo voz ativado. Fala "mais vistos", "mais recentes", "premium primeiro" ou "ler vídeos".');
+}
+
+function _criarReconhecimentoVideos(Api){
+  _vozVideosReconhecimento = new Api();
+  _vozVideosReconhecimento.lang = 'pt-BR';
+  _vozVideosReconhecimento.continuous = true;
+  _vozVideosReconhecimento.interimResults = false;
+
+  _vozVideosReconhecimento.onstart = () => { _vozVideosUltimoSinal = Date.now(); };
+
+  _vozVideosReconhecimento.onresult = (event) => {
+    _vozVideosUltimoSinal = Date.now();
+    const texto = event.results[event.results.length - 1][0].transcript.trim();
+    document.getElementById('voz-videos-transcricao').textContent = '🗣️ "' + texto + '"';
+    processarComandoVozVideos(texto);
+  };
+
+  _vozVideosReconhecimento.onend = () => {
+    _vozVideosUltimoSinal = Date.now();
+    if(_vozVideosAtiva){ try{ _vozVideosReconhecimento.start(); } catch(e){} }
+  };
+
+  _vozVideosReconhecimento.onerror = (event) => {
+    if(event.error === 'not-allowed'){
+      falarVozVideos('Preciso de permissão pro microfone.');
+      pararModoVozVideos();
+      return;
+    }
+    _vozVideosUltimoSinal = Date.now();
+    if(_vozVideosAtiva){ setTimeout(() => { try{ _vozVideosReconhecimento.start(); } catch(e){} }, 300); }
+  };
+
+  try{ _vozVideosReconhecimento.start(); } catch(e){}
+}
+
+function pararModoVozVideos(){
+  _vozVideosAtiva = false;
+  _vozVideosFalando = false;
+  clearInterval(_vozVideosVigia);
+  if(_vozVideosReconhecimento){
+    _vozVideosReconhecimento.onresult = null;
+    _vozVideosReconhecimento.onend = null;
+    _vozVideosReconhecimento.onerror = null;
+    try{ _vozVideosReconhecimento.abort(); } catch(e){}
+    _vozVideosReconhecimento = null;
+  }
+  _vozVideosSynth.cancel();
+  document.getElementById('btn-modo-voz-videos').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('painel-modo-voz-videos').style.display = 'none';
+}
+
+function falarVozVideos(texto){
+  document.getElementById('voz-videos-status').textContent = texto;
+  _vozVideosFalando = true;
+  _vozVideosSynth.cancel();
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = 'pt-BR';
+  fala.onend = () => {
+    _vozVideosFalando = false;
+    if(_vozVideosAtiva){ try{ _vozVideosReconhecimento.start(); } catch(e){} }
+  };
+  _vozVideosSynth.speak(fala);
+  setTimeout(() => {
+    _vozVideosFalando = false;
+    if(_vozVideosAtiva && _vozVideosReconhecimento){ try{ _vozVideosReconhecimento.start(); } catch(e){} }
+  }, Math.max(6000, (texto || '').length * 90));
+}
+
+function lerVideosEmVoz(){
+  const titulos = Array.from(document.querySelectorAll('#videos-lista .titulo-video')).slice(0, 5).map(el => el.textContent.trim());
+  if(titulos.length === 0) return 'Nenhum vídeo por aqui ainda.';
+  return `Vídeos em destaque: ${titulos.join(', ')}.`;
+}
+
+async function processarComandoVozVideos(texto){
+  const t = texto.toLowerCase().trim();
+
+  // Confirmação pendente de exclusão por voz — checa isso ANTES de tudo,
+  // senão o "sim" ia cair no fallback do Zeca em vez de confirmar
+  if(_videoPendenteExclusaoVoz){
+    if(t.includes('sim') || t.includes('confirma') || t.includes('pode excluir')){
+      const idParaExcluir = _videoPendenteExclusaoVoz.id;
+      const tituloParaExcluir = _videoPendenteExclusaoVoz.titulo;
+      _videoPendenteExclusaoVoz = null;
+      const { error } = await supabaseClientVideos.from('videos_empresa').delete().eq('id', idParaExcluir);
+      if(error){ falarVozVideos('Não consegui excluir. Confere se esse vídeo é mesmo seu.'); }
+      else { falarVozVideos(`Pronto, excluí o vídeo "${tituloParaExcluir}".`); await initVideos(); }
+    } else {
+      _videoPendenteExclusaoVoz = null;
+      falarVozVideos('Beleza, não excluí nada.');
+    }
+    return;
+  }
+
+  if(typeof verificarNavegacaoUniversalPorVoz === 'function'){
+    const destino = verificarNavegacaoUniversalPorVoz(t, 'videos.html');
+    if(destino){
+      localStorage.setItem('retomarModoVozAoCarregar', '1');
+      falarVozVideos(destino.fala);
+      setTimeout(() => { window.location.href = destino.url; }, 1200);
+      return;
+    }
+  }
+
+  if(t.includes('desativar modo voz') || t === 'desligar' || t === 'sair' || t.includes('cala boca') || t.includes('fica quieto')){
+    falarVozVideos('Modo voz desativado.');
+    setTimeout(pararModoVozVideos, 1200);
+    return;
+  }
+
+  if(t.includes('postar video') || t.includes('postar vídeo') || t.includes('publicar video') || t.includes('publicar vídeo')){
+    const btn = document.getElementById('btn-postar-video-aqui');
+    if(btn && btn.style.display !== 'none'){ falarVozVideos('Abrindo pra postar vídeo.'); setTimeout(irPostarVideo, 1000); }
+    else falarVozVideos('Só empresas do Pacote Completo ou Premium, logadas, podem postar vídeo.');
+    return;
+  }
+
+  if(t.includes('mais visto')){ falarVozVideos('Ordenando por mais vistos.'); mudarOrdemVideos('vistos'); return; }
+  if(t.includes('mais recente')){ falarVozVideos('Ordenando por mais recentes.'); mudarOrdemVideos('recentes'); return; }
+  if(t.includes('premium')){ falarVozVideos('Ordenando com Premium primeiro.'); mudarOrdemVideos('premium'); return; }
+
+  if(t.includes('ler video') || t.includes('ler vídeo') || t.includes('o que tem')){
+    falarVozVideos(lerVideosEmVoz());
+    return;
+  }
+
+  if(t.includes('excluir video') || t.includes('excluir vídeo') || t.includes('apagar video') || t.includes('apagar vídeo') || t.includes('deletar video') || t.includes('deletar vídeo')){
+    if(!usuarioAtualVideos){ falarVozVideos('Precisa estar logado pra excluir vídeo.'); return; }
+    const meusVideos = todosVideos.filter(v => v.profissionais.user_id === usuarioAtualVideos.id);
+    if(meusVideos.length === 0){ falarVozVideos('Você não tem nenhum vídeo postado ainda.'); return; }
+
+    // Tenta achar pelo título dito junto (ex: "excluir vídeo promoção de verão")
+    const trechoTitulo = t.replace(/excluir v[ií]deo|apagar v[ií]deo|deletar v[ií]deo/, '').trim();
+    let encontrados = trechoTitulo
+      ? meusVideos.filter(v => v.titulo.toLowerCase().includes(trechoTitulo))
+      : meusVideos;
+
+    if(encontrados.length === 0){
+      falarVozVideos(`Não achei nenhum vídeo seu com esse nome. Você tem: ${meusVideos.map(v => v.titulo).join(', ')}.`);
+    } else if(encontrados.length === 1 || (!trechoTitulo && meusVideos.length === 1)){
+      const alvo = encontrados[0];
+      _videoPendenteExclusaoVoz = { id: alvo.id, titulo: alvo.titulo };
+      falarVozVideos(`Confirma excluir o vídeo "${alvo.titulo}"? Fala "sim" ou "não".`);
+    } else {
+      falarVozVideos(`Achei mais de um vídeo seu parecido. Fala o nome completo, ou escolhe: ${encontrados.map(v => v.titulo).join(', ')}.`);
+    }
+    return;
+  }
+
+  try{
+    const respZeca = await fetch('/.netlify/functions/zeca-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensagem: texto })
+    });
+    const dadosZeca = await respZeca.json();
+    if(respZeca.ok && dadosZeca.resposta){ falarVozVideos(dadosZeca.resposta); return; }
+  } catch(eZeca){ console.warn('Zeca nao respondeu no modo voz', eZeca); }
+
+  falarVozVideos('Não entendi. Fala "mais vistos", "mais recentes", "postar vídeo", "excluir vídeo", ou o nome de uma página.');
+}
+
+if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPermanenteAtivo === 'function' && modoVozPermanenteAtivo())){
+  localStorage.removeItem('retomarModoVozAoCarregar');
+  setTimeout(() => iniciarModoVozVideos(), 1000);
+}
 </script>
+<script src="js/comandos-navegacao-voz.js"></script>
 <script src="js/modo-escuro.js"></script>
 <a href="chat.html" class="btn-chat-flutuante" title="Papo">💬<span class="btn-chat-flutuante-label">Papo</span></a>
 <script src="js/voz-acesso-cego.js"></script>
+  <button type="button" class="btn-zeca-flutuante" title="Falar com o Zeca" onclick="toggleZeca()">✨<span class="btn-zeca-flutuante-label">Zeca</span></button>
+
+  <div id="painel-zeca">
+    <div class="zeca-cabecalho">
+      <div>Zeca <small>a IA do GuiaZap</small></div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="zeca-fechar" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+        <a href="zeca.html" target="_blank" class="zeca-fechar" title="Abrir em nova aba" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">↗</a>
+        <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+      </div>
+    </div>
+    <div id="zeca-mensagens"></div>
+    <div class="zeca-rodape">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
+  </div>
+
+<script src="js/zeca.js"></script>
 </body>
 </html>

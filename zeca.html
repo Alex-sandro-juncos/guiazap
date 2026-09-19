@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeca — a IA do GuiaZap</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  body.zeca-pagina { margin: 0; height: 100vh; overflow: hidden; }
+  .zeca-pagina-topo {
+    background: #f59e0b;
+    color: white;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .zeca-pagina-topo a.zeca-voltar {
+    color: white;
+    text-decoration: none;
+    font-size: 1.3rem;
+    line-height: 1;
+  }
+  .zeca-pagina-topo div { font-weight: 800; }
+  .zeca-pagina-topo small { display: block; font-weight: 400; font-size: 0.72rem; opacity: 0.9; }
+
+  /* Reaproveita o painel do widget, só que ocupando a tela inteira em
+     vez de ser uma caixa flutuante no canto */
+  #painel-zeca {
+    display: flex !important;
+    position: static !important;
+    width: 100% !important;
+    height: calc(100vh - 58px) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  #painel-zeca .zeca-cabecalho { display: none; } /* já tem o topo da página fazendo esse papel */
+  .btn-zeca-flutuante, .btn-chat-flutuante { display: none !important; }
+</style>
+</head>
+<body class="zeca-pagina">
+
+<div class="zeca-pagina-topo">
+  <a href="index.html" class="zeca-voltar" title="Voltar ao GuiaZap">←</a>
+  <div>Zeca <small>a IA do GuiaZap</small></div>
+  <button type="button" onclick="abrirListaConversasZeca()" title="Conversas salvas" style="margin-left:auto; background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; cursor:pointer;">☰</button>
+</div>
+
+<div id="painel-zeca">
+  <div class="zeca-cabecalho">
+    <div>Zeca <small>a IA do GuiaZap</small></div>
+    <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
+  </div>
+  <div id="zeca-mensagens"></div>
+  <div class="zeca-rodape">
+    <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
+    <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+    <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<script src="js/zeca.js"></script>
+<script>
+  // Nessa página o painel já começa aberto (não tem botão flutuante
+  // escondendo ele) — só marca como aberto e manda a mensagem de boas-vindas
+  _zecaAberto = true;
+  _adicionarMensagemZeca('zeca', 'Oi! Eu sou o Zeca 👋 Pode perguntar qualquer coisa — achar empresa aqui perto, gerar uma imagem, tirar dúvida do GuiaZap, ou até código e conhecimento geral.');
+</script>
+</body>
+</html>

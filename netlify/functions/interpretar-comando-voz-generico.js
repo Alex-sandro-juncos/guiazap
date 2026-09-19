@@ -92,7 +92,7 @@ Regras gerais:
 Dados de contexto atuais dessa tela:
 ${contextoTexto}`;
 
-    const ia = await chamarIABarata(promptSistema, texto, 500);
+    const ia = await chamarIABarata(promptSistema, texto, 500, true);
     const resultado = ia.ok
       ? ia.json
       : { voice_response: 'Desculpa, não entendi direito. Pode repetir?', action: 'NENHUMA', params: {} };

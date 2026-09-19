@@ -2,6 +2,8 @@
 // aprova (publica) ou exclui — sem precisar de ninguém lendo manualmente.
 // É chamada automaticamente pelo blog.html logo depois que o artigo é
 // gravado no banco (ainda como "aprovado: false").
+// O campo "motivo" (mostrado pra pessoa quando reprova) sai na voz do
+// Zeca — a DECISÃO de aprovar/excluir nunca muda, só o texto da explicação.
 //
 // Critérios de reprovação (a IA decide olhando o texto completo):
 // - Spam, propaganda ou link/conteúdo comercial disfarçado de artigo
@@ -64,10 +66,12 @@ async function estourouLimite(ip, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY){
     });
     return false;
   } catch(e){
-    console.warn('erro ao checar limite de uso, deixando passar por segurança', e);
-    return false;
+    console.warn('erro ao checar limite de uso, bloqueando por segurança', e);
+    return true; // fail-closed: bloqueia em vez de liberar se o controle falhar
   }
 }
+
+const { PERSONA_ZECA } = require('./ia-barata-helper');
 
 exports.handler = async function (event) {
   try {
@@ -116,7 +120,7 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ decisao: 'aprovado', motivo: 'já estava aprovado' }) };
     }
 
-    const promptSistema = `Você é o moderador automático do blog do GuiaZap, um diretório de empresas e profissionais locais no Brasil (o blog publica artigos sobre negócios locais, dicas pra quem busca ou oferece serviços, empreendedorismo, etc).
+    const promptSistema = PERSONA_ZECA + `Você é o moderador automático do blog do GuiaZap, um diretório de empresas e profissionais locais no Brasil (o blog publica artigos sobre negócios locais, dicas pra quem busca ou oferece serviços, empreendedorismo, etc).
 
 Sua tarefa: ler o TÍTULO e o CONTEÚDO de um artigo enviado por um visitante, e decidir se ele deve ser PUBLICADO ou EXCLUÍDO. Responda APENAS com um JSON válido, sem texto antes/depois, sem markdown, no formato:
 {"decisao": "aprovar" ou "excluir", "motivo": "explicação curta e objetiva, em português"}
