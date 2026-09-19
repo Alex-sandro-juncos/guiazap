@@ -528,7 +528,7 @@ Regras:
     const ia = await chamarIABarata(promptIntencao, mensagem, 500, true);
 
     if (!ia.ok || !ia.json) {
-      return { statusCode: 200, body: JSON.stringify({ resposta: 'Deu ruim aqui do meu lado agora. Tenta de novo em instantes?' }) };
+      return { statusCode: 200, body: JSON.stringify({ resposta: 'Ops, tive um problema aqui. Pode tentar de novo?' }) };
     }
 
     const decisao = ia.json;
