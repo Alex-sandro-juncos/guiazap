@@ -76,6 +76,48 @@ const MAX_CARACTERES_ZIP = 60000;
 const MAX_ARQUIVOS_ZIP_CRIADOR = 5000;
 const MAX_CARACTERES_ZIP_CRIADOR = 4000000;
 
+// Se a pessoa mandou um .zip que na verdade só tem UM arquivo de mídia
+// dentro (imagem, áudio ou vídeo — ex: compactou antes de mandar pelo
+// celular), extrai esse arquivo e devolve pronto pra tratar exatamente
+// como se tivesse sido anexado direto (mesmo fluxo de editar/gerar que já
+// existe). Só age quando tem exatamente UM arquivo de mídia e NENHUM
+// arquivo de código/texto — se tiver os dois juntos, ou mais de uma
+// mídia, não tenta adivinhar; segue como zip de código normal.
+const EXTENSOES_IMAGEM_ZIP = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+const EXTENSOES_AUDIO_ZIP = { '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.flac': 'audio/flac' };
+const EXTENSOES_VIDEO_ZIP = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo' };
+
+async function extrairMidiaUnicaDoZip(base64Zip) {
+  const zip = await JSZip.loadAsync(base64Zip, { base64: true });
+  const midiasEncontradas = [];
+
+  for (const caminho of Object.keys(zip.files)) {
+    const entrada = zip.files[caminho];
+    if (entrada.dir) continue;
+    const ext = caminho.slice(caminho.lastIndexOf('.')).toLowerCase();
+
+    // Se tiver QUALQUER arquivo de código/texto junto, desiste — melhor
+    // seguir como revisão de código (comportamento já existente) do que
+    // arriscar ignorar o que a pessoa realmente queria.
+    if (EXTENSOES_TEXTO.has(ext)) return null;
+
+    let tipo = null;
+    let mimeType = null;
+    if (EXTENSOES_IMAGEM_ZIP[ext]) { tipo = 'imagem'; mimeType = EXTENSOES_IMAGEM_ZIP[ext]; }
+    else if (EXTENSOES_AUDIO_ZIP[ext]) { tipo = 'audio'; mimeType = EXTENSOES_AUDIO_ZIP[ext]; }
+    else if (EXTENSOES_VIDEO_ZIP[ext]) { tipo = 'video'; mimeType = EXTENSOES_VIDEO_ZIP[ext]; }
+    if (!tipo) continue; // outro tipo de arquivo qualquer dentro do zip — ignora
+
+    midiasEncontradas.push({ caminho, entrada, tipo, mimeType });
+    if (midiasEncontradas.length > 1) return null; // mais de uma mídia — não adivinha qual
+  }
+
+  if (midiasEncontradas.length !== 1) return null;
+  const midia = midiasEncontradas[0];
+  const base64 = await midia.entrada.async('base64');
+  return { tipo: midia.tipo, mimeType: midia.mimeType, base64 };
+}
+
 // Extrai só o texto dos arquivos de código/texto de dentro do zip, com
 // limite de quantidade de arquivos e de caracteres totais — proteção
 // contra zip-bomb (zip pequeno que descompacta em algo enorme).
@@ -331,9 +373,29 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { mensagem, historico, imagem, arquivoZip, video, audio, conversaId } = JSON.parse(event.body || '{}');
+    const corpoRequisicao = JSON.parse(event.body || '{}');
+    const { mensagem, historico, conversaId } = corpoRequisicao;
+    let { imagem, arquivoZip, video, audio } = corpoRequisicao;
     if ((!mensagem || !mensagem.trim()) && !imagem && !arquivoZip && !video && !audio) {
       return { statusCode: 400, body: JSON.stringify({ error: 'mensagem é obrigatória' }) };
+    }
+
+    // Se veio um .zip com uma mídia só (imagem/áudio/vídeo) dentro e nada
+    // mais anexado direto, trata como se essa mídia tivesse sido mandada
+    // direto — mesmo fluxo de editar/gerar/assistir de sempre. Ver
+    // extrairMidiaUnicaDoZip acima pras regras de quando isso se aplica.
+    if (arquivoZip && !imagem && !video && !audio) {
+      try {
+        const midia = await extrairMidiaUnicaDoZip(arquivoZip);
+        if (midia) {
+          if (midia.tipo === 'imagem') imagem = { data: midia.base64, mimeType: midia.mimeType };
+          else if (midia.tipo === 'audio') audio = { data: midia.base64, mimeType: midia.mimeType };
+          else if (midia.tipo === 'video') video = { data: midia.base64, mimeType: midia.mimeType };
+          arquivoZip = null;
+        }
+      } catch (eZipMidia) {
+        console.warn('não consegui checar mídia dentro do zip, segue como zip de código:', eZipMidia);
+      }
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
