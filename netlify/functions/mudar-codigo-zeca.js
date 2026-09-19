@@ -23,6 +23,47 @@ const { chamarIABarata } = require('./ia-barata-helper');
 
 const ADMIN_EMAIL_CODIGO = 'contato@guiazap.shop';
 
+// Único recurso do Zeca que mexe em código de verdade (mesmo que só via PR,
+// nunca commit direto) — mesmo sendo só o criador que usa hoje, um teto
+// diário generoso funciona como rede de segurança contra conta comprometida
+// ou algum loop/automação disparando pedido atrás de pedido sem querer.
+const LIMITE_MUDAR_CODIGO_DIA = 20;
+const CHAVE_LIMITE_MUDAR_CODIGO = 'mudar_codigo:admin';
+
+async function verificarLimiteMudarCodigo(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) {
+  const headersServico = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json'
+  };
+  const buscaResp = await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico?chave=eq.${encodeURIComponent(CHAVE_LIMITE_MUDAR_CODIGO)}`, { headers: headersServico });
+  const registros = await buscaResp.json();
+  const registro = registros[0] || null;
+  if (registro) {
+    const horasPassadas = (new Date() - new Date(registro.janela_inicio)) / 3600000;
+    if (horasPassadas < 24 && registro.contagem >= LIMITE_MUDAR_CODIGO_DIA) {
+      return { autorizado: false };
+    }
+  }
+  return { autorizado: true, registro, headersServico };
+}
+
+async function consumirLimiteMudarCodigo(SUPABASE_URL, headersServico, registro) {
+  const agora = new Date();
+  if (registro) {
+    const horasPassadas = (agora - new Date(registro.janela_inicio)) / 3600000;
+    const novaContagem = horasPassadas >= 24 ? 1 : registro.contagem + 1;
+    const novaJanela = horasPassadas >= 24 ? agora.toISOString() : registro.janela_inicio;
+    await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico?chave=eq.${encodeURIComponent(CHAVE_LIMITE_MUDAR_CODIGO)}`, {
+      method: 'PATCH', headers: headersServico, body: JSON.stringify({ contagem: novaContagem, janela_inicio: novaJanela })
+    });
+  } else {
+    await fetch(`${SUPABASE_URL}/rest/v1/rate_limit_publico`, {
+      method: 'POST', headers: headersServico, body: JSON.stringify({ chave: CHAVE_LIMITE_MUDAR_CODIGO, contagem: 1, janela_inicio: agora.toISOString() })
+    });
+  }
+}
+
 async function githubFetch(url, options, token) {
   const resp = await fetch(url, {
     ...options,
@@ -70,6 +111,13 @@ exports.handler = async function (event) {
     const souCriador = (usuario.email || '').toLowerCase() === ADMIN_EMAIL_CODIGO.toLowerCase();
     if (!souCriador) {
       return { statusCode: 403, body: JSON.stringify({ error: 'só o criador do GuiaZap pode pedir isso' }) };
+    }
+
+    // --- Teto diário de segurança (mesmo pro criador) ---
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const limite = await verificarLimiteMudarCodigo(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    if (!limite.autorizado) {
+      return { statusCode: 200, body: JSON.stringify({ resposta: `Já bati o limite de ${LIMITE_MUDAR_CODIGO_DIA} propostas de mudança de código por hoje — é uma rede de segurança, não uma trava contra você. Volta amanhã ou me avisa se precisar aumentar esse teto.` }) };
     }
 
     const { caminhoArquivo, instrucaoCodigo } = JSON.parse(event.body || '{}');
@@ -207,6 +255,15 @@ Responda APENAS com JSON válido: {"busca": "...", "substituicao": "...", "resum
       return { statusCode: 500, body: JSON.stringify({ error: 'a mudança foi commitada no branch, mas não consegui abrir o Pull Request. Você pode abrir manualmente pelo GitHub a partir do branch ' + nomeBranch }) };
     }
     const dadosPR = await respPR.json();
+
+    // Só desconta do teto diário DEPOIS que o PR foi criado com sucesso —
+    // mesma lógica de "debita só quando deu certo" usada nos outros
+    // recursos do Zeca (zeca-limites-helper.js).
+    try {
+      await consumirLimiteMudarCodigo(SUPABASE_URL, limite.headersServico, limite.registro);
+    } catch (eLimite) {
+      console.warn('não consegui atualizar o contador de limite do mudar_codigo (PR foi criado normalmente):', eLimite);
+    }
 
     return {
       statusCode: 200,

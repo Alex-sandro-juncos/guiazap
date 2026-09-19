@@ -118,7 +118,16 @@ async function chamarGemini(system, user, maxTokens) {
   }
   const texto = candidato && candidato.content ? candidato.content.parts.map(p => p.text || '').join('') : '';
   const json = extrairJson(texto);
-  return json ? { json, recusado: false, textoBruto: texto } : _semResultado(true, texto);
+  if (json) return { json, recusado: false, textoBruto: texto };
+  // Não veio JSON válido, mas SEM nenhum sinal explícito de bloqueio de
+  // segurança (checado acima) — o motivo mais comum disso é a resposta
+  // ter sido CORTADA por bater no limite de tokens (finishReason
+  // "MAX_TOKENS"), não uma recusa de política. Só marca como recusa
+  // quando o motivo de parada é claramente outro (ex: "OTHER"/"RECITATION")
+  // e não é truncamento — senão trata como falha técnica normal.
+  const truncou = candidato && candidato.finishReason === 'MAX_TOKENS';
+  console.warn('Gemini não devolveu JSON válido (sem sinal de bloqueio):', candidato && candidato.finishReason, texto ? texto.slice(0, 200) : '(vazio)');
+  return _semResultado(!truncou && !!texto, texto);
 }
 
 async function chamarHaiku(system, user, maxTokens) {
@@ -158,7 +167,15 @@ async function chamarHaiku(system, user, maxTokens) {
   }
   const texto = data.content && data.content[0] ? data.content[0].text : '';
   const json = extrairJson(texto);
-  return json ? { json, recusado: false, textoBruto: texto } : _semResultado(true, texto);
+  if (json) return { json, recusado: false, textoBruto: texto };
+  // Sem JSON válido e sem stop_reason "refusal" — o motivo mais comum é
+  // a resposta ter sido CORTADA por bater no limite de max_tokens
+  // (stop_reason "max_tokens"), não uma recusa de política. Só trata
+  // como falha técnica nesse caso — senão fica marcando resposta longa
+  // demais (que é bug de configuração nosso) como se fosse recusa.
+  const truncou = data.stop_reason === 'max_tokens';
+  console.warn('Haiku não devolveu JSON válido (sem stop_reason=refusal):', data.stop_reason, texto ? texto.slice(0, 200) : '(vazio)');
+  return _semResultado(!truncou && !!texto, texto);
 }
 
 // comPersona: true injeta a personalidade do Zeca antes do prompt de
