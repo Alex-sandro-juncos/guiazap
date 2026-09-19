@@ -1,9 +1,9 @@
 // Motor de edição de áudio/vídeo de verdade do Zeca — diferente de
 // gerar-audio-zeca.js/gerar-video-zeca.js (que CRIAM um arquivo novo do
 // zero, chamando API paga), isso aqui EDITA um arquivo que a pessoa já
-// mandou (cortar, mudar velocidade, reduzir ruído, comprimir, etc), usando
-// o ffmpeg rodando localmente dentro da própria function — sem chamar
-// nenhuma API externa paga.
+// mandou (cortar, mudar velocidade, juntar, redimensionar pro formato de
+// Story/Reels/YouTube, etc), usando o ffmpeg rodando localmente dentro da
+// própria function — sem chamar nenhuma API externa paga.
 //
 // Por isso o CUSTO aqui é só tempo de execução da function (processamento
 // local), não dinheiro por chamada de API — segue o mesmo teto de segurança
@@ -13,6 +13,13 @@
 // ffmpeg-static baixa um binário pronto do ffmpeg (não precisa instalar
 // nada no servidor) — o caminho dele precisa estar incluído no pacote da
 // function (ver netlify.toml, "included_files").
+//
+// TESTADO DE VERDADE (rodando o ffmpeg local antes de entregar) tudo que
+// esse arquivo faz, EXCETO: esse binário do ffmpeg NÃO tem o filtro
+// "drawtext" disponível — por isso NÃO dá pra gravar legenda/texto em
+// cima do vídeo (confirmado rodando: "No such filter: 'drawtext'"). Se um
+// dia isso mudar (trocar o binário do ffmpeg-static por uma build com
+// libfreetype+drawtext de verdade), dá pra adicionar essa função depois.
 
 const ffmpegPath = require('ffmpeg-static');
 const ffmpeg = require('fluent-ffmpeg');
@@ -88,20 +95,37 @@ function _extensaoPorMime(mimeType, padrao) {
   return padrao;
 }
 
+// Formatos de tela prontos pra rede social — corta/preenche mantendo o
+// centro da imagem, sempre saindo com essas dimensões exatas (testado).
+const FORMATOS_SOCIAL = {
+  story: { largura: 720, altura: 1280 },   // Stories/Reels/TikTok (9:16)
+  quadrado: { largura: 1080, altura: 1080 }, // feed do Instagram (1:1)
+  youtube: { largura: 1280, altura: 720 }    // YouTube/paisagem (16:9)
+};
+
 // ---- ÁUDIO ----
 // params: {
-//   cortarInicioSeg (número, opcional — pula os primeiros N segundos),
-//   duracaoSeg (número, opcional — mantém só N segundos a partir do ponto de corte),
-//   velocidade (número 0.25–4, opcional — 1 = sem mudança),
-//   melhorarQualidade (bool, opcional — reduz ruído de fundo + normaliza volume)
+//   cortarInicioSeg, duracaoSeg,
+//   velocidade (0.25–4, 1 = sem mudança),
+//   melhorarQualidade (bool — reduz ruído + normaliza volume),
+//   volume (multiplicador, ex: 1.5 = +50%, 0.6 = -40%),
+//   fadeInSeg, fadeOutSeg (entrada/saída suave),
+//   segundoBuffer + segundoMimeType + modoJuncao ('sequencia' junta um
+//     depois do outro | 'fundo' toca o segundo por baixo, mais baixo,
+//     tipo música de fundo)
 // }
 // Sempre devolve mp3 (mesmo formato que o resto do Zeca já entrega).
 async function editarAudio(buffer, mimeTypeEntrada, params) {
   const extEntrada = _extensaoPorMime(mimeTypeEntrada, 'mp3');
   const caminhoEntrada = await _salvarTemp(buffer, extEntrada);
   const caminhoSaida = _arquivoTemp('mp3');
+  let caminhoSegundo = null;
 
   try {
+    if (params.segundoBuffer) {
+      caminhoSegundo = await _salvarTemp(params.segundoBuffer, _extensaoPorMime(params.segundoMimeType, 'mp3'));
+    }
+
     await _rodarFfmpeg((cmd) => {
       cmd.input(caminhoEntrada);
 
@@ -119,7 +143,28 @@ async function editarAudio(buffer, mimeTypeEntrada, params) {
       if (params.melhorarQualidade) {
         filtrosAudio.push('afftdn=nf=-25', 'loudnorm');
       }
-      if (filtrosAudio.length) cmd.audioFilters(filtrosAudio);
+      if (params.volume && params.volume !== 1) {
+        filtrosAudio.push(`volume=${Math.max(0, Math.min(5, params.volume))}`);
+      }
+      if (typeof params.fadeInSeg === 'number' && params.fadeInSeg > 0) {
+        filtrosAudio.push(`afade=t=in:st=0:d=${params.fadeInSeg}`);
+      }
+      if (typeof params.fadeOutSeg === 'number' && params.fadeOutSeg > 0 && typeof params.duracaoTotalConhecidaSeg === 'number') {
+        const inicio = Math.max(0, params.duracaoTotalConhecidaSeg - params.fadeOutSeg);
+        filtrosAudio.push(`afade=t=out:st=${inicio}:d=${params.fadeOutSeg}`);
+      }
+
+      if (caminhoSegundo && params.modoJuncao === 'fundo') {
+        cmd.input(caminhoSegundo);
+        const rotuloPrincipal = filtrosAudio.length ? '[a0]' : '[0:a]';
+        const filtroPrincipal = filtrosAudio.length ? `[0:a]${filtrosAudio.join(',')}[a0];` : '';
+        cmd.complexFilter(`${filtroPrincipal}[1:a]volume=0.25[a1];${rotuloPrincipal}[a1]amix=inputs=2:duration=first:dropout_transition=2[aout]`, 'aout');
+      } else if (caminhoSegundo && params.modoJuncao === 'sequencia') {
+        cmd.input(caminhoSegundo);
+        cmd.complexFilter('[0:a][1:a]concat=n=2:v=0:a=1[aout]', 'aout');
+      } else if (filtrosAudio.length) {
+        cmd.audioFilters(filtrosAudio);
+      }
 
       cmd.audioCodec('libmp3lame').format('mp3').output(caminhoSaida);
       return cmd;
@@ -128,23 +173,43 @@ async function editarAudio(buffer, mimeTypeEntrada, params) {
     return await _lerELimpar(caminhoSaida);
   } finally {
     _apagar(caminhoEntrada);
+    _apagar(caminhoSegundo);
   }
 }
 
 // ---- VÍDEO ----
 // params: {
-//   cortarInicioSeg (número, opcional),
-//   duracaoSeg (número, opcional),
-//   comprimir (bool, opcional — reduz resolução/bitrate pra arquivo bem menor),
-//   removerAudio (bool, opcional)
+//   cortarInicioSeg, duracaoSeg,
+//   comprimir (bool — reduz resolução/bitrate pra arquivo bem menor),
+//   removerAudio (bool),
+//   audioNovoBuffer + audioNovoMimeType (troca/adiciona a trilha de áudio
+//     — silencia o áudio original e usa esse no lugar),
+//   formatoSocial ('story' | 'quadrado' | 'youtube' — recorta/preenche
+//     pro formato certo de Stories/Reels, feed quadrado, ou YouTube),
+//   rotacionarGraus (90 | 180 | 270),
+//   espelhar (bool — inverte horizontalmente),
+//   pretoBranco (bool),
+//   velocidade (0.25–4, muda a velocidade do vídeo E do áudio juntos),
+//   segundoBuffer + segundoMimeType (junta um segundo vídeo em seguida —
+//     normaliza resolução/fps antes de juntar, pra não dar erro se forem
+//     de tamanhos diferentes)
 // }
 // Sempre devolve mp4 (formato universal — cobre também o pedido de
 // "converter formato", já que a saída é sempre mp4 padronizado).
 async function editarVideo(buffer, mimeTypeEntrada, params) {
   const caminhoEntrada = await _salvarTemp(buffer, _extensaoPorMime(mimeTypeEntrada, 'mp4'));
   const caminhoSaida = _arquivoTemp('mp4');
+  let caminhoAudioNovo = null;
+  let caminhoSegundo = null;
 
   try {
+    if (params.audioNovoBuffer) {
+      caminhoAudioNovo = await _salvarTemp(params.audioNovoBuffer, _extensaoPorMime(params.audioNovoMimeType, 'mp3'));
+    }
+    if (params.segundoBuffer) {
+      caminhoSegundo = await _salvarTemp(params.segundoBuffer, _extensaoPorMime(params.segundoMimeType, 'mp4'));
+    }
+
     await _rodarFfmpeg((cmd) => {
       cmd.input(caminhoEntrada);
 
@@ -155,10 +220,45 @@ async function editarVideo(buffer, mimeTypeEntrada, params) {
         cmd.duration(Math.min(DURACAO_MAXIMA_SEG, params.duracaoSeg));
       }
 
-      if (params.removerAudio) cmd.noAudio();
+      // Junta um segundo vídeo em seguida — sempre normaliza resolução/fps
+      // antes (senão o concat pode falhar/travar se forem diferentes).
+      if (caminhoSegundo) {
+        cmd.input(caminhoSegundo);
+        cmd.complexFilter(
+          '[0:v]scale=640:360,fps=24,setsar=1[v0];[1:v]scale=640:360,fps=24,setsar=1[v1];[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[vout][aout]',
+          ['vout', 'aout']
+        );
+        cmd.videoCodec('libx264').audioCodec('aac').format('mp4').outputOptions(['-movflags +faststart']).output(caminhoSaida);
+        return cmd;
+      }
+
+      // Troca/adiciona a trilha de áudio — silencia a original, usa a nova.
+      if (caminhoAudioNovo) {
+        cmd.input(caminhoAudioNovo);
+        cmd.outputOptions(['-map 0:v:0', '-map 1:a:0', '-shortest']);
+      } else if (params.removerAudio) {
+        cmd.noAudio();
+      }
+
+      const filtrosVideo = [];
+      if (params.formatoSocial && FORMATOS_SOCIAL[params.formatoSocial]) {
+        const { largura, altura } = FORMATOS_SOCIAL[params.formatoSocial];
+        filtrosVideo.push(`scale=${largura}:${altura}:force_original_aspect_ratio=increase`, `crop=${largura}:${altura}`);
+      }
+      if (params.rotacionarGraus === 90) filtrosVideo.push('transpose=1');
+      else if (params.rotacionarGraus === 270) filtrosVideo.push('transpose=2');
+      else if (params.rotacionarGraus === 180) filtrosVideo.push('transpose=1', 'transpose=1');
+      if (params.espelhar) filtrosVideo.push('hflip');
+      if (params.pretoBranco) filtrosVideo.push('hue=s=0');
+      if (params.comprimir) filtrosVideo.push("scale='min(720,iw)':-2");
+      if (params.velocidade && params.velocidade !== 1) {
+        const v = Math.min(4, Math.max(0.25, params.velocidade));
+        filtrosVideo.push(`setpts=${(1 / v).toFixed(4)}*PTS`);
+        if (!params.removerAudio) cmd.audioFilters([_cadeiaAtempo(v)]);
+      }
+      if (filtrosVideo.length) cmd.videoFilters(filtrosVideo);
 
       if (params.comprimir) {
-        cmd.videoFilters(["scale='min(720,iw)':-2"]);
         cmd.videoBitrate('800k');
         cmd.outputOptions(['-preset veryfast']);
       }
@@ -170,22 +270,41 @@ async function editarVideo(buffer, mimeTypeEntrada, params) {
     return await _lerELimpar(caminhoSaida);
   } finally {
     _apagar(caminhoEntrada);
+    _apagar(caminhoAudioNovo);
+    _apagar(caminhoSegundo);
+  }
+}
+
+// Extrai um frame (imagem) de um momento específico do vídeo — pra usar
+// como capa/thumbnail. Devolve PNG.
+async function extrairFrameVideo(buffer, mimeTypeEntrada, segundoDoFrame) {
+  const caminhoEntrada = await _salvarTemp(buffer, _extensaoPorMime(mimeTypeEntrada, 'mp4'));
+  const caminhoSaida = _arquivoTemp('png');
+
+  try {
+    await _rodarFfmpeg((cmd) => {
+      cmd.input(caminhoEntrada);
+      if (typeof segundoDoFrame === 'number' && segundoDoFrame > 0) {
+        cmd.seekInput(segundoDoFrame);
+      }
+      cmd.outputOptions(['-frames:v 1', '-update 1']).output(caminhoSaida);
+      return cmd;
+    });
+    return await _lerELimpar(caminhoSaida);
+  } finally {
+    _apagar(caminhoEntrada);
   }
 }
 
 // ---- INTERPRETAÇÃO DO PEDIDO EM TEXTO LIVRE ----
-// Converte o que a pessoa escreveu (junto com o arquivo anexado) num
-// objeto de parâmetros pro ffmpeg — sem precisar de mais uma chamada de
-// IA (mais rápido, mais barato, e mais confiável pra comando estruturado
-// tipo "corta os primeiros 5 segundos").
-
-function _numero(texto) {
-  const m = String(texto).replace(',', '.').match(/(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : null;
-}
+// Converte o que a pessoa escreveu (junto com o(s) arquivo(s) anexado(s))
+// num objeto de parâmetros pro ffmpeg — sem precisar de mais uma chamada
+// de IA (mais rápido, mais barato, e mais confiável pra comando
+// estruturado tipo "corta os primeiros 5 segundos").
 
 // Mesma lógica de velocidade usada em gerar-audio-zeca.js (aceita número
-// solto ou frases tipo "mais rápido"/"bem devagar").
+// solto ou frases tipo "mais rápido"/"bem devagar"). Serve tanto pra
+// velocidade de áudio quanto de vídeo.
 function interpretarVelocidade(texto) {
   const t = String(texto || '').toLowerCase();
   const matchExplicito = t.match(/(\d+(?:[.,]\d+)?)\s*x\b/);
@@ -238,6 +357,14 @@ function interpretarCorte(texto) {
   return null;
 }
 
+function interpretarFormatoSocial(texto) {
+  const t = String(texto || '').toLowerCase();
+  if (/story|stories|reels?|tiktok|vertical|formato de story/.test(t)) return 'story';
+  if (/quadrad|feed(\s+do\s+instagram)?|formato quadrado/.test(t)) return 'quadrado';
+  if (/youtube|paisagem|horizontal|widescreen/.test(t)) return 'youtube';
+  return null;
+}
+
 function interpretarPedidoEdicaoAudio(texto) {
   const t = String(texto || '').toLowerCase();
   const params = {};
@@ -250,6 +377,10 @@ function interpretarPedidoEdicaoAudio(texto) {
   if (/ru[íi]do|chiado|chiad|qualidade|normaliza|volume baixo|abafad/.test(t)) {
     params.melhorarQualidade = true;
   }
+  if (/aumenta\w*\s+o\s+volume|mais\s+alto|mais\s+volume/.test(t)) params.volume = 1.6;
+  if (/diminui\w*\s+o\s+volume|mais\s+baixo|menos\s+volume/.test(t)) params.volume = 0.6;
+  if (/fade\s*-?in|entra\s+suave|come[çc]a\s+suave|aparece\s+suave/.test(t)) params.fadeInSeg = 1.5;
+  if (/fade\s*-?out|sai\s+suave|termina\s+suave|acaba\s+suave/.test(t)) params.fadeOutSeg = 1.5;
 
   return params;
 }
@@ -263,20 +394,46 @@ function interpretarPedidoEdicaoVideo(texto) {
   if (/comprim|reduz\w*\s+o\s+tamanho|arquivo\s+menor|deixa\s+mais\s+leve/.test(t)) {
     params.comprimir = true;
   }
-  if (/converte|converter|mudar\s+(o\s+)?formato|passar\s+pra\s+mp4/.test(t) && !params.comprimir) {
-    // "converter" sozinho não precisa comprimir — só normaliza pra mp4,
-    // o que a function já faz sempre na saída.
-  }
   if (/tira\s+o\s+[áa]udio|remove\s+o\s+[áa]udio|sem\s+[áa]udio|mudo\b|mudo,/.test(t)) {
     params.removerAudio = true;
   }
 
+  const formatoSocial = interpretarFormatoSocial(t);
+  if (formatoSocial) params.formatoSocial = formatoSocial;
+
+  const matchRotacao = t.match(/gira|girar|rotaciona|rotacionar/);
+  if (matchRotacao) {
+    if (/180/.test(t)) params.rotacionarGraus = 180;
+    else if (/270|esquerda/.test(t)) params.rotacionarGraus = 270;
+    else params.rotacionarGraus = 90; // padrão: 90 graus (direita)
+  }
+
+  if (/espelh|invert(e|er)\s+(a\s+)?imagem|flip/.test(t)) params.espelhar = true;
+  if (/preto e branco|p&b|\bpb\b|sem cor/.test(t)) params.pretoBranco = true;
+
+  const velocidade = interpretarVelocidade(t);
+  if (velocidade) params.velocidade = velocidade;
+
   return params;
+}
+
+// Detecta pedido de extrair um frame/capa do vídeo (isso devolve uma
+// IMAGEM, não um vídeo — tratado à parte no zeca-chat.js).
+const PADRAO_EXTRAIR_FRAME = /tira\s+(um|uma)\s+(frame|imagem|foto)|pega\s+um\s+frame|captura\s+(um\s+)?frame|faz\s+(uma\s+)?capa|thumbnail|miniatura/i;
+
+function interpretarSegundoDoFrame(texto) {
+  const t = String(texto || '').toLowerCase();
+  const m = t.match(/segundo\s+(\d+(?:[.,]\d+)?)/);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
 }
 
 module.exports = {
   editarAudio,
   editarVideo,
+  extrairFrameVideo,
   interpretarPedidoEdicaoAudio,
-  interpretarPedidoEdicaoVideo
+  interpretarPedidoEdicaoVideo,
+  interpretarFormatoSocial,
+  PADRAO_EXTRAIR_FRAME,
+  interpretarSegundoDoFrame
 };

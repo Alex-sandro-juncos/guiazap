@@ -758,6 +758,22 @@ let _zecaImagemPendente = null;
 let _zecaZipPendente = null;
 let _zecaVideoPendente = null; // { data: base64, mimeType } (pequeno) ou { url, mimeType } (via Storage) — vídeo pro Zeca "assistir"/editar
 let _zecaAudioPendente = null; // { data: base64, mimeType } (pequeno) ou { url, mimeType } (via Storage) — áudio pro Zeca editar
+// Segundo anexo — só usado quando a pessoa quer COMBINAR dois arquivos:
+// dois vídeos (junta em sequência), dois áudios (junta/mistura), ou um
+// vídeo + um áudio (troca/adiciona a trilha de áudio do vídeo). Anexar um
+// terceiro arquivo de mídia enquanto já tem 2 prontos pede pra mandar a
+// mensagem primeiro (ver _zecaProcessarArquivoAnexado).
+let _zecaVideoPendente2 = null;
+let _zecaAudioPendente2 = null;
+
+function _zecaLimparAnexosZeca(){
+  _zecaImagemPendente = null;
+  _zecaZipPendente = null;
+  _zecaVideoPendente = null;
+  _zecaAudioPendente = null;
+  _zecaVideoPendente2 = null;
+  _zecaAudioPendente2 = null;
+}
 // Áudio é bem mais leve que vídeo — quase sempre vai direto em base64.
 // Só usa Storage (precisa login) pra arquivo realmente grande.
 const MAX_AUDIO_BYTES_ZECA = 4 * 1024 * 1024;            // ~4MB — vai direto no corpo, funciona sem login
@@ -790,30 +806,34 @@ async function _zecaProcessarArquivoAnexado(arquivo){
         alert(`Esse .zip é muito grande (máximo ${Math.round(limiteZip / 1024 / 1024)}MB).`);
         return;
       }
-      _zecaImagemPendente = null;
-      _zecaVideoPendente = null;
-      _zecaAudioPendente = null;
+      _zecaLimparAnexosZeca();
       _zecaZipPendente = await _arquivoParaBase64Zeca(arquivo);
     } else if(arquivo.type.startsWith('image/')){
-      _zecaZipPendente = null;
-      _zecaVideoPendente = null;
-      _zecaAudioPendente = null;
+      _zecaLimparAnexosZeca();
       _zecaImagemPendente = await _redimensionarImagemZeca(arquivo);
     } else if(arquivo.type.startsWith('video/')){
-      _zecaZipPendente = null;
       _zecaImagemPendente = null;
-      _zecaAudioPendente = null;
+      _zecaZipPendente = null;
 
+      // Decide se esse vídeo é o anexo PRINCIPAL, o SEGUNDO vídeo (pra
+      // juntar dois em sequência), ou combina com um áudio já pendente
+      // (pra trocar/adicionar a trilha de áudio) — ver comentário na
+      // declaração de _zecaVideoPendente2 mais acima.
+      let alvo;
+      if(_zecaVideoPendente && !_zecaVideoPendente2 && !_zecaAudioPendente) alvo = 'video2';
+      else if(!_zecaVideoPendente) alvo = 'video';
+      else { alert('Já tem 2 anexos prontos pra combinar — manda a mensagem primeiro, ou clica em "remover" pra recomeçar.'); return; }
+
+      let valor;
       if(arquivo.size <= MAX_VIDEO_BYTES_ZECA){
         // Vídeo pequeno — vai direto em base64, sem precisar de login.
-        _zecaVideoPendente = { data: await _arquivoParaBase64Zeca(arquivo), mimeType: arquivo.type || 'video/mp4' };
+        valor = { data: await _arquivoParaBase64Zeca(arquivo), mimeType: arquivo.type || 'video/mp4' };
       } else if(arquivo.size <= MAX_VIDEO_BYTES_STORAGE_ZECA){
         const temToken = await _obterTokenZeca();
         if(!temToken){
           alert(`Esse vídeo passa de ${Math.round(MAX_VIDEO_BYTES_ZECA / 1024 / 1024 * 10) / 10}MB — pra vídeo maior (até ${Math.round(MAX_VIDEO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB) você precisa estar logado. Faz login ou manda um vídeo bem curto.`);
           return;
         }
-        _zecaVideoPendente = null;
         _zecaPreviewImagemPendente(arquivo, true); // mostra "enviando..." já no preview
         const urlVideo = await _zecaSubirVideoParaStorage(arquivo, 'zeca-videos');
         if(!urlVideo){
@@ -821,26 +841,33 @@ async function _zecaProcessarArquivoAnexado(arquivo){
           document.getElementById('zeca-preview-anexo')?.remove();
           return;
         }
-        _zecaVideoPendente = { url: urlVideo, mimeType: arquivo.type || 'video/mp4' };
+        valor = { url: urlVideo, mimeType: arquivo.type || 'video/mp4' };
       } else {
         alert(`Esse vídeo é grande demais pro Zeca assistir/editar (máximo ${Math.round(MAX_VIDEO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB, mesmo logado). Tenta um trecho mais curto.`);
         return;
       }
+      if(alvo === 'video2') _zecaVideoPendente2 = valor; else _zecaVideoPendente = valor;
     } else if(arquivo.type.startsWith('audio/')){
-      _zecaZipPendente = null;
       _zecaImagemPendente = null;
-      _zecaVideoPendente = null;
+      _zecaZipPendente = null;
 
+      // Mesma lógica do vídeo: principal, segundo áudio (juntar/misturar),
+      // ou combina com um vídeo já pendente (trocar/adicionar áudio nele).
+      let alvo;
+      if(_zecaAudioPendente && !_zecaAudioPendente2 && !_zecaVideoPendente) alvo = 'audio2';
+      else if(!_zecaAudioPendente) alvo = 'audio';
+      else { alert('Já tem 2 anexos prontos pra combinar — manda a mensagem primeiro, ou clica em "remover" pra recomeçar.'); return; }
+
+      let valor;
       if(arquivo.size <= MAX_AUDIO_BYTES_ZECA){
         // Áudio pequeno — vai direto em base64, sem precisar de login.
-        _zecaAudioPendente = { data: await _arquivoParaBase64Zeca(arquivo), mimeType: arquivo.type || 'audio/mpeg' };
+        valor = { data: await _arquivoParaBase64Zeca(arquivo), mimeType: arquivo.type || 'audio/mpeg' };
       } else if(arquivo.size <= MAX_AUDIO_BYTES_STORAGE_ZECA){
         const temToken = await _obterTokenZeca();
         if(!temToken){
           alert(`Esse áudio passa de ${Math.round(MAX_AUDIO_BYTES_ZECA / 1024 / 1024 * 10) / 10}MB — pra áudio maior (até ${Math.round(MAX_AUDIO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB) você precisa estar logado. Faz login ou manda um áudio menor.`);
           return;
         }
-        _zecaAudioPendente = null;
         _zecaPreviewImagemPendente(arquivo, true); // mostra "enviando..." já no preview
         const urlAudio = await _zecaSubirVideoParaStorage(arquivo, 'zeca-audios');
         if(!urlAudio){
@@ -848,11 +875,12 @@ async function _zecaProcessarArquivoAnexado(arquivo){
           document.getElementById('zeca-preview-anexo')?.remove();
           return;
         }
-        _zecaAudioPendente = { url: urlAudio, mimeType: arquivo.type || 'audio/mpeg' };
+        valor = { url: urlAudio, mimeType: arquivo.type || 'audio/mpeg' };
       } else {
         alert(`Esse áudio é grande demais pro Zeca editar (máximo ${Math.round(MAX_AUDIO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB, mesmo logado). Tenta um arquivo menor.`);
         return;
       }
+      if(alvo === 'audio2') _zecaAudioPendente2 = valor; else _zecaAudioPendente = valor;
     } else {
       alert('Só aceito imagem, vídeo, áudio ou .zip por aqui.');
       return;
@@ -932,7 +960,12 @@ function _zecaPreviewImagemPendente(arquivo, enviando){
     preview.innerHTML = `⬆️ enviando ${rotulo}...`;
     return;
   }
-  preview.innerHTML = `📎 ${rotulo} <button type="button" onclick="_zecaImagemPendente=null; _zecaZipPendente=null; _zecaVideoPendente=null; _zecaAudioPendente=null; document.getElementById('zeca-preview-anexo').remove();" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#a4402f; font-weight:700;">remover</button>`;
+  // Quando já tem um segundo anexo pendente (combinação de vídeo+vídeo,
+  // áudio+áudio, ou vídeo+áudio), mostra os dois — senão a pessoa não
+  // percebe que o primeiro continua anexado junto com esse novo.
+  const temSegundo = _zecaVideoPendente2 || _zecaAudioPendente2 || (_zecaVideoPendente && _zecaAudioPendente);
+  const rotuloFinal = temSegundo ? `${rotulo} + 1 anexo` : rotulo;
+  preview.innerHTML = `📎 ${rotuloFinal} <button type="button" onclick="_zecaLimparAnexosZeca(); document.getElementById('zeca-preview-anexo').remove();" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#a4402f; font-weight:700;">remover</button>`;
 }
 
 function _renderizarResultadoCodigoZeca(resultado){
@@ -972,6 +1005,8 @@ async function enviarMensagemZeca(){
   const zipAnexado = _zecaZipPendente;
   const videoAnexado = _zecaVideoPendente;
   const audioAnexado = _zecaAudioPendente;
+  const video2Anexado = _zecaVideoPendente2;
+  const audio2Anexado = _zecaAudioPendente2;
   if(!texto && !imagemAnexada && !zipAnexado && !videoAnexado && !audioAnexado) return;
 
   // Se veio uma imagem/vídeo/áudio SEM texto novo, mas a pessoa tinha
@@ -984,20 +1019,19 @@ async function enviarMensagemZeca(){
   }
   if(texto) _zecaUltimaInstrucaoTexto = texto;
 
+  const temDoisAnexos = video2Anexado || audio2Anexado || (videoAnexado && audioAnexado);
+
   input.value = '';
   input.disabled = true;
-  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : (videoAnexado ? '📎 (vídeo)' : (audioAnexado ? '📎 (áudio)' : '📎 (imagem)')))));
+  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : (temDoisAnexos ? '📎📎 (2 arquivos)' : (videoAnexado ? '📎 (vídeo)' : (audioAnexado ? '📎 (áudio)' : '📎 (imagem)'))))));
   document.getElementById('zeca-preview-anexo')?.remove();
-  _zecaImagemPendente = null;
-  _zecaZipPendente = null;
-  _zecaVideoPendente = null;
-  _zecaAudioPendente = null;
+  _zecaLimparAnexosZeca();
   _zecaUltimaInstrucaoTexto = null; // usa uma vez só — não reaproveita de novo no próximo anexo
 
   const digitando = document.createElement('div');
   digitando.className = 'zeca-msg zeca-msg-zeca';
   digitando.id = 'zeca-digitando';
-  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (imagemAnexada ? '👀 Olhando a imagem...' : (videoAnexado ? '🎬 Assistindo/editando o vídeo...' : (audioAnexado ? '🎧 Editando o áudio...' : '...')));
+  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (imagemAnexada ? '👀 Olhando a imagem...' : (temDoisAnexos ? '🎛️ Combinando os arquivos...' : (videoAnexado ? '🎬 Assistindo/editando o vídeo...' : (audioAnexado ? '🎧 Editando o áudio...' : '...'))));
   document.getElementById('zeca-mensagens').appendChild(digitando);
   document.getElementById('zeca-mensagens').scrollTop = 999999;
 
@@ -1017,6 +1051,8 @@ async function enviarMensagemZeca(){
         arquivoZip: zipAnexado || null,
         video: videoAnexado || null,
         audio: audioAnexado || null,
+        video2: video2Anexado || null,
+        audio2: audio2Anexado || null,
         conversaId: _zecaConversaAtual
       })
     });
