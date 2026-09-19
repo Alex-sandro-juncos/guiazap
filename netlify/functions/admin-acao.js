@@ -171,6 +171,11 @@ exports.handler = async function (event) {
 
     if ((acao === 'plano_completo' || acao === 'plano_basico' || acao === 'plano_premium' || acao === 'plano_vendas' || acao === 'plano_entregador') && tabela === 'profissionais') {
       const novoPlano = acao === 'plano_vendas' ? 'vendas' : acao === 'plano_entregador' ? 'entregador' : acao === 'plano_completo' ? 'completo' : acao === 'plano_premium' ? 'premium' : 'basico';
+      // Mudança MANUAL de plano (você, pelo admin) nunca conta como "pago"
+      // pro limite do Zeca — mesmo que dê o plano Vendas de graça pra
+      // alguém (ex: campanha em Mangueirinha), o Zeca trata como nível
+      // grátis. Só o webhook do Mercado Pago (pagamento de verdade) liga
+      // essa flag.
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${id}`, {
         method: 'PATCH',
         headers: {
@@ -178,7 +183,7 @@ exports.handler = async function (event) {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
         },
-        body: JSON.stringify({ plano: novoPlano })
+        body: JSON.stringify({ plano: novoPlano, zeca_plano_pago: false })
       });
       if (!resp.ok) return { statusCode: 500, body: JSON.stringify({ error: 'erro ao mudar plano' }) };
       return { statusCode: 200, body: JSON.stringify({ sucesso: true }) };
