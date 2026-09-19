@@ -418,10 +418,16 @@ exports.handler = async function (event) {
       // Vídeo subido pro Storage era só pra essa análise — apaga depois,
       // sucesso ou não, pra não acumular arquivo temporário no bucket.
       // Melhor esforço: se falhar, não trava a resposta pra pessoa.
-      if (video.url) {
+      // IMPORTANTE: só apaga se o caminho for exatamente dentro da pasta
+      // temporária desse mesmo usuário logado (zeca-videos/<id do usuário>/…)
+      // — nunca apaga por confiar cegamente na URL que veio no corpo da
+      // requisição, senão qualquer um poderia mandar a URL de outra foto
+      // do bucket "fotos" (produto, vitrine, etc.) e apagar ela.
+      if (video.url && usuarioIdChat) {
         try {
           const caminhoRelativo = video.url.split('/storage/v1/object/public/fotos/')[1];
-          if (caminhoRelativo) {
+          const prefixoEsperado = `zeca-videos/${usuarioIdChat}/`;
+          if (caminhoRelativo && caminhoRelativo.startsWith(prefixoEsperado)) {
             await fetch(`${SUPABASE_URL}/storage/v1/object/fotos/${caminhoRelativo}`, {
               method: 'DELETE',
               headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` }
@@ -494,7 +500,7 @@ ${extraido.texto}`;
       : (Array.isArray(historico) ? historico : []);
 
     const contextoHistorico = historicoParaUsar.length
-      ? '\n\nÚltimas mensagens dessa conversa (mais recente por último):\n' + historicoParaUsar.slice(-6).map(h => `${h.de === 'zeca' ? 'Zeca' : 'Pessoa'}: ${h.texto}`).join('\n')
+      ? '\n\nAs 6 últimas mensagens dessa conversa, só pra contexto imediato (mais recente por último) — NÃO é a conversa inteira, pode ter bem mais coisa antes disso que você não está vendo aqui:\n' + historicoParaUsar.slice(-6).map(h => `${h.de === 'zeca' ? 'Zeca' : 'Pessoa'}: ${h.texto}`).join('\n')
       : '';
 
     // O tipo "mudar_codigo" só existe no classificador quando é o criador
@@ -528,7 +534,7 @@ Regras:
     const ia = await chamarIABarata(promptIntencao, mensagem, 500, true);
 
     if (!ia.ok || !ia.json) {
-      return { statusCode: 200, body: JSON.stringify({ resposta: 'Ops, tive um problema aqui. Pode tentar de novo?' }) };
+      return { statusCode: 200, body: JSON.stringify({ resposta: 'Deu ruim aqui do meu lado agora. Tenta de novo em instantes?' }) };
     }
 
     const decisao = ia.json;
