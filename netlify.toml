@@ -46,6 +46,14 @@
 #  [headers.values]
 #    Cache-Control = "no-cache"
 
+# O ffmpeg (usado pra edição de áudio/vídeo do Zeca) vem como um binário
+# pronto dentro do node_modules (pacote ffmpeg-static) — sem isso aqui o
+# empacotador da Netlify (esbuild) não inclui o binário no pacote da
+# function, e o ffmpeg-static ia dar erro "arquivo não encontrado" em
+# produção mesmo funcionando local.
+[functions."zeca-chat"]
+  included_files = ["node_modules/ffmpeg-static/ffmpeg"]
+
 [functions."verificar-pagamentos"]
   schedule = "0 * * * *"
 

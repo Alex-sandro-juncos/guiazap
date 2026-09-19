@@ -1,2 +1,6 @@
 # Local Netlify folder
 .netlify
+
+# Dependências (a Netlify instala sozinha no build, não precisa
+# comitar — e o ffmpeg-static sozinho tem quase 80MB de binário)
+node_modules
