@@ -146,14 +146,20 @@ module.exports.memoriaAtivada = async function (usuarioId) {
   return data[0] ? data[0].memoria_ativada : false;
 };
 
-module.exports.carregarHistoricoConversa = async function (conversaId, usuarioId) {
+module.exports.carregarHistoricoConversa = async function (conversaId, usuarioId, limite) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const headers = headersServico();
   const donoResp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_conversas?id=eq.${conversaId}&user_id=eq.${usuarioId}&select=id`, { headers });
   const donoData = await donoResp.json();
   if (!donoData[0]) return [];
 
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_mensagens?conversa_id=eq.${conversaId}&select=remetente,texto&order=created_at.desc&limit=20`, { headers });
+  // Por padrão só pega as últimas 20 (contexto normal do dia a dia, mais
+  // barato). Quando a pessoa claramente está pedindo pra resgatar algo
+  // "lá do início" da conversa, zeca-chat.js chama com um limite bem
+  // maior (até o teto de LIMITE_MENSAGENS_POR_CONVERSA) pra buscar de
+  // verdade no que foi salvo, em vez do Zeca inventar uma resposta.
+  const limiteFinal = limite && limite > 0 ? Math.min(limite, LIMITE_MENSAGENS_POR_CONVERSA) : 20;
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_mensagens?conversa_id=eq.${conversaId}&select=remetente,texto&order=created_at.desc&limit=${limiteFinal}`, { headers });
   const mensagens = await resp.json();
   return mensagens.reverse().map(m => ({ de: m.remetente, texto: m.texto }));
 };
