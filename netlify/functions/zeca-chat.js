@@ -215,7 +215,12 @@ const PALAVRAS_EDICAO_VIDEO = /\b(edita|editar|edi[cç][aã]o|corta|cortar|corte
 // inteiro viaja em base64 dentro do corpo da requisição — sem um fluxo
 // de upload direto pro Storage (que ainda não existe), o teto real é o
 // limite de payload do próprio Netlify Functions (~6MB), não este código.
-const GEMINI_MODELO_VIDEO = process.env.GEMINI_MODEL_VIDEO || 'gemini-2.0-flash';
+// "gemini-2.0-flash" foi DESCONTINUADO pelo Google (confirmado em
+// produção, 19/09/2026 — a própria API respondia 404 pedindo pra trocar
+// pra "gemini-3.6-flash"). Se isso quebrar nome de novo no futuro, é só
+// trocar o valor da env var GEMINI_MODEL_VIDEO no Netlify, sem precisar
+// mexer em código.
+const GEMINI_MODELO_VIDEO = process.env.GEMINI_MODEL_VIDEO || 'gemini-3.6-flash';
 
 async function analisarVideoComGemini(base64Video, mimeType, pergunta) {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
