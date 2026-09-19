@@ -501,16 +501,48 @@ async function _gerarImagemViaZeca(descricao, token){
   return respImagem.json();
 }
 
-async function _gerarAudioViaZeca(tema, formato, vozPedida, voz2Pedida, duracaoPedida, token){
+async function _gerarAudioViaZeca(tema, formato, vozPedida, voz2Pedida, duracaoPedida, velocidadePedida, token){
   const respAudio = await fetch('/.netlify/functions/gerar-audio-zeca', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: JSON.stringify({ tema, formato, vozPedida, voz2Pedida, duracaoPedida })
+    body: JSON.stringify({ tema, formato, vozPedida, voz2Pedida, duracaoPedida, velocidadePedida })
   });
   return respAudio.json();
+}
+
+// --- Memória "silenciosa" pra tipos de resposta especiais ---
+// gerar_imagem/gerar_audio/executar_codigo e edição de imagem respondem
+// direto de OUTRA function (gerar-audio-zeca.js etc.), sem voltar a
+// passar pelo zeca-chat.js — então, sem isso, nem o histórico da sessão
+// (_zecaHistorico) nem a conversa salva no banco nunca ficavam sabendo
+// que aquele áudio/imagem/código foi gerado. Resultado: se a pessoa
+// pedisse algo sobre aquilo logo depois (ex: "faz esse áudio mais
+// rápido"), o Zeca não tinha a menor ideia do que ela tava falando.
+//
+// Registra um resumo em TEXTO (não o áudio/imagem em si, só uma
+// descrição curta) no histórico da sessão, sem criar uma bolha visível
+// extra no chat (o resultado em si já aparece visualmente — áudio,
+// imagem, bloco de código), e também salva no banco quando a pessoa tem
+// memória ativada, pra sobreviver a um recarregar de página.
+function _zecaRegistrarHistoricoSilencioso(de, texto){
+  _zecaHistorico.push({ de, texto });
+}
+
+async function _zecaSalvarTrocaEspecial(mensagemPessoa, respostaResumo, token){
+  try{
+    if(!token || !mensagemPessoa || !respostaResumo) return;
+    const resultado = await _chamarMemoriaZeca('salvar_mensagem', { conversaId: _zecaConversaAtual, mensagemPessoa, respostaZeca: respostaResumo });
+    if(resultado && resultado.conversaId){
+      _zecaConversaAtual = resultado.conversaId;
+      _zecaSalvarConversaNaSessao(resultado.conversaId);
+    }
+    // Sem conversaId de volta = ou memória desativada, ou deu algum erro —
+    // tudo bem, o histórico da SESSÃO (_zecaHistorico) já foi atualizado
+    // de qualquer forma, então ainda funciona pra follow-up na mesma página.
+  } catch(e){ console.error('erro ao salvar troca especial na memória do Zeca', e); }
 }
 
 // Só chamada quando o próprio zeca-chat.js já sinalizou tipo
@@ -817,6 +849,9 @@ async function enviarMensagemZeca(){
     _adicionarMensagemZeca('zeca', data.resposta || 'Não consegui responder agora. Tenta de novo?');
     if(data.imagemEditada && data.imagemEditada.data){
       _renderizarImagemEditadaZeca(data.imagemEditada.data, data.imagemEditada.mimeType);
+      const resumoEdicao = `[Editei a imagem como pedido: "${mensagemParaEnviar}"]`;
+      _zecaRegistrarHistoricoSilencioso('zeca', resumoEdicao);
+      _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoEdicao, token);
     }
     if(data.conversaId){ _zecaConversaAtual = data.conversaId; _zecaSalvarConversaNaSessao(data.conversaId); }
     if(data.limiteConversasAtingido){
@@ -842,6 +877,9 @@ async function enviarMensagemZeca(){
         document.getElementById('zeca-gerando-imagem')?.remove();
         if(dadosImagem.url){
           _renderizarImagemZeca(dadosImagem.url);
+          const resumoImagem = `[Gerei uma imagem sobre: "${data.descricaoImagem}"]`;
+          _zecaRegistrarHistoricoSilencioso('zeca', resumoImagem);
+          _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoImagem, token);
         } else {
           _adicionarMensagemZeca('zeca', dadosImagem.error || 'Não consegui gerar a imagem agora. Tenta de novo?');
         }
@@ -860,10 +898,13 @@ async function enviarMensagemZeca(){
       document.getElementById('zeca-mensagens').scrollTop = 999999;
 
       try{
-        const dadosAudio = await _gerarAudioViaZeca(data.temaAudio, data.formatoAudio, data.vozPedida, data.voz2Pedida, data.duracaoAudio, token);
+        const dadosAudio = await _gerarAudioViaZeca(data.temaAudio, data.formatoAudio, data.vozPedida, data.voz2Pedida, data.duracaoAudio, data.velocidadeAudio, token);
         document.getElementById('zeca-gerando-audio')?.remove();
         if(dadosAudio.audioBase64){
           _renderizarAudioGeradoZeca(dadosAudio.audioBase64, dadosAudio.roteiro);
+          const resumoAudio = `[Gerei um áudio sobre "${data.temaAudio}" — ${data.formatoAudio === 'dialogo' ? 'diálogo' : 'narração'}${data.duracaoAudio ? ', duração pedida: ' + data.duracaoAudio : ''}${data.velocidadeAudio ? ', velocidade: ' + data.velocidadeAudio : ''}. Roteiro: "${(dadosAudio.roteiro || '').slice(0, 600)}"]`;
+          _zecaRegistrarHistoricoSilencioso('zeca', resumoAudio);
+          _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoAudio, token);
         } else {
           _adicionarMensagemZeca('zeca', dadosAudio.error || 'Não consegui gerar o áudio agora. Tenta de novo?');
         }
@@ -888,6 +929,9 @@ async function enviarMensagemZeca(){
           _adicionarMensagemZeca('zeca', resultadoCodigo.error);
         } else {
           _renderizarResultadoCodigoZeca(resultadoCodigo);
+          const resumoCodigo = `[Rodei esse código em ${data.linguagem}. Status: ${resultadoCodigo.status}. ${resultadoCodigo.stdout ? 'Saída: ' + resultadoCodigo.stdout.slice(0, 400) : ''}${resultadoCodigo.stderr ? ' Erro: ' + resultadoCodigo.stderr.slice(0, 400) : ''}]`;
+          _zecaRegistrarHistoricoSilencioso('zeca', resumoCodigo);
+          _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoCodigo, token);
         }
       } catch(eCod){
         console.error(eCod);

@@ -72,15 +72,35 @@ function instrucaoDuracao(duracaoTexto, segundosPadrao) {
   return `Duração pedida: aproximadamente ${Math.round(segundos)} segundos de áudio falado. Isso significa que o texto (se for diálogo, a SOMA de todas as falas juntas) precisa ter entre ${Math.max(3, palavrasAlvo - margem)} e ${palavrasAlvo + margem} palavras — NÃO estoure isso, mesmo que pareça curto demais pra "encaixar tudo" sobre o tema. É melhor cortar conteúdo e focar no essencial do que ultrapassar a duração pedida.`;
 }
 
+// A API de TTS da OpenAI já suporta nativamente controlar a velocidade
+// da fala (parâmetro "speed", de 0.25x até 4x) — bem melhor que tentar
+// acelerar o mp3 depois de pronto (perderia qualidade/tom). Aceita tanto
+// um número solto ("1.5", "1,5") quanto frases tipo "mais rápido",
+// "bem devagar". Sempre limitado ao intervalo que a API aceita.
+function normalizarVelocidade(pedido) {
+  if (!pedido) return 1;
+  const texto = String(pedido).toLowerCase().trim();
+  const matchNumero = texto.match(/(\d+(?:[.,]\d+)?)/);
+  if (matchNumero) {
+    const valor = parseFloat(matchNumero[1].replace(',', '.'));
+    if (!isNaN(valor)) return Math.min(4, Math.max(0.25, valor));
+  }
+  if (/mais r[áa]pid|acelerad|rapidinho/.test(texto)) return 1.25;
+  if (/bem r[áa]pid|bem acelerad/.test(texto)) return 1.5;
+  if (/mais devagar|mais lent/.test(texto)) return 0.85;
+  if (/bem devagar|bem lent/.test(texto)) return 0.7;
+  return 1;
+}
+
 // Chama a API de texto-pra-fala da OpenAI e devolve o áudio como Buffer
 // (mp3), ou null se der erro.
-async function chamarTTS(texto, voz) {
+async function chamarTTS(texto, voz, velocidade) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   try {
     const resp = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: 'tts-1', voice: voz, input: texto })
+      body: JSON.stringify({ model: 'tts-1', voice: voz, input: texto, speed: velocidade || 1 })
     });
     if (!resp.ok) {
       const erroTexto = await resp.text();
@@ -100,7 +120,8 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { tema, formato, vozPedida, voz2Pedida, duracaoPedida } = JSON.parse(event.body || '{}');
+    const { tema, formato, vozPedida, voz2Pedida, duracaoPedida, velocidadePedida } = JSON.parse(event.body || '{}');
+    const velocidade = normalizarVelocidade(velocidadePedida);
     if (!tema || !tema.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: 'descreve sobre o que é o áudio' }) };
     }
@@ -200,7 +221,7 @@ Responda APENAS com JSON válido: {"falas": [{"quem": "A", "texto": "..."}, {"qu
       const buffersComOrdem = await Promise.all(
         falasValidas.map(async (fala) => {
           const voz = fala.quem === 'B' ? vozB : vozA;
-          const buffer = await chamarTTS(fala.texto.trim(), voz);
+          const buffer = await chamarTTS(fala.texto.trim(), voz, velocidade);
           return buffer;
         })
       );
@@ -221,7 +242,7 @@ Responda APENAS com JSON válido: {"texto": "..."}`;
       }
 
       const voz = normalizarVoz(vozPedida, 'alloy');
-      audioBuffer = await chamarTTS(ia.json.texto.trim(), voz);
+      audioBuffer = await chamarTTS(ia.json.texto.trim(), voz, velocidade);
       if (!audioBuffer) {
         return { statusCode: 500, body: JSON.stringify({ error: 'não consegui gravar esse áudio agora. Tenta de novo?' }) };
       }

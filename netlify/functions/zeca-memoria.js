@@ -45,7 +45,7 @@ exports.handler = async function (event) {
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const headers = headersServico();
-    const { acao, conversaId, titulo } = JSON.parse(event.body || '{}');
+    const { acao, conversaId, titulo, mensagemPessoa, respostaZeca } = JSON.parse(event.body || '{}');
 
     // --- Status: ativada ou não, e quantas conversas já tem ---
     if (acao === 'status') {
@@ -116,6 +116,19 @@ exports.handler = async function (event) {
         method: 'DELETE', headers
       });
       return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    }
+
+    // --- Salvar uma troca "por fora" do fluxo normal de texto ---
+    // Usado pelo front-end depois de gerar_imagem/gerar_audio/executar_codigo
+    // e edição de imagem — esses tipos de resposta especiais respondem
+    // direto pra outra function (gerar-audio-zeca.js etc.), sem passar de
+    // novo pelo zeca-chat.js, então sem isso a conversa salva NUNCA ficava
+    // sabendo que aquele áudio/imagem/código foi gerado (o Zeca "esquecia"
+    // na hora que a pessoa perguntava algo sobre aquilo depois).
+    if (acao === 'salvar_mensagem') {
+      if (!mensagemPessoa || !respostaZeca) return { statusCode: 400, body: JSON.stringify({ error: 'mensagemPessoa e respostaZeca são obrigatórios' }) };
+      const conversaIdSalva = await module.exports.salvarTrocaDeMensagens(usuario.id, conversaId || null, mensagemPessoa, respostaZeca);
+      return { statusCode: 200, body: JSON.stringify({ conversaId: conversaIdSalva }) };
     }
 
     // --- Apagar tudo (todas as conversas da pessoa) ---
