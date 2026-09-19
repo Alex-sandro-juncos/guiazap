@@ -1,9 +1,10 @@
-// Chamada única de modelo BARATO pra interpretar JSON.
-// Ordem: Gemini Flash-Lite (se tiver chave) → Claude Haiku (chave Anthropic que você já tem).
+// Chamada única de modelo pra interpretar JSON.
+// Ordem: Claude Haiku (chave Anthropic — é o "cérebro" principal do Zeca
+// agora) → Gemini Flash-Lite como plano B, só se a Anthropic falhar/cair.
 // Sonnet sai do caminho padrão.
 
 const GEMINI_MODELO = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
-const HAIKU_MODELO = process.env.HAIKU_MODEL || 'claude-haiku-4-5';
+const HAIKU_MODELO = process.env.HAIKU_MODEL || 'claude-haiku-4-5-20251001';
 
 // Personalidade do Zeca — a IA do GuiaZap. Só entra nos textos que o
 // usuário efetivamente LÊ ou OUVE (resposta de voz, dica, sugestão de
@@ -119,14 +120,18 @@ async function chamarHaiku(system, user, maxTokens) {
 // comPersona: true injeta a personalidade do Zeca antes do prompt de
 // sistema — só usar quando a resposta tem campo de texto que o usuário
 // vai ler/ouvir. Ver comentário do PERSONA_ZECA acima.
+//
+// Ordem: Claude Haiku primeiro (é o "cérebro" principal do Zeca — melhor
+// qualidade de resposta e raciocínio). Se a Anthropic falhar/cair, cai
+// pro Gemini Flash-Lite como plano B, pra não deixar o Zeca sem responder.
 async function chamarIABarata(system, user, maxTokens, comPersona) {
   const systemFinal = comPersona ? (PERSONA_ZECA + system) : system;
 
-  const gemini = await chamarGemini(systemFinal, user, maxTokens);
-  if (gemini) return { ok: true, json: gemini, provedor: 'gemini' };
-
   const haiku = await chamarHaiku(systemFinal, user, maxTokens);
   if (haiku) return { ok: true, json: haiku, provedor: 'haiku' };
+
+  const gemini = await chamarGemini(systemFinal, user, maxTokens);
+  if (gemini) return { ok: true, json: gemini, provedor: 'gemini' };
 
   return { ok: false, json: null, provedor: null };
 }
