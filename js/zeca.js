@@ -18,6 +18,29 @@ let _zecaConversaAtual = null; // id da conversa salva no banco (null = ainda n�
 let _zecaUltimaInstrucaoTexto = null;
 const _zecaSynth = window.speechSynthesis;
 
+// --- Continuidade da conversa entre páginas (mesma aba/sessão) ---
+// Sem isso, cada página carregada começa o Zeca do zero, mesmo se a
+// pessoa tiver memória ativada — ela precisaria abrir o ☰ e escolher a
+// mesma conversa de novo toda vez que muda de página. Guarda só o ID da
+// conversa atual (não o conteúdo) no sessionStorage — dura só essa aba,
+// some ao fechar o navegador — e, ao abrir o painel numa página nova,
+// recarrega essa mesma conversa em vez de começar do zero.
+const _CHAVE_CONVERSA_SESSAO_ZECA = 'zeca_conversa_sessao';
+
+function _zecaSalvarConversaNaSessao(conversaId){
+  try{
+    if(conversaId) sessionStorage.setItem(_CHAVE_CONVERSA_SESSAO_ZECA, conversaId);
+    else sessionStorage.removeItem(_CHAVE_CONVERSA_SESSAO_ZECA);
+  } catch(e){}
+}
+function _zecaLerConversaDaSessao(){
+  try{ return sessionStorage.getItem(_CHAVE_CONVERSA_SESSAO_ZECA); } catch(e){ return null; }
+}
+
+function _zecaMensagemBoasVindas(){
+  _adicionarMensagemZeca('zeca', 'Oi! Eu sou o Zeca 👋 Posso te ajudar a achar um profissional ou empresa aqui perto, gerar ou editar uma foto, ou tirar dúvida sobre como o GuiaZap funciona. Manda a pergunta (ou arrasta um arquivo aqui pro painel)!');
+}
+
 function toggleZeca(){
   _zecaAberto = !_zecaAberto;
   const painel = document.getElementById('painel-zeca');
@@ -26,7 +49,15 @@ function toggleZeca(){
   if(_zecaAberto) _zecaInicializarDragDrop();
 
   if(_zecaAberto && _zecaHistorico.length === 0){
-    _adicionarMensagemZeca('zeca', 'Oi! Eu sou o Zeca 👋 Posso te ajudar a achar um profissional ou empresa aqui perto, gerar ou editar uma foto, ou tirar dúvida sobre como o GuiaZap funciona. Manda a pergunta (ou arrasta um arquivo aqui pro painel)!');
+    const conversaSalvaNaSessao = _zecaLerConversaDaSessao();
+    if(conversaSalvaNaSessao){
+      // Continuando de outra página — carrega em silêncio (sem alertar
+      // se der errado, ex: conversa apagada ou memória desativada nesse
+      // meio tempo); nesse caso cai na saudação normal.
+      carregarConversaZeca(conversaSalvaNaSessao, true);
+    } else {
+      _zecaMensagemBoasVindas();
+    }
   }
 }
 
@@ -176,6 +207,42 @@ function _renderizarImagemEditadaZeca(base64, mimeType){
   container.scrollTop = container.scrollHeight;
 }
 
+// Áudio (narração ou diálogo) gerado pelo Zeca sobre um tema pedido —
+// vem como base64 (mp3) + o roteiro em texto, pra pessoa ouvir, baixar e
+// usar em vídeo. Mostra um player de áudio nativo + botão de baixar +
+// o roteiro escrito (pra ela poder copiar/editar também).
+function _renderizarAudioGeradoZeca(base64, roteiro){
+  const container = document.getElementById('zeca-mensagens');
+  const bolha = document.createElement('div');
+  bolha.className = 'zeca-msg zeca-msg-zeca';
+  bolha.style.padding = '10px';
+  const dataUrl = `data:audio/mpeg;base64,${base64}`;
+
+  const player = document.createElement('audio');
+  player.controls = true;
+  player.src = dataUrl;
+  player.style.cssText = 'display:block; width:100%; margin-bottom:8px;';
+  bolha.appendChild(player);
+
+  if(roteiro){
+    const textoRoteiro = document.createElement('div');
+    textoRoteiro.style.cssText = 'font-size:0.82rem; color:#555; white-space:pre-wrap; margin-bottom:8px;';
+    textoRoteiro.textContent = roteiro;
+    bolha.appendChild(textoRoteiro);
+  }
+
+  const baixar = document.createElement('a');
+  baixar.href = dataUrl;
+  baixar.download = 'audio-zeca.mp3';
+  baixar.textContent = '⬇️ baixar áudio (mp3)';
+  baixar.className = 'zeca-link-pdf';
+  baixar.style.cssText = 'display:inline-block; text-decoration:none;';
+  bolha.appendChild(baixar);
+
+  container.appendChild(bolha);
+  container.scrollTop = container.scrollHeight;
+}
+
 function toggleMicZeca(){
   if(_zecaOuvindo){
     try{ _zecaReconhecimento.stop(); } catch(e){}
@@ -219,6 +286,38 @@ function toggleMicZeca(){
   };
 
   try{ _zecaReconhecimento.start(); } catch(e){}
+}
+
+// Sobe um vídeo direto pro Supabase Storage (mesmo bucket "fotos" que a
+// vitrine já usa pra vídeo de produto), usando o cliente Supabase já
+// autenticado com a sessão da pessoa — o upload vai direto navegador →
+// Supabase, sem passar pelo corpo da requisição do Netlify Functions,
+// que é o que limitava vídeo a poucos MB antes. Precisa de login (a
+// política do bucket é por pasta do usuário) — sem login, volta null.
+async function _zecaSubirVideoParaStorage(arquivo){
+  try{
+    if(typeof window.supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'){
+      return null;
+    }
+    const cliente = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: sessaoData } = await cliente.auth.getSession();
+    const usuario = sessaoData && sessaoData.session ? sessaoData.session.user : null;
+    if(!usuario) return null;
+
+    const extensao = (arquivo.name && arquivo.name.includes('.')) ? arquivo.name.split('.').pop() : 'mp4';
+    const nomeArquivo = `zeca-videos/${usuario.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${extensao}`;
+
+    const { error } = await cliente.storage.from('fotos').upload(nomeArquivo, arquivo);
+    if(error){
+      console.error('erro ao subir vídeo pro Storage', error);
+      return null;
+    }
+    const { data } = cliente.storage.from('fotos').getPublicUrl(nomeArquivo);
+    return data.publicUrl;
+  } catch(e){
+    console.error('erro no upload de vídeo pro Storage', e);
+    return null;
+  }
 }
 
 function _falarRespostaZeca(texto){
@@ -352,6 +451,7 @@ async function _alternarMemoriaZeca(ligar){
 
 function novaConversaZeca(){
   _zecaConversaAtual = null;
+  _zecaSalvarConversaNaSessao(null);
   _zecaHistorico = [];
   _zecaUltimaInstrucaoTexto = null;
   document.getElementById('zeca-mensagens').innerHTML = '';
@@ -359,14 +459,23 @@ function novaConversaZeca(){
   _adicionarMensagemZeca('zeca', 'Começando uma conversa nova! Manda a pergunta.');
 }
 
-async function carregarConversaZeca(conversaId){
+// silencioso=true é usado ao restaurar a conversa automaticamente numa
+// página nova (ver toggleZeca) — se der errado, cai na saudação padrão
+// em vez de mostrar um alert() inesperado assim que o painel abre.
+async function carregarConversaZeca(conversaId, silencioso){
   const dados = await _chamarMemoriaZeca('obter_conversa', { conversaId });
   document.getElementById('zeca-overlay-conversas')?.remove();
   if(!dados || !dados.mensagens){
-    alert('Não consegui abrir essa conversa.');
+    _zecaSalvarConversaNaSessao(null); // não existe mais / sem acesso — não insiste nela nas próximas páginas
+    if(silencioso){
+      _zecaMensagemBoasVindas();
+    } else {
+      alert('Não consegui abrir essa conversa.');
+    }
     return;
   }
   _zecaConversaAtual = conversaId;
+  _zecaSalvarConversaNaSessao(conversaId);
   _zecaHistorico = [];
   _zecaUltimaInstrucaoTexto = null;
   document.getElementById('zeca-mensagens').innerHTML = '';
@@ -390,6 +499,35 @@ async function _gerarImagemViaZeca(descricao, token){
     body: JSON.stringify({ descricao })
   });
   return respImagem.json();
+}
+
+async function _gerarAudioViaZeca(tema, formato, vozPedida, voz2Pedida, duracaoPedida, token){
+  const respAudio = await fetch('/.netlify/functions/gerar-audio-zeca', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ tema, formato, vozPedida, voz2Pedida, duracaoPedida })
+  });
+  return respAudio.json();
+}
+
+// Só chamada quando o próprio zeca-chat.js já sinalizou tipo
+// "mudar_codigo" (e isso só acontece quando o back-end já confirmou que
+// quem está falando é o criador, pelo login). mudar-codigo-zeca.js
+// confere de novo antes de tocar em qualquer coisa no GitHub — nunca
+// abre PR sem essa dupla confirmação.
+async function _mudarCodigoViaZeca(caminhoArquivo, instrucaoCodigo, token){
+  const respMudar = await fetch('/.netlify/functions/mudar-codigo-zeca', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ caminhoArquivo, instrucaoCodigo })
+  });
+  return respMudar.json();
 }
 
 // Redimensiona a imagem no navegador antes de mandar (imagem de celular
@@ -434,16 +572,26 @@ function _arquivoParaBase64Zeca(arquivo){
 
 let _zecaImagemPendente = null;
 let _zecaZipPendente = null;
+let _zecaVideoPendente = null; // { data: base64, mimeType } (pequeno) ou { url, mimeType } (via Storage) — vídeo pro Zeca "assistir"
 const MAX_ZIP_BYTES_ZECA = 8 * 1024 * 1024;           // 8MB pro público
 // Pro criador não tem teto de propósito no código — mas o Netlify
 // Functions (onde o zeca-chat.js roda) recusa sozinho qualquer requisição
 // acima de ~6MB de corpo, então na prática o teto real de hoje é esse do
 // Netlify, não este número. Deixado bem alto só pra não barrar antes disso.
 const MAX_ZIP_BYTES_CRIADOR_ZECA = 500 * 1024 * 1024; // 500MB (limitado de verdade pelo Netlify antes de chegar aqui)
+// Vídeo pequeno (até MAX_VIDEO_BYTES_ZECA) vai direto em base64 no corpo
+// da requisição, igual imagem — simples e funciona pra qualquer um,
+// mesmo visitante. Vídeo maior que isso precisa subir primeiro pro
+// Supabase Storage (só funciona logado — ver _zecaSubirVideoParaStorage)
+// e manda só a URL pro zeca-chat, driblando o teto de ~6MB do Netlify.
+// MAX_VIDEO_BYTES_STORAGE_ZECA é limitado pelo teto de vídeo inline que o
+// próprio Gemini aceita numa chamada só (não é mais o Netlify o gargalo).
+const MAX_VIDEO_BYTES_ZECA = 3.5 * 1024 * 1024;          // ~3.5MB — vai direto no corpo, funciona sem login
+const MAX_VIDEO_BYTES_STORAGE_ZECA = 15 * 1024 * 1024;   // ~15MB — via Storage, precisa estar logado
 
 // Lógica compartilhada entre seletor de arquivo, colar (Ctrl+V) e
-// arrastar-e-soltar — decide se é imagem ou .zip, confere tamanho e
-// prepara o anexo pendente pra próxima mensagem.
+// arrastar-e-soltar — decide se é imagem, vídeo ou .zip, confere tamanho
+// e prepara o anexo pendente pra próxima mensagem.
 async function _zecaProcessarArquivoAnexado(arquivo){
   const ehZip = arquivo.name.toLowerCase().endsWith('.zip') || arquivo.type === 'application/zip';
   try{
@@ -454,12 +602,40 @@ async function _zecaProcessarArquivoAnexado(arquivo){
         return;
       }
       _zecaImagemPendente = null;
+      _zecaVideoPendente = null;
       _zecaZipPendente = await _arquivoParaBase64Zeca(arquivo);
     } else if(arquivo.type.startsWith('image/')){
       _zecaZipPendente = null;
+      _zecaVideoPendente = null;
       _zecaImagemPendente = await _redimensionarImagemZeca(arquivo);
+    } else if(arquivo.type.startsWith('video/')){
+      _zecaZipPendente = null;
+      _zecaImagemPendente = null;
+
+      if(arquivo.size <= MAX_VIDEO_BYTES_ZECA){
+        // Vídeo pequeno — vai direto em base64, sem precisar de login.
+        _zecaVideoPendente = { data: await _arquivoParaBase64Zeca(arquivo), mimeType: arquivo.type || 'video/mp4' };
+      } else if(arquivo.size <= MAX_VIDEO_BYTES_STORAGE_ZECA){
+        const temToken = await _obterTokenZeca();
+        if(!temToken){
+          alert(`Esse vídeo passa de ${Math.round(MAX_VIDEO_BYTES_ZECA / 1024 / 1024 * 10) / 10}MB — pra vídeo maior (até ${Math.round(MAX_VIDEO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB) você precisa estar logado. Faz login ou manda um vídeo bem curto.`);
+          return;
+        }
+        _zecaVideoPendente = null;
+        _zecaPreviewImagemPendente(arquivo, true); // mostra "enviando..." já no preview
+        const urlVideo = await _zecaSubirVideoParaStorage(arquivo);
+        if(!urlVideo){
+          alert('Não consegui subir esse vídeo agora. Tenta de novo ou usa um vídeo menor.');
+          document.getElementById('zeca-preview-anexo')?.remove();
+          return;
+        }
+        _zecaVideoPendente = { url: urlVideo, mimeType: arquivo.type || 'video/mp4' };
+      } else {
+        alert(`Esse vídeo é grande demais pro Zeca assistir (máximo ${Math.round(MAX_VIDEO_BYTES_STORAGE_ZECA / 1024 / 1024)}MB, mesmo logado). Tenta um trecho mais curto.`);
+        return;
+      }
     } else {
-      alert('Só aceito imagem ou .zip por aqui.');
+      alert('Só aceito imagem, vídeo ou .zip por aqui.');
       return;
     }
     _zecaPreviewImagemPendente(arquivo);
@@ -472,7 +648,7 @@ async function _zecaProcessarArquivoAnexado(arquivo){
 function _abrirSeletorImagemZeca(){
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.zip';
+  input.accept = 'image/*,video/*,.zip';
   input.onchange = async () => {
     const arquivo = input.files[0];
     if(!arquivo) return;
@@ -521,7 +697,7 @@ function _zecaInicializarDragDrop(){
   });
 }
 
-function _zecaPreviewImagemPendente(arquivo){
+function _zecaPreviewImagemPendente(arquivo, enviando){
   const rodape = document.querySelector('#painel-zeca .zeca-rodape');
   let preview = document.getElementById('zeca-preview-anexo');
   if(!preview){
@@ -531,7 +707,13 @@ function _zecaPreviewImagemPendente(arquivo){
     rodape.parentElement.insertBefore(preview, rodape);
   }
   const rotulo = arquivo.name ? arquivo.name.slice(0, 30) : 'imagem colada';
-  preview.innerHTML = `📎 ${rotulo} <button type="button" onclick="_zecaImagemPendente=null; _zecaZipPendente=null; document.getElementById('zeca-preview-anexo').remove();" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#a4402f; font-weight:700;">remover</button>`;
+  if(enviando){
+    // Estado transitório enquanto o vídeo grande sobe pro Storage — sem
+    // botão de remover ainda, porque o upload já está em andamento.
+    preview.innerHTML = `⬆️ enviando ${rotulo}...`;
+    return;
+  }
+  preview.innerHTML = `📎 ${rotulo} <button type="button" onclick="_zecaImagemPendente=null; _zecaZipPendente=null; _zecaVideoPendente=null; document.getElementById('zeca-preview-anexo').remove();" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#a4402f; font-weight:700;">remover</button>`;
 }
 
 function _renderizarResultadoCodigoZeca(resultado){
@@ -569,30 +751,31 @@ async function enviarMensagemZeca(){
   const texto = input.value.trim();
   const imagemAnexada = _zecaImagemPendente;
   const zipAnexado = _zecaZipPendente;
-  if(!texto && !imagemAnexada && !zipAnexado) return;
+  const videoAnexado = _zecaVideoPendente;
+  if(!texto && !imagemAnexada && !zipAnexado && !videoAnexado) return;
 
-  // Se veio uma imagem SEM texto novo, mas a pessoa tinha digitado um
-  // pedido antes (ex: "tira o fundo dessa imagem") numa mensagem
-  // separada, reaproveita esse pedido agora — senão a instrução se perde
-  // e o Zeca cai no modo "só descrever" a foto em vez de editar.
+  // Se veio uma imagem/vídeo SEM texto novo, mas a pessoa tinha digitado
+  // um pedido antes numa mensagem separada, reaproveita esse pedido agora
+  // — senão a instrução se perde e o Zeca cai no modo "só descrever".
   let mensagemParaEnviar = texto;
-  if(!texto && imagemAnexada && _zecaUltimaInstrucaoTexto){
+  if(!texto && (imagemAnexada || videoAnexado) && _zecaUltimaInstrucaoTexto){
     mensagemParaEnviar = _zecaUltimaInstrucaoTexto;
   }
   if(texto) _zecaUltimaInstrucaoTexto = texto;
 
   input.value = '';
   input.disabled = true;
-  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : '📎 (imagem)')));
+  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : (videoAnexado ? '📎 (vídeo)' : '📎 (imagem)'))));
   document.getElementById('zeca-preview-anexo')?.remove();
   _zecaImagemPendente = null;
   _zecaZipPendente = null;
+  _zecaVideoPendente = null;
   _zecaUltimaInstrucaoTexto = null; // usa uma vez só — não reaproveita de novo no próximo anexo
 
   const digitando = document.createElement('div');
   digitando.className = 'zeca-msg zeca-msg-zeca';
   digitando.id = 'zeca-digitando';
-  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (imagemAnexada ? '👀 Olhando a imagem...' : '...');
+  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (imagemAnexada ? '👀 Olhando a imagem...' : (videoAnexado ? '🎬 Assistindo o vídeo...' : '...'));
   document.getElementById('zeca-mensagens').appendChild(digitando);
   document.getElementById('zeca-mensagens').scrollTop = 999999;
 
@@ -610,6 +793,7 @@ async function enviarMensagemZeca(){
         historico: _zecaHistorico.slice(0, -1),
         imagem: imagemAnexada ? { data: imagemAnexada, mimeType: 'image/jpeg' } : null,
         arquivoZip: zipAnexado || null,
+        video: videoAnexado || null,
         conversaId: _zecaConversaAtual
       })
     });
@@ -634,7 +818,7 @@ async function enviarMensagemZeca(){
     if(data.imagemEditada && data.imagemEditada.data){
       _renderizarImagemEditadaZeca(data.imagemEditada.data, data.imagemEditada.mimeType);
     }
-    if(data.conversaId) _zecaConversaAtual = data.conversaId;
+    if(data.conversaId){ _zecaConversaAtual = data.conversaId; _zecaSalvarConversaNaSessao(data.conversaId); }
     if(data.limiteConversasAtingido){
       _adicionarMensagemZeca('zeca', '⚠️ Essa conversa não foi salva — você já tem 30 conversas guardadas. Apaga uma antiga no ☰ pra continuar salvando.');
     }
@@ -667,6 +851,28 @@ async function enviarMensagemZeca(){
         _adicionarMensagemZeca('zeca', 'Deu erro gerando a imagem. Tenta de novo?');
       }
     }
+    if(data.tipo === 'gerar_audio'){
+      const gravando = document.createElement('div');
+      gravando.className = 'zeca-msg zeca-msg-zeca';
+      gravando.id = 'zeca-gerando-audio';
+      gravando.textContent = data.formatoAudio === 'dialogo' ? '🎙️ Escrevendo e gravando o diálogo...' : '🎙️ Escrevendo e gravando o áudio...';
+      document.getElementById('zeca-mensagens').appendChild(gravando);
+      document.getElementById('zeca-mensagens').scrollTop = 999999;
+
+      try{
+        const dadosAudio = await _gerarAudioViaZeca(data.temaAudio, data.formatoAudio, data.vozPedida, data.voz2Pedida, data.duracaoAudio, token);
+        document.getElementById('zeca-gerando-audio')?.remove();
+        if(dadosAudio.audioBase64){
+          _renderizarAudioGeradoZeca(dadosAudio.audioBase64, dadosAudio.roteiro);
+        } else {
+          _adicionarMensagemZeca('zeca', dadosAudio.error || 'Não consegui gerar o áudio agora. Tenta de novo?');
+        }
+      } catch(eAudio){
+        console.error(eAudio);
+        document.getElementById('zeca-gerando-audio')?.remove();
+        _adicionarMensagemZeca('zeca', 'Deu erro gerando o áudio. Tenta de novo?');
+      }
+    }
     if(data.tipo === 'executar_codigo'){
       const rodando = document.createElement('div');
       rodando.className = 'zeca-msg zeca-msg-zeca';
@@ -687,6 +893,30 @@ async function enviarMensagemZeca(){
         console.error(eCod);
         document.getElementById('zeca-rodando-codigo')?.remove();
         _adicionarMensagemZeca('zeca', 'Deu erro rodando o código. Tenta de novo?');
+      }
+    }
+    if(data.tipo === 'mudar_codigo'){
+      const propondo = document.createElement('div');
+      propondo.className = 'zeca-msg zeca-msg-zeca';
+      propondo.id = 'zeca-propondo-codigo';
+      propondo.textContent = `🔧 Preparando alteração em ${data.caminhoArquivo}...`;
+      document.getElementById('zeca-mensagens').appendChild(propondo);
+      document.getElementById('zeca-mensagens').scrollTop = 999999;
+
+      try{
+        const resultadoMudanca = await _mudarCodigoViaZeca(data.caminhoArquivo, data.instrucaoCodigo, token);
+        document.getElementById('zeca-propondo-codigo')?.remove();
+        if(resultadoMudanca.error){
+          _adicionarMensagemZeca('zeca', resultadoMudanca.error);
+        } else if(resultadoMudanca.resposta){
+          _adicionarMensagemZeca('zeca', resultadoMudanca.resposta);
+        } else {
+          _adicionarMensagemZeca('zeca', 'Não consegui preparar essa mudança agora. Tenta de novo?');
+        }
+      } catch(eCodigo){
+        console.error(eCodigo);
+        document.getElementById('zeca-propondo-codigo')?.remove();
+        _adicionarMensagemZeca('zeca', 'Deu erro tentando preparar essa mudança de código. Tenta de novo?');
       }
     }
   } catch(e){
