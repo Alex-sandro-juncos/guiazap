@@ -40,6 +40,38 @@ function normalizarVoz(pedido, padrao) {
   return VOZES_OPENAI[chave] || padrao;
 }
 
+// Antes, a duração pedida ("10 segundos") só entrava como uma dica solta
+// no prompt ("Duração aproximada pedida: 10 segundos") — a IA não tem
+// noção real de quantas palavras cabem em 10 segundos de fala, então
+// ignorava na prática e escrevia o tamanho que "parecia razoável" pra
+// ela (ex: pediram 10s e saiu 23s). Corrige convertendo o tempo pedido
+// num alvo de PALAVRAS de verdade, usando uma cadência média de fala em
+// português (~2,5 palavras/segundo, perto de 150 palavras/minuto).
+const PALAVRAS_POR_SEGUNDO = 2.5;
+
+function estimarSegundosPedidos(duracaoTexto) {
+  if (!duracaoTexto) return null;
+  const texto = String(duracaoTexto).toLowerCase();
+  const matchMinutos = texto.match(/(\d+(?:[.,]\d+)?)\s*min/);
+  if (matchMinutos) return parseFloat(matchMinutos[1].replace(',', '.')) * 60;
+  const matchSegundos = texto.match(/(\d+(?:[.,]\d+)?)\s*(seg|s\b)/);
+  if (matchSegundos) return parseFloat(matchSegundos[1].replace(',', '.'));
+  if (/bem curto|bem r[áa]pido|curtinho/.test(texto)) return 8;
+  if (/curto|r[áa]pido/.test(texto)) return 15;
+  if (/longo|comprido|extenso/.test(texto)) return 60;
+  return null; // não deu pra entender a duração pedida — usa o padrão
+}
+
+// duracaoTexto: o que a pessoa pediu em palavras livres (ou null).
+// segundosPadrao: usado só quando não veio duração nenhuma.
+function instrucaoDuracao(duracaoTexto, segundosPadrao) {
+  const segundos = estimarSegundosPedidos(duracaoTexto) || segundosPadrao;
+  if (!segundos) return 'Curto e objetivo — bom pra usar em vídeo de rede social.';
+  const palavrasAlvo = Math.max(5, Math.round(segundos * PALAVRAS_POR_SEGUNDO));
+  const margem = Math.max(3, Math.round(palavrasAlvo * 0.2));
+  return `Duração pedida: aproximadamente ${Math.round(segundos)} segundos de áudio falado. Isso significa que o texto (se for diálogo, a SOMA de todas as falas juntas) precisa ter entre ${Math.max(3, palavrasAlvo - margem)} e ${palavrasAlvo + margem} palavras — NÃO estoure isso, mesmo que pareça curto demais pra "encaixar tudo" sobre o tema. É melhor cortar conteúdo e focar no essencial do que ultrapassar a duração pedida.`;
+}
+
 // Chama a API de texto-pra-fala da OpenAI e devolve o áudio como Buffer
 // (mp3), ou null se der erro.
 async function chamarTTS(texto, voz) {
@@ -149,7 +181,7 @@ exports.handler = async function (event) {
     let audioBuffer;
 
     if (ehDialogo) {
-      const promptRoteiro = `Escreva um roteiro de diálogo curto e natural entre duas pessoas ("A" e "B") sobre o tema: "${tema.trim()}". ${duracaoPedida ? `Duração aproximada pedida: ${duracaoPedida}.` : 'Curto e objetivo — bom pra usar como narração/trilha em vídeo de rede social.'} Português do Brasil, tom natural de conversa (não de texto formal lido em voz alta).
+      const promptRoteiro = `Escreva um roteiro de diálogo curto e natural entre duas pessoas ("A" e "B") sobre o tema: "${tema.trim()}". ${instrucaoDuracao(duracaoPedida, 30)} Português do Brasil, tom natural de conversa (não de texto formal lido em voz alta).
 Responda APENAS com JSON válido: {"falas": [{"quem": "A", "texto": "..."}, {"quem": "B", "texto": "..."}]}`;
 
       const ia = await chamarIABarata(promptRoteiro, tema, 1200, false);
@@ -180,7 +212,7 @@ Responda APENAS com JSON válido: {"falas": [{"quem": "A", "texto": "..."}, {"qu
       audioBuffer = Buffer.concat(buffers);
       roteiroTexto = falasValidas.map(f => `${f.quem === 'B' ? 'B' : 'A'}: ${f.texto}`).join('\n');
     } else {
-      const promptRoteiro = `Escreva um texto de narração (uma voz só, sem indicar personagens ou diálogo) sobre o tema: "${tema.trim()}". ${duracaoPedida ? `Duração aproximada pedida: ${duracaoPedida}.` : 'Curto e objetivo — bom pra narração de vídeo de rede social (uns 30-40 segundos falado).'} Português do Brasil, texto corrido, sem formatação (sem markdown, sem tópicos), pronto pra ser lido em voz alta.
+      const promptRoteiro = `Escreva um texto de narração (uma voz só, sem indicar personagens ou diálogo) sobre o tema: "${tema.trim()}". ${instrucaoDuracao(duracaoPedida, 35)} Português do Brasil, texto corrido, sem formatação (sem markdown, sem tópicos), pronto pra ser lido em voz alta.
 Responda APENAS com JSON válido: {"texto": "..."}`;
 
       const ia = await chamarIABarata(promptRoteiro, tema, 900, false);
