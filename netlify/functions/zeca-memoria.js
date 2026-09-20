@@ -49,17 +49,20 @@ exports.handler = async function (event) {
 
     // --- Status: ativada ou não, e quantas conversas já tem ---
     if (acao === 'status') {
-      const prefResp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_preferencias_usuario?user_id=eq.${usuario.id}&select=memoria_ativada`, { headers });
+      const prefResp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_preferencias_usuario?user_id=eq.${usuario.id}&select=memoria_ativada,lembretes_ativados`, { headers });
       const prefData = await prefResp.json();
       const ativada = prefData[0] ? prefData[0].memoria_ativada : false;
+      // Sem linha ainda pra essa pessoa = valor padrão da coluna (true) —
+      // só quando já existe linha é que confia no que tá salvo.
+      const lembretesAtivados = prefData[0] && prefData[0].lembretes_ativados !== undefined ? prefData[0].lembretes_ativados : true;
 
       const contagemResp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_conversas?user_id=eq.${usuario.id}&select=id`, { headers: { ...headers, Prefer: 'count=exact' } });
       const totalConversas = parseInt((contagemResp.headers.get('content-range') || '/0').split('/')[1] || '0', 10);
 
-      return { statusCode: 200, body: JSON.stringify({ ativada, totalConversas, limiteConversas: LIMITE_CONVERSAS }) };
+      return { statusCode: 200, body: JSON.stringify({ ativada, lembretesAtivados, totalConversas, limiteConversas: LIMITE_CONVERSAS }) };
     }
 
-    // --- Ativar / desativar ---
+    // --- Ativar / desativar (memória de conversas) ---
     if (acao === 'ativar' || acao === 'desativar') {
       const novoValor = acao === 'ativar';
       await fetch(`${SUPABASE_URL}/rest/v1/zeca_preferencias_usuario?on_conflict=user_id`, {
@@ -68,6 +71,17 @@ exports.handler = async function (event) {
         body: JSON.stringify({ user_id: usuario.id, memoria_ativada: novoValor, updated_at: new Date().toISOString() })
       });
       return { statusCode: 200, body: JSON.stringify({ ativada: novoValor }) };
+    }
+
+    // --- Ativar / desativar avisos proativos (zeca-lembretes.js) ---
+    if (acao === 'ativar_lembretes' || acao === 'desativar_lembretes') {
+      const novoValorLembretes = acao === 'ativar_lembretes';
+      await fetch(`${SUPABASE_URL}/rest/v1/zeca_preferencias_usuario?on_conflict=user_id`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ user_id: usuario.id, lembretes_ativados: novoValorLembretes, updated_at: new Date().toISOString() })
+      });
+      return { statusCode: 200, body: JSON.stringify({ lembretesAtivados: novoValorLembretes }) };
     }
 
     // --- Listar conversas (só id, título e data — não traz as mensagens) ---
@@ -172,9 +186,13 @@ module.exports.carregarHistoricoConversa = async function (conversaId, usuarioId
   // maior (até o teto de LIMITE_MENSAGENS_POR_CONVERSA) pra buscar de
   // verdade no que foi salvo, em vez do Zeca inventar uma resposta.
   const limiteFinal = limite && limite > 0 ? Math.min(limite, LIMITE_MENSAGENS_POR_CONVERSA) : 20;
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_mensagens?conversa_id=eq.${conversaId}&select=remetente,texto&order=created_at.desc&limit=${limiteFinal}`, { headers });
+  // "created_at" vai junto (não só remetente/texto) pra dar consciência
+  // temporal de verdade pro Zeca — ver _rotuloRelativoData em
+  // zeca-chat.js, que usa isso pra ele saber dizer "você comentou ontem
+  // que..." em vez de tratar toda a conversa como se fosse tudo "agora".
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/zeca_mensagens?conversa_id=eq.${conversaId}&select=remetente,texto,created_at&order=created_at.desc&limit=${limiteFinal}`, { headers });
   const mensagens = await resp.json();
-  return mensagens.reverse().map(m => ({ de: m.remetente, texto: m.texto }));
+  return mensagens.reverse().map(m => ({ de: m.remetente, texto: m.texto, quando: m.created_at }));
 };
 
 // Salva a troca (pergunta da pessoa + resposta do Zeca). Se não tiver

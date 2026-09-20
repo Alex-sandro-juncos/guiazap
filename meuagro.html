@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu Agro — GuiaZap</title>
+<meta name="description" content="Controle da sua propriedade rural no GuiaZap: finanças, safras, produção e bens.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<style>
+  body.agro-pagina { background: #f7f5f0; }
+  .agro-topo {
+    background: linear-gradient(90deg, #4a7a2a, #345c1c);
+    color: white;
+    padding: 16px 15px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .agro-topo a.agro-voltar { color: white; text-decoration: none; font-size: 1.3rem; line-height: 1; opacity: 0.9; }
+  .agro-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .agro-conteudo { max-width: 560px; margin: 0 auto; padding: 16px 15px 60px; }
+
+  .agro-select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+
+  .agro-secoes { display: flex; gap: 6px; margin-bottom: 16px; }
+  .agro-secao-btn {
+    flex: 1;
+    padding: 10px 6px;
+    border-radius: 10px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #555;
+    cursor: pointer;
+    text-align: center;
+  }
+  .agro-secao-btn.ativa { background: #4a7a2a; color: white; border-color: #4a7a2a; }
+
+  .agro-abas { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+  .agro-aba {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #555;
+    cursor: pointer;
+  }
+  .agro-aba.ativa { background: #4a7a2a; color: white; border-color: #4a7a2a; }
+
+  .agro-totais { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+  .agro-card-total { background: white; border-radius: 12px; padding: 12px 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .agro-card-total .agro-label { font-size: 0.7rem; color: #888; font-weight: 700; text-transform: uppercase; }
+  .agro-card-total .agro-valor { font-size: 1.05rem; font-weight: 800; margin-top: 4px; }
+  .agro-card-total.receita .agro-valor { color: #2a7a2a; }
+  .agro-card-total.despesa .agro-valor { color: #a4402f; }
+  .agro-card-total.saldo .agro-valor { color: #1c1c1c; }
+
+  .agro-form-add {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 18px;
+  }
+  .agro-form-add h3 { font-size: 0.95rem; margin: 0 0 10px; }
+  .agro-form-linha { display: flex; gap: 8px; margin-bottom: 8px; }
+  .agro-form-linha select, .agro-form-linha input {
+    flex: 1;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid #e5e0d5;
+    font-size: 0.88rem;
+  }
+  .agro-btn-add {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: #4a7a2a;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .agro-btn-add:disabled { opacity: 0.6; }
+
+  .agro-lista-item {
+    background: white;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .agro-lista-icone { font-size: 1.1rem; flex-shrink: 0; }
+  .agro-lista-info { flex: 1; min-width: 0; }
+  .agro-lista-desc { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agro-lista-meta { font-size: 0.72rem; color: #999; }
+  .agro-lista-valor { font-weight: 800; font-size: 0.9rem; white-space: nowrap; }
+  .agro-lista-valor.receita { color: #2a7a2a; }
+  .agro-lista-valor.despesa { color: #a4402f; }
+  .agro-lista-apagar { background: none; border: none; color: #bbb; cursor: pointer; font-size: 1rem; padding: 4px; }
+
+  .agro-vazio { text-align: center; color: #888; padding: 30px 10px; font-size: 0.9rem; }
+  .agro-zeca-dica { text-align: center; font-size: 0.78rem; color: #888; margin-top: 18px; }
+  .agro-zeca-dica a { color: #4a7a2a; font-weight: 700; text-decoration: none; }
+
+  .agro-bem-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #4a7a2a;
+    background: #eef6e6;
+    border-radius: 20px;
+    padding: 2px 9px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body class="agro-pagina">
+
+<div class="agro-topo">
+  <a href="index.html" class="agro-voltar" title="Voltar">←</a>
+  <h1>🌱 Meu Agro</h1>
+</div>
+
+<div class="agro-conteudo">
+  <select id="agro-select-propriedade" class="agro-select" style="display:none;" onchange="agroTrocarPropriedade()"></select>
+  <select id="agro-select-safra" class="agro-select" onchange="agroTrocarSafra()"></select>
+
+  <div class="agro-secoes">
+    <button type="button" class="agro-secao-btn ativa" data-secao="financas" onclick="agroTrocarSecao('financas')">💰 Finanças</button>
+    <button type="button" class="agro-secao-btn" data-secao="producao" onclick="agroTrocarSecao('producao')">🌾 Produção</button>
+    <button type="button" class="agro-secao-btn" data-secao="bens" onclick="agroTrocarSecao('bens')">🚜 Bens</button>
+    <button type="button" class="agro-secao-btn" data-secao="talhoes" onclick="agroTrocarSecao('talhoes')">🗺️ Talhões</button>
+    <button type="button" class="agro-secao-btn" data-secao="documentos" onclick="agroTrocarSecao('documentos')">📁 Documentos</button>
+  </div>
+
+  <div id="agro-secao-financas">
+    <div class="agro-abas" id="agro-abas">
+      <button type="button" class="agro-aba" data-periodo="hoje" onclick="agroTrocarPeriodo('hoje')">Hoje</button>
+      <button type="button" class="agro-aba" data-periodo="semana" onclick="agroTrocarPeriodo('semana')">Essa semana</button>
+      <button type="button" class="agro-aba ativa" data-periodo="mes" onclick="agroTrocarPeriodo('mes')">Esse mês</button>
+      <button type="button" class="agro-aba" data-periodo="tudo" onclick="agroTrocarPeriodo('tudo')">Tudo</button>
+    </div>
+
+    <div class="agro-totais">
+      <div class="agro-card-total receita"><div class="agro-label">Receitas</div><div class="agro-valor" id="agro-total-receita">R$ 0,00</div></div>
+      <div class="agro-card-total despesa"><div class="agro-label">Despesas</div><div class="agro-valor" id="agro-total-despesa">R$ 0,00</div></div>
+      <div class="agro-card-total saldo"><div class="agro-label">Saldo</div><div class="agro-valor" id="agro-total-saldo">R$ 0,00</div></div>
+    </div>
+
+    <div class="agro-form-add">
+      <h3>Novo lançamento</h3>
+      <div class="agro-form-linha">
+        <select id="agro-novo-tipo">
+          <option value="despesa">⬇️ Despesa</option>
+          <option value="receita">⬆️ Receita</option>
+        </select>
+        <input type="text" id="agro-novo-valor" placeholder="Valor (ex: 500,00)" inputmode="decimal">
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-novo-descricao" placeholder="Descrição (ex: compra de adubo)">
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-novo-categoria" placeholder="Categoria (opcional)">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-add" onclick="agroAdicionarLancamento()">Adicionar</button>
+    </div>
+
+    <div id="agro-lista"></div>
+  </div>
+
+  <div id="agro-secao-producao" style="display:none;">
+    <div class="agro-form-add">
+      <h3>Registrar produção</h3>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-prod-cultura" placeholder="Cultura (ex: milho)">
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-prod-quantidade" placeholder="Quantidade" inputmode="decimal">
+        <input type="text" id="agro-prod-unidade" placeholder="Unidade (ex: sc)" value="sc">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-prod-add" onclick="agroAdicionarProducao()">Registrar</button>
+    </div>
+    <div id="agro-lista-producao"></div>
+  </div>
+
+  <div id="agro-secao-bens" style="display:none;">
+    <div class="agro-form-add">
+      <h3>Cadastrar bem</h3>
+      <div class="agro-form-linha">
+        <select id="agro-bem-tipo">
+          <option value="maquina">🚜 Máquina</option>
+          <option value="animal">🐄 Animal</option>
+          <option value="benfeitoria">🏗️ Benfeitoria</option>
+          <option value="outro">📦 Outro</option>
+        </select>
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-bem-descricao" placeholder="Descrição (ex: trator John Deere)">
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-bem-valor" placeholder="Valor de aquisição (opcional)" inputmode="decimal">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-bem-add" onclick="agroAdicionarBem()">Cadastrar</button>
+    </div>
+    <div id="agro-lista-bens"></div>
+  </div>
+
+  <div id="agro-secao-talhoes" style="display:none;">
+    <div class="agro-form-add">
+      <h3>Cadastrar talhão</h3>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-talhao-nome" placeholder="Nome (ex: Talhão 3, Fundo da mata)">
+      </div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-talhao-area" placeholder="Área em hectares (opcional)" inputmode="decimal">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-talhao-add" onclick="agroAdicionarTalhao()">Cadastrar</button>
+    </div>
+    <div id="agro-lista-talhoes"></div>
+  </div>
+
+  <div id="agro-secao-documentos" style="display:none;">
+    <div class="agro-form-add">
+      <h3>Novo documento</h3>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-doc-categoria" placeholder="Categoria (ex: nota fiscal, laudo)">
+        <input type="text" id="agro-doc-ano" placeholder="Ano" inputmode="numeric" style="max-width:90px;">
+      </div>
+      <div class="agro-form-linha">
+        <input type="file" id="agro-doc-arquivo">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-doc-add" onclick="agroAdicionarDocumento()">Guardar</button>
+    </div>
+    <div id="agro-lista-documentos"></div>
+
+    <div class="agro-form-add">
+      <h3>📄 Preparar dados pro IR</h3>
+      <div style="font-size:0.78rem;color:#888;padding:0 0 10px;">O Zeca organiza os lançamentos, bens e documentos do ano de TODAS as tuas propriedades num PDF — não declara sozinho, é só pra te ajudar na hora de declarar (ou passar pro contador).</div>
+      <div class="agro-form-linha">
+        <input type="text" id="agro-ir-ano" placeholder="Ano" inputmode="numeric" style="max-width:110px;">
+      </div>
+      <button type="button" class="agro-btn-add" id="agro-btn-ir" onclick="agroPrepararIR()">Gerar PDF pro IR</button>
+    </div>
+  </div>
+
+  <div class="agro-zeca-dica">💬 Também dá pra lançar e consultar falando com o <a href="zeca.html">Zeca</a> — "gastei 500 em adubo".</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientAgro = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let agroUsuario = null;
+let agroPropriedades = [];
+let agroPropriedadeAtual = null;
+let agroSafras = [];
+let agroSafraAtual = ''; // '' = todas as safras
+let agroPeriodoAtual = 'mes';
+let agroLancamentos = [];
+let agroProducoes = [];
+let agroBens = [];
+let agroTalhoes = [];
+let agroDocumentos = [];
+
+function agroEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function agroFmt(v){
+  return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
+}
+function agroChaveDia(d){
+  return d.toLocaleDateString('en-CA');
+}
+
+async function initAgro(){
+  const { data: { session } } = await supabaseClientAgro.auth.getSession();
+  if(!session){
+    document.querySelector('.agro-conteudo').innerHTML = '<div class="agro-vazio">🔒 Faça login na <a href="index.html">página inicial</a> pra ver o teu Agro.</div>';
+    return;
+  }
+  agroUsuario = session.user;
+
+  let { data: propriedades } = await supabaseClientAgro.from('agro_propriedades').select('id, nome').eq('user_id', agroUsuario.id).order('created_at');
+  if(!propriedades || !propriedades.length){
+    // Mesma regra do Zeca no chat: cria a propriedade padrão na primeira vez,
+    // pra não travar quem só quer ver a tela sem nunca ter mandado mensagem.
+    const { data: criada } = await supabaseClientAgro.from('agro_propriedades').insert({ nome: 'Minha Propriedade' }).select('id, nome');
+    propriedades = criada || [];
+  }
+  agroPropriedades = propriedades || [];
+  if(!agroPropriedades.length){
+    document.querySelector('.agro-conteudo').innerHTML = '<div class="agro-vazio">Não consegui acessar o Agro agora. Tenta de novo mais tarde.</div>';
+    return;
+  }
+
+  if(agroPropriedades.length > 1){
+    const select = document.getElementById('agro-select-propriedade');
+    select.innerHTML = agroPropriedades.map(p => `<option value="${p.id}">${agroEscapar(p.nome)}</option>`).join('');
+    select.style.display = 'block';
+  }
+
+  agroPropriedadeAtual = agroPropriedades[0].id;
+  await agroCarregarSafras();
+  await agroCarregarLancamentos();
+}
+
+async function agroCarregarSafras(){
+  const { data } = await supabaseClientAgro.from('agro_safras').select('id, nome, cultura').eq('propriedade_id', agroPropriedadeAtual).order('created_at', { ascending: false });
+  agroSafras = data || [];
+  const select = document.getElementById('agro-select-safra');
+  select.innerHTML = '<option value="">Todas as safras</option>' + agroSafras.map(s => `<option value="${s.id}">${agroEscapar(s.nome)}${s.cultura ? ' (' + agroEscapar(s.cultura) + ')' : ''}</option>`).join('');
+  agroSafraAtual = '';
+}
+
+function agroTrocarPropriedade(){
+  agroPropriedadeAtual = document.getElementById('agro-select-propriedade').value;
+  agroCarregarSafras().then(() => {
+    agroCarregarLancamentos();
+    agroCarregarProducao();
+    agroCarregarBens();
+    agroTalhoes = [];
+    if(document.getElementById('agro-secao-talhoes').style.display !== 'none') agroCarregarTalhoes();
+  });
+}
+
+function agroTrocarSafra(){
+  agroSafraAtual = document.getElementById('agro-select-safra').value;
+  agroCarregarLancamentos();
+  agroCarregarProducao();
+}
+
+function agroTrocarSecao(secao){
+  document.querySelectorAll('.agro-secao-btn').forEach(b => b.classList.toggle('ativa', b.dataset.secao === secao));
+  document.getElementById('agro-secao-financas').style.display = secao === 'financas' ? '' : 'none';
+  document.getElementById('agro-secao-producao').style.display = secao === 'producao' ? '' : 'none';
+  document.getElementById('agro-secao-bens').style.display = secao === 'bens' ? '' : 'none';
+  document.getElementById('agro-secao-talhoes').style.display = secao === 'talhoes' ? '' : 'none';
+  document.getElementById('agro-secao-documentos').style.display = secao === 'documentos' ? '' : 'none';
+  if(secao === 'producao' && !agroProducoes.length) agroCarregarProducao();
+  if(secao === 'bens' && !agroBens.length) agroCarregarBens();
+  if(secao === 'talhoes' && !agroTalhoes.length) agroCarregarTalhoes();
+  if(secao === 'documentos') agroCarregarDocumentos();
+}
+
+function agroTrocarPeriodo(periodo){
+  agroPeriodoAtual = periodo;
+  document.querySelectorAll('.agro-aba').forEach(b => b.classList.toggle('ativa', b.dataset.periodo === periodo));
+  agroCarregarLancamentos();
+}
+
+function agroIntervaloPeriodo(){
+  const hoje = new Date();
+  const chaveHoje = agroChaveDia(hoje);
+  if(agroPeriodoAtual === 'hoje') return { inicio: chaveHoje, fim: chaveHoje };
+  if(agroPeriodoAtual === 'tudo') return null;
+  if(agroPeriodoAtual === 'semana'){
+    const diaSemana = hoje.getDay();
+    const voltar = diaSemana === 0 ? 6 : diaSemana - 1;
+    const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - voltar);
+    return { inicio: agroChaveDia(inicio), fim: chaveHoje };
+  }
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  return { inicio: agroChaveDia(inicio), fim: chaveHoje };
+}
+
+async function agroCarregarLancamentos(){
+  document.getElementById('agro-lista').innerHTML = '<div class="agro-vazio">Carregando...</div>';
+  let query = supabaseClientAgro.from('agro_lancamentos').select('*').eq('propriedade_id', agroPropriedadeAtual).order('data', { ascending: false }).order('created_at', { ascending: false });
+  const intervalo = agroIntervaloPeriodo();
+  if(intervalo){ query = query.gte('data', intervalo.inicio).lte('data', intervalo.fim); }
+  if(agroSafraAtual){ query = query.eq('safra_id', agroSafraAtual); }
+  const { data } = await query;
+  agroLancamentos = data || [];
+  agroRenderTotais();
+  agroRenderLista();
+}
+
+function agroRenderTotais(){
+  const totalReceita = agroLancamentos.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  const totalDespesa = agroLancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+  document.getElementById('agro-total-receita').textContent = agroFmt(totalReceita);
+  document.getElementById('agro-total-despesa').textContent = agroFmt(totalDespesa);
+  document.getElementById('agro-total-saldo').textContent = agroFmt(totalReceita - totalDespesa);
+}
+
+function agroRenderLista(){
+  const container = document.getElementById('agro-lista');
+  if(!agroLancamentos.length){
+    container.innerHTML = '<div class="agro-vazio">Nenhum lançamento nesse período ainda.</div>';
+    return;
+  }
+  container.innerHTML = agroLancamentos.map(l => {
+    const dataFmt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const qtd = l.quantidade ? ` · ${l.quantidade}${l.unidade || ''}` : '';
+    return `<div class="agro-lista-item">
+      <div class="agro-lista-icone">${l.tipo === 'receita' ? '⬆️' : '⬇️'}</div>
+      <div class="agro-lista-info">
+        <div class="agro-lista-desc">${agroEscapar(l.descricao)}</div>
+        <div class="agro-lista-meta">${dataFmt}${l.categoria ? ' · ' + agroEscapar(l.categoria) : ''}${qtd}</div>
+      </div>
+      <div class="agro-lista-valor ${l.tipo}">${l.tipo === 'receita' ? '+' : '-'}${agroFmt(l.valor)}</div>
+      <button type="button" class="agro-lista-apagar" onclick="agroApagarLancamento('${l.id}')" title="Apagar">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+async function agroApagarLancamento(id){
+  if(!confirm('Apagar esse lançamento?')) return;
+  await supabaseClientAgro.from('agro_lancamentos').delete().eq('id', id);
+  agroCarregarLancamentos();
+}
+
+async function agroAdicionarLancamento(){
+  const tipo = document.getElementById('agro-novo-tipo').value;
+  const valorTexto = document.getElementById('agro-novo-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const valor = parseFloat(valorTexto);
+  const descricao = document.getElementById('agro-novo-descricao').value.trim();
+  const categoria = document.getElementById('agro-novo-categoria').value.trim();
+
+  if(!valor || valor <= 0){ alert('Digita um valor válido.'); return; }
+  if(!descricao){ alert('Digita uma descrição curta.'); return; }
+
+  const btn = document.getElementById('agro-btn-add');
+  btn.disabled = true;
+  btn.textContent = 'Adicionando...';
+
+  const { error } = await supabaseClientAgro.from('agro_lancamentos').insert({
+    propriedade_id: agroPropriedadeAtual,
+    safra_id: agroSafraAtual || null,
+    tipo, descricao, valor,
+    categoria: categoria || null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Adicionar';
+
+  if(error){
+    alert('Erro ao adicionar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('agro-novo-valor').value = '';
+  document.getElementById('agro-novo-descricao').value = '';
+  document.getElementById('agro-novo-categoria').value = '';
+  agroCarregarLancamentos();
+}
+
+async function agroCarregarProducao(){
+  const container = document.getElementById('agro-lista-producao');
+  if(!agroSafraAtual){
+    // Produção sempre pertence a UMA safra — sem uma escolhida, mostra a
+    // de todas as safras da propriedade de uma vez.
+    const idsSafras = agroSafras.map(s => s.id);
+    if(!idsSafras.length){
+      agroProducoes = [];
+      container.innerHTML = '<div class="agro-vazio">Nenhuma safra cadastrada ainda — cria uma pelo chat com o Zeca ("comecei a safra de milho").</div>';
+      return;
+    }
+    container.innerHTML = '<div class="agro-vazio">Carregando...</div>';
+    const { data } = await supabaseClientAgro.from('agro_producao').select('*').in('safra_id', idsSafras).order('created_at', { ascending: false });
+    agroProducoes = data || [];
+  } else {
+    container.innerHTML = '<div class="agro-vazio">Carregando...</div>';
+    const { data } = await supabaseClientAgro.from('agro_producao').select('*').eq('safra_id', agroSafraAtual).order('created_at', { ascending: false });
+    agroProducoes = data || [];
+  }
+  agroRenderProducao();
+}
+
+function agroRenderProducao(){
+  const container = document.getElementById('agro-lista-producao');
+  if(!agroProducoes.length){
+    container.innerHTML = '<div class="agro-vazio">Nenhuma produção registrada ainda.</div>';
+    return;
+  }
+  const safraNome = id => (agroSafras.find(s => s.id === id) || {}).nome || '';
+  container.innerHTML = agroProducoes.map(p => `<div class="agro-lista-item">
+    <div class="agro-lista-icone">🌾</div>
+    <div class="agro-lista-info">
+      <div class="agro-lista-desc">${agroEscapar(p.cultura || '')}</div>
+      <div class="agro-lista-meta">${safraNome(p.safra_id)}</div>
+    </div>
+    <div class="agro-lista-valor">${p.quantidade}${agroEscapar(p.unidade || '')}</div>
+    <button type="button" class="agro-lista-apagar" onclick="agroApagarProducao('${p.id}')" title="Apagar">🗑️</button>
+  </div>`).join('');
+}
+
+async function agroApagarProducao(id){
+  if(!confirm('Apagar esse registro de produção?')) return;
+  await supabaseClientAgro.from('agro_producao').delete().eq('id', id);
+  agroCarregarProducao();
+}
+
+async function agroAdicionarProducao(){
+  if(!agroSafraAtual){
+    alert('Escolhe uma safra específica ali em cima primeiro (produção sempre pertence a uma safra).');
+    return;
+  }
+  const cultura = document.getElementById('agro-prod-cultura').value.trim();
+  const quantidadeTexto = document.getElementById('agro-prod-quantidade').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const quantidade = parseFloat(quantidadeTexto);
+  const unidade = document.getElementById('agro-prod-unidade').value.trim() || 'sc';
+
+  if(!cultura){ alert('Digita a cultura.'); return; }
+  if(!quantidade || quantidade <= 0){ alert('Digita uma quantidade válida.'); return; }
+
+  const btn = document.getElementById('agro-btn-prod-add');
+  btn.disabled = true;
+  btn.textContent = 'Registrando...';
+
+  const { error } = await supabaseClientAgro.from('agro_producao').insert({
+    safra_id: agroSafraAtual, cultura, quantidade, unidade
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Registrar';
+
+  if(error){
+    alert('Erro ao registrar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('agro-prod-cultura').value = '';
+  document.getElementById('agro-prod-quantidade').value = '';
+  agroCarregarProducao();
+}
+
+const AGRO_TIPO_LABEL = { maquina: '🚜 Máquina', animal: '🐄 Animal', benfeitoria: '🏗️ Benfeitoria', outro: '📦 Outro' };
+
+async function agroCarregarBens(){
+  document.getElementById('agro-lista-bens').innerHTML = '<div class="agro-vazio">Carregando...</div>';
+  const { data } = await supabaseClientAgro.from('agro_patrimonio').select('*').eq('propriedade_id', agroPropriedadeAtual).eq('ativo', true).order('created_at', { ascending: false });
+  agroBens = data || [];
+  agroRenderBens();
+}
+
+function agroRenderBens(){
+  const container = document.getElementById('agro-lista-bens');
+  if(!agroBens.length){
+    container.innerHTML = '<div class="agro-vazio">Nenhum bem cadastrado ainda.</div>';
+    return;
+  }
+  container.innerHTML = agroBens.map(b => `<div class="agro-lista-item">
+    <div class="agro-lista-info">
+      <div class="agro-lista-desc">${agroEscapar(b.descricao)}</div>
+      <div class="agro-lista-meta"><span class="agro-bem-tag">${AGRO_TIPO_LABEL[b.tipo] || b.tipo}</span>${b.valor_aquisicao ? ' · ' + agroFmt(b.valor_aquisicao) : ''}</div>
+    </div>
+    <button type="button" class="agro-lista-apagar" onclick="agroApagarBem('${b.id}')" title="Remover">🗑️</button>
+  </div>`).join('');
+}
+
+async function agroApagarBem(id){
+  if(!confirm('Remover esse bem? (fica como inativo, o histórico não se perde)')) return;
+  await supabaseClientAgro.from('agro_patrimonio').update({ ativo: false }).eq('id', id);
+  agroCarregarBens();
+}
+
+async function agroAdicionarBem(){
+  const tipo = document.getElementById('agro-bem-tipo').value;
+  const descricao = document.getElementById('agro-bem-descricao').value.trim();
+  const valorTexto = document.getElementById('agro-bem-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const valor = parseFloat(valorTexto);
+
+  if(!descricao){ alert('Digita uma descrição do bem.'); return; }
+
+  const btn = document.getElementById('agro-btn-bem-add');
+  btn.disabled = true;
+  btn.textContent = 'Cadastrando...';
+
+  const { error } = await supabaseClientAgro.from('agro_patrimonio').insert({
+    propriedade_id: agroPropriedadeAtual,
+    tipo, descricao,
+    valor_aquisicao: (!isNaN(valor) && valor > 0) ? valor : null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Cadastrar';
+
+  if(error){
+    alert('Erro ao cadastrar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('agro-bem-descricao').value = '';
+  document.getElementById('agro-bem-valor').value = '';
+  agroCarregarBens();
+}
+
+// ============ DOCUMENTOS ============
+// Mesmo esquema privado do documentos-lar/documentos-empresa, mas aqui a
+// pasta é por PROPRIEDADE (agroPropriedadeAtual) — quem tem mais de uma
+// propriedade rural cadastrada mantém os documentos de cada uma separados.
+
+async function agroCarregarDocumentos(){
+  document.getElementById('agro-lista-documentos').innerHTML = '<div class="agro-vazio">Carregando...</div>';
+  const { data } = await supabaseClientAgro.from('agro_documentos').select('*').eq('propriedade_id', agroPropriedadeAtual).order('ano_referencia', { ascending: false }).order('created_at', { ascending: false });
+  agroDocumentos = data || [];
+  agroRenderDocumentos();
+}
+
+function agroRenderDocumentos(){
+  const container = document.getElementById('agro-lista-documentos');
+  if(!agroDocumentos.length){
+    container.innerHTML = '<div class="agro-vazio">Nenhum documento guardado ainda.</div>';
+    return;
+  }
+  container.innerHTML = agroDocumentos.map(d => `<div class="agro-lista-item">
+    <div class="agro-lista-info">
+      <div class="agro-lista-desc">${agroEscapar(d.nome)}</div>
+      <div class="agro-lista-meta">${d.ano_referencia || ''}${d.categoria ? ' · ' + agroEscapar(d.categoria) : ''}</div>
+    </div>
+    <button type="button" class="agro-lista-apagar" onclick="agroAbrirDocumento('${agroEscapar(d.url)}')" title="Abrir" style="color:#3b6ea5;">⬇️</button>
+    <button type="button" class="agro-lista-apagar" onclick="agroApagarDocumento('${d.id}', '${agroEscapar(d.url)}')" title="Apagar">🗑️</button>
+  </div>`).join('');
+}
+
+async function agroAbrirDocumento(caminho){
+  const { data, error } = await supabaseClientAgro.storage.from('documentos-agro').createSignedUrl(caminho, 60);
+  if(error){ alert('Não consegui abrir esse arquivo: ' + error.message); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+async function agroApagarDocumento(id, caminho){
+  if(!confirm('Apagar esse documento? Não tem como desfazer.')) return;
+  await supabaseClientAgro.storage.from('documentos-agro').remove([caminho]);
+  await supabaseClientAgro.from('agro_documentos').delete().eq('id', id);
+  agroCarregarDocumentos();
+}
+
+async function agroAdicionarDocumento(){
+  const categoria = document.getElementById('agro-doc-categoria').value.trim();
+  const anoTexto = document.getElementById('agro-doc-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+  const inputArquivo = document.getElementById('agro-doc-arquivo');
+  const arquivo = inputArquivo.files[0];
+
+  if(!arquivo){ alert('Escolhe um arquivo primeiro.'); return; }
+
+  const btn = document.getElementById('agro-btn-doc-add');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  const nomeLimpo = arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const caminho = `${agroPropriedadeAtual}/${Date.now()}_${nomeLimpo}`;
+
+  const { error: erroUpload } = await supabaseClientAgro.storage.from('documentos-agro').upload(caminho, arquivo);
+  if(erroUpload){
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+    alert('Erro ao enviar o arquivo: ' + erroUpload.message);
+    return;
+  }
+
+  const { error } = await supabaseClientAgro.from('agro_documentos').insert({
+    propriedade_id: agroPropriedadeAtual,
+    categoria: categoria || null,
+    nome: arquivo.name,
+    url: caminho,
+    ano_referencia: !isNaN(ano) ? ano : null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Guardar';
+
+  if(error){
+    alert('Erro ao salvar o registro: ' + error.message);
+    return;
+  }
+
+  document.getElementById('agro-doc-categoria').value = '';
+  document.getElementById('agro-doc-ano').value = '';
+  inputArquivo.value = '';
+  agroCarregarDocumentos();
+}
+
+// Talhões — hoje o Zeca já cria um talhão sozinho pelo chat
+// ("cadastrar_talhao"), mas não tinha nenhuma tela pra listar, renomear
+// ou desativar um — essa seção cobre isso.
+async function agroCarregarTalhoes(){
+  document.getElementById('agro-lista-talhoes').innerHTML = '<div class="agro-vazio">Carregando...</div>';
+  const { data } = await supabaseClientAgro.from('agro_talhoes').select('*').eq('propriedade_id', agroPropriedadeAtual).eq('ativo', true).order('nome');
+  agroTalhoes = data || [];
+  agroRenderTalhoes();
+}
+
+function agroRenderTalhoes(){
+  const container = document.getElementById('agro-lista-talhoes');
+  if(!agroTalhoes.length){
+    container.innerHTML = '<div class="agro-vazio">Nenhum talhão cadastrado ainda.</div>';
+    return;
+  }
+  container.innerHTML = agroTalhoes.map(t => `<div class="agro-lista-item">
+    <div class="agro-lista-icone">🗺️</div>
+    <div class="agro-lista-info">
+      <div class="agro-lista-desc">${agroEscapar(t.nome)}</div>
+      <div class="agro-lista-meta">${t.area_hectares ? t.area_hectares + ' ha' : 'área não informada'}</div>
+    </div>
+    <button type="button" class="agro-lista-apagar" onclick="agroEditarTalhao('${t.id}')" title="Editar" style="color:#4a7a2a;">✏️</button>
+    <button type="button" class="agro-lista-apagar" onclick="agroApagarTalhao('${t.id}')" title="Desativar">🗑️</button>
+  </div>`).join('');
+}
+
+async function agroEditarTalhao(id){
+  const talhao = agroTalhoes.find(t => t.id === id);
+  if(!talhao) return;
+  const novoNome = prompt('Nome do talhão:', talhao.nome);
+  if(novoNome === null) return; // cancelou
+  if(!novoNome.trim()){ alert('O nome não pode ficar vazio.'); return; }
+  const novaAreaTexto = prompt('Área em hectares (deixe vazio se não souber):', talhao.area_hectares || '');
+  if(novaAreaTexto === null) return;
+  const novaArea = parseFloat(String(novaAreaTexto).replace(',', '.'));
+
+  const { error } = await supabaseClientAgro.from('agro_talhoes').update({
+    nome: novoNome.trim(),
+    area_hectares: (!isNaN(novaArea) && novaArea > 0) ? novaArea : null
+  }).eq('id', id);
+
+  if(error){ alert('Erro ao editar: ' + error.message); return; }
+  agroCarregarTalhoes();
+}
+
+async function agroApagarTalhao(id){
+  if(!confirm('Desativar esse talhão? Os lançamentos e produções já registrados nele continuam no histórico, só some da lista de talhões ativos.')) return;
+  await supabaseClientAgro.from('agro_talhoes').update({ ativo: false }).eq('id', id);
+  agroCarregarTalhoes();
+}
+
+async function agroAdicionarTalhao(){
+  const nome = document.getElementById('agro-talhao-nome').value.trim();
+  const areaTexto = document.getElementById('agro-talhao-area').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const area = parseFloat(areaTexto);
+
+  if(!nome){ alert('Digita um nome pro talhão.'); return; }
+
+  const btn = document.getElementById('agro-btn-talhao-add');
+  btn.disabled = true;
+  btn.textContent = 'Cadastrando...';
+
+  const { error } = await supabaseClientAgro.from('agro_talhoes').insert({
+    propriedade_id: agroPropriedadeAtual,
+    nome,
+    area_hectares: (!isNaN(area) && area > 0) ? area : null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Cadastrar';
+
+  if(error){
+    alert('Erro ao cadastrar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('agro-talhao-nome').value = '';
+  document.getElementById('agro-talhao-area').value = '';
+  agroCarregarTalhoes();
+}
+
+async function agroPrepararIR(){
+  const anoTexto = document.getElementById('agro-ir-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+  const btn = document.getElementById('agro-btn-ir');
+  btn.disabled = true;
+  btn.textContent = 'Organizando...';
+  try{
+    const { data: { session } } = await supabaseClientAgro.auth.getSession();
+    const respDados = await fetch('/.netlify/functions/preparar-ir-zeca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ modulo: 'agro', ano })
+    });
+    const dados = await respDados.json();
+    if(!respDados.ok || dados.error){ alert(dados.error || 'Não consegui organizar os dados agora.'); return; }
+
+    const respPdf = await fetch('/.netlify/functions/gerar-pdf-zeca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: dados.texto, titulo: dados.titulo })
+    });
+    if(!respPdf.ok){ alert('Organizei os dados, mas deu erro gerando o PDF. Tenta de novo?'); return; }
+    const blob = await respPdf.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `preparacao-ir-agro-${ano}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error(e);
+    alert('Deu erro preparando os dados pro IR. Tenta de novo?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Gerar PDF pro IR';
+  }
+}
+
+initAgro();
+</script>
+</body>
+</html>

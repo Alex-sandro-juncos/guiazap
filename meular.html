@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu Lar — GuiaZap</title>
+<meta name="description" content="Controle das suas finanças e bens pessoais no GuiaZap.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<style>
+  body.lar-pagina { background: #f7f5f0; }
+  .lar-topo {
+    background: linear-gradient(90deg, #3b6ea5, #2a5580);
+    color: white;
+    padding: 16px 15px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .lar-topo a.lar-voltar { color: white; text-decoration: none; font-size: 1.3rem; line-height: 1; opacity: 0.9; }
+  .lar-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .lar-conteudo { max-width: 560px; margin: 0 auto; padding: 16px 15px 60px; }
+
+  .lar-secoes { display: flex; gap: 6px; margin-bottom: 16px; }
+  .lar-secao-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #555;
+    cursor: pointer;
+    text-align: center;
+  }
+  .lar-secao-btn.ativa { background: #3b6ea5; color: white; border-color: #3b6ea5; }
+
+  .lar-abas { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+  .lar-aba {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #555;
+    cursor: pointer;
+  }
+  .lar-aba.ativa { background: #3b6ea5; color: white; border-color: #3b6ea5; }
+
+  .lar-totais { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+  .lar-card-total { background: white; border-radius: 12px; padding: 12px 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .lar-card-total .lar-label { font-size: 0.7rem; color: #888; font-weight: 700; text-transform: uppercase; }
+  .lar-card-total .lar-valor { font-size: 1.05rem; font-weight: 800; margin-top: 4px; }
+  .lar-card-total.receita .lar-valor { color: #2a7a2a; }
+  .lar-card-total.despesa .lar-valor { color: #a4402f; }
+  .lar-card-total.saldo .lar-valor { color: #1c1c1c; }
+
+  .lar-grafico { display: flex; align-items: flex-end; gap: 6px; height: 90px; margin-bottom: 20px; padding: 0 4px; }
+  .lar-barra-dia { flex: 1; display: flex; flex-direction: column-reverse; align-items: center; gap: 1px; height: 100%; }
+  .lar-barra-receita { width: 100%; background: #2a7a2a; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .lar-barra-despesa { width: 100%; background: #a4402f; border-radius: 0 0 3px 3px; min-height: 2px; }
+  .lar-barra-dia-label { font-size: 0.6rem; color: #999; margin-top: 4px; }
+
+  .lar-form-add {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 18px;
+  }
+  .lar-form-add h3 { font-size: 0.95rem; margin: 0 0 10px; }
+  .lar-form-linha { display: flex; gap: 8px; margin-bottom: 8px; }
+  .lar-form-linha select, .lar-form-linha input {
+    flex: 1;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid #e5e0d5;
+    font-size: 0.88rem;
+  }
+  .lar-btn-add {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: #3b6ea5;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .lar-btn-add:disabled { opacity: 0.6; }
+
+  .lar-lista-item {
+    background: white;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .lar-lista-icone { font-size: 1.1rem; flex-shrink: 0; }
+  .lar-lista-info { flex: 1; min-width: 0; }
+  .lar-lista-desc { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lar-lista-meta { font-size: 0.72rem; color: #999; }
+  .lar-lista-valor { font-weight: 800; font-size: 0.9rem; white-space: nowrap; }
+  .lar-lista-valor.receita { color: #2a7a2a; }
+  .lar-lista-valor.despesa { color: #a4402f; }
+  .lar-lista-apagar { background: none; border: none; color: #bbb; cursor: pointer; font-size: 1rem; padding: 4px; }
+
+  .lar-vazio { text-align: center; color: #888; padding: 30px 10px; font-size: 0.9rem; }
+  .lar-zeca-dica {
+    text-align: center;
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 18px;
+  }
+  .lar-zeca-dica a { color: #3b6ea5; font-weight: 700; text-decoration: none; }
+
+  .lar-bem-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #3b6ea5;
+    background: #eaf1fa;
+    border-radius: 20px;
+    padding: 2px 9px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body class="lar-pagina">
+
+<div class="lar-topo">
+  <a href="index.html" class="lar-voltar" title="Voltar">←</a>
+  <h1>🏠 Meu Lar</h1>
+</div>
+
+<div class="lar-conteudo">
+  <div class="lar-secoes">
+    <button type="button" class="lar-secao-btn ativa" data-secao="financas" onclick="larTrocarSecao('financas')">💰 Finanças</button>
+    <button type="button" class="lar-secao-btn" data-secao="bens" onclick="larTrocarSecao('bens')">🏡 Bens</button>
+    <button type="button" class="lar-secao-btn" data-secao="documentos" onclick="larTrocarSecao('documentos')">📄 Docs</button>
+  </div>
+
+  <div id="lar-secao-financas">
+    <div class="lar-abas" id="lar-abas">
+      <button type="button" class="lar-aba" data-periodo="hoje" onclick="larTrocarPeriodo('hoje')">Hoje</button>
+      <button type="button" class="lar-aba" data-periodo="semana" onclick="larTrocarPeriodo('semana')">Essa semana</button>
+      <button type="button" class="lar-aba ativa" data-periodo="mes" onclick="larTrocarPeriodo('mes')">Esse mês</button>
+      <button type="button" class="lar-aba" data-periodo="tudo" onclick="larTrocarPeriodo('tudo')">Tudo</button>
+    </div>
+
+    <div class="lar-totais">
+      <div class="lar-card-total receita"><div class="lar-label">Receitas</div><div class="lar-valor" id="lar-total-receita">R$ 0,00</div></div>
+      <div class="lar-card-total despesa"><div class="lar-label">Despesas</div><div class="lar-valor" id="lar-total-despesa">R$ 0,00</div></div>
+      <div class="lar-card-total saldo"><div class="lar-label">Saldo</div><div class="lar-valor" id="lar-total-saldo">R$ 0,00</div></div>
+    </div>
+
+    <div class="lar-grafico" id="lar-grafico"></div>
+
+    <div class="lar-form-add">
+      <h3>Novo lançamento</h3>
+      <div class="lar-form-linha">
+        <select id="lar-novo-tipo">
+          <option value="despesa">⬇️ Despesa</option>
+          <option value="receita">⬆️ Receita</option>
+        </select>
+        <input type="text" id="lar-novo-valor" placeholder="Valor (ex: 80,00)" inputmode="decimal">
+      </div>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-novo-descricao" placeholder="Descrição (ex: conta de luz)">
+      </div>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-novo-categoria" placeholder="Categoria (opcional)">
+      </div>
+      <button type="button" class="lar-btn-add" id="lar-btn-add" onclick="larAdicionarLancamento()">Adicionar</button>
+    </div>
+
+    <div id="lar-lista"></div>
+  </div>
+
+  <div id="lar-secao-bens" style="display:none;">
+    <div class="lar-form-add">
+      <h3>Cadastrar bem</h3>
+      <div class="lar-form-linha">
+        <select id="lar-bem-tipo">
+          <option value="imovel">🏠 Imóvel</option>
+          <option value="veiculo">🚗 Veículo</option>
+          <option value="investimento">📈 Investimento</option>
+          <option value="outro">📦 Outro</option>
+        </select>
+      </div>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-bem-descricao" placeholder="Descrição (ex: Honda Civic 2024)">
+      </div>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-bem-valor" placeholder="Valor de aquisição (opcional)" inputmode="decimal">
+      </div>
+      <button type="button" class="lar-btn-add" id="lar-btn-bem-add" onclick="larAdicionarBem()">Cadastrar</button>
+    </div>
+    <div id="lar-lista-bens"></div>
+  </div>
+
+  <div id="lar-secao-documentos" style="display:none;">
+    <div class="lar-form-add">
+      <h3>Guardar documento</h3>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-doc-categoria" placeholder="Categoria (ex: saúde, escola, IR)">
+        <input type="text" id="lar-doc-ano" placeholder="Ano" inputmode="numeric" style="max-width:90px;">
+      </div>
+      <div class="lar-form-linha">
+        <input type="file" id="lar-doc-arquivo">
+      </div>
+      <button type="button" class="lar-btn-add" id="lar-btn-doc-add" onclick="larAdicionarDocumento()">Guardar</button>
+    </div>
+    <div id="lar-lista-documentos"></div>
+    <div class="lar-vazio" style="padding-top:0;">🔒 Só você tem acesso a esses arquivos — ficam guardados num espaço privado, não são públicos.</div>
+
+    <div class="lar-form-add">
+      <h3>📄 Preparar dados pro IR</h3>
+      <div class="lar-vazio" style="padding:0 0 10px;font-size:0.78rem;">O Zeca organiza teus lançamentos, bens e documentos do ano num PDF — não declara sozinho, é só pra te ajudar na hora de declarar (ou passar pro contador).</div>
+      <div class="lar-form-linha">
+        <input type="text" id="lar-ir-ano" placeholder="Ano" inputmode="numeric" style="max-width:110px;">
+      </div>
+      <button type="button" class="lar-btn-add" id="lar-btn-ir" onclick="larPrepararIR()">Gerar PDF pro IR</button>
+    </div>
+  </div>
+
+  <div class="lar-zeca-dica">💬 Também dá pra lançar e consultar falando com o <a href="zeca.html">Zeca</a> — "gastei 80 reais no mercado".</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientLar = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let larUsuario = null;
+let larPeriodoAtual = 'mes';
+let larLancamentos = [];
+let larBens = [];
+let larDocumentos = [];
+
+function larEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function larFmt(v){
+  return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
+}
+function larChaveDia(d){
+  return d.toLocaleDateString('en-CA');
+}
+
+async function initLar(){
+  const { data: { session } } = await supabaseClientLar.auth.getSession();
+  if(!session){
+    document.querySelector('.lar-conteudo').innerHTML = '<div class="lar-vazio">🔒 Faça login na <a href="index.html">página inicial</a> pra ver o teu Lar.</div>';
+    return;
+  }
+  larUsuario = session.user;
+  await larCarregarLancamentos();
+}
+
+function larTrocarSecao(secao){
+  document.querySelectorAll('.lar-secao-btn').forEach(b => b.classList.toggle('ativa', b.dataset.secao === secao));
+  document.getElementById('lar-secao-financas').style.display = secao === 'financas' ? '' : 'none';
+  document.getElementById('lar-secao-bens').style.display = secao === 'bens' ? '' : 'none';
+  document.getElementById('lar-secao-documentos').style.display = secao === 'documentos' ? '' : 'none';
+  if(secao === 'bens' && !larBens.length) larCarregarBens();
+  if(secao === 'documentos' && !larDocumentos.length) larCarregarDocumentos();
+}
+
+function larTrocarPeriodo(periodo){
+  larPeriodoAtual = periodo;
+  document.querySelectorAll('.lar-aba').forEach(b => b.classList.toggle('ativa', b.dataset.periodo === periodo));
+  larCarregarLancamentos();
+}
+
+function larIntervaloPeriodo(){
+  const hoje = new Date();
+  const chaveHoje = larChaveDia(hoje);
+  if(larPeriodoAtual === 'hoje') return { inicio: chaveHoje, fim: chaveHoje };
+  if(larPeriodoAtual === 'tudo') return null;
+  if(larPeriodoAtual === 'semana'){
+    const diaSemana = hoje.getDay();
+    const voltar = diaSemana === 0 ? 6 : diaSemana - 1;
+    const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - voltar);
+    return { inicio: larChaveDia(inicio), fim: chaveHoje };
+  }
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  return { inicio: larChaveDia(inicio), fim: chaveHoje };
+}
+
+async function larCarregarLancamentos(){
+  document.getElementById('lar-lista').innerHTML = '<div class="lar-vazio">Carregando...</div>';
+  let query = supabaseClientLar.from('lar_lancamentos').select('*').eq('user_id', larUsuario.id).order('data', { ascending: false }).order('created_at', { ascending: false });
+  const intervalo = larIntervaloPeriodo();
+  if(intervalo){ query = query.gte('data', intervalo.inicio).lte('data', intervalo.fim); }
+  const { data } = await query;
+  larLancamentos = data || [];
+  larRenderTotais();
+  larRenderGrafico();
+  larRenderLista();
+}
+
+function larRenderTotais(){
+  const totalReceita = larLancamentos.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  const totalDespesa = larLancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+  document.getElementById('lar-total-receita').textContent = larFmt(totalReceita);
+  document.getElementById('lar-total-despesa').textContent = larFmt(totalDespesa);
+  document.getElementById('lar-total-saldo').textContent = larFmt(totalReceita - totalDespesa);
+}
+
+function larRenderGrafico(){
+  const dias = [];
+  for(let i = 6; i >= 0; i--){
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dias.push({ chave: larChaveDia(d), label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') });
+  }
+  const porDia = {};
+  larLancamentos.forEach(l => {
+    if(!porDia[l.data]) porDia[l.data] = { receita: 0, despesa: 0 };
+    porDia[l.data][l.tipo] += Number(l.valor);
+  });
+  const maiorValor = Math.max(1, ...dias.map(d => Math.max((porDia[d.chave]?.receita || 0), (porDia[d.chave]?.despesa || 0))));
+
+  document.getElementById('lar-grafico').innerHTML = dias.map(d => {
+    const r = porDia[d.chave]?.receita || 0;
+    const dp = porDia[d.chave]?.despesa || 0;
+    const alturaR = Math.round((r / maiorValor) * 60);
+    const alturaD = Math.round((dp / maiorValor) * 60);
+    return `<div class="lar-barra-dia" title="${d.label}: receita ${larFmt(r)}, despesa ${larFmt(dp)}">
+      <div class="lar-barra-receita" style="height:${alturaR}px;"></div>
+      <div class="lar-barra-despesa" style="height:${alturaD}px;"></div>
+      <div class="lar-barra-dia-label">${d.label}</div>
+    </div>`;
+  }).join('');
+}
+
+function larRenderLista(){
+  const container = document.getElementById('lar-lista');
+  if(!larLancamentos.length){
+    container.innerHTML = '<div class="lar-vazio">Nenhum lançamento nesse período ainda.</div>';
+    return;
+  }
+  container.innerHTML = larLancamentos.map(l => {
+    const dataFmt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    return `<div class="lar-lista-item">
+      <div class="lar-lista-icone">${l.tipo === 'receita' ? '⬆️' : '⬇️'}</div>
+      <div class="lar-lista-info">
+        <div class="lar-lista-desc">${larEscapar(l.descricao)}</div>
+        <div class="lar-lista-meta">${dataFmt}${l.categoria ? ' · ' + larEscapar(l.categoria) : ''}</div>
+      </div>
+      <div class="lar-lista-valor ${l.tipo}">${l.tipo === 'receita' ? '+' : '-'}${larFmt(l.valor)}</div>
+      <button type="button" class="lar-lista-apagar" onclick="larApagarLancamento('${l.id}')" title="Apagar">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+async function larApagarLancamento(id){
+  if(!confirm('Apagar esse lançamento?')) return;
+  await supabaseClientLar.from('lar_lancamentos').delete().eq('id', id);
+  larCarregarLancamentos();
+}
+
+async function larAdicionarLancamento(){
+  const tipo = document.getElementById('lar-novo-tipo').value;
+  const valorTexto = document.getElementById('lar-novo-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const valor = parseFloat(valorTexto);
+  const descricao = document.getElementById('lar-novo-descricao').value.trim();
+  const categoria = document.getElementById('lar-novo-categoria').value.trim();
+
+  if(!valor || valor <= 0){ alert('Digita um valor válido.'); return; }
+  if(!descricao){ alert('Digita uma descrição curta.'); return; }
+
+  const btn = document.getElementById('lar-btn-add');
+  btn.disabled = true;
+  btn.textContent = 'Adicionando...';
+
+  const { error } = await supabaseClientLar.from('lar_lancamentos').insert({
+    tipo, descricao, valor,
+    categoria: categoria || null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Adicionar';
+
+  if(error){
+    alert('Erro ao adicionar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('lar-novo-valor').value = '';
+  document.getElementById('lar-novo-descricao').value = '';
+  document.getElementById('lar-novo-categoria').value = '';
+  larCarregarLancamentos();
+}
+
+async function larCarregarBens(){
+  document.getElementById('lar-lista-bens').innerHTML = '<div class="lar-vazio">Carregando...</div>';
+  const { data } = await supabaseClientLar.from('lar_patrimonio').select('*').eq('user_id', larUsuario.id).eq('ativo', true).order('created_at', { ascending: false });
+  larBens = data || [];
+  larRenderBens();
+}
+
+const LAR_TIPO_LABEL = { imovel: '🏠 Imóvel', veiculo: '🚗 Veículo', investimento: '📈 Investimento', outro: '📦 Outro' };
+
+function larRenderBens(){
+  const container = document.getElementById('lar-lista-bens');
+  if(!larBens.length){
+    container.innerHTML = '<div class="lar-vazio">Nenhum bem cadastrado ainda.</div>';
+    return;
+  }
+  container.innerHTML = larBens.map(b => `<div class="lar-lista-item">
+    <div class="lar-lista-info">
+      <div class="lar-lista-desc">${larEscapar(b.descricao)}</div>
+      <div class="lar-lista-meta"><span class="lar-bem-tag">${LAR_TIPO_LABEL[b.tipo] || b.tipo}</span>${b.valor_aquisicao ? ' · ' + larFmt(b.valor_aquisicao) : ''}</div>
+    </div>
+    <button type="button" class="lar-lista-apagar" onclick="larApagarBem('${b.id}')" title="Remover">🗑️</button>
+  </div>`).join('');
+}
+
+async function larApagarBem(id){
+  if(!confirm('Remover esse bem? (fica como inativo, o histórico não se perde)')) return;
+  await supabaseClientLar.from('lar_patrimonio').update({ ativo: false }).eq('id', id);
+  larCarregarBens();
+}
+
+async function larAdicionarBem(){
+  const tipo = document.getElementById('lar-bem-tipo').value;
+  const descricao = document.getElementById('lar-bem-descricao').value.trim();
+  const valorTexto = document.getElementById('lar-bem-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const valor = parseFloat(valorTexto);
+
+  if(!descricao){ alert('Digita uma descrição do bem.'); return; }
+
+  const btn = document.getElementById('lar-btn-bem-add');
+  btn.disabled = true;
+  btn.textContent = 'Cadastrando...';
+
+  const { error } = await supabaseClientLar.from('lar_patrimonio').insert({
+    tipo, descricao,
+    valor_aquisicao: (!isNaN(valor) && valor > 0) ? valor : null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Cadastrar';
+
+  if(error){
+    alert('Erro ao cadastrar: ' + error.message);
+    return;
+  }
+
+  document.getElementById('lar-bem-descricao').value = '';
+  document.getElementById('lar-bem-valor').value = '';
+  larCarregarBens();
+}
+
+async function larCarregarDocumentos(){
+  document.getElementById('lar-lista-documentos').innerHTML = '<div class="lar-vazio">Carregando...</div>';
+  const { data } = await supabaseClientLar.from('lar_documentos').select('*').eq('user_id', larUsuario.id).order('ano_referencia', { ascending: false }).order('created_at', { ascending: false });
+  larDocumentos = data || [];
+  larRenderDocumentos();
+}
+
+function larRenderDocumentos(){
+  const container = document.getElementById('lar-lista-documentos');
+  if(!larDocumentos.length){
+    container.innerHTML = '<div class="lar-vazio">Nenhum documento guardado ainda.</div>';
+    return;
+  }
+  container.innerHTML = larDocumentos.map(d => `<div class="lar-lista-item">
+    <div class="lar-lista-icone">📄</div>
+    <div class="lar-lista-info">
+      <div class="lar-lista-desc">${larEscapar(d.nome)}</div>
+      <div class="lar-lista-meta">${d.ano_referencia || ''}${d.categoria ? ' · ' + larEscapar(d.categoria) : ''}</div>
+    </div>
+    <button type="button" class="lar-lista-apagar" onclick="larAbrirDocumento('${d.id}', '${larEscapar(d.url)}')" title="Abrir" style="color:#3b6ea5;">⬇️</button>
+    <button type="button" class="lar-lista-apagar" onclick="larApagarDocumento('${d.id}', '${larEscapar(d.url)}')" title="Apagar">🗑️</button>
+  </div>`).join('');
+}
+
+async function larAbrirDocumento(id, caminho){
+  // Bucket privado — precisa de uma URL assinada, válida só por um
+  // tempo curto, em vez de um link público fixo.
+  const { data, error } = await supabaseClientLar.storage.from('documentos-lar').createSignedUrl(caminho, 60);
+  if(error){ alert('Não consegui abrir esse arquivo: ' + error.message); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+async function larApagarDocumento(id, caminho){
+  if(!confirm('Apagar esse documento? Não tem como desfazer.')) return;
+  await supabaseClientLar.storage.from('documentos-lar').remove([caminho]);
+  await supabaseClientLar.from('lar_documentos').delete().eq('id', id);
+  larCarregarDocumentos();
+}
+
+async function larAdicionarDocumento(){
+  const categoria = document.getElementById('lar-doc-categoria').value.trim();
+  const anoTexto = document.getElementById('lar-doc-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+  const inputArquivo = document.getElementById('lar-doc-arquivo');
+  const arquivo = inputArquivo.files[0];
+
+  if(!arquivo){ alert('Escolhe um arquivo primeiro.'); return; }
+
+  const btn = document.getElementById('lar-btn-doc-add');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  // Caminho "<user_id>/<timestamp>_<nome>" — é exatamente o que a
+  // política de Storage exige (dono só mexe na própria pasta) e evita
+  // dois arquivos com nome igual se sobrescreverem.
+  const nomeLimpo = arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const caminho = `${larUsuario.id}/${Date.now()}_${nomeLimpo}`;
+
+  const { error: erroUpload } = await supabaseClientLar.storage.from('documentos-lar').upload(caminho, arquivo);
+  if(erroUpload){
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+    alert('Erro ao enviar o arquivo: ' + erroUpload.message);
+    return;
+  }
+
+  const { error } = await supabaseClientLar.from('lar_documentos').insert({
+    categoria: categoria || null,
+    nome: arquivo.name,
+    url: caminho,
+    ano_referencia: !isNaN(ano) ? ano : null
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Guardar';
+
+  if(error){
+    alert('Erro ao salvar o registro: ' + error.message);
+    return;
+  }
+
+  document.getElementById('lar-doc-categoria').value = '';
+  document.getElementById('lar-doc-ano').value = '';
+  inputArquivo.value = '';
+  larCarregarDocumentos();
+}
+
+async function larPrepararIR(){
+  const anoTexto = document.getElementById('lar-ir-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+  const btn = document.getElementById('lar-btn-ir');
+  btn.disabled = true;
+  btn.textContent = 'Organizando...';
+  try{
+    const { data: { session } } = await supabaseClientLar.auth.getSession();
+    const respDados = await fetch('/.netlify/functions/preparar-ir-zeca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ modulo: 'lar', ano })
+    });
+    const dados = await respDados.json();
+    if(!respDados.ok || dados.error){ alert(dados.error || 'Não consegui organizar os dados agora.'); return; }
+
+    const respPdf = await fetch('/.netlify/functions/gerar-pdf-zeca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: dados.texto, titulo: dados.titulo })
+    });
+    if(!respPdf.ok){ alert('Organizei os dados, mas deu erro gerando o PDF. Tenta de novo?'); return; }
+    const blob = await respPdf.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `preparacao-ir-lar-${ano}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error(e);
+    alert('Deu erro preparando os dados pro IR. Tenta de novo?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Gerar PDF pro IR';
+  }
+}
+
+initLar();
+</script>
+</body>
+</html>
