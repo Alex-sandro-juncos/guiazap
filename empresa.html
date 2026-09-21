@@ -190,8 +190,28 @@
       <div class="emp-card-total despesa"><div class="emp-label">Despesas</div><div class="emp-valor" id="emp-caixa-despesa">R$ 0,00</div></div>
       <div class="emp-card-total saldo"><div class="emp-label">Saldo</div><div class="emp-valor" id="emp-caixa-saldo">R$ 0,00</div></div>
     </div>
+    <div class="emp-card-total despesa" id="emp-card-total-impostos" style="display:none; margin-bottom:8px;"><div class="emp-label">Impostos no período (lançados)</div><div class="emp-valor" id="emp-caixa-imposto-total">R$ 0,00</div></div>
+    <div class="emp-card-total despesa" id="emp-card-total-retiradas" style="display:none; margin-bottom:16px;"><div class="emp-label">Retiradas de sócio (pró-labore) — fora da despesa operacional</div><div class="emp-valor" id="emp-caixa-retiradas-total">R$ 0,00</div></div>
+    <div id="emp-alerta-gastos"></div>
+    <div class="emp-card" id="emp-card-categorias" style="display:none;">
+      <h3 style="font-size:0.85rem;">📊 Gastos por categoria</h3>
+      <div id="emp-categorias-lista"></div>
+    </div>
     <div class="emp-card">
       <h3>Novo lançamento</h3>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">📷</div>
+          <div style="font-weight:700; color:#6b46c1; font-size:0.76rem; margin-top:2px;">Lançar por foto da nota</div>
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="empProcessarFotoNota(event)">
+        </label>
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">🖼️</div>
+          <div style="font-weight:700; color:#6b46c1; font-size:0.76rem; margin-top:2px;">Galeria / PDF</div>
+          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="empProcessarFotoNota(event)">
+        </label>
+      </div>
+      <div id="emp-nota-ia-status"></div>
       <div class="emp-linha">
         <select id="emp-caixa-tipo">
           <option value="despesa">⬇️ Despesa</option>
@@ -203,6 +223,13 @@
         <input type="text" id="emp-caixa-descricao" placeholder="Descrição">
         <input type="text" id="emp-caixa-valor" placeholder="Valor" inputmode="decimal">
       </div>
+      <div class="emp-linha">
+        <input type="text" id="emp-caixa-imposto" placeholder="Imposto embutido (opcional, ex: 45,00)" inputmode="decimal">
+      </div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#555; margin:-2px 0 8px;">
+        <input type="checkbox" id="emp-caixa-retirada-socio" style="width:auto;">
+        Isso é retirada de sócio (pró-labore/distribuição de lucro), não despesa operacional
+      </label>
       <div class="emp-linha">
         <select id="emp-caixa-cliente"><option value="">Cliente (opcional)</option></select>
         <select id="emp-caixa-fornecedor"><option value="">Fornecedor (opcional)</option></select>
@@ -483,16 +510,71 @@ async function empCarregarCaixa(){
   const { data } = await query;
   empCaixaLancamentos = data || [];
   empRenderCaixaTotais();
+  empRenderCategoriasCaixa();
   empRenderCaixaLista();
   empPreencherSelectsCaixa();
+  empCarregarAlertaGastos();
+}
+
+// Mesmo ranking de gastos por categoria do Lar/Agro — exclui retirada de
+// sócio (não é despesa operacional, ver empRenderCaixaTotais).
+function empRenderCategoriasCaixa(){
+  const card = document.getElementById('emp-card-categorias');
+  const somaPorCategoria = {};
+  empCaixaLancamentos.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).forEach(l => {
+    somaPorCategoria[l.categoria] = (somaPorCategoria[l.categoria] || 0) + Number(l.valor);
+  });
+  const ranking = Object.entries(somaPorCategoria).sort((a, b) => b[1] - a[1]);
+  if(!ranking.length){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const totalDespesas = ranking.reduce((s, [, v]) => s + v, 0);
+  document.getElementById('emp-categorias-lista').innerHTML = ranking.map(([cat, valor]) => {
+    const pct = totalDespesas > 0 ? Math.round((valor / totalDespesas) * 100) : 0;
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:3px;">
+          <span>${empEscapar(cat)}</span>
+          <span style="font-weight:700;">${empFmt(valor)} <span style="color:#999; font-weight:400;">(${pct}%)</span></span>
+        </div>
+        <div style="background:#eee; border-radius:6px; height:6px; overflow:hidden;">
+          <div style="background:#a4402f; height:100%; width:${pct}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function empRenderCaixaTotais(){
   const totalReceita = empCaixaLancamentos.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
-  const totalDespesa = empCaixaLancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+  // Despesa "operacional" exclui retirada de sócio — pró-labore/distribuição
+  // de lucro não é custo do negócio, é dinheiro saindo pro dono, e o
+  // contador precisa dessa separação (tributação de cada um é diferente).
+  const totalDespesaOperacional = empCaixaLancamentos.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const totalRetiradas = empCaixaLancamentos.filter(l => l.tipo === 'despesa' && l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
   document.getElementById('emp-caixa-receita').textContent = empFmt(totalReceita);
-  document.getElementById('emp-caixa-despesa').textContent = empFmt(totalDespesa);
-  document.getElementById('emp-caixa-saldo').textContent = empFmt(totalReceita - totalDespesa);
+  document.getElementById('emp-caixa-despesa').textContent = empFmt(totalDespesaOperacional);
+  // Saldo é o caixa de verdade — inclui a retirada, porque o dinheiro saiu.
+  document.getElementById('emp-caixa-saldo').textContent = empFmt(totalReceita - totalDespesaOperacional - totalRetiradas);
+
+  // Total de imposto é só a SOMA do que foi digitado em cada lançamento
+  // (campo opcional) — nunca um cálculo automático de alíquota, porque
+  // isso varia por regime/produto e o Zeca não tem esse dado certo.
+  const cardImposto = document.getElementById('emp-card-total-impostos');
+  const totalImposto = empCaixaLancamentos.reduce((s, l) => s + Number(l.valor_imposto || 0), 0);
+  if(totalImposto > 0){
+    cardImposto.style.display = 'block';
+    document.getElementById('emp-caixa-imposto-total').textContent = empFmt(totalImposto);
+  } else {
+    cardImposto.style.display = 'none';
+  }
+
+  const cardRetiradas = document.getElementById('emp-card-total-retiradas');
+  if(totalRetiradas > 0){
+    cardRetiradas.style.display = 'block';
+    document.getElementById('emp-caixa-retiradas-total').textContent = empFmt(totalRetiradas);
+  } else {
+    cardRetiradas.style.display = 'none';
+  }
 }
 
 function empRenderCaixaLista(){
@@ -500,15 +582,66 @@ function empRenderCaixaLista(){
   if(!empCaixaLancamentos.length){ container.innerHTML = '<div class="emp-vazio">Nenhum lançamento ainda.</div>'; return; }
   container.innerHTML = empCaixaLancamentos.map(l => {
     const dataFmt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const temImposto = Number(l.valor_imposto || 0) > 0;
     return `<div class="emp-item">
       <div class="emp-item-info">
         <div class="emp-item-nome">${empEscapar(l.descricao)}</div>
-        <div class="emp-item-meta"><span class="emp-tag">${empEscapar(l.categoria)}</span> ${dataFmt}</div>
+        <div class="emp-item-meta"><span class="emp-tag">${empEscapar(l.categoria)}</span> ${dataFmt}${temImposto ? ` · <span class="emp-tag alerta">imposto: ${empFmt(l.valor_imposto)}</span>` : ''}${l.eh_retirada_socio ? ` · <span class="emp-tag">🤵 pró-labore</span>` : ''}</div>
       </div>
       <div class="emp-item-valor ${l.tipo}">${l.tipo === 'receita' ? '+' : '-'}${empFmt(l.valor)}</div>
       <button type="button" class="emp-item-apagar" onclick="empApagarCaixa('${l.id}')" title="Apagar">🗑️</button>
     </div>`;
   }).join('');
+}
+
+// Alerta "gastou mais que o normal" — compara SEMPRE o mês corrente com
+// o mês anterior (calendário, independente do filtro de filial escolhido
+// na tela), categoria por categoria, ignorando retirada de sócio. Só
+// alerta quando: (1) já existia gasto na categoria mês passado (não é
+// categoria nova), (2) subiu 25% ou mais, (3) o valor desse mês já é
+// pelo menos R$ 50 (pra não alertar por causa de centavos). Comparação
+// simples de soma — nunca IA, nunca estimativa.
+async function empCarregarAlertaGastos(){
+  const container = document.getElementById('emp-alerta-gastos');
+  const hoje = new Date();
+  const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  const fmtData = d => d.toISOString().slice(0, 10);
+
+  let query = supabaseClientEmp.from('empresa_caixa').select('categoria, valor, data')
+    .eq('profissional_id', empEmpresaAtual)
+    .eq('tipo', 'despesa')
+    .eq('eh_retirada_socio', false)
+    .gte('data', fmtData(inicioMesAnterior))
+    .lte('data', fmtData(hoje));
+  if(empFilialAtual) query = query.eq('filial_id', empFilialAtual);
+  const { data, error } = await query;
+  if(error || !data){ container.innerHTML = ''; return; }
+
+  const chaveInicioAtual = fmtData(inicioMesAtual);
+  const chaveFimAnterior = fmtData(fimMesAnterior);
+  const porCategoriaAtual = {};
+  const porCategoriaAnterior = {};
+  data.forEach(l => {
+    const alvo = l.data >= chaveInicioAtual ? porCategoriaAtual : (l.data <= chaveFimAnterior ? porCategoriaAnterior : null);
+    if(alvo) alvo[l.categoria] = (alvo[l.categoria] || 0) + Number(l.valor);
+  });
+
+  const alertas = Object.keys(porCategoriaAtual).map(cat => {
+    const atual = porCategoriaAtual[cat];
+    const anterior = porCategoriaAnterior[cat] || 0;
+    if(anterior <= 0 || atual < 50) return null;
+    const variacao = ((atual - anterior) / anterior) * 100;
+    if(variacao < 25) return null;
+    return { cat, atual, anterior, variacao };
+  }).filter(Boolean).sort((a, b) => b.variacao - a.variacao);
+
+  if(!alertas.length){ container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="emp-card" style="border-left:3px solid #a4402f;">
+    <h3 style="font-size:0.85rem;">⚠️ Gasto acima do normal esse mês</h3>
+    ${alertas.map(a => `<div style="font-size:0.8rem; margin-bottom:6px;">${empEscapar(a.cat)}: <b>${empFmt(a.atual)}</b> vs ${empFmt(a.anterior)} mês passado <span style="color:#a4402f; font-weight:700;">(+${Math.round(a.variacao)}%)</span></div>`).join('')}
+  </div>`;
 }
 
 function empPreencherSelectsCaixa(){
@@ -528,11 +661,64 @@ async function empApagarCaixa(id){
   empCarregarCaixa();
 }
 
+// Lançar por foto da nota — igual em espírito ao "cadastrar cardápio por
+// foto" da Vitrine: a IA só LÊ e PREENCHE o formulário, nunca lança nada
+// sozinha. A pessoa confere os campos (e pode corrigir qualquer um antes
+// de clicar em "Lançar") — sem isso, um erro de leitura da IA lançaria
+// valor errado direto no caixa sem ninguém perceber.
+async function empProcessarFotoNota(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = ''; // permite escolher o mesmo arquivo de novo depois
+
+  const status = document.getElementById('emp-nota-ia-status');
+  status.innerHTML = `<div style="text-align:center; padding:14px; background:#f3eefc; border-radius:10px; margin-bottom:10px;">
+    <div style="font-size:1.3rem;">✨</div>
+    <div style="font-weight:700; color:#6b46c1; font-size:0.85rem;">Lendo a nota, aguarde...</div>
+  </div>`;
+
+  try{
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const { data: { session } } = await supabaseClientEmp.auth.getSession();
+    const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', profissionalId: empEmpresaAtual })
+    });
+    const dados = await resp.json();
+
+    if(!resp.ok || dados.error){
+      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${empEscapar(dados.error || 'Erro ao ler a nota')}. Tenta com uma foto mais nítida ou preenche na mão.</div>`;
+      return;
+    }
+
+    if(dados.tipo) document.getElementById('emp-caixa-tipo').value = dados.tipo;
+    if(dados.categoria) document.getElementById('emp-caixa-categoria').value = dados.categoria;
+    if(dados.descricao) document.getElementById('emp-caixa-descricao').value = dados.fornecedor ? `${dados.descricao} (${dados.fornecedor})` : dados.descricao;
+    if(dados.valor) document.getElementById('emp-caixa-valor').value = dados.valor;
+    if(dados.valor_imposto) document.getElementById('emp-caixa-imposto').value = dados.valor_imposto;
+
+    status.innerHTML = `<div style="padding:10px; background:#e8f5e9; border-radius:10px; font-size:0.8rem; color:#2a7a2a; margin-bottom:4px;">✅ Li a nota e preenchi o formulário abaixo — <b>confere os dados</b> (principalmente o valor) antes de clicar em "Lançar".</div>`;
+    document.getElementById('emp-caixa-valor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch(e){
+    console.error(e);
+    status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ Erro ao processar a imagem. Tenta de novo ou preenche na mão.</div>`;
+  }
+}
+
 async function empAdicionarCaixa(){
   const tipo = document.getElementById('emp-caixa-tipo').value;
   const categoria = document.getElementById('emp-caixa-categoria').value.trim();
   const descricao = document.getElementById('emp-caixa-descricao').value.trim();
   const valor = empParseValor(document.getElementById('emp-caixa-valor').value);
+  const valorImposto = empParseValor(document.getElementById('emp-caixa-imposto').value);
+  const ehRetiradaSocio = document.getElementById('emp-caixa-retirada-socio').checked;
   const clienteId = document.getElementById('emp-caixa-cliente').value || null;
   const fornecedorId = document.getElementById('emp-caixa-fornecedor').value || null;
   const colaboradorId = document.getElementById('emp-caixa-colaborador').value || null;
@@ -548,6 +734,8 @@ async function empAdicionarCaixa(){
     profissional_id: empEmpresaAtual,
     filial_id: empFilialAtual || null,
     tipo, categoria, descricao, valor,
+    valor_imposto: (valorImposto && valorImposto > 0) ? valorImposto : null,
+    eh_retirada_socio: ehRetiradaSocio,
     cliente_id: clienteId, fornecedor_id: fornecedorId, colaborador_id: colaboradorId
   });
 
@@ -557,6 +745,9 @@ async function empAdicionarCaixa(){
   document.getElementById('emp-caixa-categoria').value = '';
   document.getElementById('emp-caixa-descricao').value = '';
   document.getElementById('emp-caixa-valor').value = '';
+  document.getElementById('emp-caixa-imposto').value = '';
+  document.getElementById('emp-caixa-retirada-socio').checked = false;
+  document.getElementById('emp-nota-ia-status').innerHTML = '';
   empCarregarCaixa();
 }
 

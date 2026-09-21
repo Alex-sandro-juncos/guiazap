@@ -171,8 +171,28 @@
       <div class="agro-card-total saldo"><div class="agro-label">Saldo</div><div class="agro-valor" id="agro-total-saldo">R$ 0,00</div></div>
     </div>
 
+    <div id="agro-alerta-gastos"></div>
+
+    <div class="agro-form-add" id="agro-card-categorias" style="display:none;">
+      <h3 style="font-size:0.85rem;">📊 Gastos por categoria</h3>
+      <div id="agro-categorias-lista"></div>
+    </div>
+
     <div class="agro-form-add">
       <h3>Novo lançamento</h3>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">📷</div>
+          <div style="font-weight:700; color:#2f7d32; font-size:0.76rem; margin-top:2px;">Lançar por foto</div>
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="agroProcessarFotoNota(event)">
+        </label>
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">🖼️</div>
+          <div style="font-weight:700; color:#2f7d32; font-size:0.76rem; margin-top:2px;">Galeria / PDF</div>
+          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="agroProcessarFotoNota(event)">
+        </label>
+      </div>
+      <div id="agro-nota-ia-status"></div>
       <div class="agro-form-linha">
         <select id="agro-novo-tipo">
           <option value="despesa">⬇️ Despesa</option>
@@ -397,7 +417,80 @@ async function agroCarregarLancamentos(){
   const { data } = await query;
   agroLancamentos = data || [];
   agroRenderTotais();
+  agroRenderCategorias();
   agroRenderLista();
+  agroCarregarAlertaGastos();
+}
+
+// Mesmo alerta "gastou mais que o normal" do Meu Lar — mês corrente x
+// mês anterior por categoria, independente do filtro de período/safra
+// da tela. Precisa de 25%+ de alta e já ter batido R$ 50 esse mês.
+async function agroCarregarAlertaGastos(){
+  const container = document.getElementById('agro-alerta-gastos');
+  const hoje = new Date();
+  const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  const fmtData = d => d.toISOString().slice(0, 10);
+
+  const { data, error } = await supabaseClientAgro.from('agro_lancamentos').select('categoria, valor, data, tipo')
+    .eq('propriedade_id', agroPropriedadeAtual)
+    .eq('tipo', 'despesa')
+    .gte('data', fmtData(inicioMesAnterior))
+    .lte('data', fmtData(hoje));
+  if(error || !data){ container.innerHTML = ''; return; }
+
+  const chaveInicioAtual = fmtData(inicioMesAtual);
+  const chaveFimAnterior = fmtData(fimMesAnterior);
+  const porCategoriaAtual = {};
+  const porCategoriaAnterior = {};
+  data.filter(l => l.categoria).forEach(l => {
+    const alvo = l.data >= chaveInicioAtual ? porCategoriaAtual : (l.data <= chaveFimAnterior ? porCategoriaAnterior : null);
+    if(alvo) alvo[l.categoria] = (alvo[l.categoria] || 0) + Number(l.valor);
+  });
+
+  const alertas = Object.keys(porCategoriaAtual).map(cat => {
+    const atual = porCategoriaAtual[cat];
+    const anterior = porCategoriaAnterior[cat] || 0;
+    if(anterior <= 0 || atual < 50) return null;
+    const variacao = ((atual - anterior) / anterior) * 100;
+    if(variacao < 25) return null;
+    return { cat, atual, anterior, variacao };
+  }).filter(Boolean).sort((a, b) => b.variacao - a.variacao);
+
+  if(!alertas.length){ container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="agro-form-add" style="border-left:3px solid #a4402f;">
+    <h3 style="font-size:0.85rem;">⚠️ Gasto acima do normal esse mês</h3>
+    ${alertas.map(a => `<div style="font-size:0.8rem; margin-bottom:6px;">${agroEscapar(a.cat)}: <b>${agroFmt(a.atual)}</b> vs ${agroFmt(a.anterior)} mês passado <span style="color:#a4402f; font-weight:700;">(+${Math.round(a.variacao)}%)</span></div>`).join('')}
+  </div>`;
+}
+
+// Mesmo ranking de gastos por categoria do Meu Lar — reaproveita os
+// lançamentos já carregados pro período/safra escolhidos, sem consulta extra.
+function agroRenderCategorias(){
+  const card = document.getElementById('agro-card-categorias');
+  const somaPorCategoria = {};
+  agroLancamentos.filter(l => l.tipo === 'despesa' && l.categoria).forEach(l => {
+    somaPorCategoria[l.categoria] = (somaPorCategoria[l.categoria] || 0) + Number(l.valor);
+  });
+  const ranking = Object.entries(somaPorCategoria).sort((a, b) => b[1] - a[1]);
+  if(!ranking.length){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const totalDespesas = ranking.reduce((s, [, v]) => s + v, 0);
+  document.getElementById('agro-categorias-lista').innerHTML = ranking.map(([cat, valor]) => {
+    const pct = totalDespesas > 0 ? Math.round((valor / totalDespesas) * 100) : 0;
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:3px;">
+          <span>${agroEscapar(cat)}</span>
+          <span style="font-weight:700;">${agroFmt(valor)} <span style="color:#999; font-weight:400;">(${pct}%)</span></span>
+        </div>
+        <div style="background:#eee; border-radius:6px; height:6px; overflow:hidden;">
+          <div style="background:#2f7d32; height:100%; width:${pct}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function agroRenderTotais(){
@@ -435,6 +528,53 @@ async function agroApagarLancamento(id){
   agroCarregarLancamentos();
 }
 
+// Lançar por foto — mesmo recurso do Empresa/Lar: a IA só LÊ e PREENCHE
+// o formulário, nunca lança sozinha. Confere antes de clicar em "Adicionar".
+async function agroProcessarFotoNota(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = '';
+
+  const status = document.getElementById('agro-nota-ia-status');
+  status.innerHTML = `<div style="text-align:center; padding:14px; background:#eaf6ea; border-radius:10px; margin-bottom:10px;">
+    <div style="font-size:1.3rem;">✨</div>
+    <div style="font-weight:700; color:#2f7d32; font-size:0.85rem;">Lendo a nota, aguarde...</div>
+  </div>`;
+
+  try{
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const { data: { session } } = await supabaseClientAgro.auth.getSession();
+    const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', modulo: 'agro', propriedadeId: agroPropriedadeAtual })
+    });
+    const dados = await resp.json();
+
+    if(!resp.ok || dados.error){
+      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${agroEscapar(dados.error || 'Erro ao ler a nota')}. Tenta com uma foto mais nítida ou preenche na mão.</div>`;
+      return;
+    }
+
+    if(dados.tipo) document.getElementById('agro-novo-tipo').value = dados.tipo;
+    if(dados.categoria) document.getElementById('agro-novo-categoria').value = dados.categoria;
+    if(dados.descricao) document.getElementById('agro-novo-descricao').value = dados.fornecedor ? `${dados.descricao} (${dados.fornecedor})` : dados.descricao;
+    if(dados.valor) document.getElementById('agro-novo-valor').value = dados.valor;
+
+    status.innerHTML = `<div style="padding:10px; background:#e8f5e9; border-radius:10px; font-size:0.8rem; color:#2a7a2a; margin-bottom:4px;">✅ Li a nota e preenchi o formulário abaixo — <b>confere os dados</b> (principalmente o valor) antes de clicar em "Adicionar".</div>`;
+    document.getElementById('agro-novo-valor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch(e){
+    console.error(e);
+    status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ Erro ao processar a imagem. Tenta de novo ou preenche na mão.</div>`;
+  }
+}
+
 async function agroAdicionarLancamento(){
   const tipo = document.getElementById('agro-novo-tipo').value;
   const valorTexto = document.getElementById('agro-novo-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
@@ -467,6 +607,7 @@ async function agroAdicionarLancamento(){
   document.getElementById('agro-novo-valor').value = '';
   document.getElementById('agro-novo-descricao').value = '';
   document.getElementById('agro-novo-categoria').value = '';
+  document.getElementById('agro-nota-ia-status').innerHTML = '';
   agroCarregarLancamentos();
 }
 

@@ -169,8 +169,28 @@
 
     <div class="lar-grafico" id="lar-grafico"></div>
 
+    <div id="lar-alerta-gastos"></div>
+
+    <div class="lar-card-categorias" id="lar-card-categorias" style="display:none;">
+      <h3 style="font-size:0.85rem; margin:0 0 8px;">📊 Gastos por categoria</h3>
+      <div id="lar-categorias-lista"></div>
+    </div>
+
     <div class="lar-form-add">
       <h3>Novo lançamento</h3>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">📷</div>
+          <div style="font-weight:700; color:#3b6ea5; font-size:0.76rem; margin-top:2px;">Lançar por foto</div>
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="larProcessarFotoNota(event)">
+        </label>
+        <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
+          <div style="font-size:1.3rem;">🖼️</div>
+          <div style="font-weight:700; color:#3b6ea5; font-size:0.76rem; margin-top:2px;">Galeria / PDF</div>
+          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="larProcessarFotoNota(event)">
+        </label>
+      </div>
+      <div id="lar-nota-ia-status"></div>
       <div class="lar-form-linha">
         <select id="lar-novo-tipo">
           <option value="despesa">⬇️ Despesa</option>
@@ -310,7 +330,83 @@ async function larCarregarLancamentos(){
   larLancamentos = data || [];
   larRenderTotais();
   larRenderGrafico();
+  larRenderCategorias();
   larRenderLista();
+  larCarregarAlertaGastos();
+}
+
+// Alerta "gastou mais que o normal" — sempre compara mês corrente com
+// mês anterior (calendário), independente da aba de período selecionada
+// na tela. Só alerta categoria que já existia mês passado, subiu 25%+ e
+// já bateu R$ 50 nesse mês — soma simples, nunca estimativa/IA.
+async function larCarregarAlertaGastos(){
+  const container = document.getElementById('lar-alerta-gastos');
+  const hoje = new Date();
+  const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  const fmtData = d => d.toISOString().slice(0, 10);
+
+  const { data, error } = await supabaseClientLar.from('lar_lancamentos').select('categoria, valor, data, tipo')
+    .eq('user_id', larUsuario.id)
+    .eq('tipo', 'despesa')
+    .gte('data', fmtData(inicioMesAnterior))
+    .lte('data', fmtData(hoje));
+  if(error || !data){ container.innerHTML = ''; return; }
+
+  const chaveInicioAtual = fmtData(inicioMesAtual);
+  const chaveFimAnterior = fmtData(fimMesAnterior);
+  const porCategoriaAtual = {};
+  const porCategoriaAnterior = {};
+  data.filter(l => l.categoria).forEach(l => {
+    const alvo = l.data >= chaveInicioAtual ? porCategoriaAtual : (l.data <= chaveFimAnterior ? porCategoriaAnterior : null);
+    if(alvo) alvo[l.categoria] = (alvo[l.categoria] || 0) + Number(l.valor);
+  });
+
+  const alertas = Object.keys(porCategoriaAtual).map(cat => {
+    const atual = porCategoriaAtual[cat];
+    const anterior = porCategoriaAnterior[cat] || 0;
+    if(anterior <= 0 || atual < 50) return null;
+    const variacao = ((atual - anterior) / anterior) * 100;
+    if(variacao < 25) return null;
+    return { cat, atual, anterior, variacao };
+  }).filter(Boolean).sort((a, b) => b.variacao - a.variacao);
+
+  if(!alertas.length){ container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="lar-form-add" style="border-left:3px solid #a4402f;">
+    <h3 style="font-size:0.85rem;">⚠️ Gasto acima do normal esse mês</h3>
+    ${alertas.map(a => `<div style="font-size:0.8rem; margin-bottom:6px;">${larEscapar(a.cat)}: <b>${larFmt(a.atual)}</b> vs ${larFmt(a.anterior)} mês passado <span style="color:#a4402f; font-weight:700;">(+${Math.round(a.variacao)}%)</span></div>`).join('')}
+  </div>`;
+}
+
+// Ranking de gastos por categoria — usa os mesmos lançamentos já
+// carregados pro período escolhido nas abas (Hoje/Semana/Mês/Tudo), sem
+// precisar de outra consulta. Só considera despesas com categoria
+// preenchida (categoria é opcional no lançamento).
+function larRenderCategorias(){
+  const card = document.getElementById('lar-card-categorias');
+  const somaPorCategoria = {};
+  larLancamentos.filter(l => l.tipo === 'despesa' && l.categoria).forEach(l => {
+    somaPorCategoria[l.categoria] = (somaPorCategoria[l.categoria] || 0) + Number(l.valor);
+  });
+  const ranking = Object.entries(somaPorCategoria).sort((a, b) => b[1] - a[1]);
+  if(!ranking.length){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const totalDespesas = ranking.reduce((s, [, v]) => s + v, 0);
+  document.getElementById('lar-categorias-lista').innerHTML = ranking.map(([cat, valor]) => {
+    const pct = totalDespesas > 0 ? Math.round((valor / totalDespesas) * 100) : 0;
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:3px;">
+          <span>${larEscapar(cat)}</span>
+          <span style="font-weight:700;">${larFmt(valor)} <span style="color:#999; font-weight:400;">(${pct}%)</span></span>
+        </div>
+        <div style="background:#eee; border-radius:6px; height:6px; overflow:hidden;">
+          <div style="background:#3b6ea5; height:100%; width:${pct}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function larRenderTotais(){
@@ -374,6 +470,54 @@ async function larApagarLancamento(id){
   larCarregarLancamentos();
 }
 
+// Lançar por foto — mesmo recurso do módulo Empresa: a IA só LÊ e
+// PREENCHE o formulário, nunca lança sozinha. Confere antes de clicar
+// em "Adicionar".
+async function larProcessarFotoNota(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = '';
+
+  const status = document.getElementById('lar-nota-ia-status');
+  status.innerHTML = `<div style="text-align:center; padding:14px; background:#eaf1f8; border-radius:10px; margin-bottom:10px;">
+    <div style="font-size:1.3rem;">✨</div>
+    <div style="font-weight:700; color:#3b6ea5; font-size:0.85rem;">Lendo a nota, aguarde...</div>
+  </div>`;
+
+  try{
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const { data: { session } } = await supabaseClientLar.auth.getSession();
+    const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', modulo: 'lar' })
+    });
+    const dados = await resp.json();
+
+    if(!resp.ok || dados.error){
+      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${larEscapar(dados.error || 'Erro ao ler a nota')}. Tenta com uma foto mais nítida ou preenche na mão.</div>`;
+      return;
+    }
+
+    if(dados.tipo) document.getElementById('lar-novo-tipo').value = dados.tipo;
+    if(dados.categoria) document.getElementById('lar-novo-categoria').value = dados.categoria;
+    if(dados.descricao) document.getElementById('lar-novo-descricao').value = dados.fornecedor ? `${dados.descricao} (${dados.fornecedor})` : dados.descricao;
+    if(dados.valor) document.getElementById('lar-novo-valor').value = dados.valor;
+
+    status.innerHTML = `<div style="padding:10px; background:#e8f5e9; border-radius:10px; font-size:0.8rem; color:#2a7a2a; margin-bottom:4px;">✅ Li a nota e preenchi o formulário abaixo — <b>confere os dados</b> (principalmente o valor) antes de clicar em "Adicionar".</div>`;
+    document.getElementById('lar-novo-valor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch(e){
+    console.error(e);
+    status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ Erro ao processar a imagem. Tenta de novo ou preenche na mão.</div>`;
+  }
+}
+
 async function larAdicionarLancamento(){
   const tipo = document.getElementById('lar-novo-tipo').value;
   const valorTexto = document.getElementById('lar-novo-valor').value.replace(/[^\d,.-]/g, '').replace(',', '.');
@@ -404,6 +548,7 @@ async function larAdicionarLancamento(){
   document.getElementById('lar-novo-valor').value = '';
   document.getElementById('lar-novo-descricao').value = '';
   document.getElementById('lar-novo-categoria').value = '';
+  document.getElementById('lar-nota-ia-status').innerHTML = '';
   larCarregarLancamentos();
 }
 

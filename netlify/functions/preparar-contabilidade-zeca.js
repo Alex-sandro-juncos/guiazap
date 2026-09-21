@@ -91,7 +91,7 @@ exports.handler = async function (event) {
     }
 
     const [caixaResp, docsResp, colabResp] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/empresa_caixa?profissional_id=eq.${profissionalId}&data=gte.${inicio}&data=lte.${fim}&select=tipo,categoria,valor,descricao,data,documento_url&order=data.asc`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/empresa_caixa?profissional_id=eq.${profissionalId}&data=gte.${inicio}&data=lte.${fim}&select=tipo,categoria,valor,valor_imposto,eh_retirada_socio,descricao,data,documento_url&order=data.asc`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/empresa_documentos?profissional_id=eq.${profissionalId}&ano_referencia=eq.${ano}&select=nome,categoria`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/empresa_colaboradores?profissional_id=eq.${profissionalId}&ativo=eq.true&select=nome,cargo,setor,salario`, { headers })
     ]);
@@ -99,21 +99,38 @@ exports.handler = async function (event) {
     const documentos = docsResp.ok ? await docsResp.json() : [];
     const colaboradores = colabResp.ok ? await colabResp.json() : [];
 
-    const porTipo = _somarPorCategoria(lancamentos);
+    // Retirada de sócio (pró-labore/distribuição de lucro) fica FORA da
+    // despesa operacional — contador precisa dela separada, tributação
+    // é diferente de despesa normal do negócio.
+    const lancamentosOperacionais = lancamentos.filter(l => !l.eh_retirada_socio);
+    const retiradasSocios = lancamentos.filter(l => l.eh_retirada_socio);
+    const totalRetiradas = retiradasSocios.reduce((s, l) => s + Number(l.valor || 0), 0);
+
+    const porTipo = _somarPorCategoria(lancamentosOperacionais);
     const totalReceita = Object.values(porTipo.receita).reduce((s, v) => s + v, 0);
     const totalDespesa = Object.values(porTipo.despesa).reduce((s, v) => s + v, 0);
     const comComprovante = lancamentos.filter(l => l.documento_url).length;
     const semComprovante = lancamentos.length - comComprovante;
+    // Soma só o que a pessoa digitou manualmente em cada lançamento
+    // (campo opcional "imposto embutido") — nunca um cálculo de alíquota
+    // feito pelo sistema, isso continua sendo trabalho do contador.
+    const totalImpostoLancado = lancamentos.reduce((s, l) => s + Number(l.valor_imposto || 0), 0);
 
     let texto = `PREPARAÇÃO DE DADOS PRA CONTABILIDADE — ${empresa.name}\n`;
     texto += `Período: ${rotuloPeriodo}\n\n`;
     texto += 'ATENÇÃO: isso é uma ORGANIZAÇÃO dos lançamentos e documentos já cadastrados no GuiaZap — não é cálculo de imposto nem declaração pronta. Confira com o contador antes de usar.\n';
 
-    texto += '\n=== RESUMO DO CAIXA ===\n';
+    texto += '\n=== RESUMO DO CAIXA (operacional — sem retirada de sócio) ===\n';
     texto += `Receitas: ${_fmtMoeda(totalReceita)}\n`;
     texto += `Despesas: ${_fmtMoeda(totalDespesa)}\n`;
-    texto += `Saldo: ${_fmtMoeda(totalReceita - totalDespesa)}\n`;
+    texto += `Saldo: ${_fmtMoeda(totalReceita - totalDespesa - totalRetiradas)}\n`;
     texto += `Lançamentos com comprovante anexado: ${comComprovante} · sem comprovante: ${semComprovante}\n`;
+    if (totalImpostoLancado > 0) {
+      texto += `Imposto embutido lançado manualmente (soma do que foi informado item a item, não é cálculo automático): ${_fmtMoeda(totalImpostoLancado)}\n`;
+    }
+    if (totalRetiradas > 0) {
+      texto += `Retirada de sócio (pró-labore/distribuição de lucro) no período: ${_fmtMoeda(totalRetiradas)} — separada da despesa operacional acima\n`;
+    }
 
     texto += '\n=== RECEITAS POR CATEGORIA ===\n';
     const catsReceita = Object.entries(porTipo.receita).sort((a, b) => b[1] - a[1]);
@@ -133,7 +150,7 @@ exports.handler = async function (event) {
     const LIMITE_LANCAMENTOS_DETALHE = 150;
     texto += '\n=== LANÇAMENTOS DO PERÍODO (detalhado) ===\n';
     if (lancamentos.length) {
-      texto += lancamentos.slice(0, LIMITE_LANCAMENTOS_DETALHE).map(l => `${l.data} · ${l.tipo === 'receita' ? '+' : '-'}${_fmtMoeda(l.valor)} · ${l.categoria || 'sem categoria'} · ${l.descricao}${l.documento_url ? ' · 📎 com comprovante' : ''}`).join('\n') + '\n';
+      texto += lancamentos.slice(0, LIMITE_LANCAMENTOS_DETALHE).map(l => `${l.data} · ${l.tipo === 'receita' ? '+' : '-'}${_fmtMoeda(l.valor)} · ${l.categoria || 'sem categoria'} · ${l.descricao}${Number(l.valor_imposto || 0) > 0 ? ` · imposto: ${_fmtMoeda(l.valor_imposto)}` : ''}${l.eh_retirada_socio ? ' · RETIRADA DE SÓCIO' : ''}${l.documento_url ? ' · 📎 com comprovante' : ''}`).join('\n') + '\n';
       if (lancamentos.length > LIMITE_LANCAMENTOS_DETALHE) {
         texto += `(+ ${lancamentos.length - LIMITE_LANCAMENTOS_DETALHE} lançamento(s) a mais nesse período — já contados nos totais por categoria acima, só não listados um a um aqui)\n`;
       }
