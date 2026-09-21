@@ -91,7 +91,7 @@ exports.handler = async function (event) {
     }
 
     const [caixaResp, docsResp, colabResp] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/empresa_caixa?profissional_id=eq.${profissionalId}&data=gte.${inicio}&data=lte.${fim}&select=tipo,categoria,valor,valor_imposto,eh_retirada_socio,descricao,data,documento_url&order=data.asc`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/empresa_caixa?profissional_id=eq.${profissionalId}&data=gte.${inicio}&data=lte.${fim}&select=tipo,categoria,valor,valor_imposto,eh_retirada_socio,status_pagamento,data_vencimento,descricao,data,documento_url&order=data.asc`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/empresa_documentos?profissional_id=eq.${profissionalId}&ano_referencia=eq.${ano}&select=nome,categoria`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/empresa_colaboradores?profissional_id=eq.${profissionalId}&ativo=eq.true&select=nome,cargo,setor,salario`, { headers })
     ]);
@@ -99,11 +99,18 @@ exports.handler = async function (event) {
     const documentos = docsResp.ok ? await docsResp.json() : [];
     const colaboradores = colabResp.ok ? await colabResp.json() : [];
 
+    // Lançamento "pendente" (conta a receber/a pagar) ainda não
+    // aconteceu de verdade — fica fora do resumo/totais principais,
+    // só entra numa seção separada, pra não inflar receita/despesa com
+    // algo que só está combinado.
+    const lancamentosEfetivados = lancamentos.filter(l => l.status_pagamento !== 'pendente');
+    const lancamentosPendentes = lancamentos.filter(l => l.status_pagamento === 'pendente');
+
     // Retirada de sócio (pró-labore/distribuição de lucro) fica FORA da
     // despesa operacional — contador precisa dela separada, tributação
     // é diferente de despesa normal do negócio.
-    const lancamentosOperacionais = lancamentos.filter(l => !l.eh_retirada_socio);
-    const retiradasSocios = lancamentos.filter(l => l.eh_retirada_socio);
+    const lancamentosOperacionais = lancamentosEfetivados.filter(l => !l.eh_retirada_socio);
+    const retiradasSocios = lancamentosEfetivados.filter(l => l.eh_retirada_socio);
     const totalRetiradas = retiradasSocios.reduce((s, l) => s + Number(l.valor || 0), 0);
 
     const porTipo = _somarPorCategoria(lancamentosOperacionais);
@@ -132,6 +139,21 @@ exports.handler = async function (event) {
       texto += `Retirada de sócio (pró-labore/distribuição de lucro) no período: ${_fmtMoeda(totalRetiradas)} — separada da despesa operacional acima\n`;
     }
 
+    if (lancamentosPendentes.length) {
+      const hojeStr = new Date().toISOString().slice(0, 10);
+      const aReceber = lancamentosPendentes.filter(l => l.tipo === 'receita');
+      const aPagar = lancamentosPendentes.filter(l => l.tipo === 'despesa');
+      const totalAReceber = aReceber.reduce((s, l) => s + Number(l.valor || 0), 0);
+      const totalAPagar = aPagar.reduce((s, l) => s + Number(l.valor || 0), 0);
+      texto += '\n=== CONTAS A RECEBER / A PAGAR (ainda não aconteceram de verdade — fora dos totais acima) ===\n';
+      texto += `A receber: ${_fmtMoeda(totalAReceber)} (${aReceber.length} lançamento(s))\n`;
+      texto += `A pagar: ${_fmtMoeda(totalAPagar)} (${aPagar.length} lançamento(s))\n`;
+      lancamentosPendentes.forEach(l => {
+        const vencido = l.data_vencimento && l.data_vencimento < hojeStr;
+        texto += `- ${l.tipo === 'receita' ? 'A RECEBER' : 'A PAGAR'} · ${_fmtMoeda(l.valor)} · ${l.categoria || 'sem categoria'} · ${l.descricao}${l.data_vencimento ? ` · vencimento: ${l.data_vencimento}` : ''}${vencido ? ' · ⚠️ VENCIDO' : ''}\n`;
+      });
+    }
+
     texto += '\n=== RECEITAS POR CATEGORIA ===\n';
     const catsReceita = Object.entries(porTipo.receita).sort((a, b) => b[1] - a[1]);
     texto += catsReceita.length
@@ -150,7 +172,7 @@ exports.handler = async function (event) {
     const LIMITE_LANCAMENTOS_DETALHE = 150;
     texto += '\n=== LANÇAMENTOS DO PERÍODO (detalhado) ===\n';
     if (lancamentos.length) {
-      texto += lancamentos.slice(0, LIMITE_LANCAMENTOS_DETALHE).map(l => `${l.data} · ${l.tipo === 'receita' ? '+' : '-'}${_fmtMoeda(l.valor)} · ${l.categoria || 'sem categoria'} · ${l.descricao}${Number(l.valor_imposto || 0) > 0 ? ` · imposto: ${_fmtMoeda(l.valor_imposto)}` : ''}${l.eh_retirada_socio ? ' · RETIRADA DE SÓCIO' : ''}${l.documento_url ? ' · 📎 com comprovante' : ''}`).join('\n') + '\n';
+      texto += lancamentos.slice(0, LIMITE_LANCAMENTOS_DETALHE).map(l => `${l.data} · ${l.tipo === 'receita' ? '+' : '-'}${_fmtMoeda(l.valor)} · ${l.categoria || 'sem categoria'} · ${l.descricao}${Number(l.valor_imposto || 0) > 0 ? ` · imposto: ${_fmtMoeda(l.valor_imposto)}` : ''}${l.eh_retirada_socio ? ' · RETIRADA DE SÓCIO' : ''}${l.status_pagamento === 'pendente' ? ' · PENDENTE (não efetivado)' : ''}${l.documento_url ? ' · 📎 com comprovante' : ''}`).join('\n') + '\n';
       if (lancamentos.length > LIMITE_LANCAMENTOS_DETALHE) {
         texto += `(+ ${lancamentos.length - LIMITE_LANCAMENTOS_DETALHE} lançamento(s) a mais nesse período — já contados nos totais por categoria acima, só não listados um a um aqui)\n`;
       }

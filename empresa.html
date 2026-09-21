@@ -192,6 +192,10 @@
     </div>
     <div class="emp-card-total despesa" id="emp-card-total-impostos" style="display:none; margin-bottom:8px;"><div class="emp-label">Impostos no período (lançados)</div><div class="emp-valor" id="emp-caixa-imposto-total">R$ 0,00</div></div>
     <div class="emp-card-total despesa" id="emp-card-total-retiradas" style="display:none; margin-bottom:16px;"><div class="emp-label">Retiradas de sócio (pró-labore) — fora da despesa operacional</div><div class="emp-valor" id="emp-caixa-retiradas-total">R$ 0,00</div></div>
+    <div class="emp-totais" id="emp-card-contas-pendentes" style="display:none; margin-bottom:16px;">
+      <div class="emp-card-total receita"><div class="emp-label">A receber</div><div class="emp-valor" id="emp-caixa-a-receber-total">R$ 0,00</div></div>
+      <div class="emp-card-total despesa"><div class="emp-label">A pagar</div><div class="emp-valor" id="emp-caixa-a-pagar-total">R$ 0,00</div></div>
+    </div>
     <div id="emp-alerta-gastos"></div>
     <div class="emp-card" id="emp-card-categorias" style="display:none;">
       <h3 style="font-size:0.85rem;">📊 Gastos por categoria</h3>
@@ -230,6 +234,13 @@
         <input type="checkbox" id="emp-caixa-retirada-socio" style="width:auto;">
         Isso é retirada de sócio (pró-labore/distribuição de lucro), não despesa operacional
       </label>
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#555; margin:-2px 0 8px;">
+        <input type="checkbox" id="emp-caixa-pendente" style="width:auto;" onchange="document.getElementById('emp-caixa-vencimento-wrap').style.display = this.checked ? 'block' : 'none';">
+        Ainda não aconteceu de verdade (é uma conta a receber/a pagar)
+      </label>
+      <div class="emp-linha" id="emp-caixa-vencimento-wrap" style="display:none;">
+        <input type="date" id="emp-caixa-vencimento" placeholder="Data combinada (vencimento)">
+      </div>
       <div class="emp-linha">
         <select id="emp-caixa-cliente"><option value="">Cliente (opcional)</option></select>
         <select id="emp-caixa-fornecedor"><option value="">Fornecedor (opcional)</option></select>
@@ -392,6 +403,7 @@
         <input type="text" id="emp-contab-ano" placeholder="Ano" inputmode="numeric" style="max-width:100px;">
       </div>
       <button type="button" class="emp-btn full" id="emp-contab-btn" onclick="empPrepararContabilidade()">Gerar PDF pra contabilidade</button>
+      <button type="button" class="emp-btn secundario full" id="emp-contab-excel-btn" onclick="empGerarExcelContabilidade()" style="margin-top:8px;">📊 Gerar Excel (Vendas / Compras / Financeiro)</button>
     </div>
   </div>
 
@@ -545,12 +557,17 @@ function empRenderCategoriasCaixa(){
 }
 
 function empRenderCaixaTotais(){
-  const totalReceita = empCaixaLancamentos.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  // Lançamento "pendente" (conta a receber/a pagar) ainda não aconteceu
+  // de verdade — não entra em receita/despesa/saldo, só no card separado
+  // de "a receber/a pagar" mais abaixo. Vira caixa de verdade só quando
+  // alguém marcar como pago/recebido.
+  const efetivados = empCaixaLancamentos.filter(l => l.status_pagamento !== 'pendente');
+  const totalReceita = efetivados.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
   // Despesa "operacional" exclui retirada de sócio — pró-labore/distribuição
   // de lucro não é custo do negócio, é dinheiro saindo pro dono, e o
   // contador precisa dessa separação (tributação de cada um é diferente).
-  const totalDespesaOperacional = empCaixaLancamentos.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
-  const totalRetiradas = empCaixaLancamentos.filter(l => l.tipo === 'despesa' && l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const totalDespesaOperacional = efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const totalRetiradas = efetivados.filter(l => l.tipo === 'despesa' && l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
   document.getElementById('emp-caixa-receita').textContent = empFmt(totalReceita);
   document.getElementById('emp-caixa-despesa').textContent = empFmt(totalDespesaOperacional);
   // Saldo é o caixa de verdade — inclui a retirada, porque o dinheiro saiu.
@@ -575,23 +592,60 @@ function empRenderCaixaTotais(){
   } else {
     cardRetiradas.style.display = 'none';
   }
+
+  // Contas a receber/a pagar — lançamentos "pendente" ainda não entram
+  // no saldo/despesa/receita acima (isso continua sendo só o que já
+  // aconteceu de verdade), mas precisam aparecer separado pra pessoa
+  // acompanhar o que tá combinado e ainda não caiu/saiu.
+  const pendentes = empCaixaLancamentos.filter(l => l.status_pagamento === 'pendente');
+  const cardPendentes = document.getElementById('emp-card-contas-pendentes');
+  if(pendentes.length){
+    const aReceber = pendentes.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+    const aPagar = pendentes.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+    cardPendentes.style.display = 'flex';
+    document.getElementById('emp-caixa-a-receber-total').textContent = empFmt(aReceber);
+    document.getElementById('emp-caixa-a-pagar-total').textContent = empFmt(aPagar);
+  } else {
+    cardPendentes.style.display = 'none';
+  }
 }
 
 function empRenderCaixaLista(){
   const container = document.getElementById('emp-lista-caixa');
   if(!empCaixaLancamentos.length){ container.innerHTML = '<div class="emp-vazio">Nenhum lançamento ainda.</div>'; return; }
+  const hojeStr = new Date().toISOString().slice(0, 10);
   container.innerHTML = empCaixaLancamentos.map(l => {
     const dataFmt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR');
     const temImposto = Number(l.valor_imposto || 0) > 0;
+    const pendente = l.status_pagamento === 'pendente';
+    const vencido = pendente && l.data_vencimento && l.data_vencimento < hojeStr;
+    const vencimentoFmt = l.data_vencimento ? new Date(l.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : null;
+    let tagPendente = '';
+    if(pendente){
+      const rotulo = l.tipo === 'receita' ? 'a receber' : 'a pagar';
+      tagPendente = ` · <span class="emp-tag ${vencido ? 'alerta' : ''}">${vencido ? '⚠️ vencido — ' : '⏳ '}${rotulo}${vencimentoFmt ? ' até ' + vencimentoFmt : ''}</span>`;
+    }
     return `<div class="emp-item">
       <div class="emp-item-info">
         <div class="emp-item-nome">${empEscapar(l.descricao)}</div>
-        <div class="emp-item-meta"><span class="emp-tag">${empEscapar(l.categoria)}</span> ${dataFmt}${temImposto ? ` · <span class="emp-tag alerta">imposto: ${empFmt(l.valor_imposto)}</span>` : ''}${l.eh_retirada_socio ? ` · <span class="emp-tag">🤵 pró-labore</span>` : ''}</div>
+        <div class="emp-item-meta"><span class="emp-tag">${empEscapar(l.categoria)}</span> ${dataFmt}${temImposto ? ` · <span class="emp-tag alerta">imposto: ${empFmt(l.valor_imposto)}</span>` : ''}${l.eh_retirada_socio ? ` · <span class="emp-tag">🤵 pró-labore</span>` : ''}${tagPendente}</div>
       </div>
       <div class="emp-item-valor ${l.tipo}">${l.tipo === 'receita' ? '+' : '-'}${empFmt(l.valor)}</div>
+      ${pendente ? `<button type="button" class="emp-item-apagar" onclick="empMarcarComoPago('${l.id}')" title="Marcar como ${l.tipo === 'receita' ? 'recebido' : 'pago'}" style="color:#2e7d32;">✅</button>` : ''}
       <button type="button" class="emp-item-apagar" onclick="empApagarCaixa('${l.id}')" title="Apagar">🗑️</button>
     </div>`;
   }).join('');
+}
+
+// Marca uma conta a receber/a pagar como liquidada — vira caixa de
+// verdade a partir de agora (entra em receita/despesa/saldo).
+async function empMarcarComoPago(id){
+  const { error } = await supabaseClientEmp.from('empresa_caixa').update({ status_pagamento: 'pago' }).eq('id', id);
+  if(error){ alert('Erro ao atualizar: ' + error.message); return; }
+  const item = empCaixaLancamentos.find(l => l.id === id);
+  if(item) item.status_pagamento = 'pago';
+  empRenderCaixaTotais();
+  empRenderCaixaLista();
 }
 
 // Alerta "gastou mais que o normal" — compara SEMPRE o mês corrente com
@@ -689,7 +743,7 @@ async function empProcessarFotoNota(event){
     const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', profissionalId: empEmpresaAtual })
+      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', profissionalId: empEmpresaAtual, modulo: 'empresa' })
     });
     const dados = await resp.json();
 
@@ -719,6 +773,8 @@ async function empAdicionarCaixa(){
   const valor = empParseValor(document.getElementById('emp-caixa-valor').value);
   const valorImposto = empParseValor(document.getElementById('emp-caixa-imposto').value);
   const ehRetiradaSocio = document.getElementById('emp-caixa-retirada-socio').checked;
+  const ehPendente = document.getElementById('emp-caixa-pendente').checked;
+  const dataVencimento = document.getElementById('emp-caixa-vencimento').value || null;
   const clienteId = document.getElementById('emp-caixa-cliente').value || null;
   const fornecedorId = document.getElementById('emp-caixa-fornecedor').value || null;
   const colaboradorId = document.getElementById('emp-caixa-colaborador').value || null;
@@ -736,6 +792,8 @@ async function empAdicionarCaixa(){
     tipo, categoria, descricao, valor,
     valor_imposto: (valorImposto && valorImposto > 0) ? valorImposto : null,
     eh_retirada_socio: ehRetiradaSocio,
+    status_pagamento: ehPendente ? 'pendente' : 'pago',
+    data_vencimento: ehPendente ? dataVencimento : null,
     cliente_id: clienteId, fornecedor_id: fornecedorId, colaborador_id: colaboradorId
   });
 
@@ -747,6 +805,9 @@ async function empAdicionarCaixa(){
   document.getElementById('emp-caixa-valor').value = '';
   document.getElementById('emp-caixa-imposto').value = '';
   document.getElementById('emp-caixa-retirada-socio').checked = false;
+  document.getElementById('emp-caixa-pendente').checked = false;
+  document.getElementById('emp-caixa-vencimento').value = '';
+  document.getElementById('emp-caixa-vencimento-wrap').style.display = 'none';
   document.getElementById('emp-nota-ia-status').innerHTML = '';
   empCarregarCaixa();
 }
@@ -1462,6 +1523,45 @@ async function empPrepararContabilidade(){
   } finally {
     btn.disabled = false;
     btn.textContent = 'Gerar PDF pra contabilidade';
+  }
+}
+
+async function empGerarExcelContabilidade(){
+  const mesTexto = document.getElementById('emp-contab-mes').value;
+  const mes = mesTexto ? parseInt(mesTexto, 10) : null;
+  const anoTexto = document.getElementById('emp-contab-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+
+  const btn = document.getElementById('emp-contab-excel-btn');
+  btn.disabled = true;
+  btn.textContent = 'Gerando planilha...';
+  try{
+    const { data: { session } } = await supabaseClientEmp.auth.getSession();
+    const resp = await fetch('/.netlify/functions/gerar-excel-contabilidade-zeca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId: empEmpresaAtual, ano, mes })
+    });
+    if(!resp.ok){
+      const dados = await resp.json().catch(() => ({}));
+      alert(dados.error || 'Não consegui gerar a planilha agora.');
+      return;
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pacote-contador-${ano}${mes ? '-' + String(mes).padStart(2,'0') : ''}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error(e);
+    alert('Deu erro gerando a planilha. Tenta de novo?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 Gerar Excel (Vendas / Compras / Financeiro)';
   }
 }
 
