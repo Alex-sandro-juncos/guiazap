@@ -99,6 +99,7 @@
   </div>
 
   <div class="emp-topo-linha">
+    <span id="pdv-status-conexao" class="emp-tag" style="display:none;">🟢 online</span>
     <select id="pdv-select-filial" class="emp-select" style="display:none;"><option value="">Todas as filiais</option></select>
     <button type="button" class="emp-btn secundario emp-btn-icone" id="pdv-sair-btn" style="display:none;" onclick="pdvSairDoTerminal()" title="Trocar código / sair">🔓</button>
   </div>
@@ -199,12 +200,24 @@ function pdvParseValor(texto){
 
 // Toda chamada ao servidor manda o código de acesso do caixa junto — é
 // esse código (não login de verdade) que autoriza as operações do PDV.
+//
+// Se o fetch nem CONSEGUE sair (sem internet, sinal caiu no meio da loja
+// etc), isso não é um erro do servidor — é "modo offline". Marca o erro
+// com .offline = true pra quem chamou decidir usar o catálogo/fila salvos
+// no aparelho em vez de travar a venda.
 async function pdvChamar(action, extra){
-  const resp = await fetch('/.netlify/functions/pdv-operacao', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, profissionalId: pdvProfissionalId, codigoAcesso: pdvCodigoAcesso, ...extra })
-  });
+  let resp;
+  try{
+    resp = await fetch('/.netlify/functions/pdv-operacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, profissionalId: pdvProfissionalId, codigoAcesso: pdvCodigoAcesso, ...extra })
+    });
+  } catch(e){
+    const erroOffline = new Error('Sem conexão com a internet agora.');
+    erroOffline.offline = true;
+    throw erroOffline;
+  }
   const dados = await resp.json();
   if(!resp.ok){
     if(resp.status === 401 || resp.status === 403){
@@ -215,6 +228,119 @@ async function pdvChamar(action, extra){
     throw new Error(dados.error || 'erro na operação');
   }
   return dados;
+}
+
+// ============ PDV OFFLINE (venda continua mesmo sem internet) ============
+// Guarda no navegador (localStorage) uma cópia do catálogo de produtos e
+// dos dados básicos do terminal (bootstrap), pra continuar vendendo se a
+// internet cair no meio do turno. Cada venda feita offline fica numa
+// "fila" local e é mandada pro servidor de verdade assim que a conexão
+// volta — nunca inventa nem confirma nada como definitivo antes disso
+// (estoque/caixa reais só mudam quando o servidor processa a venda).
+
+function pdvSalvarBootstrapCache(dados){
+  try{ localStorage.setItem('pdv_bootstrap_cache', JSON.stringify({ profissionalId: pdvProfissionalId, codigoAcesso: pdvCodigoAcesso, ...dados })); }catch(e){}
+}
+function pdvLerBootstrapCache(){
+  try{
+    const raw = localStorage.getItem('pdv_bootstrap_cache');
+    if(!raw) return null;
+    const dados = JSON.parse(raw);
+    if(dados.profissionalId !== pdvProfissionalId || dados.codigoAcesso !== pdvCodigoAcesso) return null;
+    return dados;
+  } catch(e){ return null; }
+}
+function pdvSalvarCatalogoCache(produtos){
+  try{ localStorage.setItem('pdv_catalogo_cache', JSON.stringify({ profissionalId: pdvProfissionalId, produtos, atualizadoEm: Date.now() })); }catch(e){}
+}
+function pdvLerCatalogoCache(){
+  try{
+    const raw = localStorage.getItem('pdv_catalogo_cache');
+    if(!raw) return [];
+    const dados = JSON.parse(raw);
+    if(dados.profissionalId !== pdvProfissionalId) return [];
+    return dados.produtos || [];
+  } catch(e){ return []; }
+}
+function pdvBuscarNoCatalogoLocalPorCodigo(codigo){
+  return pdvLerCatalogoCache().find(p => p.codigo_barras === codigo || p.codigo_interno === codigo) || null;
+}
+function pdvLerFilaOffline(){
+  try{ return JSON.parse(localStorage.getItem('pdv_fila_offline') || '[]'); } catch(e){ return []; }
+}
+function pdvSalvarFilaOffline(fila){
+  try{ localStorage.setItem('pdv_fila_offline', JSON.stringify(fila)); }catch(e){}
+}
+
+function pdvAtualizarBadgeConexao(){
+  const el = document.getElementById('pdv-status-conexao');
+  if(!el) return;
+  el.style.display = 'inline-block';
+  const pendentes = pdvLerFilaOffline().length;
+  if(navigator.onLine){
+    el.textContent = pendentes ? `🟡 online · sincronizando ${pendentes}` : '🟢 online';
+    el.className = 'emp-tag';
+  } else {
+    el.textContent = `🔴 offline${pendentes ? ' · ' + pendentes + ' venda(s) pendente(s)' : ''}`;
+    el.className = 'emp-tag alerta';
+  }
+}
+
+// Guarda a venda localmente (sem mandar pro servidor ainda) e já desconta
+// do catálogo salvo no aparelho, pra próxima venda offline do mesmo turno
+// já refletir o estoque — o desconto DE VERDADE no banco só acontece
+// quando o servidor processa de fato, na sincronização.
+function pdvGuardarVendaOffline(venda){
+  const localId = 'offline-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const fila = pdvLerFilaOffline();
+  fila.push({ localId, ...venda, criadoEm: new Date().toISOString() });
+  pdvSalvarFilaOffline(fila);
+
+  const catalogo = pdvLerCatalogoCache();
+  venda.itens.forEach(item => {
+    if(!item.produtoId) return;
+    const p = catalogo.find(c => c.id === item.produtoId);
+    if(p) p.quantidade = Math.max(0, Number(p.quantidade || 0) - Number(item.quantidade));
+  });
+  pdvSalvarCatalogoCache(catalogo);
+
+  return { pedidoId: localId, valorTotal: venda.valorTotal, notaFiscal: null };
+}
+
+let pdvSincronizando = false;
+async function pdvSincronizarFilaOffline(){
+  if(pdvSincronizando || !navigator.onLine) return;
+  const fila = pdvLerFilaOffline();
+  if(!fila.length) return;
+  pdvSincronizando = true;
+  pdvAtualizarBadgeConexao();
+
+  let sincronizouAlguma = false;
+  for(const venda of fila){
+    let ok = true;
+    try{
+      await pdvChamar('finalizarVenda', {
+        itens: venda.itens, clienteId: venda.clienteId, formaPagamento: venda.formaPagamento,
+        parcelas: venda.parcelas, cpfCnpjCliente: venda.cpfCnpjCliente, filialId: venda.filialId
+      });
+    } catch(e){
+      ok = false;
+      // Caiu de novo no meio da sincronização (ou deu erro de verdade no
+      // servidor) — para por aqui e tenta o resto depois, pra não ficar
+      // batendo repetido sem parar.
+      console.error('erro sincronizando venda offline', venda.localId, e.message);
+    }
+    if(ok){
+      pdvSalvarFilaOffline(pdvLerFilaOffline().filter(v => v.localId !== venda.localId));
+      sincronizouAlguma = true;
+    } else {
+      break;
+    }
+  }
+
+  pdvSincronizando = false;
+  pdvAtualizarBadgeConexao();
+  if(sincronizouAlguma) await pdvCarregarVendasHoje();
 }
 
 // ============ ENTRADA NO TERMINAL (código de acesso, sem login) ============
@@ -234,6 +360,13 @@ function initPdv(){
 
   pdvProfissionalId = localStorage.getItem('pdv_profissional_id');
   pdvCodigoAcesso = localStorage.getItem('pdv_codigo_acesso');
+
+  window.addEventListener('online', () => { pdvAtualizarBadgeConexao(); pdvSincronizarFilaOffline(); });
+  window.addEventListener('offline', () => pdvAtualizarBadgeConexao());
+  // Confere de novo periodicamente — o navegador às vezes demora a disparar
+  // o evento "online" (ex: sinal fraco indo e voltando), então isso pega o
+  // caso de ficar "achando" que ainda tá offline por mais tempo que devia.
+  setInterval(() => { if(navigator.onLine) pdvSincronizarFilaOffline(); }, 30000);
 
   if(pdvProfissionalId && pdvCodigoAcesso){
     pdvIniciarSessao();
@@ -284,8 +417,26 @@ async function pdvIniciarSessao(){
   let bootstrap;
   try{
     bootstrap = await pdvChamar('bootstrap');
+    pdvSalvarBootstrapCache(bootstrap);
+    // Atualiza o catálogo salvo no aparelho toda vez que consegue entrar
+    // de verdade — é isso que permite vender offline depois, se a
+    // internet cair no meio do turno. Não trava a entrada se só isso
+    // falhar (ex: internet caiu bem no meio dessas duas chamadas).
+    try{
+      const catalogo = await pdvChamar('catalogoCompleto');
+      pdvSalvarCatalogoCache(catalogo.produtos || []);
+    } catch(eCatalogo){ /* segue sem atualizar o catálogo dessa vez */ }
   } catch(e){
-    return; // pdvChamar já tratou (código errado joga de volta pro gate)
+    if(e.offline){
+      const cache = pdvLerBootstrapCache();
+      if(!cache){
+        pdvSairDoTerminal('Sem internet — esse terminal ainda não tem dados salvos. Precisa entrar com internet pelo menos uma vez antes de vender offline.');
+        return;
+      }
+      bootstrap = cache;
+    } else {
+      return; // pdvChamar já tratou (código errado joga de volta pro gate)
+    }
   }
 
   pdvEmpresaNome = bootstrap.empresaNome;
@@ -307,6 +458,11 @@ async function pdvIniciarSessao(){
   document.getElementById('pdv-corpo').style.display = 'block';
   pdvCarrinho = [];
   pdvRenderCarrinho();
+  pdvAtualizarBadgeConexao();
+  if(!navigator.onLine || pdvLerFilaOffline().length){
+    pdvMostrarStatus(navigator.onLine ? '🟡 Tem venda(s) offline aguardando sincronizar.' : '📴 Sem internet agora — pode continuar vendendo normal, sincroniza sozinho quando voltar.', 'erro');
+  }
+  pdvSincronizarFilaOffline();
   await pdvCarregarVendasHoje();
 
   const scanInput = document.getElementById('pdv-scan-input');
@@ -353,23 +509,34 @@ async function pdvProcessarCodigo(codigoBruto){
   const codigoLimpo = codigo.replace(/[^a-zA-Z0-9-]/g, '');
   if(!codigoLimpo){ pdvMostrarStatus('Código inválido.', 'erro'); return; }
 
-  let resultado;
-  try{ resultado = await pdvChamar('produtoPorCodigo', { codigo: codigoLimpo }); }
-  catch(e){ pdvMostrarStatus(e.message, 'erro'); return; }
+  let produto;
+  try{
+    const resultado = await pdvChamar('produtoPorCodigo', { codigo: codigoLimpo });
+    produto = resultado.produto;
+  } catch(e){
+    if(!e.offline){ pdvMostrarStatus(e.message, 'erro'); return; }
+    produto = pdvBuscarNoCatalogoLocalPorCodigo(codigoLimpo);
+    if(!produto){ pdvMostrarStatus(`📴 Offline — nenhum produto com o código "${codigoLimpo}" no catálogo salvo nesse aparelho.`, 'erro'); return; }
+  }
 
-  if(!resultado.produto){
+  if(!produto){
     pdvMostrarStatus(`Nenhum produto com o código "${codigoLimpo}" — cadastra na Vitrine/Estoque ou gera um código interno.`, 'erro');
     return;
   }
-  pdvAdicionarAoCarrinho(resultado.produto);
+  pdvAdicionarAoCarrinho(produto);
 }
 
 async function pdvBuscarPorNome(termo){
   const container = document.getElementById('pdv-busca-resultados');
-  let resultado;
-  try{ resultado = await pdvChamar('produtosPorNome', { termo }); }
-  catch(e){ container.innerHTML = `<div class="emp-vazio" style="padding:10px;">${pdvEscapar(e.message)}</div>`; return; }
-  const produtos = resultado.produtos || [];
+  let produtos;
+  try{
+    const resultado = await pdvChamar('produtosPorNome', { termo });
+    produtos = resultado.produtos || [];
+  } catch(e){
+    if(!e.offline){ container.innerHTML = `<div class="emp-vazio" style="padding:10px;">${pdvEscapar(e.message)}</div>`; return; }
+    const termoLower = termo.toLowerCase();
+    produtos = pdvLerCatalogoCache().filter(p => (p.nome || '').toLowerCase().includes(termoLower)).slice(0, 8);
+  }
   if(!produtos.length){ container.innerHTML = '<div class="emp-vazio" style="padding:10px;">Nada encontrado.</div>'; return; }
   container.innerHTML = produtos.map((p, i) => `<div class="emp-item" onclick="pdvAdicionarAoCarrinhoPorIndice(${i})">
     <div class="emp-item-info">
@@ -475,25 +642,38 @@ async function pdvFinalizarVenda(){
   btn.disabled = true; btn.textContent = 'Finalizando...';
 
   let resultado;
+  let ficouOffline = false;
   try{
     resultado = await pdvChamar('finalizarVenda', {
       itens: pdvCarrinho, clienteId, formaPagamento, parcelas, cpfCnpjCliente, filialId: pdvFilialAtual || null
     });
   } catch(e){
-    btn.disabled = false; btn.textContent = '✅ Finalizar venda';
-    alert('Erro ao salvar a venda: ' + e.message);
-    return;
+    if(e.offline){
+      // Sem internet agora — a venda NÃO se perde: fica guardada no
+      // aparelho e vai pro servidor sozinha assim que a conexão voltar
+      // (pdvSincronizarFilaOffline, disparada pelo evento "online" e por
+      // uma checagem a cada 30s). O cliente já pode levar a mercadoria.
+      resultado = pdvGuardarVendaOffline({ itens: pdvCarrinho, clienteId, formaPagamento, parcelas, cpfCnpjCliente, filialId: pdvFilialAtual || null, valorTotal });
+      ficouOffline = true;
+    } else {
+      btn.disabled = false; btn.textContent = '✅ Finalizar venda';
+      alert('Erro ao salvar a venda: ' + e.message);
+      return;
+    }
   }
 
   btn.disabled = false; btn.textContent = '✅ Finalizar venda';
   let msgNota = '';
-  const nf = resultado.notaFiscal;
-  if(nf && nf.motivo !== 'emissao_nao_ativada'){
-    if(nf.ok && nf.status === 'autorizado') msgNota = ' · 🧾 nota fiscal emitida';
-    else if(nf.ok && nf.status === 'processando_autorizacao') msgNota = ' · ⏳ nota fiscal em processamento';
-    else msgNota = ' · ⚠️ nota fiscal: ' + (nf.erro || nf.motivo || 'falha ao emitir — confira em Empresa > Nota fiscal');
+  if(!ficouOffline){
+    const nf = resultado.notaFiscal;
+    if(nf && nf.motivo !== 'emissao_nao_ativada'){
+      if(nf.ok && nf.status === 'autorizado') msgNota = ' · 🧾 nota fiscal emitida';
+      else if(nf.ok && nf.status === 'processando_autorizacao') msgNota = ' · ⏳ nota fiscal em processamento';
+      else msgNota = ' · ⚠️ nota fiscal: ' + (nf.erro || nf.motivo || 'falha ao emitir — confira em Empresa > Nota fiscal');
+    }
   }
-  pdvMostrarStatus(`✅ Venda de ${pdvFmt(valorTotal)} finalizada${formaPagamento === 'fiado' ? ' (fiado — virou conta a receber)' : ''}!${msgNota}`, 'ok');
+  const msgOffline = ficouOffline ? ' · 📴 salva no aparelho, sincroniza sozinha quando a internet voltar' : '';
+  pdvMostrarStatus(`✅ Venda de ${pdvFmt(valorTotal)} finalizada${formaPagamento === 'fiado' ? ' (fiado — vira conta a receber)' : ''}!${msgNota}${msgOffline}`, 'ok');
   pdvOferecerImpressao(resultado.pedidoId, pdvCarrinho, valorTotal, formaPagamento);
   pdvCarrinho = [];
   pdvRenderCarrinho();
@@ -501,6 +681,7 @@ async function pdvFinalizarVenda(){
   document.getElementById('pdv-cliente').value = '';
   document.getElementById('pdv-cpf-cnpj-cliente').value = '';
   pdvAoMudarPagamento();
+  pdvAtualizarBadgeConexao();
   await pdvCarregarVendasHoje();
   document.getElementById('pdv-scan-input').focus();
 }
@@ -565,24 +746,68 @@ function pdvImprimirComprovante(pedidoId, itens, valorTotal, formaPagamento, cri
 async function pdvCarregarVendasHoje(){
   const container = document.getElementById('pdv-vendas-hoje');
   container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
-  let resultado;
-  try{ resultado = await pdvChamar('vendasHoje'); }
-  catch(e){ container.innerHTML = `<div class="emp-vazio">${pdvEscapar(e.message)}</div>`; return; }
-  const pedidos = resultado.pedidos || [];
-  if(!pedidos.length){ container.innerHTML = '<div class="emp-vazio">Nenhuma venda hoje ainda.</div>'; return; }
-  container.innerHTML = pedidos.map(p => {
+  let pedidos = [];
+  try{
+    const resultado = await pdvChamar('vendasHoje');
+    pedidos = resultado.pedidos || [];
+  } catch(e){
+    if(!e.offline){ container.innerHTML = `<div class="emp-vazio">${pdvEscapar(e.message)}</div>`; return; }
+    // Offline: segue só com o que tiver na fila local, sem travar a tela
+    // — a lista do servidor volta a aparecer quando a conexão voltar.
+  }
+
+  // Vendas feitas offline (ainda não sincronizadas) entram no topo da
+  // lista, marcadas, mesmo antes de existirem de verdade no servidor.
+  const filaOffline = pdvLerFilaOffline();
+  const itensOffline = filaOffline.map(v => `<div class="emp-item">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${new Date(v.criadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${v.formaPagamento ? ` · ${pdvEscapar(v.formaPagamento)}` : ''}</div>
+      <div class="emp-item-meta"><span class="emp-tag alerta">📴 aguardando internet pra sincronizar</span></div>
+    </div>
+    <div class="emp-item-valor receita">${pdvFmt(v.valorTotal)}</div>
+  </div>`).join('');
+
+  if(!pedidos.length && !filaOffline.length){ container.innerHTML = '<div class="emp-vazio">Nenhuma venda hoje ainda.</div>'; return; }
+
+  const itensServidor = pedidos.map(p => {
     const hora = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const cancelado = p.status === 'cancelado';
+
+    let tagNota = '';
+    if (p.nf_status && p.nf_status !== 'nao_emitida') {
+      if (p.nf_status === 'emitida') tagNota = `<span class="emp-tag">🧾 nota emitida</span>`;
+      else if (p.nf_status === 'emitindo') tagNota = `<span class="emp-tag">⏳ nota processando</span>`;
+      else if (p.nf_status === 'erro') tagNota = `<span class="emp-tag alerta" title="${pdvEscapar(p.nf_erro || '').replace(/"/g, '&quot;')}">⚠️ erro na nota</span>`;
+    }
+
     return `<div class="emp-item">
       <div class="emp-item-info">
         <div class="emp-item-nome">${hora}${p.forma_pagamento ? ` · ${pdvEscapar(p.forma_pagamento)}` : ''}</div>
-        <div class="emp-item-meta">${cancelado ? '<span class="emp-tag alerta">cancelada/devolvida</span>' : `<span class="emp-tag">${pdvEscapar(p.origem)}</span>`}</div>
+        <div class="emp-item-meta">${cancelado ? '<span class="emp-tag alerta">cancelada/devolvida</span>' : `<span class="emp-tag">${pdvEscapar(p.origem)}</span>`} ${tagNota}</div>
       </div>
       <div class="emp-item-valor ${cancelado ? '' : 'receita'}" style="${cancelado ? 'text-decoration:line-through; color:#999;' : ''}">${pdvFmt(p.valor_total)}</div>
+      ${!cancelado && p.nf_url_danfe ? `<a class="emp-btn secundario emp-btn-icone" href="${pdvEscapar(p.nf_url_danfe)}" target="_blank" title="Ver DANFE/nota">🧾</a>` : ''}
+      ${!cancelado && (p.nf_status === 'erro' || p.nf_status === 'emitindo') ? `<button type="button" class="emp-item-apagar" onclick="pdvReemitirNota('${p.id}')" title="${p.nf_status === 'erro' ? 'Tentar emitir de novo' : 'Consultar status'}">🔁</button>` : ''}
       ${!cancelado ? `<button type="button" class="emp-item-apagar" onclick="pdvImprimirComprovanteDoPedido('${p.id}')" title="Reimprimir comprovante">🖨️</button>` : ''}
       ${!cancelado ? `<button type="button" class="emp-item-apagar" onclick="pdvCancelarVenda('${p.id}')" title="Cancelar/devolver">↩️</button>` : ''}
     </div>`;
   }).join('');
+
+  container.innerHTML = itensOffline + itensServidor;
+}
+
+async function pdvReemitirNota(pedidoId){
+  try{
+    const resultado = await pdvChamar('reemitirNota', { pedidoId });
+    const nf = resultado.notaFiscal || {};
+    if (nf.ok && nf.status === 'autorizado') alert('Nota emitida com sucesso!');
+    else if (nf.ok && nf.status === 'processando_autorizacao') alert('Ainda processando no provedor — tenta consultar de novo em alguns segundos.');
+    else if (!nf.ok) alert('Erro na nota: ' + (nf.erro || nf.motivo || 'falha desconhecida'));
+    else alert('Status: ' + (nf.status || 'desconhecido'));
+  } catch(e){
+    alert('Erro: ' + e.message);
+  }
+  await pdvCarregarVendasHoje();
 }
 
 async function pdvCancelarVenda(pedidoId){

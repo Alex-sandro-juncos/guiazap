@@ -173,14 +173,18 @@
     <button type="button" class="emp-btn secundario" onclick="empNovaFilial()">+ Filial</button>
   </div>
 
+  <div class="emp-topo-linha">
+    <button type="button" class="emp-btn secundario" id="emp-modo-simples-btn" onclick="empAlternarModoSimples()" style="flex:0;">🎯 Modo simples</button>
+  </div>
+
   <div class="emp-abas">
     <button type="button" class="emp-aba ativa" data-aba="caixa" onclick="empTrocarAba('caixa')">💰 Caixa</button>
     <button type="button" class="emp-aba" data-aba="pedidos" onclick="empTrocarAba('pedidos')">🧾 Pedidos</button>
     <button type="button" class="emp-aba" data-aba="clientes" onclick="empTrocarAba('clientes')">👤 Clientes</button>
+    <button type="button" class="emp-aba" data-aba="estoque" onclick="empTrocarAba('estoque')">📊 Estoque</button>
     <button type="button" class="emp-aba" data-aba="fornecedores" onclick="empTrocarAba('fornecedores')">📦 Fornecedores</button>
     <button type="button" class="emp-aba" data-aba="compras" onclick="empTrocarAba('compras')">🛒 Compras</button>
     <button type="button" class="emp-aba" data-aba="equipe" onclick="empTrocarAba('equipe')">👥 Equipe</button>
-    <button type="button" class="emp-aba" data-aba="estoque" onclick="empTrocarAba('estoque')">📊 Estoque</button>
     <button type="button" class="emp-aba" data-aba="oferta" onclick="empTrocarAba('oferta')">📢 Oferta</button>
     <button type="button" class="emp-aba" data-aba="documentos" onclick="empTrocarAba('documentos')">📁 Documentos</button>
     <button type="button" class="emp-aba" data-aba="relatorios" onclick="empTrocarAba('relatorios')">📈 Relatórios</button>
@@ -280,6 +284,11 @@
       <h3>🏆 Mais vendidos (últimos 30 dias)</h3>
       <div id="emp-mais-vendidos">Carregando...</div>
     </div>
+    <div class="emp-card" id="emp-pedidos-aprovacao-card" style="display:none;">
+      <h3>📋 Pedidos de vendedor externo — aguardando aprovação</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Tirado na rua por um vendedor externo — só vira venda de verdade (entra no caixa) depois que você aprova aqui.</div>
+      <div id="emp-lista-pedidos-aprovacao"></div>
+    </div>
     <div class="emp-card">
       <h3>Novo pedido</h3>
       <div class="emp-linha">
@@ -370,9 +379,57 @@
         <input type="text" id="emp-colab-cargo" placeholder="Cargo">
         <input type="text" id="emp-colab-salario" placeholder="Salário" inputmode="decimal">
       </div>
+      <div class="emp-linha">
+        <input type="text" id="emp-colab-cpf" placeholder="CPF (opcional)" inputmode="numeric">
+        <input type="text" id="emp-colab-telefone" placeholder="Telefone (opcional)" inputmode="tel">
+      </div>
+      <div class="emp-linha">
+        <select id="emp-colab-tipo-contrato">
+          <option value="">Tipo de contrato (opcional)</option>
+          <option value="clt">CLT</option>
+          <option value="pj">PJ</option>
+          <option value="estagiario">Estagiário</option>
+          <option value="autonomo">Autônomo</option>
+          <option value="temporario">Temporário</option>
+        </select>
+        <input type="text" id="emp-colab-carga-horaria" placeholder="Horas/semana (opcional)" inputmode="decimal">
+      </div>
       <button type="button" class="emp-btn full" id="emp-colab-btn" onclick="empAdicionarColaborador()">Cadastrar</button>
     </div>
     <div id="emp-lista-equipe"></div>
+
+    <div class="emp-card">
+      <h3>🕐 Ponto (registro interno)</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">⚠️ Isso é só um apontamento interno de horário pra sua referência (calcular hora extra aproximada, controlar atraso etc) — NÃO é o ponto eletrônico oficial exigido por lei pra empresa com 20+ empregados (que precisa de sistema homologado pelo INMETRO). Não substitui isso.</div>
+      <div class="emp-linha">
+        <select id="emp-ponto-colaborador" onchange="empCarregarPontoRegistros()"></select>
+        <input type="date" id="emp-ponto-data">
+      </div>
+      <div class="emp-linha">
+        <input type="time" id="emp-ponto-entrada" placeholder="Entrada">
+        <input type="time" id="emp-ponto-saida-almoco" placeholder="Saída almoço">
+      </div>
+      <div class="emp-linha">
+        <input type="time" id="emp-ponto-volta-almoco" placeholder="Volta almoço">
+        <input type="time" id="emp-ponto-saida" placeholder="Saída">
+      </div>
+      <div class="emp-linha">
+        <input type="text" id="emp-ponto-obs" placeholder="Observação (opcional — ex: atestado, folga)">
+      </div>
+      <button type="button" class="emp-btn full" id="emp-ponto-btn" onclick="empSalvarRegistroPonto()">Salvar registro</button>
+      <div id="emp-lista-ponto" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="emp-card">
+      <h3>🧑‍💼 Vendedores externos</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Pra representante/vendedor que visita cliente e tira pedido na rua, sem acesso ao Gerenciamento nem ao caixa. Cada um tem um código de acesso próprio pro <strong>vendedor.html</strong> — o pedido que ele tira fica "aguardando aprovação" em Pedidos, só vira venda de verdade (lança no caixa) depois que você aprova.</div>
+      <div class="emp-linha">
+        <input type="text" id="emp-novo-vendedor-nome" placeholder='Nome (ex: "João - Zona Sul")'>
+      </div>
+      <button type="button" class="emp-btn full" onclick="empCriarVendedorExterno()">➕ Criar vendedor externo</button>
+      <div id="emp-lista-vendedores-externos" style="margin-top:10px;"></div>
+      <div id="emp-vendedor-codigo-resultado"></div>
+    </div>
   </div>
 
   <!-- ESTOQUE -->
@@ -614,6 +671,7 @@ async function initEmpresa(){
   };
   await empCarregarFiliais();
   await empRecarregarTudo();
+  empAplicarModoSimples();
 
   // Permite abrir direto numa aba específica via link (ex: vindo do
   // gerenciar.html, "empresa.html#aba=estoque") — sem isso, todo link de
@@ -625,13 +683,15 @@ async function initEmpresa(){
 }
 
 async function empRecarregarTudo(){
-  await Promise.all([empCarregarClientes(), empCarregarFornecedores(), empCarregarColaboradores()]);
+  await Promise.all([empCarregarClientes(), empCarregarFornecedores(), empCarregarColaboradores(), empCarregarVendedoresExternos()]);
   empCarregarAbaAtual();
   try{
     const emailSalvo = localStorage.getItem('gz-email-contador-' + empEmpresaAtual);
     const campoEmail = document.getElementById('emp-contab-email-contador');
     if(emailSalvo && campoEmail && !campoEmail.value) campoEmail.value = emailSalvo;
   }catch(e){}
+  const campoDataPonto = document.getElementById('emp-ponto-data');
+  if(campoDataPonto && !campoDataPonto.value) campoDataPonto.value = new Date().toISOString().slice(0,10);
 }
 
 async function empCarregarFiliais(){
@@ -656,6 +716,37 @@ function empTrocarAba(aba){
     document.getElementById('emp-secao-' + a).style.display = a === aba ? '' : 'none';
   });
   empCarregarAbaAtual();
+}
+
+// ============ MODO SIMPLES (esconde as abas menos usadas no dia a dia) ============
+// Pedido antigo do roadmap externo ("UI fácil pra quem não é tão íntimo
+// de tecnologia") — versão simples e reversível: só esconde/mostra abas
+// que já existem, nunca muda dado nem comportamento nenhum por baixo.
+// Fica salvo no navegador (não é por empresa — é preferência da pessoa
+// usando esse aparelho).
+
+const EMP_ABAS_AVANCADAS = ['fornecedores', 'compras', 'equipe', 'oferta', 'documentos', 'relatorios', 'matriz'];
+
+function empModoSimplesAtivo(){
+  try{ return localStorage.getItem('gz-modo-simples') === '1'; }catch(e){ return false; }
+}
+
+function empAplicarModoSimples(){
+  const ativo = empModoSimplesAtivo();
+  document.querySelectorAll('.emp-abas .emp-aba').forEach(btn => {
+    if(EMP_ABAS_AVANCADAS.includes(btn.dataset.aba)) btn.style.display = ativo ? 'none' : '';
+  });
+  const botao = document.getElementById('emp-modo-simples-btn');
+  if(botao) botao.textContent = ativo ? '🎯 Modo simples (ativo) — ver tudo' : '🎯 Modo simples';
+  // Se a aba aberta agora é uma das escondidas, volta pra uma aba sempre
+  // visível em vez de deixar a tela numa aba que sumiu do menu.
+  if(ativo && EMP_ABAS_AVANCADAS.includes(empAbaAtual)) empTrocarAba('caixa');
+}
+
+function empAlternarModoSimples(){
+  const ativoAgora = empModoSimplesAtivo();
+  try{ localStorage.setItem('gz-modo-simples', ativoAgora ? '0' : '1'); }catch(e){}
+  empAplicarModoSimples();
 }
 
 function empCarregarAbaAtual(){
@@ -1258,11 +1349,15 @@ async function empSalvarPedido(){
 
 async function empCarregarPedidos(){
   document.getElementById('emp-lista-pedidos').innerHTML = '<div class="emp-vazio">Carregando...</div>';
-  let query = supabaseClientEmp.from('empresa_pedidos').select('*, empresa_clientes(nome)').eq('profissional_id', empEmpresaAtual).order('data', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+  // "aberto" (pedido tirado por vendedor externo, ainda sem aprovação) não
+  // entra nessa lista normal — tem o card próprio "aguardando aprovação",
+  // porque ainda não é uma venda de verdade (não lançou nada no caixa).
+  let query = supabaseClientEmp.from('empresa_pedidos').select('*, empresa_clientes(nome)').eq('profissional_id', empEmpresaAtual).neq('status', 'aberto').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(100);
   if(empFilialAtual) query = query.eq('filial_id', empFilialAtual);
   const { data } = await query;
   empPedidos = data || [];
   empRenderPedidos();
+  empCarregarPedidosAprovacao();
   empCarregarMaisVendidos();
 }
 
@@ -1324,6 +1419,66 @@ async function empApagarPedido(id){
   if(!confirm('Apagar esse pedido? (o lançamento de caixa gerado por ele continua e precisa ser apagado à parte, se quiser)')) return;
   await supabaseClientEmp.from('empresa_pedidos').delete().eq('id', id);
   empCarregarPedidos();
+}
+
+// ============ PEDIDOS DE VENDEDOR EXTERNO (aguardando aprovação) ============
+
+async function empCarregarPedidosAprovacao(){
+  const card = document.getElementById('emp-pedidos-aprovacao-card');
+  const container = document.getElementById('emp-lista-pedidos-aprovacao');
+  const { data: pedidos } = await supabaseClientEmp.from('empresa_pedidos')
+    .select('id, valor_total, observacoes, created_at, empresa_clientes(nome), empresa_vendedores_externos(nome)')
+    .eq('profissional_id', empEmpresaAtual).eq('status', 'aberto').order('created_at', { ascending: false });
+
+  if(!pedidos || !pedidos.length){ card.style.display = 'none'; container.innerHTML = ''; return; }
+  card.style.display = 'block';
+
+  const ids = pedidos.map(p => p.id);
+  const { data: itens } = await supabaseClientEmp.from('empresa_pedido_itens').select('pedido_id, nome_item, quantidade, valor_unitario').in('pedido_id', ids);
+  const itensPorPedido = {};
+  (itens || []).forEach(i => { (itensPorPedido[i.pedido_id] = itensPorPedido[i.pedido_id] || []).push(i); });
+
+  container.innerHTML = pedidos.map(p => {
+    const nomeCliente = p.empresa_clientes ? p.empresa_clientes.nome : 'Sem cliente';
+    const nomeVendedor = p.empresa_vendedores_externos ? p.empresa_vendedores_externos.nome : 'Vendedor';
+    const listaItens = (itensPorPedido[p.id] || []).map(i => `${i.quantidade}x ${empEscapar(i.nome_item)}`).join(', ');
+    return `<div class="emp-item" style="flex-wrap:wrap;">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${empEscapar(nomeCliente)} <span class="emp-tag">${empEscapar(nomeVendedor)}</span></div>
+        <div class="emp-item-meta">${listaItens}${p.observacoes ? ' · ' + empEscapar(p.observacoes) : ''}</div>
+      </div>
+      <div class="emp-item-valor receita">${empFmt(p.valor_total)}</div>
+      <button type="button" class="emp-btn full" style="margin-top:6px;" onclick="empAprovarPedidoVendedor('${p.id}')">✅ Aprovar (lança no caixa)</button>
+      <button type="button" class="emp-btn secundario full" style="margin-top:6px;" onclick="empRecusarPedidoVendedor('${p.id}')">❌ Recusar</button>
+    </div>`;
+  }).join('');
+}
+
+async function empAprovarPedidoVendedor(pedidoId){
+  if(!confirm('Aprovar esse pedido? Vira uma venda de verdade — lança no caixa como receita.')) return;
+  const { data: pedido } = await supabaseClientEmp.from('empresa_pedidos').select('valor_total, cliente_id, filial_id').eq('id', pedidoId).eq('profissional_id', empEmpresaAtual).single();
+  if(!pedido){ alert('Pedido não encontrado.'); return; }
+
+  const { data: itens } = await supabaseClientEmp.from('empresa_pedido_itens').select('nome_item').eq('pedido_id', pedidoId);
+  const descricaoItens = (itens || []).map(i => i.nome_item).join(', ');
+
+  const { error: erroCaixa } = await supabaseClientEmp.from('empresa_caixa').insert({
+    profissional_id: empEmpresaAtual, filial_id: pedido.filial_id || null, tipo: 'receita', categoria: 'venda',
+    descricao: `Pedido de vendedor externo — ${descricaoItens}`.slice(0, 200),
+    valor: pedido.valor_total, cliente_id: pedido.cliente_id, pedido_id: pedidoId
+  });
+  if(erroCaixa){ alert('Erro ao lançar no caixa: ' + erroCaixa.message); return; }
+
+  const { error: erroStatus } = await supabaseClientEmp.from('empresa_pedidos').update({ status: 'concluido' }).eq('id', pedidoId);
+  if(erroStatus){ alert('Lancei no caixa, mas deu erro atualizando o status do pedido: ' + erroStatus.message); }
+
+  await empCarregarPedidos();
+}
+
+async function empRecusarPedidoVendedor(pedidoId){
+  if(!confirm('Recusar esse pedido? Não lança nada no caixa.')) return;
+  await supabaseClientEmp.from('empresa_pedidos').update({ status: 'cancelado' }).eq('id', pedidoId);
+  await empCarregarPedidos();
 }
 
 // ============ CLIENTES ============
@@ -1695,6 +1850,8 @@ async function empCarregarColaboradores(){
   empColaboradores = data || [];
 }
 
+const EMP_TIPO_CONTRATO_LABEL = { clt: 'CLT', pj: 'PJ', estagiario: 'Estagiário', autonomo: 'Autônomo', temporario: 'Temporário' };
+
 function empRenderEquipe(){
   const container = document.getElementById('emp-lista-equipe');
   const lista = empFilialAtual ? empColaboradores.filter(c => c.filial_id === empFilialAtual) : empColaboradores;
@@ -1702,11 +1859,21 @@ function empRenderEquipe(){
   container.innerHTML = lista.map(c => `<div class="emp-item">
     <div class="emp-item-info">
       <div class="emp-item-nome">${empEscapar(c.nome)}</div>
-      <div class="emp-item-meta">${c.setor ? '<span class="emp-tag">' + empEscapar(c.setor) + '</span>' : ''} ${c.cargo ? empEscapar(c.cargo) : ''}</div>
+      <div class="emp-item-meta">${c.setor ? '<span class="emp-tag">' + empEscapar(c.setor) + '</span>' : ''} ${c.cargo ? empEscapar(c.cargo) : ''}${c.tipo_contrato ? ' · ' + (EMP_TIPO_CONTRATO_LABEL[c.tipo_contrato] || empEscapar(c.tipo_contrato)) : ''}${c.carga_horaria_semanal ? ' · ' + Number(c.carga_horaria_semanal) + 'h/sem' : ''}</div>
     </div>
     <div class="emp-item-valor">${c.salario ? empFmt(c.salario) : ''}</div>
     <button type="button" class="emp-item-apagar" onclick="empRemoverColaborador('${c.id}')" title="Desligar">🗑️</button>
   </div>`).join('');
+
+  const selectPonto = document.getElementById('emp-ponto-colaborador');
+  if(selectPonto){
+    const selecionadoAntes = selectPonto.value;
+    selectPonto.innerHTML = lista.length
+      ? lista.map(c => `<option value="${c.id}">${empEscapar(c.nome)}</option>`).join('')
+      : '<option value="">Nenhum colaborador cadastrado</option>';
+    if(lista.some(c => c.id === selecionadoAntes)) selectPonto.value = selecionadoAntes;
+    if(selectPonto.value) empCarregarPontoRegistros();
+  }
 }
 
 async function empRemoverColaborador(id){
@@ -1722,12 +1889,18 @@ async function empAdicionarColaborador(){
   const setor = document.getElementById('emp-colab-setor').value.trim();
   const cargo = document.getElementById('emp-colab-cargo').value.trim();
   const salario = empParseValor(document.getElementById('emp-colab-salario').value);
+  const cpf = document.getElementById('emp-colab-cpf').value.trim();
+  const telefone = document.getElementById('emp-colab-telefone').value.trim();
+  const tipoContrato = document.getElementById('emp-colab-tipo-contrato').value;
+  const cargaHoraria = empParseValor(document.getElementById('emp-colab-carga-horaria').value);
   if(!nome){ alert('Digita o nome.'); return; }
   const btn = document.getElementById('emp-colab-btn');
   btn.disabled = true; btn.textContent = 'Cadastrando...';
   const { error } = await supabaseClientEmp.from('empresa_colaboradores').insert({
     profissional_id: empEmpresaAtual, filial_id: empFilialAtual || null,
     nome, setor: setor || null, cargo: cargo || null, salario: salario || null,
+    cpf: cpf || null, telefone: telefone || null, tipo_contrato: tipoContrato || null,
+    carga_horaria_semanal: cargaHoraria || null,
     data_admissao: new Date().toISOString().slice(0,10)
   });
   btn.disabled = false; btn.textContent = 'Cadastrar';
@@ -1736,9 +1909,161 @@ async function empAdicionarColaborador(){
   document.getElementById('emp-colab-setor').value = '';
   document.getElementById('emp-colab-cargo').value = '';
   document.getElementById('emp-colab-salario').value = '';
+  document.getElementById('emp-colab-cpf').value = '';
+  document.getElementById('emp-colab-telefone').value = '';
+  document.getElementById('emp-colab-tipo-contrato').value = '';
+  document.getElementById('emp-colab-carga-horaria').value = '';
   await empCarregarColaboradores();
   empRenderEquipe();
   empPreencherSelectsCaixa();
+}
+
+// ============ PONTO (registro interno — ver aviso na tela) ============
+
+function empCalcularHorasPonto(r){
+  if(!r.entrada || !r.saida) return null;
+  const paraMinutos = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  let minutos = paraMinutos(r.saida) - paraMinutos(r.entrada);
+  if(r.saida_almoco && r.volta_almoco){
+    minutos -= (paraMinutos(r.volta_almoco) - paraMinutos(r.saida_almoco));
+  }
+  if(minutos < 0) return null; // horários incoerentes (ex: saída antes da entrada) — não tenta adivinhar
+  return minutos / 60;
+}
+
+async function empCarregarPontoRegistros(){
+  const colaboradorId = document.getElementById('emp-ponto-colaborador').value;
+  const container = document.getElementById('emp-lista-ponto');
+  if(!colaboradorId){ container.innerHTML = ''; return; }
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  const { data, error } = await supabaseClientEmp.from('empresa_ponto_registros')
+    .select('*').eq('colaborador_id', colaboradorId).order('data', { ascending: false }).limit(14);
+  if(error){ container.innerHTML = `<div class="emp-vazio">${empEscapar(error.message)}</div>`; return; }
+  const registros = data || [];
+  if(!registros.length){ container.innerHTML = '<div class="emp-vazio">Nenhum registro ainda pra esse colaborador.</div>'; return; }
+  container.innerHTML = registros.map(r => {
+    const horas = empCalcularHorasPonto(r);
+    const horarios = [r.entrada, r.saida_almoco, r.volta_almoco, r.saida].filter(Boolean).map(h => h.slice(0,5)).join(' · ');
+    return `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+        <div class="emp-item-meta">${horarios || 'sem horário'}${r.observacao ? ' · ' + empEscapar(r.observacao) : ''}</div>
+      </div>
+      <div class="emp-item-valor">${horas !== null ? horas.toFixed(1) + 'h' : ''}</div>
+      <button type="button" class="emp-item-apagar" onclick="empRemoverRegistroPonto('${r.id}')" title="Apagar">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+async function empSalvarRegistroPonto(){
+  const colaboradorId = document.getElementById('emp-ponto-colaborador').value;
+  if(!colaboradorId){ alert('Cadastra um colaborador primeiro.'); return; }
+  const data = document.getElementById('emp-ponto-data').value || new Date().toISOString().slice(0,10);
+  const entrada = document.getElementById('emp-ponto-entrada').value || null;
+  const saidaAlmoco = document.getElementById('emp-ponto-saida-almoco').value || null;
+  const voltaAlmoco = document.getElementById('emp-ponto-volta-almoco').value || null;
+  const saida = document.getElementById('emp-ponto-saida').value || null;
+  const observacao = document.getElementById('emp-ponto-obs').value.trim() || null;
+  if(!entrada && !saida && !observacao){ alert('Preenche pelo menos um horário ou uma observação.'); return; }
+
+  const btn = document.getElementById('emp-ponto-btn');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const { error } = await supabaseClientEmp.from('empresa_ponto_registros').insert({
+    profissional_id: empEmpresaAtual, colaborador_id: colaboradorId, data,
+    entrada, saida_almoco: saidaAlmoco, volta_almoco: voltaAlmoco, saida, observacao
+  });
+  btn.disabled = false; btn.textContent = 'Salvar registro';
+  if(error){ alert('Erro: ' + error.message); return; }
+  document.getElementById('emp-ponto-entrada').value = '';
+  document.getElementById('emp-ponto-saida-almoco').value = '';
+  document.getElementById('emp-ponto-volta-almoco').value = '';
+  document.getElementById('emp-ponto-saida').value = '';
+  document.getElementById('emp-ponto-obs').value = '';
+  await empCarregarPontoRegistros();
+}
+
+async function empRemoverRegistroPonto(id){
+  if(!confirm('Apagar esse registro de ponto?')) return;
+  await supabaseClientEmp.from('empresa_ponto_registros').delete().eq('id', id);
+  await empCarregarPontoRegistros();
+}
+
+// ============ VENDEDORES EXTERNOS (vendedor.html) ============
+
+let empVendedoresExternos = [];
+
+async function empCarregarVendedoresExternos(){
+  const { data } = await supabaseClientEmp.from('empresa_vendedores_externos').select('id, nome, ativo').eq('profissional_id', empEmpresaAtual).order('created_at');
+  empVendedoresExternos = data || [];
+  empRenderVendedoresExternos();
+}
+
+function empRenderVendedoresExternos(){
+  const container = document.getElementById('emp-lista-vendedores-externos');
+  if(!container) return;
+  if(!empVendedoresExternos.length){ container.innerHTML = '<div class="emp-vazio">Nenhum vendedor externo criado ainda.</div>'; return; }
+  container.innerHTML = empVendedoresExternos.map(v => `<div class="emp-item">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${empEscapar(v.nome)}</div>
+      <div class="emp-item-meta">${v.ativo ? '<span class="emp-tag">ativo</span>' : '<span class="emp-tag alerta">desativado</span>'}</div>
+    </div>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empRenovarCodigoVendedor('${v.id}', '${empEscapar(v.nome).replace(/'/g, "\\'")}')" title="Gerar novo código">🔑</button>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empAlternarVendedorExterno('${v.id}')" title="${v.ativo ? 'Desativar' : 'Reativar'}">${v.ativo ? '⏸️' : '▶️'}</button>
+  </div>`).join('');
+}
+
+async function empCriarVendedorExterno(){
+  const nome = document.getElementById('emp-novo-vendedor-nome').value.trim();
+  if(!nome){ alert('Dá um nome pro vendedor (ex: "João - Zona Sul").'); return; }
+
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/vendedor-gerenciar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'criarVendedor', profissionalId: empEmpresaAtual, nomeVendedor: nome })
+  });
+  const resultado = await resp.json();
+  if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra criar o vendedor')); return; }
+
+  document.getElementById('emp-novo-vendedor-nome').value = '';
+  empMostrarCodigoVendedor(nome, resultado.codigo);
+  empCarregarVendedoresExternos();
+}
+
+async function empRenovarCodigoVendedor(vendedorId, nome){
+  if(!confirm(`Gerar um código novo pro "${nome}"? O código antigo dele para de funcionar na hora.`)) return;
+
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/vendedor-gerenciar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'renovarCodigoVendedor', profissionalId: empEmpresaAtual, vendedorId })
+  });
+  const resultado = await resp.json();
+  if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra gerar o código')); return; }
+  empMostrarCodigoVendedor(nome, resultado.codigo);
+}
+
+async function empAlternarVendedorExterno(vendedorId){
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/vendedor-gerenciar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'alternarVendedor', profissionalId: empEmpresaAtual, vendedorId })
+  });
+  if(!resp.ok){ const r = await resp.json(); alert('Erro: ' + (r.error || 'não deu pra mudar o vendedor')); return; }
+  empCarregarVendedoresExternos();
+}
+
+function empMostrarCodigoVendedor(nomeVendedor, codigo){
+  const linkPronto = `${window.location.origin}/vendedor.html?empresa=${empEmpresaAtual}&codigo=${codigo}`;
+  document.getElementById('emp-vendedor-codigo-resultado').innerHTML = `
+    <div class="emp-vazio" style="text-align:left; padding:10px 0 0;">
+      <strong>${empEscapar(nomeVendedor)} — código:</strong> ${empEscapar(codigo)}<br>
+      Digite esse código na tela inicial do vendedor.html no celular dele — só precisa fazer isso uma vez.<br><br>
+      <strong>Ou manda esse link pronto direto pra ele</strong> (configura sozinho):<br>
+      <input type="text" readonly value="${empEscapar(linkPronto)}" style="width:100%; margin-top:4px; font-size:0.78rem;" onclick="this.select()">
+    </div>`;
 }
 
 // ============ ESTOQUE ============

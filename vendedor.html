@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendedor externo | GuiaZap</title>
+<meta name="description" content="Tira pedido na rua, visitando cliente — sem acesso ao caixa nem ao gerenciamento da empresa.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  body.emp-pagina { background: #f7f5f0; }
+  * { box-sizing: border-box; }
+  .emp-topo {
+    background: linear-gradient(90deg, #6a3fb5, #4d2c8a);
+    color: white;
+    padding: 16px 15px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .emp-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .emp-conteudo { max-width: 620px; margin: 0 auto; padding: 16px 15px 60px; }
+
+  .emp-card { background: white; border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  .emp-card h3 { font-size: 0.95rem; margin: 0 0 10px; }
+  .emp-linha { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .emp-linha select, .emp-linha input { flex: 1; min-width: 120px; padding: 9px 10px; border-radius: 8px; border: 1px solid #e5e0d5; font-size: 0.88rem; }
+  .emp-btn { padding: 10px 16px; min-height: 42px; border-radius: 8px; border: none; background: #6a3fb5; color: white; font-weight: 700; cursor: pointer; font-size: 0.88rem; }
+  .emp-btn:disabled { opacity: 0.6; }
+  .emp-btn.full { width: 100%; }
+  .emp-btn.secundario { background: #eee; color: #444; }
+
+  .emp-item { background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); flex-wrap: wrap; }
+  .emp-item-info { flex: 1; min-width: 0; }
+  .emp-item-nome { font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emp-item-meta { font-size: 0.74rem; color: #999; margin-top: 2px; }
+  .emp-item-valor { font-weight: 800; font-size: 0.9rem; white-space: nowrap; }
+  .emp-item-valor.receita { color: #2a7a2a; }
+  .emp-item-apagar { background: none; border: none; color: #bbb; cursor: pointer; font-size: 1.15rem; padding: 8px; min-width: 38px; min-height: 38px; flex-shrink: 0; }
+  .emp-tag { display: inline-block; font-size: 0.66rem; font-weight: 700; color: #6a3fb5; background: #f1eaf9; border-radius: 20px; padding: 2px 9px; text-transform: uppercase; }
+  .emp-tag.alerta { color: #a4402f; background: #fbe9e5; }
+  .emp-vazio { text-align: center; color: #888; padding: 26px 10px; font-size: 0.9rem; }
+
+  #vend-busca-resultados .emp-item { cursor: pointer; }
+  .vend-total-card { background: #6a3fb5; color: white; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px; }
+  .vend-total-card .vend-total-label { font-size: 0.78rem; opacity: 0.85; text-transform: uppercase; font-weight: 700; }
+  .vend-total-card .vend-total-valor { font-size: 2rem; font-weight: 800; margin-top: 4px; }
+
+  @media (max-width: 640px){
+    .emp-conteudo { padding: 12px 10px 60px; }
+    .emp-linha select, .emp-linha input { font-size: 16px; min-height: 42px; }
+    .emp-btn { font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body class="emp-pagina">
+
+<div class="emp-topo">
+  <h1>🧑‍💼 Vendedor<span id="vend-nome-topo"></span></h1>
+</div>
+
+<div class="emp-conteudo">
+  <div id="vend-gate" class="emp-card" style="display:none;">
+    <h3>🔑 Acesso do vendedor</h3>
+    <p style="font-size:0.85rem; color:#666; margin-top:0;">Pede pro dono/gerente o código de acesso (Equipe &gt; "Vendedores externos" no Gerenciamento). Esse código só abre essa tela pra tirar pedido — não dá acesso ao Gerenciamento nem ao caixa.</p>
+    <div class="emp-linha">
+      <input type="text" id="vend-gate-empresa" placeholder="Código da empresa (ID)">
+    </div>
+    <div class="emp-linha">
+      <input type="text" id="vend-gate-codigo" placeholder="Código de acesso" style="text-transform:uppercase;">
+    </div>
+    <div id="vend-gate-msg" style="font-size:0.82rem; color:#a4402f; margin-bottom:8px;"></div>
+    <button type="button" class="emp-btn full" onclick="vendEntrarComCodigo()">Entrar</button>
+  </div>
+
+  <div id="vend-corpo" style="display:none;">
+    <div class="emp-linha" style="margin-bottom:8px;">
+      <button type="button" class="emp-btn secundario" style="flex:0;" onclick="vendSairDoTerminal()" title="Trocar código / sair">🔓 Sair</button>
+    </div>
+
+    <div class="emp-vazio" style="padding:0 0 14px; text-align:left;">⚠️ O pedido que você tira aqui fica <strong>aguardando aprovação</strong> — só vira venda de verdade depois que a empresa confirmar.</div>
+
+    <div class="emp-card">
+      <h3>👤 Cliente</h3>
+      <select id="vend-cliente"><option value="">Escolhe o cliente...</option></select>
+    </div>
+
+    <div class="emp-card">
+      <h3>🔎 Buscar produto</h3>
+      <input type="text" id="vend-busca-nome" placeholder="Nome ou código do produto...">
+      <div id="vend-busca-resultados"></div>
+    </div>
+
+    <div class="emp-card">
+      <h3>🛒 Pedido</h3>
+      <div id="vend-carrinho-lista"><div class="emp-vazio">Nenhum item ainda — busca um produto.</div></div>
+      <button type="button" class="emp-btn secundario full" onclick="vendAdicionarItemAvulso()" style="margin-top:4px;">➕ Item avulso (sem código)</button>
+    </div>
+
+    <div class="vend-total-card">
+      <div class="vend-total-label">Total do pedido</div>
+      <div class="vend-total-valor" id="vend-total-valor">R$ 0,00</div>
+    </div>
+
+    <div class="emp-card">
+      <input type="text" id="vend-observacao" placeholder="Observação (opcional — ex: entregar até sexta)" style="width:100%; padding:9px 10px; border-radius:8px; border:1px solid #e5e0d5; font-size:0.88rem; margin-bottom:10px;">
+      <button type="button" class="emp-btn full" id="vend-enviar-btn" onclick="vendEnviarPedido()" style="font-size:1.05rem; padding:14px;">📤 Enviar pedido pra aprovação</button>
+    </div>
+
+    <div class="emp-card">
+      <h3>📋 Meus últimos pedidos</h3>
+      <div id="vend-meus-pedidos"><div class="emp-vazio">Carregando...</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let vendProfissionalId = null;
+let vendCodigoAcesso = null;
+let vendEmpresaNome = '';
+let vendNomeVendedor = '';
+let vendClientes = [];
+let vendCarrinho = []; // { produtoId, nome, quantidade, valorUnitario, unidadeMedida }
+
+function vendEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function vendFmt(v){
+  return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
+}
+function vendParseValor(texto){
+  const limpo = (texto || '').replace(/[^\d,.-]/g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return !isNaN(n) ? n : null;
+}
+
+async function vendChamar(action, extra){
+  const resp = await fetch('/.netlify/functions/vendedor-operacao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, profissionalId: vendProfissionalId, codigoAcesso: vendCodigoAcesso, ...extra })
+  });
+  const dados = await resp.json();
+  if(!resp.ok){
+    if(resp.status === 401 || resp.status === 403){
+      vendSairDoTerminal(dados.error);
+      throw new Error(dados.error || 'acesso negado');
+    }
+    throw new Error(dados.error || 'erro na operação');
+  }
+  return dados;
+}
+
+// ============ ENTRADA (código de acesso, sem login) ============
+
+function initVendedor(){
+  const params = new URLSearchParams(window.location.search);
+  const empresaUrl = params.get('empresa');
+  const codigoUrl = params.get('codigo');
+  if(empresaUrl && codigoUrl){
+    localStorage.setItem('vendedor_profissional_id', empresaUrl);
+    localStorage.setItem('vendedor_codigo_acesso', codigoUrl);
+    window.history.replaceState({}, '', 'vendedor.html');
+  }
+
+  vendProfissionalId = localStorage.getItem('vendedor_profissional_id');
+  vendCodigoAcesso = localStorage.getItem('vendedor_codigo_acesso');
+
+  if(vendProfissionalId && vendCodigoAcesso){
+    vendIniciarSessao();
+  } else {
+    document.getElementById('vend-gate').style.display = 'block';
+  }
+}
+
+async function vendEntrarComCodigo(){
+  const empresaId = document.getElementById('vend-gate-empresa').value.trim();
+  const codigo = document.getElementById('vend-gate-codigo').value.trim().toUpperCase();
+  const msg = document.getElementById('vend-gate-msg');
+  if(!empresaId || !codigo){ msg.textContent = 'Preenche os dois campos.'; return; }
+
+  vendProfissionalId = empresaId;
+  vendCodigoAcesso = codigo;
+  msg.textContent = 'Verificando...';
+  msg.style.color = '#666';
+
+  try{
+    await vendChamar('bootstrap');
+    localStorage.setItem('vendedor_profissional_id', empresaId);
+    localStorage.setItem('vendedor_codigo_acesso', codigo);
+    document.getElementById('vend-gate').style.display = 'none';
+    vendIniciarSessao();
+  } catch(e){
+    msg.textContent = e.message;
+    msg.style.color = '#a4402f';
+    vendProfissionalId = null;
+    vendCodigoAcesso = null;
+  }
+}
+
+function vendSairDoTerminal(motivo){
+  localStorage.removeItem('vendedor_profissional_id');
+  localStorage.removeItem('vendedor_codigo_acesso');
+  vendProfissionalId = null;
+  vendCodigoAcesso = null;
+  document.getElementById('vend-corpo').style.display = 'none';
+  document.getElementById('vend-gate').style.display = 'block';
+  document.getElementById('vend-gate-msg').textContent = motivo || '';
+  document.getElementById('vend-gate-msg').style.color = '#a4402f';
+}
+
+async function vendIniciarSessao(){
+  let bootstrap;
+  try{ bootstrap = await vendChamar('bootstrap'); }
+  catch(e){ return; }
+
+  vendEmpresaNome = bootstrap.empresaNome;
+  vendNomeVendedor = bootstrap.vendedorNome || '';
+  vendClientes = bootstrap.clientes || [];
+  document.getElementById('vend-nome-topo').textContent = vendNomeVendedor ? ` — ${vendNomeVendedor}` : '';
+  document.getElementById('vend-cliente').innerHTML = '<option value="">Escolhe o cliente...</option>' + vendClientes.map(c => `<option value="${c.id}">${vendEscapar(c.nome)}</option>`).join('');
+
+  document.getElementById('vend-corpo').style.display = 'block';
+  vendCarrinho = [];
+  vendRenderCarrinho();
+  await vendCarregarMeusPedidos();
+
+  let buscaTimeout;
+  document.getElementById('vend-busca-nome').addEventListener('input', e => {
+    clearTimeout(buscaTimeout);
+    const termo = e.target.value.trim();
+    if(!termo){ document.getElementById('vend-busca-resultados').innerHTML = ''; return; }
+    buscaTimeout = setTimeout(() => vendBuscarProduto(termo), 350);
+  });
+}
+
+// ============ BUSCA DE PRODUTO ============
+
+async function vendBuscarProduto(termo){
+  const container = document.getElementById('vend-busca-resultados');
+  // Tenta como código exato primeiro (o vendedor pode digitar/colar um
+  // código de barras também), senão busca por nome.
+  const codigoLimpo = termo.replace(/[^a-zA-Z0-9-]/g, '');
+  if(codigoLimpo === termo && codigoLimpo.length >= 4){
+    try{
+      const resultado = await vendChamar('produtoPorCodigo', { codigo: codigoLimpo });
+      if(resultado.produto){
+        container.innerHTML = '';
+        vendAdicionarAoCarrinho(resultado.produto);
+        document.getElementById('vend-busca-nome').value = '';
+        return;
+      }
+    } catch(e){ /* segue tentando por nome */ }
+  }
+
+  let resultado;
+  try{ resultado = await vendChamar('produtosPorNome', { termo }); }
+  catch(e){ container.innerHTML = `<div class="emp-vazio" style="padding:10px;">${vendEscapar(e.message)}</div>`; return; }
+  const produtos = resultado.produtos || [];
+  if(!produtos.length){ container.innerHTML = '<div class="emp-vazio" style="padding:10px;">Nada encontrado.</div>'; return; }
+  container.innerHTML = produtos.map((p, i) => `<div class="emp-item" onclick="vendAdicionarAoCarrinhoPorIndice(${i})">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${vendEscapar(p.nome)}</div>
+      <div class="emp-item-meta">Estoque: ${Number(p.quantidade || 0)}</div>
+    </div>
+    <div class="emp-item-valor">${p.preco ? vendFmt(p.preco) : ''}</div>
+  </div>`).join('');
+  window._vendBuscaResultados = produtos;
+}
+
+function vendAdicionarAoCarrinhoPorIndice(i){
+  const produto = (window._vendBuscaResultados || [])[i];
+  if(!produto) return;
+  vendAdicionarAoCarrinho(produto);
+  document.getElementById('vend-busca-nome').value = '';
+  document.getElementById('vend-busca-resultados').innerHTML = '';
+}
+
+function vendAdicionarAoCarrinho(produto){
+  const precoBase = vendParseValor(String(produto.preco || '0')) || 0;
+
+  if(produto.unidade_medida === 'peso' || produto.unidade_medida === 'litro'){
+    const unidadeLabel = produto.unidade_medida === 'peso' ? 'kg' : 'L';
+    const texto = prompt(`${produto.nome} — quantidade em ${unidadeLabel}:`);
+    const quantidade = vendParseValor(texto);
+    if(!quantidade || quantidade <= 0) return;
+    vendCarrinho.push({
+      produtoId: produto.id, nome: `${produto.nome} (${quantidade}${unidadeLabel})`,
+      quantidade, valorUnitario: precoBase, unidadeMedida: produto.unidade_medida
+    });
+  } else {
+    const existente = vendCarrinho.find(i => i.produtoId === produto.id);
+    if(existente){
+      existente.quantidade += 1;
+    } else {
+      vendCarrinho.push({ produtoId: produto.id, nome: produto.nome, quantidade: 1, valorUnitario: precoBase, unidadeMedida: produto.unidade_medida });
+    }
+  }
+  vendRenderCarrinho();
+}
+
+function vendAdicionarItemAvulso(){
+  const nome = prompt('Nome do item (sem código/produto cadastrado):');
+  if(!nome) return;
+  const valorTexto = prompt('Valor unitário:');
+  const valor = vendParseValor(valorTexto);
+  if(!valor || valor <= 0){ alert('Valor inválido.'); return; }
+  vendCarrinho.push({ produtoId: null, nome: nome.trim(), quantidade: 1, valorUnitario: valor, unidadeMedida: null });
+  vendRenderCarrinho();
+}
+
+function vendRenderCarrinho(){
+  const container = document.getElementById('vend-carrinho-lista');
+  if(!vendCarrinho.length){
+    container.innerHTML = '<div class="emp-vazio">Nenhum item ainda — busca um produto.</div>';
+  } else {
+    container.innerHTML = vendCarrinho.map((item, i) => `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${vendEscapar(item.nome)}</div>
+        <div class="emp-item-meta">${item.unidadeMedida === 'peso' || item.unidadeMedida === 'litro' ? '' : `${item.quantidade}x `}${vendFmt(item.valorUnitario)}</div>
+      </div>
+      <div class="emp-item-valor receita">${vendFmt(item.quantidade * item.valorUnitario)}</div>
+      <button type="button" class="emp-item-apagar" onclick="vendRemoverItem(${i})" title="Remover">🗑️</button>
+    </div>`).join('');
+  }
+  const total = vendCarrinho.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
+  document.getElementById('vend-total-valor').textContent = vendFmt(total);
+}
+
+function vendRemoverItem(i){
+  vendCarrinho.splice(i, 1);
+  vendRenderCarrinho();
+}
+
+// ============ ENVIAR PEDIDO (fica aguardando aprovação) ============
+
+async function vendEnviarPedido(){
+  if(!vendCarrinho.length){ alert('Adiciona pelo menos um item.'); return; }
+  const clienteId = document.getElementById('vend-cliente').value;
+  if(!clienteId){ alert('Escolhe pra qual cliente é esse pedido.'); return; }
+  const observacao = document.getElementById('vend-observacao').value.trim();
+
+  const btn = document.getElementById('vend-enviar-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+
+  try{
+    await vendChamar('criarPedido', { itens: vendCarrinho, clienteId, observacao });
+  } catch(e){
+    btn.disabled = false; btn.textContent = '📤 Enviar pedido pra aprovação';
+    alert('Erro ao enviar o pedido: ' + e.message);
+    return;
+  }
+
+  btn.disabled = false; btn.textContent = '📤 Enviar pedido pra aprovação';
+  alert('✅ Pedido enviado! Fica aguardando aprovação da empresa.');
+  vendCarrinho = [];
+  vendRenderCarrinho();
+  document.getElementById('vend-cliente').value = '';
+  document.getElementById('vend-observacao').value = '';
+  await vendCarregarMeusPedidos();
+}
+
+// ============ MEUS ÚLTIMOS PEDIDOS ============
+
+async function vendCarregarMeusPedidos(){
+  const container = document.getElementById('vend-meus-pedidos');
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  let resultado;
+  try{ resultado = await vendChamar('meusPedidosRecentes'); }
+  catch(e){ container.innerHTML = `<div class="emp-vazio">${vendEscapar(e.message)}</div>`; return; }
+  const pedidos = resultado.pedidos || [];
+  if(!pedidos.length){ container.innerHTML = '<div class="emp-vazio">Nenhum pedido enviado ainda.</div>'; return; }
+  const statusLabel = { aberto: '⏳ aguardando aprovação', concluido: '✅ aprovado', cancelado: '❌ recusado' };
+  container.innerHTML = pedidos.map(p => {
+    const dataFmt = new Date(p.created_at).toLocaleDateString('pt-BR');
+    const nomeCliente = p.empresa_clientes ? p.empresa_clientes.nome : 'Sem cliente';
+    return `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${vendEscapar(nomeCliente)}</div>
+        <div class="emp-item-meta">${dataFmt} · <span class="emp-tag ${p.status === 'cancelado' ? 'alerta' : ''}">${statusLabel[p.status] || p.status}</span></div>
+      </div>
+      <div class="emp-item-valor ${p.status !== 'cancelado' ? 'receita' : ''}">${vendFmt(p.valor_total)}</div>
+    </div>`;
+  }).join('');
+}
+
+initVendedor();
+</script>
+</body>
+</html>

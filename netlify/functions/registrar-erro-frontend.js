@@ -32,6 +32,16 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ error: 'mensagem é obrigatória' }) };
     }
 
+    // userId vem cru do navegador, sem login exigido aqui de propósito
+    // (erro pode acontecer com a pessoa nem logada ainda) — então nunca é
+    // usado pra ler/gravar dado de ninguém, só fica de "etiqueta" pra saber
+    // quem reportou, pra você debugar. Mesmo assim, só aceita se tiver
+    // formato de UUID de verdade — qualquer string solta vira null, pra
+    // não guardar lixo/spoofing na coluna.
+    const userIdValido = typeof userId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+      ? userId
+      : null;
+
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const headers = {
@@ -50,7 +60,7 @@ exports.handler = async function (event) {
         mensagem: String(mensagem).slice(0, 2000),
         stack: stack ? String(stack).slice(0, 4000) : null,
         user_agent: userAgent,
-        user_id: userId || null
+        user_id: userIdValido
       })
     });
 

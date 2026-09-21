@@ -97,6 +97,15 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ produtos: data }) };
     }
 
+    // ---------- CATÁLOGO COMPLETO (pro PDV guardar no aparelho e
+    // continuar vendendo mesmo se a internet cair no meio do turno —
+    // "PDV offline") ----------
+    if (action === 'catalogoCompleto') {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?profissional_id=eq.${profissionalId}&select=id,nome,preco,quantidade,unidade_medida,codigo_barras,codigo_interno,filial_id&order=nome&limit=5000`, { headers });
+      const data = resp.ok ? await resp.json() : [];
+      return { statusCode: 200, body: JSON.stringify({ produtos: data }) };
+    }
+
     // ---------- VENDAS DE HOJE (só desse caixa/terminal) ----------
     if (action === 'vendasHoje') {
       const hoje = new Date().toISOString().slice(0, 10);

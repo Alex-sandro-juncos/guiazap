@@ -17,6 +17,24 @@
 
 const { legendarVideo } = require('./zeca-ffmpeg-helper');
 
+// ⚠️ SEGURANÇA: videoUrl vem cru do corpo da requisição (o navegador manda
+// de volta o link que verificar-video-zeca.js devolveu antes) e o servidor
+// faz um fetch nele — sem checar, isso é um SSRF: qualquer usuário logado
+// poderia mandar um link interno (rede da própria hospedagem, serviço
+// interno, etc) em vez do link de vídeo de verdade, e fazer o servidor
+// "bater" nele. Como o vídeo gerado só existe de fato hospedado nos
+// domínios da HeyGen (quem devolve o video_url em verificar-video-zeca.js),
+// só deixa passar link https de lá.
+const DOMINIOS_VIDEO_PERMITIDOS = /(^|\.)heygen\.ai$/i;
+function _urlDeVideoPermitida(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && DOMINIOS_VIDEO_PERMITIDOS.test(u.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
 const IDIOMAS_LEGENDA = {
   'português': 'português', 'portugues': 'português', 'pt': 'português',
   'inglês': 'inglês (English)', 'ingles': 'inglês (English)', 'english': 'inglês (English)',
@@ -108,6 +126,9 @@ exports.handler = async function (event) {
     const { videoUrl, mensagemOriginal } = JSON.parse(event.body || '{}');
     if (!videoUrl) {
       return { statusCode: 400, body: JSON.stringify({ error: 'faltou o link do vídeo' }) };
+    }
+    if (!_urlDeVideoPermitida(videoUrl)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'link de vídeo inválido' }) };
     }
 
     // Baixa o vídeo pronto (link externo da HeyGen) — isso roda no
