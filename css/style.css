@@ -1510,8 +1510,18 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   display: none;
   position: fixed;
   bottom: 24px;
-  right: max(24px, calc(50vw - 240px + 24px));
-  width: min(360px, calc(100vw - 48px));
+  /* Centralizado de verdade, horizontalmente, em qualquer largura de tela
+     (celular ou desktop) — "left:0; right:0; margin:auto" com largura fixa
+     é a forma confiável de centralizar um elemento "position:fixed" sem
+     depender de contar viewport na mão (a fórmula anterior, baseada em
+     calc(50vw - ...), presumia uma largura de tela que nem sempre batia
+     com a tela de verdade, deixando o painel torto/cortado em alguns
+     aparelhos). */
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+  width: min(360px, calc(100vw - 32px));
   height: min(520px, calc(100vh - 100px));
   background: white;
   border-radius: 20px;

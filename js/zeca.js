@@ -20,6 +20,92 @@ let _zecaConversaAtual = null; // id da conversa salva no banco (null = ainda n�
 let _zecaUltimaInstrucaoTexto = null;
 const _zecaSynth = window.speechSynthesis;
 
+// "Conversa totalmente por voz" — quando o Zeca acabou de mostrar um card
+// de confirmação (lançar dinheiro, cadastrar produto/bem, Modo Resolver
+// etc.) e a pessoa responde só "sim"/"pode" FALANDO (pelo microfone), ele
+// confirma sozinho sem precisar tocar no botão. Só vale pra
+// confirmar/cancelar — nunca pra "decidir" o conteúdo da ação em si, que
+// continua sempre determinístico e mostrado por escrito antes.
+let _zecaCardVozPendente = null;
+function _zecaMarcarCardVozPendente(card, btnConfirmar, btnCancelar){
+  _zecaCardVozPendente = { card, confirmar: btnConfirmar, cancelar: btnCancelar };
+  const limpar = () => { if(_zecaCardVozPendente && _zecaCardVozPendente.card === card) _zecaCardVozPendente = null; };
+  btnConfirmar.addEventListener('click', limpar);
+  btnCancelar.addEventListener('click', limpar);
+}
+// Frases curtas de concordância/recusa — só reconhece quando a frase
+// INTEIRA é isso (poucas palavras), pra nunca confundir com uma frase
+// normal que só contém a palavra "sim"/"não" no meio de outra coisa.
+const _ZECA_VOZ_AFIRMATIVO = /^(sim|isso|isso mesmo|pode|pode sim|confirma|confirmado|confirmar|manda|é isso|tá certo|ta certo|beleza|ok|okay|fechado)[.!\s]*$/i;
+const _ZECA_VOZ_NEGATIVO = /^(não|nao|cancela|cancelar|deixa (pra lá|quieto)|esquece|para|pera|não quero|nao quero)[.!\s]*$/i;
+
+// Cliente Supabase compartilhado, criado no máximo UMA vez por página.
+// ANTES, cada uma das 3 funções abaixo que precisavam checar a sessão
+// (upload de vídeo, pegar token, checar se é o criador) chamava
+// window.supabase.createClient() na hora — cada chamada cria uma
+// instância NOVA do GoTrueClient (o controlador de sessão/login por
+// baixo do Supabase), e várias instâncias competindo pela MESMA chave de
+// sessão salva no navegador (sb-...-auth-token) é o que o próprio
+// Supabase avisa no console como "Multiple GoTrueClient instances
+// detected" — não é só um aviso bonito, isso pode corromper a sessão (um
+// cliente renovando o token enquanto outro lê um valor velho), fazendo
+// chamada à API falhar sem erro visível na tela, só ficando "carregando"
+// pra sempre. Por isso, em vez de criar um cliente novo toda vez, essa
+// função reaproveita o cliente que a própria página já tiver criado
+// (cada página usa um nome de variável diferente pro dela) e, só se não
+// achar nenhum, cria UM e guarda em cache pro resto da sessão do Zeca.
+let _zecaClienteSupabaseCache = null;
+function _zecaObterClienteSupabase(){
+  if(_zecaClienteSupabaseCache) return _zecaClienteSupabaseCache;
+  if(typeof window.supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'){
+    return null;
+  }
+  // Nomes de variável que cada página usa pro próprio cliente Supabase —
+  // reaproveita o que já existe em vez de duplicar. São declaradas com
+  // "const"/"let" no topo de cada arquivo/página, então NÃO viram
+  // propriedade de "window" — só dá pra checar como identificador solto,
+  // com typeof (senão dá ReferenceError numa página que não carregou
+  // aquele script e não tem essa variável).
+  //
+  // Lista de TODA página que carrega esse js/zeca.js (o widget flutuante)
+  // E também declara o próprio cliente Supabase — mantida em sincronia
+  // manualmente; se uma página nova entrar nesse grupo com um nome de
+  // variável novo, ele precisa ser adicionado aqui também, senão volta a
+  // duplicar client (ver aviso "Multiple GoTrueClient instances" no
+  // console, que pode até corromper sessão em vez de só avisar).
+  const clienteDaPagina =
+    (typeof supabaseClient !== 'undefined' && supabaseClient) ||
+    (typeof supabaseClientV !== 'undefined' && supabaseClientV) ||
+    (typeof supabaseClientVagas !== 'undefined' && supabaseClientVagas) ||
+    (typeof supabaseClientPac !== 'undefined' && supabaseClientPac) ||
+    (typeof supabaseClientAdmin !== 'undefined' && supabaseClientAdmin) ||
+    (typeof supabaseClientAgenda !== 'undefined' && supabaseClientAgenda) ||
+    (typeof supabaseClientAgro !== 'undefined' && supabaseClientAgro) ||
+    (typeof supabaseClientBanco !== 'undefined' && supabaseClientBanco) ||
+    (typeof supabaseClientBlog !== 'undefined' && supabaseClientBlog) ||
+    (typeof supabaseClientCancelar !== 'undefined' && supabaseClientCancelar) ||
+    (typeof supabaseClientCat !== 'undefined' && supabaseClientCat) ||
+    (typeof supabaseClientChat !== 'undefined' && supabaseClientChat) ||
+    (typeof supabaseClientContato !== 'undefined' && supabaseClientContato) ||
+    (typeof supabaseClientCorridas !== 'undefined' && supabaseClientCorridas) ||
+    (typeof supabaseClientEmp !== 'undefined' && supabaseClientEmp) ||
+    (typeof supabaseClientEntregas !== 'undefined' && supabaseClientEntregas) ||
+    (typeof supabaseClientFeed !== 'undefined' && supabaseClientFeed) ||
+    (typeof supabaseClientFin !== 'undefined' && supabaseClientFin) ||
+    (typeof supabaseClientFrete !== 'undefined' && supabaseClientFrete) ||
+    (typeof supabaseClientLar !== 'undefined' && supabaseClientLar) ||
+    (typeof supabaseClientMapa !== 'undefined' && supabaseClientMapa) ||
+    (typeof supabaseClientMeusPedidos !== 'undefined' && supabaseClientMeusPedidos) ||
+    (typeof supabaseClientPedidos !== 'undefined' && supabaseClientPedidos) ||
+    (typeof supabaseClientPost !== 'undefined' && supabaseClientPost) ||
+    (typeof supabaseClientRel !== 'undefined' && supabaseClientRel) ||
+    (typeof supabaseClientTalentos !== 'undefined' && supabaseClientTalentos) ||
+    (typeof supabaseClientVideos !== 'undefined' && supabaseClientVideos) ||
+    null;
+  _zecaClienteSupabaseCache = clienteDaPagina || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _zecaClienteSupabaseCache;
+}
+
 // --- Continuidade da conversa entre páginas (mesma aba/sessão) ---
 // Sem isso, cada página carregada começa o Zeca do zero, mesmo se a
 // pessoa tiver memória ativada — ela precisaria abrir o ☰ e escolher a
@@ -85,6 +171,13 @@ function _adicionarMensagemZeca(de, texto){
     linkCopiar.textContent = '📋 copiar';
     linkCopiar.onclick = () => _copiarRespostaZeca(texto, linkCopiar);
     container.appendChild(linkCopiar);
+
+    const linkOuvir = document.createElement('button');
+    linkOuvir.type = 'button';
+    linkOuvir.className = 'zeca-link-pdf';
+    linkOuvir.textContent = '🔊 ouvir';
+    linkOuvir.onclick = () => _ouvirRespostaZeca(texto, linkOuvir);
+    container.appendChild(linkOuvir);
   }
 
   // Resposta substancial do Zeca ganha também um botão de baixar em PDF
@@ -196,6 +289,385 @@ async function _baixarPdfZeca(texto){
     console.error(e);
     alert('Deu erro baixando o PDF. Tenta de novo?');
   }
+}
+
+// Lê a resposta do Zeca em voz alta (TTS) — reaproveita o áudio já
+// gerado se a pessoa clicar "ouvir" de novo na mesma mensagem, em vez de
+// gastar limite gerando o mesmo áudio duas vezes.
+let _zecaAudioTocando = null;
+async function _ouvirRespostaZeca(texto, botao){
+  try{
+    if(botao.dataset.audioBase64){
+      _zecaTocarAudioBase64(botao.dataset.audioBase64, botao);
+      return;
+    }
+    const textoOriginal = botao.textContent;
+    botao.textContent = '⏳ preparando áudio...';
+    botao.disabled = true;
+
+    const token = await _obterTokenZeca();
+    const resp = await fetch('/.netlify/functions/zeca-tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify({ texto })
+    });
+    const dados = await resp.json();
+    botao.disabled = false;
+    if(!resp.ok){
+      botao.textContent = textoOriginal;
+      alert(dados.error || 'Não consegui gerar o áudio agora.');
+      return;
+    }
+    botao.dataset.audioBase64 = dados.audioBase64;
+    botao.textContent = '🔊 ouvir';
+    _zecaTocarAudioBase64(dados.audioBase64, botao);
+  } catch(e){
+    console.error(e);
+    botao.disabled = false;
+    botao.textContent = '🔊 ouvir';
+    alert('Deu erro gerando o áudio. Tenta de novo?');
+  }
+}
+function _zecaTocarAudioBase64(base64, botao){
+  if(_zecaAudioTocando){ _zecaAudioTocando.pause(); }
+  const audio = new Audio('data:audio/mpeg;base64,' + base64);
+  _zecaAudioTocando = audio;
+  const textoOriginal = botao.textContent;
+  botao.textContent = '⏸️ tocando...';
+  audio.play();
+  audio.onended = () => { botao.textContent = textoOriginal === '⏸️ tocando...' ? '🔊 ouvir' : textoOriginal; };
+}
+
+// Cadastro de produto proposto pelo Zeca (tipo "produto" do zeca-chat) —
+// ele NUNCA aplica direto, só propõe; o dono confirma ou cancela aqui,
+// mesmo princípio do comando de cardápio que já existe na Vitrine.
+function _renderizarConfirmacaoProdutoZeca(acao, token){
+  const container = document.getElementById('zeca-mensagens');
+  const card = document.createElement('div');
+  card.className = 'zeca-msg zeca-msg-zeca';
+  card.style.cssText = 'background:#fff8ec; border:1px solid #f0d9a8; border-radius:10px; padding:10px 14px; margin-left:40px; max-width:calc(100% - 40px);';
+
+  const linhas = [`<b>${_escaparHtmlZeca(acao.nome)}</b>`];
+  if(acao.preco !== null && acao.preco !== undefined) linhas.push(`R$ ${Number(acao.preco).toFixed(2).replace('.', ',')}`);
+  if(acao.categoria) linhas.push(_escaparHtmlZeca(acao.categoria));
+  if(acao.descricao) linhas.push(_escaparHtmlZeca(acao.descricao));
+  card.innerHTML = `<div style="margin-bottom:8px;">${linhas.join(' · ')}</div>`;
+
+  const btnConfirmar = document.createElement('button');
+  btnConfirmar.type = 'button';
+  btnConfirmar.className = 'zeca-link-pdf';
+  btnConfirmar.textContent = '✅ Confirmar cadastro';
+  btnConfirmar.onclick = async () => {
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = '⏳ cadastrando...';
+    try{
+      const cliente = _zecaObterClienteSupabase();
+      const { error } = await cliente.from('produtos').insert({
+        profissional_id: acao.profissionalId,
+        nome: acao.nome,
+        preco: acao.preco,
+        categoria: acao.categoria,
+        descricao: acao.descricao,
+        disponivel_venda: true,
+        no_cardapio_bot: true
+      });
+      if(error){
+        console.error(error);
+        card.querySelector('.zeca-confirma-erro')?.remove();
+        const erro = document.createElement('div');
+        erro.className = 'zeca-confirma-erro';
+        erro.style.cssText = 'color:#b23; font-size:0.85rem; margin-top:6px;';
+        erro.textContent = 'Deu erro cadastrando: ' + error.message;
+        card.appendChild(erro);
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = '✅ Confirmar cadastro';
+        return;
+      }
+      card.querySelectorAll('button').forEach(b => b.remove());
+      const ok = document.createElement('div');
+      ok.style.cssText = 'color:#2a7a2a; font-weight:600;';
+      ok.textContent = `✅ Produto cadastrado na Vitrine da ${acao.profissionalNome}!`;
+      card.appendChild(ok);
+      // Registra no histórico/memória — sem isso o Zeca "esquece" que
+      // cadastrou esse produto se a pessoa perguntar sobre ele depois.
+      const resumoProduto = `[Cadastrei o produto "${acao.nome}" na Vitrine da ${acao.profissionalNome}, confirmado pela pessoa]`;
+      _zecaRegistrarHistoricoSilencioso('zeca', resumoProduto);
+      _zecaSalvarTrocaEspecial(`Cadastra o produto ${acao.nome}`, resumoProduto, token);
+    } catch(e){
+      console.error(e);
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = '✅ Confirmar cadastro';
+      alert('Deu erro cadastrando o produto. Tenta de novo?');
+    }
+  };
+  card.appendChild(btnConfirmar);
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.className = 'zeca-link-pdf';
+  btnCancelar.textContent = '✖ Cancelar';
+  btnCancelar.onclick = () => {
+    card.querySelectorAll('button').forEach(b => b.remove());
+    const cancelado = document.createElement('div');
+    cancelado.style.cssText = 'color:#777; font-style:italic;';
+    cancelado.textContent = 'Cadastro cancelado.';
+    card.appendChild(cancelado);
+  };
+  card.appendChild(btnCancelar);
+
+  _zecaMarcarCardVozPendente(card, btnConfirmar, btnCancelar);
+  container.appendChild(card);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Versão genérica do mesmo padrão de confirmação, usada pelo Meu Lar e
+// pelo Meu Agro — em vez de repetir a mesma estrutura de card pra cada
+// tabela nova, recebe o que muda (título, detalhes, nome da tabela e o
+// payload do insert) e cuida do resto (RLS já garante que só o dono
+// consegue inserir, então não precisa mandar user_id — a coluna já tem
+// "default auth.uid()" no banco).
+function _renderizarConfirmacaoGenericaZeca({ titulo, detalhes, textoBotao, textoSucesso, tabela, payload }){
+  const container = document.getElementById('zeca-mensagens');
+  const card = document.createElement('div');
+  card.className = 'zeca-msg zeca-msg-zeca';
+  card.style.cssText = 'background:#fff8ec; border:1px solid #f0d9a8; border-radius:10px; padding:10px 14px; margin-left:40px; max-width:calc(100% - 40px);';
+
+  const linhas = [`<b>${_escaparHtmlZeca(titulo)}</b>`];
+  if(detalhes) linhas.push(_escaparHtmlZeca(detalhes));
+  card.innerHTML = `<div style="margin-bottom:8px;">${linhas.join(' · ')}</div>`;
+
+  const btnConfirmar = document.createElement('button');
+  btnConfirmar.type = 'button';
+  btnConfirmar.className = 'zeca-link-pdf';
+  btnConfirmar.textContent = textoBotao || '✅ Confirmar';
+  btnConfirmar.onclick = async () => {
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = '⏳ salvando...';
+    try{
+      const cliente = _zecaObterClienteSupabase();
+      const { error } = await cliente.from(tabela).insert(payload);
+      if(error){
+        console.error(error);
+        card.querySelector('.zeca-confirma-erro')?.remove();
+        const erro = document.createElement('div');
+        erro.className = 'zeca-confirma-erro';
+        erro.style.cssText = 'color:#b23; font-size:0.85rem; margin-top:6px;';
+        erro.textContent = 'Deu erro salvando: ' + error.message;
+        card.appendChild(erro);
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = textoBotao || '✅ Confirmar';
+        return;
+      }
+      card.querySelectorAll('button').forEach(b => b.remove());
+      const ok = document.createElement('div');
+      ok.style.cssText = 'color:#2a7a2a; font-weight:600;';
+      ok.textContent = textoSucesso || '✅ Salvo!';
+      card.appendChild(ok);
+      _zecaRegistrarHistoricoSilencioso('zeca', `[${textoSucesso || 'Salvei'} — confirmado pela pessoa]`);
+    } catch(e){
+      console.error(e);
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = textoBotao || '✅ Confirmar';
+      alert('Deu erro salvando. Tenta de novo?');
+    }
+  };
+  card.appendChild(btnConfirmar);
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.className = 'zeca-link-pdf';
+  btnCancelar.textContent = '✖ Cancelar';
+  btnCancelar.onclick = () => {
+    card.querySelectorAll('button').forEach(b => b.remove());
+    const cancelado = document.createElement('div');
+    cancelado.style.cssText = 'color:#777; font-style:italic;';
+    cancelado.textContent = 'Cancelado.';
+    card.appendChild(cancelado);
+  };
+  card.appendChild(btnCancelar);
+
+  _zecaMarcarCardVozPendente(card, btnConfirmar, btnCancelar);
+  container.appendChild(card);
+  container.scrollTop = container.scrollHeight;
+}
+
+// "Modo Resolver" — o Zeca ACHOU um profissional de verdade no GuiaZap e
+// propõe um plano de 1-2 passos (iniciar conversa pedindo orçamento pelo
+// Papo e/ou criar um lembrete futuro) — a pessoa confirma UMA vez e os
+// passos rodam em sequência. Cada passo é uma ação real e determinística
+// (nada inventado): abrir/achar a conversa de verdade e criar o lembrete
+// de verdade no banco, sem prometer nada que o Zeca não consiga cumprir
+// (não espera resposta do profissional sozinho, não agenda horário sem a
+// pessoa confirmar com ele — isso a própria pessoa continua fazendo pelo
+// Papo depois que a conversa é aberta).
+function _renderizarConfirmacaoResolverZeca(acao){
+  const container = document.getElementById('zeca-mensagens');
+  const card = document.createElement('div');
+  card.className = 'zeca-msg zeca-msg-zeca';
+  card.style.cssText = 'background:#fff8ec; border:1px solid #f0d9a8; border-radius:10px; padding:10px 14px; margin-left:40px; max-width:calc(100% - 40px);';
+
+  const passos = [];
+  if(acao.profissionalId) passos.push(`💬 Abrir conversa pelo Papo com <b>${_escaparHtmlZeca(acao.profissionalNome)}</b> pedindo orçamento`);
+  if(acao.lembreteTexto) passos.push(`⏰ Criar lembrete: "${_escaparHtmlZeca(acao.lembreteTexto)}" (${_escaparHtmlZeca(acao.lembreteRotulo || acao.lembreteData)})`);
+
+  card.innerHTML = `<div style="margin-bottom:8px;"><b>🧭 Plano:</b><br>${passos.join('<br>')}</div>`;
+
+  const btnConfirmar = document.createElement('button');
+  btnConfirmar.type = 'button';
+  btnConfirmar.className = 'zeca-link-pdf';
+  btnConfirmar.textContent = '✅ Fazer isso';
+  btnConfirmar.onclick = async () => {
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = '⏳ executando...';
+    const cliente = _zecaObterClienteSupabase();
+    const erros = [];
+    try{
+      const { data: sessaoData } = await cliente.auth.getSession();
+      const usuario = sessaoData && sessaoData.session ? sessaoData.session.user : null;
+      if(!usuario){ alert('Precisa estar logado.'); btnConfirmar.disabled = false; btnConfirmar.textContent = '✅ Fazer isso'; return; }
+
+      if(acao.profissionalId){
+        try{
+          const { data: existente } = await cliente.from('conversas').select('id').eq('profissional_id', acao.profissionalId).eq('visitante_user_id', usuario.id).maybeSingle();
+          let conversaId = existente ? existente.id : null;
+          if(!conversaId){
+            const { data: nova, error: erroNova } = await cliente.from('conversas').insert({ profissional_id: acao.profissionalId, visitante_user_id: usuario.id }).select('id').single();
+            if(erroNova) throw erroNova;
+            conversaId = nova.id;
+          }
+          const { error: erroMsg } = await cliente.from('mensagens_chat').insert({
+            conversa_id: conversaId,
+            remetente_user_id: usuario.id,
+            tipo: 'texto',
+            texto: `Olá! Vim pelo Zeca do GuiaZap. ${acao.mensagemAbertura || 'Queria pedir um orçamento, pode me ajudar?'}`,
+            lida: false
+          });
+          if(erroMsg) throw erroMsg;
+          await cliente.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaId);
+        } catch(e){ console.error(e); erros.push('Não consegui abrir a conversa pelo Papo.'); }
+      }
+
+      if(acao.lembreteTexto && acao.lembreteData){
+        try{
+          const { error: erroLembrete } = await cliente.from('zeca_lembretes_pessoais').insert({
+            user_id: usuario.id, texto: acao.lembreteTexto, data_lembrete: acao.lembreteData
+          });
+          if(erroLembrete) throw erroLembrete;
+        } catch(e){ console.error(e); erros.push('Não consegui criar o lembrete.'); }
+      }
+
+      card.querySelectorAll('button').forEach(b => b.remove());
+      const ok = document.createElement('div');
+      if(erros.length){
+        ok.style.cssText = 'color:#a4402f;';
+        ok.textContent = '⚠️ ' + erros.join(' ');
+      } else {
+        ok.style.cssText = 'color:#2a7a2a; font-weight:600;';
+        ok.textContent = '✅ Feito! Confere no Papo e/ou nos teus lembretes.';
+      }
+      card.appendChild(ok);
+    } catch(e){
+      console.error(e);
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = '✅ Fazer isso';
+      alert('Deu erro executando o plano. Tenta de novo?');
+    }
+  };
+  card.appendChild(btnConfirmar);
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.className = 'zeca-link-pdf';
+  btnCancelar.textContent = '✖ Cancelar';
+  btnCancelar.onclick = () => {
+    card.querySelectorAll('button').forEach(b => b.remove());
+    const cancelado = document.createElement('div');
+    cancelado.style.cssText = 'color:#777; font-style:italic;';
+    cancelado.textContent = 'Cancelado.';
+    card.appendChild(cancelado);
+  };
+  card.appendChild(btnCancelar);
+
+  _zecaMarcarCardVozPendente(card, btnConfirmar, btnCancelar);
+  container.appendChild(card);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Mesmo princípio do cadastro de produto acima — o Zeca só PROPÕE o
+// lançamento financeiro, o dono confirma ou cancela.
+function _renderizarConfirmacaoFinanceiraZeca(acao, token){
+  const container = document.getElementById('zeca-mensagens');
+  const card = document.createElement('div');
+  card.className = 'zeca-msg zeca-msg-zeca';
+  const corTipo = acao.tipo === 'receita' ? '#2a7a2a' : '#a4402f';
+  card.style.cssText = 'background:#fff8ec; border:1px solid #f0d9a8; border-radius:10px; padding:10px 14px; margin-left:40px; max-width:calc(100% - 40px);';
+
+  const linhas = [`<b style="color:${corTipo};">${acao.tipo === 'receita' ? '⬆️ Receita' : '⬇️ Despesa'}</b>`, `R$ ${Number(acao.valor).toFixed(2).replace('.', ',')}`, _escaparHtmlZeca(acao.descricao)];
+  if(acao.categoria) linhas.push(_escaparHtmlZeca(acao.categoria));
+  card.innerHTML = `<div style="margin-bottom:8px;">${linhas.join(' · ')}</div>`;
+
+  const btnConfirmar = document.createElement('button');
+  btnConfirmar.type = 'button';
+  btnConfirmar.className = 'zeca-link-pdf';
+  btnConfirmar.textContent = '✅ Confirmar lançamento';
+  btnConfirmar.onclick = async () => {
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = '⏳ lançando...';
+    try{
+      const cliente = _zecaObterClienteSupabase();
+      const { error } = await cliente.from('financeiro_lancamentos').insert({
+        profissional_id: acao.profissionalId,
+        tipo: acao.tipo,
+        descricao: acao.descricao,
+        valor: acao.valor,
+        categoria: acao.categoria
+      });
+      if(error){
+        console.error(error);
+        const erro = document.createElement('div');
+        erro.style.cssText = 'color:#b23; font-size:0.85rem; margin-top:6px;';
+        erro.textContent = 'Deu erro lançando: ' + error.message;
+        card.appendChild(erro);
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = '✅ Confirmar lançamento';
+        return;
+      }
+      card.querySelectorAll('button').forEach(b => b.remove());
+      const ok = document.createElement('div');
+      ok.style.cssText = 'color:#2a7a2a; font-weight:600;';
+      ok.textContent = `✅ Lançado no Financeiro da ${acao.profissionalNome}!`;
+      card.appendChild(ok);
+      const resumoFin = `[Lancei ${acao.tipo === 'receita' ? 'a receita' : 'a despesa'} "${acao.descricao}" (R$ ${Number(acao.valor).toFixed(2).replace('.', ',')}) no Financeiro da ${acao.profissionalNome}, confirmado pela pessoa]`;
+      _zecaRegistrarHistoricoSilencioso('zeca', resumoFin);
+      _zecaSalvarTrocaEspecial(`Lança ${acao.tipo} de ${acao.descricao}`, resumoFin, token);
+    } catch(e){
+      console.error(e);
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = '✅ Confirmar lançamento';
+      alert('Deu erro lançando. Tenta de novo?');
+    }
+  };
+  card.appendChild(btnConfirmar);
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.className = 'zeca-link-pdf';
+  btnCancelar.textContent = '✖ Cancelar';
+  btnCancelar.onclick = () => {
+    card.querySelectorAll('button').forEach(b => b.remove());
+    const cancelado = document.createElement('div');
+    cancelado.style.cssText = 'color:#777; font-style:italic;';
+    cancelado.textContent = 'Lançamento cancelado.';
+    card.appendChild(cancelado);
+  };
+  card.appendChild(btnCancelar);
+
+  _zecaMarcarCardVozPendente(card, btnConfirmar, btnCancelar);
+  container.appendChild(card);
+  container.scrollTop = container.scrollHeight;
 }
 
 function _renderizarResultadosZeca(resultados){
@@ -375,6 +847,21 @@ function toggleMicZeca(){
 
   _zecaReconhecimento.onresult = (event) => {
     const texto = event.results[0][0].transcript.trim();
+
+    // Tem um card de confirmação esperando resposta E a pessoa só disse
+    // "sim"/"não" (frase curta, sem mais nada junto) — confirma/cancela
+    // direto, sem gastar uma chamada de IA pra isso.
+    if(_zecaCardVozPendente){
+      if(_ZECA_VOZ_AFIRMATIVO.test(texto)){
+        _zecaCardVozPendente.confirmar.click();
+        return;
+      }
+      if(_ZECA_VOZ_NEGATIVO.test(texto)){
+        _zecaCardVozPendente.cancelar.click();
+        return;
+      }
+    }
+
     document.getElementById('zeca-input').value = texto;
     _zecaUltimaPerguntaFoiPorVoz = true;
     enviarMensagemZeca();
@@ -402,10 +889,8 @@ function toggleMicZeca(){
 // política do bucket é por pasta do usuário) — sem login, volta null.
 async function _zecaSubirVideoParaStorage(arquivo, pasta){
   try{
-    if(typeof window.supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'){
-      return null;
-    }
-    const cliente = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const cliente = _zecaObterClienteSupabase();
+    if(!cliente) return null;
     const { data: sessaoData } = await cliente.auth.getSession();
     const usuario = sessaoData && sessaoData.session ? sessaoData.session.user : null;
     if(!usuario) return null;
@@ -434,18 +919,16 @@ function _falarRespostaZeca(texto){
   _zecaSynth.speak(fala);
 }
 
-// Pega o token de sessão, se a pessoa estiver logada — cria um cliente
-// Supabase temporário só pra ler a sessão já salva no navegador (funciona
-// em qualquer página, não depende do nome da variável que cada tela usa
-// pro próprio cliente Supabase). Sem login, volta null — e mesmo assim o
-// Zeca funciona pra visitante, com o limite de visitante.
+// Pega o token de sessão, se a pessoa estiver logada — reaproveita o
+// cliente Supabase compartilhado (funciona em qualquer página, não
+// depende do nome da variável que cada tela usa pro próprio cliente).
+// Sem login, volta null — e mesmo assim o Zeca funciona pra visitante,
+// com o limite de visitante.
 async function _obterTokenZeca(){
   try{
-    if(typeof window.supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'){
-      return null;
-    }
-    const clienteTemp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data: sessaoData } = await clienteTemp.auth.getSession();
+    const cliente = _zecaObterClienteSupabase();
+    if(!cliente) return null;
+    const { data: sessaoData } = await cliente.auth.getSession();
     return sessaoData && sessaoData.session ? sessaoData.session.access_token : null;
   } catch(e){
     console.warn('não consegui checar sessão pro Zeca', e);
@@ -461,12 +944,12 @@ let _zecaEmailCache;
 async function _souCriadorZeca(){
   if(_zecaEmailCache !== undefined) return _zecaEmailCache === 'contato@guiazap.shop';
   try{
-    if(typeof window.supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'){
+    const cliente = _zecaObterClienteSupabase();
+    if(!cliente){
       _zecaEmailCache = null;
       return false;
     }
-    const clienteTemp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data } = await clienteTemp.auth.getSession();
+    const { data } = await cliente.auth.getSession();
     _zecaEmailCache = (data && data.session && data.session.user && data.session.user.email) || null;
   } catch(e){
     _zecaEmailCache = null;
@@ -528,6 +1011,17 @@ async function abrirListaConversasZeca(){
         <span style="position:absolute; top:3px; left:${status.ativada ? '21px' : '3px'}; width:18px; height:18px; background:white; border-radius:50%; transition:0.2s;"></span>
       </label>
     </div>
+    <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div style="font-size:0.82rem;">
+        <b>Avisos automáticos</b>
+        <div style="color:#888; font-size:0.72rem;">Financeiro parado, estoque baixo, resumo da semana...</div>
+      </div>
+      <label style="position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0;">
+        <input type="checkbox" id="zeca-toggle-lembretes" ${status.lembretesAtivados ? 'checked' : ''} onchange="_alternarLembretesZeca(this.checked)" style="opacity:0; width:0; height:0;">
+        <span style="position:absolute; inset:0; background:${status.lembretesAtivados ? '#f59e0b' : '#ccc'}; border-radius:24px; transition:0.2s;"></span>
+        <span style="position:absolute; top:3px; left:${status.lembretesAtivados ? '21px' : '3px'}; width:18px; height:18px; background:white; border-radius:50%; transition:0.2s;"></span>
+      </label>
+    </div>
     ${status.ativada ? `
       <button type="button" onclick="novaConversaZeca()" style="margin:12px 16px 6px; background:#f59e0b; color:white; border:none; border-radius:10px; padding:10px; font-weight:700; cursor:pointer;">+ Nova conversa</button>
       <div style="overflow-y:auto; padding:6px 10px 14px;">
@@ -552,6 +1046,11 @@ async function abrirListaConversasZeca(){
 
 async function _alternarMemoriaZeca(ligar){
   await _chamarMemoriaZeca(ligar ? 'ativar' : 'desativar');
+  abrirListaConversasZeca(); // recarrega o painel já com o novo estado
+}
+
+async function _alternarLembretesZeca(ligar){
+  await _chamarMemoriaZeca(ligar ? 'ativar_lembretes' : 'desativar_lembretes');
   abrirListaConversasZeca(); // recarrega o painel já com o novo estado
 }
 
@@ -756,6 +1255,7 @@ function _arquivoParaBase64Zeca(arquivo){
 
 let _zecaImagemPendente = null;
 let _zecaZipPendente = null;
+let _zecaPdfPendente = null;
 let _zecaVideoPendente = null; // { data: base64, mimeType } (pequeno) ou { url, mimeType } (via Storage) — vídeo pro Zeca "assistir"/editar
 let _zecaAudioPendente = null; // { data: base64, mimeType } (pequeno) ou { url, mimeType } (via Storage) — áudio pro Zeca editar
 // Segundo anexo — só usado quando a pessoa quer COMBINAR dois arquivos:
@@ -769,6 +1269,7 @@ let _zecaAudioPendente2 = null;
 function _zecaLimparAnexosZeca(){
   _zecaImagemPendente = null;
   _zecaZipPendente = null;
+  _zecaPdfPendente = null;
   _zecaVideoPendente = null;
   _zecaAudioPendente = null;
   _zecaVideoPendente2 = null;
@@ -779,6 +1280,8 @@ function _zecaLimparAnexosZeca(){
 const MAX_AUDIO_BYTES_ZECA = 4 * 1024 * 1024;            // ~4MB — vai direto no corpo, funciona sem login
 const MAX_AUDIO_BYTES_STORAGE_ZECA = 20 * 1024 * 1024;   // ~20MB — via Storage, precisa estar logado (bate com o teto do zeca-chat.js)
 const MAX_ZIP_BYTES_ZECA = 8 * 1024 * 1024;           // 8MB pro público
+const MAX_PDF_BYTES_ZECA = 8 * 1024 * 1024;           // 8MB pro público — mesmo teto do .zip
+const MAX_PDF_BYTES_CRIADOR_ZECA = 500 * 1024 * 1024; // mesmo raciocínio do .zip do criador (ver comentário abaixo)
 // Pro criador não tem teto de propósito no código — mas o Netlify
 // Functions (onde o zeca-chat.js roda) recusa sozinho qualquer requisição
 // acima de ~6MB de corpo, então na prática o teto real de hoje é esse do
@@ -799,6 +1302,7 @@ const MAX_VIDEO_BYTES_STORAGE_ZECA = 15 * 1024 * 1024;   // ~15MB — via Storag
 // e prepara o anexo pendente pra próxima mensagem.
 async function _zecaProcessarArquivoAnexado(arquivo){
   const ehZip = arquivo.name.toLowerCase().endsWith('.zip') || arquivo.type === 'application/zip';
+  const ehPdf = arquivo.name.toLowerCase().endsWith('.pdf') || arquivo.type === 'application/pdf';
   try{
     if(ehZip){
       const limiteZip = (await _souCriadorZeca()) ? MAX_ZIP_BYTES_CRIADOR_ZECA : MAX_ZIP_BYTES_ZECA;
@@ -808,6 +1312,14 @@ async function _zecaProcessarArquivoAnexado(arquivo){
       }
       _zecaLimparAnexosZeca();
       _zecaZipPendente = await _arquivoParaBase64Zeca(arquivo);
+    } else if(ehPdf){
+      const limitePdf = (await _souCriadorZeca()) ? MAX_PDF_BYTES_CRIADOR_ZECA : MAX_PDF_BYTES_ZECA;
+      if(arquivo.size > limitePdf){
+        alert(`Esse PDF é grande demais (máximo ${Math.round(limitePdf / 1024 / 1024)}MB).`);
+        return;
+      }
+      _zecaLimparAnexosZeca();
+      _zecaPdfPendente = await _arquivoParaBase64Zeca(arquivo);
     } else if(arquivo.type.startsWith('image/')){
       _zecaLimparAnexosZeca();
       _zecaImagemPendente = await _redimensionarImagemZeca(arquivo);
@@ -882,7 +1394,7 @@ async function _zecaProcessarArquivoAnexado(arquivo){
       }
       if(alvo === 'audio2') _zecaAudioPendente2 = valor; else _zecaAudioPendente = valor;
     } else {
-      alert('Só aceito imagem, vídeo, áudio ou .zip por aqui.');
+      alert('Só aceito imagem, vídeo, áudio, PDF ou .zip por aqui.');
       return;
     }
     _zecaPreviewImagemPendente(arquivo);
@@ -895,7 +1407,28 @@ async function _zecaProcessarArquivoAnexado(arquivo){
 function _abrirSeletorImagemZeca(){
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,video/*,audio/*,.zip';
+  input.accept = 'image/*,video/*,audio/*,.zip,.pdf,application/pdf';
+  input.onchange = async () => {
+    const arquivo = input.files[0];
+    if(!arquivo) return;
+    await _zecaProcessarArquivoAnexado(arquivo);
+  };
+  input.click();
+}
+
+// Botão da câmera (📷) — abre direto a câmera do celular pra tirar foto
+// ou gravar vídeo na hora, em vez de precisar escolher da galeria. O
+// atributo "capture" é isso: no celular, o navegador já abre a câmera
+// (traseira, por causa do "environment") em vez do seletor de arquivo
+// normal. Em computador sem câmera de verdade acessível assim, ele é
+// ignorado e cai no seletor de arquivo comum — não é o Zeca "vendo"
+// sua câmera ao vivo, é só um atalho pra tirar a foto/vídeo na hora e
+// mandar como arquivo, igual qualquer anexo.
+function _abrirCameraZeca(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*,video/*';
+  input.capture = 'environment';
   input.onchange = async () => {
     const arquivo = input.files[0];
     if(!arquivo) return;
@@ -1003,11 +1536,18 @@ async function enviarMensagemZeca(){
   const texto = input.value.trim();
   const imagemAnexada = _zecaImagemPendente;
   const zipAnexado = _zecaZipPendente;
+  const pdfAnexado = _zecaPdfPendente;
   const videoAnexado = _zecaVideoPendente;
   const audioAnexado = _zecaAudioPendente;
   const video2Anexado = _zecaVideoPendente2;
   const audio2Anexado = _zecaAudioPendente2;
-  if(!texto && !imagemAnexada && !zipAnexado && !videoAnexado && !audioAnexado) return;
+  if(!texto && !imagemAnexada && !zipAnexado && !pdfAnexado && !videoAnexado && !audioAnexado) return;
+
+  // Mandou uma mensagem nova de verdade (não o atalho de voz "sim"/"não"
+  // pra um card pendente, que já retorna antes de chegar aqui) — a pessoa
+  // mudou de assunto, então o card antigo perde a prioridade de voz (ela
+  // ainda pode confirmar ele clicando no botão normalmente).
+  _zecaCardVozPendente = null;
 
   // Se veio uma imagem/vídeo/áudio SEM texto novo, mas a pessoa tinha
   // digitado um pedido antes numa mensagem separada, reaproveita esse
@@ -1023,7 +1563,7 @@ async function enviarMensagemZeca(){
 
   input.value = '';
   input.disabled = true;
-  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : (temDoisAnexos ? '📎📎 (2 arquivos)' : (videoAnexado ? '📎 (vídeo)' : (audioAnexado ? '📎 (áudio)' : '📎 (imagem)'))))));
+  _adicionarMensagemZeca('pessoa', texto || (zipAnexado ? '📎 (arquivo .zip)' : (pdfAnexado ? '📎 (PDF)' : (mensagemParaEnviar ? `📎 ${mensagemParaEnviar}` : (temDoisAnexos ? '📎📎 (2 arquivos)' : (videoAnexado ? '📎 (vídeo)' : (audioAnexado ? '📎 (áudio)' : '📎 (imagem)')))))));
   document.getElementById('zeca-preview-anexo')?.remove();
   _zecaLimparAnexosZeca();
   _zecaUltimaInstrucaoTexto = null; // usa uma vez só — não reaproveita de novo no próximo anexo
@@ -1031,7 +1571,7 @@ async function enviarMensagemZeca(){
   const digitando = document.createElement('div');
   digitando.className = 'zeca-msg zeca-msg-zeca';
   digitando.id = 'zeca-digitando';
-  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (imagemAnexada ? '👀 Olhando a imagem...' : (temDoisAnexos ? '🎛️ Combinando os arquivos...' : (videoAnexado ? '🎬 Assistindo/editando o vídeo...' : (audioAnexado ? '🎧 Editando o áudio...' : '...'))));
+  digitando.textContent = zipAnexado ? '📦 Lendo o zip...' : (pdfAnexado ? '📄 Lendo o PDF...' : (imagemAnexada ? '👀 Olhando a imagem...' : (temDoisAnexos ? '🎛️ Combinando os arquivos...' : (videoAnexado ? '🎬 Assistindo/editando o vídeo...' : (audioAnexado ? '🎧 Editando o áudio...' : '...')))));
   document.getElementById('zeca-mensagens').appendChild(digitando);
   document.getElementById('zeca-mensagens').scrollTop = 999999;
 
@@ -1049,6 +1589,7 @@ async function enviarMensagemZeca(){
         historico: _zecaHistorico.slice(0, -1),
         imagem: imagemAnexada ? { data: imagemAnexada, mimeType: 'image/jpeg' } : null,
         arquivoZip: zipAnexado || null,
+        pdf: pdfAnexado ? { data: pdfAnexado } : null,
         video: videoAnexado || null,
         audio: audioAnexado || null,
         video2: video2Anexado || null,
@@ -1097,6 +1638,116 @@ async function enviarMensagemZeca(){
       _zecaRegistrarHistoricoSilencioso('zeca', resumoEdicaoVideo);
       _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoEdicaoVideo, token);
     }
+    if(data.acaoProduto){
+      _renderizarConfirmacaoProdutoZeca(data.acaoProduto, token);
+    }
+    if(data.acaoFinanceira){
+      _renderizarConfirmacaoFinanceiraZeca(data.acaoFinanceira, token);
+    }
+    if(data.acaoEmpresaCaixa){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `${data.acaoEmpresaCaixa.tipo === 'receita' ? '⬆️ Receita' : '⬇️ Despesa'} — ${data.acaoEmpresaCaixa.descricao}`,
+        detalhes: [`R$ ${Number(data.acaoEmpresaCaixa.valor).toFixed(2).replace('.', ',')}`, data.acaoEmpresaCaixa.categoria].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar lançamento',
+        textoSucesso: `✅ Lançado no caixa da ${data.acaoEmpresaCaixa.profissionalNome}!`,
+        tabela: 'empresa_caixa',
+        payload: { profissional_id: data.acaoEmpresaCaixa.profissionalId, tipo: data.acaoEmpresaCaixa.tipo, descricao: data.acaoEmpresaCaixa.descricao, valor: data.acaoEmpresaCaixa.valor, categoria: data.acaoEmpresaCaixa.categoria }
+      });
+    }
+    if(data.acaoEmpresaCliente){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `👤 ${data.acaoEmpresaCliente.nome}`,
+        detalhes: data.acaoEmpresaCliente.telefone || '',
+        textoBotao: '✅ Confirmar cadastro',
+        textoSucesso: `✅ Cliente cadastrado na ${data.acaoEmpresaCliente.profissionalNome}!`,
+        tabela: 'empresa_clientes',
+        payload: { profissional_id: data.acaoEmpresaCliente.profissionalId, nome: data.acaoEmpresaCliente.nome, telefone: data.acaoEmpresaCliente.telefone }
+      });
+    }
+    if(data.acaoEmpresaFornecedor){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `📦 ${data.acaoEmpresaFornecedor.nome}`,
+        detalhes: [data.acaoEmpresaFornecedor.categoria, data.acaoEmpresaFornecedor.telefone].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar cadastro',
+        textoSucesso: `✅ Fornecedor cadastrado na ${data.acaoEmpresaFornecedor.profissionalNome}!`,
+        tabela: 'empresa_fornecedores',
+        payload: { profissional_id: data.acaoEmpresaFornecedor.profissionalId, nome: data.acaoEmpresaFornecedor.nome, categoria: data.acaoEmpresaFornecedor.categoria, telefone: data.acaoEmpresaFornecedor.telefone }
+      });
+    }
+    if(data.acaoLar){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `${data.acaoLar.tipo === 'receita' ? '⬆️ Receita' : '⬇️ Despesa'} — ${data.acaoLar.descricao}`,
+        detalhes: [`R$ ${Number(data.acaoLar.valor).toFixed(2).replace('.', ',')}`, data.acaoLar.categoria].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar lançamento',
+        textoSucesso: '✅ Lançado no teu Lar!',
+        tabela: 'lar_lancamentos',
+        payload: { tipo: data.acaoLar.tipo, descricao: data.acaoLar.descricao, valor: data.acaoLar.valor, categoria: data.acaoLar.categoria }
+      });
+    }
+    if(data.acaoLarPatrimonio){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `🏠 ${data.acaoLarPatrimonio.descricao}`,
+        detalhes: [data.acaoLarPatrimonio.tipo, data.acaoLarPatrimonio.valorAquisicao ? `R$ ${Number(data.acaoLarPatrimonio.valorAquisicao).toFixed(2).replace('.', ',')}` : null].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar cadastro',
+        textoSucesso: '✅ Bem cadastrado no teu Lar!',
+        tabela: 'lar_patrimonio',
+        payload: { tipo: data.acaoLarPatrimonio.tipo, descricao: data.acaoLarPatrimonio.descricao, valor_aquisicao: data.acaoLarPatrimonio.valorAquisicao }
+      });
+    }
+    if(data.acaoAgro){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `${data.acaoAgro.tipo === 'receita' ? '⬆️ Receita' : '⬇️ Despesa'} — ${data.acaoAgro.descricao}`,
+        detalhes: [`R$ ${Number(data.acaoAgro.valor).toFixed(2).replace('.', ',')}`, data.acaoAgro.categoria, data.acaoAgro.quantidade ? `${data.acaoAgro.quantidade}${data.acaoAgro.unidade || ''}` : null].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar lançamento',
+        textoSucesso: `✅ Lançado na ${data.acaoAgro.propriedadeNome}!`,
+        tabela: 'agro_lancamentos',
+        payload: {
+          propriedade_id: data.acaoAgro.propriedadeId, safra_id: data.acaoAgro.safraId,
+          tipo: data.acaoAgro.tipo, descricao: data.acaoAgro.descricao, valor: data.acaoAgro.valor,
+          categoria: data.acaoAgro.categoria, quantidade: data.acaoAgro.quantidade, unidade: data.acaoAgro.unidade
+        }
+      });
+    }
+    if(data.acaoAgroTalhao){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `📐 Novo talhão — ${data.acaoAgroTalhao.nome}`,
+        detalhes: data.acaoAgroTalhao.areaHectares ? `${data.acaoAgroTalhao.areaHectares} ha` : '',
+        textoBotao: '✅ Confirmar talhão',
+        textoSucesso: `✅ Talhão cadastrado na ${data.acaoAgroTalhao.propriedadeNome}!`,
+        tabela: 'agro_talhoes',
+        payload: { propriedade_id: data.acaoAgroTalhao.propriedadeId, nome: data.acaoAgroTalhao.nome, area_hectares: data.acaoAgroTalhao.areaHectares }
+      });
+    }
+    if(data.acaoAgroSafra){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `🌱 Nova safra — ${data.acaoAgroSafra.nome}`,
+        detalhes: data.acaoAgroSafra.cultura,
+        textoBotao: '✅ Confirmar safra',
+        textoSucesso: `✅ Safra criada na ${data.acaoAgroSafra.propriedadeNome}!`,
+        tabela: 'agro_safras',
+        payload: { propriedade_id: data.acaoAgroSafra.propriedadeId, nome: data.acaoAgroSafra.nome, cultura: data.acaoAgroSafra.cultura }
+      });
+    }
+    if(data.acaoAgroPatrimonio){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `🚜 ${data.acaoAgroPatrimonio.descricao}`,
+        detalhes: [data.acaoAgroPatrimonio.tipo, data.acaoAgroPatrimonio.valorAquisicao ? `R$ ${Number(data.acaoAgroPatrimonio.valorAquisicao).toFixed(2).replace('.', ',')}` : null].filter(Boolean).join(' · '),
+        textoBotao: '✅ Confirmar cadastro',
+        textoSucesso: `✅ Bem cadastrado na ${data.acaoAgroPatrimonio.propriedadeNome}!`,
+        tabela: 'agro_patrimonio',
+        payload: { propriedade_id: data.acaoAgroPatrimonio.propriedadeId, tipo: data.acaoAgroPatrimonio.tipo, descricao: data.acaoAgroPatrimonio.descricao, valor_aquisicao: data.acaoAgroPatrimonio.valorAquisicao }
+      });
+    }
+    if(data.acaoAgroProducao){
+      _renderizarConfirmacaoGenericaZeca({
+        titulo: `🌾 Colheita — ${data.acaoAgroProducao.cultura}`,
+        detalhes: `${data.acaoAgroProducao.quantidade}${data.acaoAgroProducao.unidade}${data.acaoAgroProducao.safraNome ? ` · safra ${data.acaoAgroProducao.safraNome}` : ''}`,
+        textoBotao: '✅ Confirmar produção',
+        textoSucesso: `✅ Produção registrada na ${data.acaoAgroProducao.propriedadeNome}!`,
+        tabela: 'agro_producao',
+        payload: { safra_id: data.acaoAgroProducao.safraId, cultura: data.acaoAgroProducao.cultura, quantidade: data.acaoAgroProducao.quantidade, unidade: data.acaoAgroProducao.unidade }
+      });
+    }
     if(data.conversaId){ _zecaConversaAtual = data.conversaId; _zecaSalvarConversaNaSessao(data.conversaId); }
     if(data.limiteConversasAtingido){
       _adicionarMensagemZeca('zeca', '⚠️ Essa conversa não foi salva — você já tem 30 conversas guardadas. Apaga uma antiga no ☰ pra continuar salvando.');
@@ -1107,6 +1758,9 @@ async function enviarMensagemZeca(){
     _zecaUltimaPerguntaFoiPorVoz = false;
     if(Array.isArray(data.resultados) && data.resultados.length > 0){
       _renderizarResultadosZeca(data.resultados);
+    }
+    if(data.acaoResolver){
+      _renderizarConfirmacaoResolverZeca(data.acaoResolver);
     }
     if(data.tipo === 'gerar_imagem'){
       const gerando = document.createElement('div');
@@ -1175,8 +1829,39 @@ async function enviarMensagemZeca(){
         });
         document.getElementById('zeca-gerando-video')?.remove();
         if(dadosVideo.url){
-          _renderizarVideoGeradoZeca(dadosVideo.url, dadosVideo.roteiro);
-          const resumoVideo = `[Gerei um vídeo sobre "${data.temaVideo}". Roteiro: "${(dadosVideo.roteiro || '').slice(0, 600)}"]`;
+          let urlFinal = dadosVideo.url;
+          // "Estúdio multimídia encadeado" — se a pessoa pediu legenda
+          // junto com o vídeo, encadeia automaticamente o passo de
+          // legendar em cima do vídeo que acabou de sair, sem perguntar
+          // de novo (ela já pediu isso na mensagem original).
+          if(data.pedeLegendaVideo){
+            const legendando = document.createElement('div');
+            legendando.className = 'zeca-msg zeca-msg-zeca';
+            legendando.id = 'zeca-legendando-video';
+            legendando.textContent = '🔤 Vídeo pronto! Agora legendando automaticamente...';
+            document.getElementById('zeca-mensagens').appendChild(legendando);
+            document.getElementById('zeca-mensagens').scrollTop = 999999;
+            try{
+              const respLegenda = await fetch('/.netlify/functions/legendar-video-gerado-zeca', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                body: JSON.stringify({ videoUrl: dadosVideo.url, mensagemOriginal: data.mensagemOriginal })
+              });
+              const dadosLegenda = await respLegenda.json();
+              document.getElementById('zeca-legendando-video')?.remove();
+              if(dadosLegenda.url){
+                urlFinal = dadosLegenda.url;
+              } else if(dadosLegenda.error){
+                _adicionarMensagemZeca('zeca', dadosLegenda.error);
+              }
+            } catch(eLegendaVideo){
+              console.error(eLegendaVideo);
+              document.getElementById('zeca-legendando-video')?.remove();
+              _adicionarMensagemZeca('zeca', 'Não consegui legendar o vídeo automaticamente agora. O vídeo sem legenda continua disponível.');
+            }
+          }
+          _renderizarVideoGeradoZeca(urlFinal, dadosVideo.roteiro);
+          const resumoVideo = `[Gerei um vídeo${data.pedeLegendaVideo && urlFinal !== dadosVideo.url ? ' já legendado' : ''} sobre "${data.temaVideo}". Roteiro: "${(dadosVideo.roteiro || '').slice(0, 600)}"]`;
           _zecaRegistrarHistoricoSilencioso('zeca', resumoVideo);
           _zecaSalvarTrocaEspecial(mensagemParaEnviar, resumoVideo, token);
         } else {
