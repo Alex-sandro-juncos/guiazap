@@ -268,6 +268,10 @@ function renderProdutos(){
   const filtradosBase = produtos
     .filter(p => !empresaFiltroId || (p.profissionais && p.profissionais.id === empresaFiltroId))
     .filter(p => !modoGerenciarVitrineAtivo || (p.profissionais && p.profissionais.user_id === currentUserV.id))
+    // Produto marcado como "só no gerenciamento" (visivel_guiazap: false) não
+    // aparece na Vitrine pública — só quem é dono e está no modo "meus produtos"
+    // consegue ver/editar esse item aqui.
+    .filter(p => p.visivel_guiazap !== false || (modoGerenciarVitrineAtivo && p.profissionais && currentUserV && p.profissionais.user_id === currentUserV.id))
     .filter(p => !mostrandoSoFavoritosProdutos || favoritosProdutos.has(p.id))
     .filter(p => !categoriaFiltro || p.categoria === categoriaFiltro || (p.categorias_extra && p.categorias_extra.split('\n').includes(categoriaFiltro)))
     .filter(p => {
@@ -382,6 +386,9 @@ function renderProdutos(){
         <div class="acoes-produto-coluna">
           ${(p.estoque_quantidade !== null && p.estoque_quantidade !== undefined && p.estoque_quantidade > 0 && p.estoque_quantidade <= 5)
             ? `<span style="display:inline-block; background:#fff3cd; color:#7c4a03; font-size:0.72rem; font-weight:700; padding:4px 9px; border-radius:50px; margin-bottom:6px;">🔥 Últimas ${p.estoque_quantidade} unidade${p.estoque_quantidade > 1 ? 's' : ''}!</span>`
+            : ''}
+          ${p.visivel_guiazap === false
+            ? `<span style="display:inline-block; background:#e0e7ff; color:#3730a3; font-size:0.72rem; font-weight:700; padding:4px 9px; border-radius:50px; margin-bottom:6px;">🏪 Só gerenciamento (não aparece no GuiaZap)</span>`
             : ''}
           ${p.disponivel_venda === false
             ? `<span style="display:inline-block; background:#eee; color:#666; font-size:0.75rem; font-weight:700; padding:5px 10px; border-radius:50px; margin-bottom:6px;">📷 Em exposição</span>`
@@ -787,6 +794,7 @@ function fecharFormProduto(){
   document.getElementById('p-codigo-barras-manual').value = '';
   document.getElementById('p-nome').value = '';
   document.getElementById('p-marca').value = '';
+  document.getElementById('p-codigo-fiscal').value = '';
   document.getElementById('p-categoria').value = '';
   document.getElementById('p-descricao').value = '';
   document.getElementById('p-unidade-medida').value = 'unidade';
@@ -797,6 +805,7 @@ function fecharFormProduto(){
   document.getElementById('p-link-externo').value = '';
   document.getElementById('p-18mais').checked = false;
   document.getElementById('p-disponivel-venda').checked = true;
+  document.getElementById('p-visivel-guiazap-ambos').checked = true;
   document.getElementById('p-cardapio-bot').checked = false;
   document.getElementById('p-foto-preview').style.display = 'none';
   document.getElementById('p-foto-msg').textContent = '';
@@ -902,6 +911,7 @@ function editarProduto(id){
   document.getElementById('p-profissional').value = p.profissional_id;
   document.getElementById('p-nome').value = p.nome;
   document.getElementById('p-marca').value = p.marca || '';
+  document.getElementById('p-codigo-fiscal').value = p.codigo_fiscal || '';
   document.getElementById('p-categoria').value = p.categoria || '';
   document.getElementById('p-descricao').value = p.descricao || '';
   document.getElementById('p-unidade-medida').value = p.unidade_medida || 'unidade';
@@ -912,6 +922,11 @@ function editarProduto(id){
   document.getElementById('p-link-externo').value = p.link_externo || '';
   document.getElementById('p-18mais').checked = !!p.produto_18_mais;
   document.getElementById('p-disponivel-venda').checked = p.disponivel_venda !== false;
+  if(p.visivel_guiazap === false){
+    document.getElementById('p-visivel-guiazap-interno').checked = true;
+  } else {
+    document.getElementById('p-visivel-guiazap-ambos').checked = true;
+  }
   document.getElementById('p-cardapio-bot').checked = !!p.no_cardapio_bot;
   carregarVariacoesProduto(p.variacoes);
   carregarAdicionaisProduto(p.adicionais);
@@ -1141,6 +1156,7 @@ async function salvarProduto(e){
     profissional_id: document.getElementById('p-profissional').value,
     nome: document.getElementById('p-nome').value.trim(),
     marca: document.getElementById('p-marca').value.trim() || null,
+    codigo_fiscal: document.getElementById('p-codigo-fiscal').value.trim() || null,
     descricao: document.getElementById('p-descricao').value.trim() || null,
     categoria: document.getElementById('p-categoria').value.trim() || null,
     unidade_medida: document.getElementById('p-unidade-medida').value,
@@ -1151,6 +1167,7 @@ async function salvarProduto(e){
     codigo_barras: document.getElementById('p-codigo-barras').value.trim() || null,
     link_externo: document.getElementById('p-link-externo').value.trim() || null,
     disponivel_venda: document.getElementById('p-disponivel-venda').checked,
+    visivel_guiazap: document.getElementById('p-visivel-guiazap-interno').checked ? false : true,
     no_cardapio_bot: document.getElementById('p-cardapio-bot').checked,
     variacoes: coletarVariacoesProduto(),
     adicionais: coletarAdicionaisProduto(),

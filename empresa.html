@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body.emp-pagina { background: #f7f5f0; }
   .emp-topo {
@@ -181,6 +182,7 @@
     <button type="button" class="emp-aba" data-aba="estoque" onclick="empTrocarAba('estoque')">📊 Estoque</button>
     <button type="button" class="emp-aba" data-aba="oferta" onclick="empTrocarAba('oferta')">📢 Oferta</button>
     <button type="button" class="emp-aba" data-aba="documentos" onclick="empTrocarAba('documentos')">📁 Documentos</button>
+    <button type="button" class="emp-aba" data-aba="relatorios" onclick="empTrocarAba('relatorios')">📈 Relatórios</button>
   </div>
 
   <!-- CAIXA -->
@@ -197,24 +199,42 @@
       <div class="emp-card-total despesa"><div class="emp-label">A pagar</div><div class="emp-valor" id="emp-caixa-a-pagar-total">R$ 0,00</div></div>
     </div>
     <div id="emp-alerta-gastos"></div>
+    <div class="emp-card" id="emp-card-fluxo-projetado" style="display:none;">
+      <h3 style="font-size:0.85rem;">📈 Fluxo de caixa projetado</h3>
+      <div style="font-size:0.72rem; color:#888; margin:-4px 0 8px;">Saldo atual + contas a receber/a pagar combinadas, na ordem do vencimento — mostra pra onde o caixa vai se tudo pendente acontecer como planejado.</div>
+      <div id="emp-fluxo-projetado-lista"></div>
+    </div>
     <div class="emp-card" id="emp-card-categorias" style="display:none;">
       <h3 style="font-size:0.85rem;">📊 Gastos por categoria</h3>
       <div id="emp-categorias-lista"></div>
     </div>
+
+    <div class="emp-card">
+      <h3>📊 Importar lançamentos de planilha</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Já tem o histórico numa planilha (de outro sistema, do Excel, de onde for)? Sobe o arquivo — funciona com colunas <b>Data, Tipo, Categoria, Descrição, Valor</b> (nomes parecidos também servem, tipo "valor total" ou "R$"). Nada entra automático: você confere e escolhe o que importar antes.</div>
+      <label style="display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:16px 8px; cursor:pointer; margin-bottom:8px;">
+        <div style="font-size:1.5rem;">📁</div>
+        <div style="font-weight:700; color:#6b46c1; font-size:0.82rem; margin-top:2px;">Toque pra escolher a planilha (.xlsx ou .csv)</div>
+        <input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="empProcessarPlanilhaLancamentos(event)">
+      </label>
+      <div id="emp-planilha-resultado"></div>
+    </div>
+
     <div class="emp-card">
       <h3>Novo lançamento</h3>
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
           <div style="font-size:1.3rem;">📷</div>
-          <div style="font-weight:700; color:#6b46c1; font-size:0.76rem; margin-top:2px;">Lançar por foto da nota</div>
-          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="empProcessarFotoNota(event)">
+          <div style="font-weight:700; color:#6b46c1; font-size:0.76rem; margin-top:2px;">Tirar foto da nota</div>
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="empAdicionarFotoNota(event)">
         </label>
         <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
           <div style="font-size:1.3rem;">🖼️</div>
           <div style="font-weight:700; color:#6b46c1; font-size:0.76rem; margin-top:2px;">Galeria / PDF</div>
-          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="empProcessarFotoNota(event)">
+          <input type="file" accept="image/*,application/pdf" multiple style="display:none;" onchange="empAdicionarFotoNota(event)">
         </label>
       </div>
+      <div id="emp-nota-fotos-fila"></div>
       <div id="emp-nota-ia-status"></div>
       <div class="emp-linha">
         <select id="emp-caixa-tipo">
@@ -253,6 +273,7 @@
 
   <!-- PEDIDOS -->
   <div id="emp-secao-pedidos" style="display:none;">
+    <a href="pdv.html" class="emp-btn full" style="display:block; text-align:center; text-decoration:none; margin-bottom:16px; font-size:1.02rem; padding:14px;">🖥️ Abrir PDV (caixa do balcão)</a>
     <div class="emp-card" id="emp-mais-vendidos-card">
       <h3>🏆 Mais vendidos (últimos 30 dias)</h3>
       <div id="emp-mais-vendidos">Carregando...</div>
@@ -354,8 +375,65 @@
 
   <!-- ESTOQUE -->
   <div id="emp-secao-estoque" style="display:none;">
-    <div class="emp-vazio" style="padding-top:0;">Estoque é por produto da Vitrine — cadastra o produto lá (ou pelo Zeca) e mexe na quantidade aqui.</div>
+    <div class="emp-vazio" style="padding-top:0;">Estoque é por produto da Vitrine — cadastra o produto lá (ou pelo Zeca) e mexe na quantidade aqui. Produto sem código de barras de fábrica (carne, batata, ração a granel...) pode ganhar um código interno pra usar no PDV — botão 🏷️ em cada item.</div>
     <div id="emp-lista-estoque"></div>
+
+    <div class="emp-card">
+      <h3>🔐 Senha gerencial do PDV</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Obrigatória pra cancelar/devolver uma venda que já foi lançada no <a href="pdv.html">PDV</a> — só quem sabe essa senha consegue estornar uma venda, o operador do caixa sozinho não consegue.</div>
+      <div class="emp-linha">
+        <input type="text" id="emp-pdv-senha-nova" placeholder="Nova senha (4 a 6 números)" inputmode="numeric" maxlength="6">
+      </div>
+      <button type="button" class="emp-btn full" onclick="empDefinirSenhaGerencial()">Definir/trocar senha gerencial</button>
+    </div>
+
+    <div class="emp-card">
+      <h3>🖥️ Caixas / PDV</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Cada caixa físico (frente de venda) tem um ID e um código de acesso próprio — o operador abre o <a href="pdv.html">PDV</a> com esse código, não é o login da empresa, então nunca consegue entrar aqui no Gerenciamento, só vender naquele caixa. Assim dá pra saber depois qual caixa vendeu quanto e fechar/conferir cada um separado.</div>
+      <div class="emp-linha">
+        <input type="text" id="emp-novo-caixa-nome" placeholder='Nome do novo caixa (ex: "Caixa 1")'>
+      </div>
+      <button type="button" class="emp-btn full" onclick="empCriarCaixaPdv()">➕ Criar caixa</button>
+      <div id="emp-lista-caixas-pdv" style="margin-top:10px;"></div>
+      <div id="emp-codigo-acesso-resultado"></div>
+    </div>
+
+    <div class="emp-card">
+      <h3>⏰ Validade e descarte (perecíveis)</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Define a validade de um produto perecível (carne, hortaliças, laticínios...) pra receber aviso antes de vencer, e registra o descarte quando precisar jogar fora — isso já entra como perda no relatório.</div>
+    </div>
+
+    <div class="emp-card">
+      <h3>🧾 Nota / cupom fiscal</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Emissão de verdade, direto na Receita — não é só uma anotação interna. Isso exige uma conta própria sua num provedor de nota fiscal (hoje o GuiaZap conversa com a <strong>Focus NFe</strong>) e um certificado digital da empresa; o GuiaZap não vende nem intermedia esse custo, é você quem contrata e paga o provedor direto com eles. Comece em <strong>homologação</strong> (modo de teste, sem valor fiscal) até seu contador confirmar que tudo está certo — só depois mude pra produção.</div>
+      <div class="emp-linha">
+        <select id="emp-nf-modelo">
+          <option value="nfce">Cupom fiscal (NFC-e) — venda direto ao consumidor</option>
+          <option value="nfe">Nota fiscal (NF-e) — pra um CNPJ/comprador específico</option>
+        </select>
+      </div>
+      <div class="emp-linha">
+        <select id="emp-nf-regime">
+          <option value="simples_nacional">Simples Nacional</option>
+          <option value="simples_nacional_excesso">Simples Nacional (excesso de sublimite)</option>
+          <option value="normal">Regime normal</option>
+          <option value="mei">MEI</option>
+        </select>
+      </div>
+      <div class="emp-linha">
+        <input type="text" id="emp-nf-token" placeholder="Token de acesso da conta no provedor (Focus NFe)">
+      </div>
+      <div class="emp-linha">
+        <select id="emp-nf-ambiente">
+          <option value="homologacao">Homologação (teste, sem valor fiscal)</option>
+          <option value="producao">Produção (nota valendo de verdade)</option>
+        </select>
+      </div>
+      <div class="emp-linha" style="align-items:center; gap:8px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem;"><input type="checkbox" id="emp-nf-ativa" style="width:auto;"> Emitir automaticamente a cada venda do PDV</label>
+      </div>
+      <button type="button" class="emp-btn full" onclick="empSalvarConfigNotaFiscal()">Salvar configuração da nota fiscal</button>
+    </div>
   </div>
 
   <!-- OFERTA DA SEMANA -->
@@ -405,6 +483,23 @@
       <button type="button" class="emp-btn full" id="emp-contab-btn" onclick="empPrepararContabilidade()">Gerar PDF pra contabilidade</button>
       <button type="button" class="emp-btn secundario full" id="emp-contab-excel-btn" onclick="empGerarExcelContabilidade()" style="margin-top:8px;">📊 Gerar Excel (Vendas / Compras / Financeiro)</button>
     </div>
+  </div>
+
+  <!-- RELATÓRIOS -->
+  <div id="emp-secao-relatorios" style="display:none;">
+    <div class="emp-linha" style="margin-bottom:16px;">
+      <button type="button" class="emp-btn secundario" id="emp-rel-btn-hoje" onclick="empCarregarRelatorio('hoje')" style="flex:1;">Hoje</button>
+      <button type="button" class="emp-btn secundario" id="emp-rel-btn-semana" onclick="empCarregarRelatorio('semana')" style="flex:1;">Semana</button>
+      <button type="button" class="emp-btn" id="emp-rel-btn-mes" onclick="empCarregarRelatorio('mes')" style="flex:1;">Mês</button>
+      <button type="button" class="emp-btn secundario" id="emp-rel-btn-periodo" onclick="empCarregarRelatorio('periodo')" style="flex:1;">Período</button>
+    </div>
+    <div class="emp-linha" id="emp-rel-periodo-custom" style="display:none;">
+      <input type="date" id="emp-rel-data-inicio">
+      <input type="date" id="emp-rel-data-fim">
+      <button type="button" class="emp-btn secundario" onclick="empCarregarRelatorio('periodo')">Aplicar</button>
+    </div>
+
+    <div id="emp-rel-corpo"><div class="emp-vazio">Carregando...</div></div>
   </div>
 
   <div class="emp-zeca-dica">💬 Peça conselhos e resumos pro <a href="zeca.html">Zeca</a> em cima desses dados — "como tá minha empresa esse mês?".</div>
@@ -495,7 +590,7 @@ async function empNovaFilial(){
 function empTrocarAba(aba){
   empAbaAtual = aba;
   document.querySelectorAll('.emp-aba').forEach(b => b.classList.toggle('ativa', b.dataset.aba === aba));
-  ['caixa','pedidos','clientes','fornecedores','compras','equipe','estoque','oferta','documentos'].forEach(a => {
+  ['caixa','pedidos','clientes','fornecedores','compras','equipe','estoque','oferta','documentos','relatorios'].forEach(a => {
     document.getElementById('emp-secao-' + a).style.display = a === aba ? '' : 'none';
   });
   empCarregarAbaAtual();
@@ -511,6 +606,7 @@ function empCarregarAbaAtual(){
   if(empAbaAtual === 'estoque') empCarregarEstoque();
   if(empAbaAtual === 'oferta') empCarregarOferta();
   if(empAbaAtual === 'documentos') empCarregarDocumentos();
+  if(empAbaAtual === 'relatorios') empCarregarRelatorio('mes');
 }
 
 // ============ CAIXA ============
@@ -608,6 +704,44 @@ function empRenderCaixaTotais(){
   } else {
     cardPendentes.style.display = 'none';
   }
+
+  empRenderFluxoProjetado(totalReceita - totalDespesaOperacional - totalRetiradas, pendentes);
+}
+
+// Fluxo de caixa projetado — pega o saldo de hoje e vai aplicando, em
+// ordem de vencimento, cada conta a receber/a pagar ainda pendente,
+// mostrando o saldo "se tudo acontecer como combinado". Puramente
+// aritmético em cima do que já está lançado — nunca uma previsão da IA.
+function empRenderFluxoProjetado(saldoAtual, pendentes){
+  const card = document.getElementById('emp-card-fluxo-projetado');
+  const container = document.getElementById('emp-fluxo-projetado-lista');
+  if(!pendentes.length){ card.style.display = 'none'; return; }
+
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  const ordenados = [...pendentes].sort((a, b) => {
+    const va = a.data_vencimento || '9999-99-99';
+    const vb = b.data_vencimento || '9999-99-99';
+    return va.localeCompare(vb);
+  });
+
+  let saldoCorrente = saldoAtual;
+  let html = `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">Saldo atual</div></div><div class="emp-item-valor">${empFmt(saldoAtual)}</div></div>`;
+  html += ordenados.map(l => {
+    saldoCorrente += l.tipo === 'receita' ? Number(l.valor) : -Number(l.valor);
+    const vencido = l.data_vencimento && l.data_vencimento < hojeStr;
+    const vencimentoFmt = l.data_vencimento ? new Date(l.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'sem data';
+    return `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${empEscapar(l.descricao)}</div>
+        <div class="emp-item-meta"><span class="emp-tag ${vencido ? 'alerta' : ''}">${vencido ? '⚠️ vencido — ' : ''}${vencimentoFmt}</span></div>
+      </div>
+      <div class="emp-item-valor ${l.tipo}">${l.tipo === 'receita' ? '+' : '-'}${empFmt(l.valor)}</div>
+      <div style="font-size:0.72rem; color:#888; min-width:90px; text-align:right;">saldo: ${empFmt(saldoCorrente)}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+  card.style.display = 'block';
 }
 
 function empRenderCaixaLista(){
@@ -720,11 +854,56 @@ async function empApagarCaixa(id){
 // sozinha. A pessoa confere os campos (e pode corrigir qualquer um antes
 // de clicar em "Lançar") — sem isso, um erro de leitura da IA lançaria
 // valor errado direto no caixa sem ninguém perceber.
-async function empProcessarFotoNota(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  event.target.value = ''; // permite escolher o mesmo arquivo de novo depois
+// Fila de fotos da MESMA nota — quando a letra fica pequena demais numa
+// foto só (nota grande, texto miúdo), dá pra tirar mais de uma foto
+// (geral + de perto) antes de mandar tudo junto pra IA ler de uma vez.
+let empNotaFotosFila = [];
 
+function empRenderFilaFotosNota(){
+  const container = document.getElementById('emp-nota-fotos-fila');
+  if(!empNotaFotosFila.length){ container.innerHTML = ''; return; }
+  container.innerHTML = `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+    ${empNotaFotosFila.map((f, i) => `<div style="position:relative;">
+      ${f.mediaType === 'application/pdf'
+        ? '<div style="width:52px; height:52px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">📄</div>'
+        : `<img src="data:${f.mediaType};base64,${f.imagemBase64}" style="width:52px; height:52px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">`}
+      <button type="button" onclick="empRemoverFotoNota(${i})" style="position:absolute; top:-6px; right:-6px; background:#a4402f; color:white; border:none; border-radius:50%; width:20px; height:20px; font-size:0.7rem; cursor:pointer;">✖</button>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex; gap:8px; margin-bottom:10px;">
+    <button type="button" class="emp-btn full" onclick="empAnalisarFotosNota()">🔍 Analisar ${empNotaFotosFila.length} foto${empNotaFotosFila.length > 1 ? 's' : ''} da nota</button>
+    <button type="button" class="emp-btn secundario" onclick="empLimparFotosNota()">Limpar</button>
+  </div>`;
+}
+
+function empAdicionarFotoNota(event){
+  const files = Array.from(event.target.files || []);
+  event.target.value = ''; // permite escolher o mesmo arquivo de novo depois
+  if(!files.length) return;
+  const LIMITE = 4;
+  files.forEach(file => {
+    if(empNotaFotosFila.length >= LIMITE) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      empNotaFotosFila.push({ imagemBase64: reader.result.split(',')[1], mediaType: file.type || 'image/jpeg' });
+      empRenderFilaFotosNota();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function empRemoverFotoNota(i){
+  empNotaFotosFila.splice(i, 1);
+  empRenderFilaFotosNota();
+}
+
+function empLimparFotosNota(){
+  empNotaFotosFila = [];
+  empRenderFilaFotosNota();
+}
+
+async function empAnalisarFotosNota(){
+  if(!empNotaFotosFila.length) return;
   const status = document.getElementById('emp-nota-ia-status');
   status.innerHTML = `<div style="text-align:center; padding:14px; background:#f3eefc; border-radius:10px; margin-bottom:10px;">
     <div style="font-size:1.3rem;">✨</div>
@@ -732,34 +911,33 @@ async function empProcessarFotoNota(event){
   </div>`;
 
   try{
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
     const { data: { session } } = await supabaseClientEmp.auth.getSession();
     const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', profissionalId: empEmpresaAtual, modulo: 'empresa' })
+      body: JSON.stringify({ imagens: empNotaFotosFila, profissionalId: empEmpresaAtual, modulo: 'empresa' })
     });
     const dados = await resp.json();
 
     if(!resp.ok || dados.error){
-      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${empEscapar(dados.error || 'Erro ao ler a nota')}. Tenta com uma foto mais nítida ou preenche na mão.</div>`;
+      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${empEscapar(dados.error || 'Erro ao ler a nota')}. Tenta tirar mais uma foto mais de perto (com "🖼️ Galeria") ou preenche na mão.</div>`;
       return;
     }
 
     if(dados.tipo) document.getElementById('emp-caixa-tipo').value = dados.tipo;
     if(dados.categoria) document.getElementById('emp-caixa-categoria').value = dados.categoria;
-    if(dados.descricao) document.getElementById('emp-caixa-descricao').value = dados.fornecedor ? `${dados.descricao} (${dados.fornecedor})` : dados.descricao;
+    let descricao = dados.descricao || '';
+    if(dados.fornecedor) descricao = `${descricao} (${dados.fornecedor})`;
+    if(dados.numero_nota) descricao += ` · NF ${dados.numero_nota}`;
+    if(dados.cnpj_emitente) descricao += ` · CNPJ ${dados.cnpj_emitente}`;
+    if(descricao) document.getElementById('emp-caixa-descricao').value = descricao.trim();
     if(dados.valor) document.getElementById('emp-caixa-valor').value = dados.valor;
     if(dados.valor_imposto) document.getElementById('emp-caixa-imposto').value = dados.valor_imposto;
 
     status.innerHTML = `<div style="padding:10px; background:#e8f5e9; border-radius:10px; font-size:0.8rem; color:#2a7a2a; margin-bottom:4px;">✅ Li a nota e preenchi o formulário abaixo — <b>confere os dados</b> (principalmente o valor) antes de clicar em "Lançar".</div>`;
     document.getElementById('emp-caixa-valor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    empNotaFotosFila = [];
+    empRenderFilaFotosNota();
   } catch(e){
     console.error(e);
     status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ Erro ao processar a imagem. Tenta de novo ou preenche na mão.</div>`;
@@ -809,6 +987,126 @@ async function empAdicionarCaixa(){
   document.getElementById('emp-caixa-vencimento').value = '';
   document.getElementById('emp-caixa-vencimento-wrap').style.display = 'none';
   document.getElementById('emp-nota-ia-status').innerHTML = '';
+  empCarregarCaixa();
+}
+
+// ============ IMPORTAR LANÇAMENTOS DE PLANILHA ============
+// Mesmo espírito do importador de produtos da Vitrine: lê a planilha
+// inteira no navegador (SheetJS), tenta reconhecer as colunas por nome
+// (aceita variação comum, com/sem acento), mostra uma prévia com
+// checkbox por linha, e só grava no banco quando a pessoa confirma —
+// nunca importa nada automático.
+let empLancamentosDaPlanilha = [];
+
+function empAcharColunaPlanilha(linha, opcoes){
+  const chaves = Object.keys(linha);
+  for(const opcao of opcoes){
+    const achada = chaves.find(k => k.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') === opcao);
+    if(achada) return linha[achada];
+  }
+  return '';
+}
+
+function empParseDataPlanilha(valor){
+  if(!valor) return new Date().toISOString().slice(0, 10);
+  // Excel às vezes manda a data como número serial em vez de texto.
+  if(typeof valor === 'number'){
+    const data = XLSX.SSF.parse_date_code(valor);
+    if(data) return `${data.y}-${String(data.m).padStart(2,'0')}-${String(data.d).padStart(2,'0')}`;
+  }
+  const texto = String(valor).trim();
+  const brMatch = texto.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(brMatch){
+    let [, d, m, y] = brMatch;
+    if(y.length === 2) y = '20' + y;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  const isoMatch = texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2,'0')}-${isoMatch[3].padStart(2,'0')}`;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function empProcessarPlanilhaLancamentos(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = '';
+
+  const resultado = document.getElementById('emp-planilha-resultado');
+  resultado.innerHTML = '<div class="emp-vazio">Lendo a planilha...</div>';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const dados = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(dados, { type: 'array' });
+      const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+      const linhas = XLSX.utils.sheet_to_json(primeiraAba, { defval: '' });
+
+      if(!linhas.length){
+        resultado.innerHTML = '<div class="emp-vazio">A planilha está vazia.</div>';
+        return;
+      }
+
+      empLancamentosDaPlanilha = linhas.map(linha => {
+        const tipoTexto = String(empAcharColunaPlanilha(linha, ['tipo']) || '').trim().toLowerCase();
+        const tipo = ['receita', 'entrada', 'venda', 'credito', 'crédito'].some(t => tipoTexto.includes(t)) ? 'receita' : 'despesa';
+        const valorTexto = String(empAcharColunaPlanilha(linha, ['valor', 'valor total', 'valor (r$)', 'r$', 'preco', 'preço']) || '').replace('R$', '').trim();
+        return {
+          data: empParseDataPlanilha(empAcharColunaPlanilha(linha, ['data'])),
+          tipo,
+          categoria: String(empAcharColunaPlanilha(linha, ['categoria']) || 'outro').trim() || 'outro',
+          descricao: String(empAcharColunaPlanilha(linha, ['descricao', 'descrição', 'historico', 'histórico']) || '').trim(),
+          valor: empParseValor(valorTexto),
+          selecionado: true
+        };
+      }).filter(l => l.descricao && l.valor && l.valor > 0);
+
+      if(!empLancamentosDaPlanilha.length){
+        resultado.innerHTML = '<div class="emp-vazio">Não encontrei nenhuma linha com descrição e valor válidos. Confere se as colunas "Descrição" e "Valor" estão certas na planilha.</div>';
+        return;
+      }
+      empRenderPlanilhaLancamentos();
+    } catch(err){
+      console.error(err);
+      resultado.innerHTML = '<div class="emp-vazio">Erro ao ler a planilha. Confere se é um arquivo .xlsx ou .csv válido.</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function empRenderPlanilhaLancamentos(){
+  const resultado = document.getElementById('emp-planilha-resultado');
+  const selecionados = empLancamentosDaPlanilha.filter(l => l.selecionado).length;
+  resultado.innerHTML = `
+    <div class="emp-vazio" style="padding:0 0 8px; text-align:left; font-weight:700; color:#555;">Encontrei ${empLancamentosDaPlanilha.length} lançamento(s) — desmarca o que não quer importar:</div>
+    <div style="max-height:280px; overflow-y:auto; margin-bottom:10px;">
+      ${empLancamentosDaPlanilha.map((l, i) => `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:0.82rem;">
+        <input type="checkbox" ${l.selecionado ? 'checked' : ''} onchange="empLancamentosDaPlanilha[${i}].selecionado = this.checked; empRenderPlanilhaLancamentos();" style="width:auto; flex-shrink:0;">
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${empEscapar(l.descricao)} <span style="color:#999;">— ${empEscapar(l.categoria)} · ${new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
+        <b style="color:${l.tipo === 'receita' ? '#2a7a2a' : '#a4402f'};">${l.tipo === 'receita' ? '+' : '-'}${empFmt(l.valor)}</b>
+      </label>`).join('')}
+    </div>
+    <button type="button" class="emp-btn full" onclick="empImportarLancamentosDaPlanilha()">✅ Importar ${selecionados} lançamento${selecionados !== 1 ? 's' : ''}</button>
+    <span id="emp-planilha-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+  `;
+}
+
+async function empImportarLancamentosDaPlanilha(){
+  const msg = document.getElementById('emp-planilha-msg');
+  const selecionados = empLancamentosDaPlanilha.filter(l => l.selecionado);
+  if(!selecionados.length){ msg.textContent = 'Seleciona pelo menos um lançamento.'; return; }
+
+  msg.textContent = 'Importando...';
+  const { error } = await supabaseClientEmp.from('empresa_caixa').insert(selecionados.map(l => ({
+    profissional_id: empEmpresaAtual,
+    filial_id: empFilialAtual || null,
+    tipo: l.tipo, categoria: l.categoria, descricao: l.descricao, valor: l.valor, data: l.data
+  })));
+
+  if(error){ msg.textContent = 'Erro ao importar: ' + error.message; return; }
+  msg.textContent = `✅ ${selecionados.length} lançamento(s) importado(s)!`;
+  empLancamentosDaPlanilha = [];
+  setTimeout(() => { document.getElementById('emp-planilha-resultado').innerHTML = ''; }, 2500);
   empCarregarCaixa();
 }
 
@@ -1384,11 +1682,13 @@ async function empAdicionarColaborador(){
 
 async function empCarregarEstoque(){
   document.getElementById('emp-lista-estoque').innerHTML = '<div class="emp-vazio">Carregando...</div>';
-  let query = supabaseClientEmp.from('produtos').select('id, nome, quantidade, estoque_minimo, filial_id').eq('profissional_id', empEmpresaAtual).order('nome');
+  let query = supabaseClientEmp.from('produtos').select('id, nome, quantidade, estoque_minimo, filial_id, codigo_barras, codigo_interno, visivel_guiazap, data_validade, preco').eq('profissional_id', empEmpresaAtual).order('nome');
   if(empFilialAtual) query = query.eq('filial_id', empFilialAtual);
   const { data } = await query;
   empProdutos = data || [];
   empRenderEstoque();
+  empCarregarCaixasPdv();
+  empCarregarConfigNotaFiscal();
 }
 
 function empRenderEstoque(){
@@ -1396,16 +1696,222 @@ function empRenderEstoque(){
   if(!empProdutos.length){ container.innerHTML = '<div class="emp-vazio">Nenhum produto cadastrado ainda — cadastra na Vitrine ou pelo Zeca.</div>'; return; }
   container.innerHTML = empProdutos.map(p => {
     const baixo = p.estoque_minimo && Number(p.quantidade) <= Number(p.estoque_minimo);
+    const codigo = p.codigo_barras || p.codigo_interno;
+    const soGerenciamento = p.visivel_guiazap === false;
+
+    let tagValidade = '';
+    if(p.data_validade){
+      const hojeISO = new Date().toISOString().slice(0,10);
+      const diasParaVencer = Math.ceil((new Date(p.data_validade + 'T00:00:00') - new Date(hojeISO + 'T00:00:00')) / 86400000);
+      if(diasParaVencer < 0) tagValidade = `<span class="emp-tag alerta">⚠️ vencido há ${Math.abs(diasParaVencer)}d</span>`;
+      else if(diasParaVencer <= 3) tagValidade = `<span class="emp-tag alerta">⏰ vence em ${diasParaVencer}d</span>`;
+      else tagValidade = `<span class="emp-tag">📅 val. ${empDataParaBr(p.data_validade)}</span>`;
+    }
+
     return `<div class="emp-item">
       <div class="emp-item-info">
         <div class="emp-item-nome">${empEscapar(p.nome)}</div>
-        <div class="emp-item-meta">${baixo ? '<span class="emp-tag alerta">estoque baixo</span>' : ''}</div>
+        <div class="emp-item-meta">${baixo ? '<span class="emp-tag alerta">estoque baixo</span> ' : ''}${codigo ? `<span class="emp-tag">${empEscapar(codigo)}</span>` : 'sem código'} <span class="emp-tag${soGerenciamento ? ' alerta' : ''}">${soGerenciamento ? '🏪 só gerenciamento' : '🌐 gerenciamento + GuiaZap'}</span> ${tagValidade}</div>
       </div>
       <div class="emp-item-valor">${Number(p.quantidade || 0)}</div>
+      ${!p.codigo_barras && !p.codigo_interno ? `<button type="button" class="emp-btn secundario emp-btn-icone" onclick="empGerarCodigoInterno('${p.id}')" title="Gerar código interno">🏷️</button>` : ''}
+      <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empAlternarVisibilidadeGuiazap('${p.id}', ${soGerenciamento})" title="${soGerenciamento ? 'Mostrar também no GuiaZap' : 'Deixar só no gerenciamento (esconder do GuiaZap)'}">${soGerenciamento ? '🌐' : '🏪'}</button>
+      <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empDefinirValidade('${p.id}', ${p.data_validade ? `'${p.data_validade}'` : 'null'})" title="Definir validade">📅</button>
+      <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empDescartarProduto('${p.id}', '${empEscapar(p.nome).replace(/'/g, "\\'")}', ${Number(p.quantidade || 0)}, '${p.preco || ''}')" title="Descartar (vencido/estragado)">🗑️</button>
       <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empMovimentarEstoque('${p.id}', 'entrada')" title="Entrada">+</button>
       <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empMovimentarEstoque('${p.id}', 'saida')" title="Saída">−</button>
     </div>`;
   }).join('');
+}
+
+// Gera um código interno pra produto que não tem código de barras de
+// fábrica (carne, batata, ração a granel...) — cola uma etiqueta com
+// esse código e usa no leitor do PDV igual usaria um código de verdade.
+// Único por empresa (confere contra os produtos já carregados; se bater,
+// tenta de novo — bem raro com 6 dígitos aleatórios).
+async function empGerarCodigoInterno(produtoId){
+  let codigo;
+  let tentativas = 0;
+  do {
+    codigo = 'I' + String(Math.floor(100000 + Math.random() * 900000));
+    tentativas++;
+  } while(empProdutos.some(p => p.codigo_interno === codigo) && tentativas < 10);
+
+  const { error } = await supabaseClientEmp.from('produtos').update({ codigo_interno: codigo }).eq('id', produtoId);
+  if(error){ alert('Erro ao gerar código: ' + error.message); return; }
+  alert(`Código interno gerado: ${codigo}\n\nCola uma etiqueta com esse código no produto (ou na gôndola/balança) — o PDV reconhece igual um código de barras normal.`);
+  empCarregarEstoque();
+}
+
+// Alterna se o produto aparece só no gerenciamento (controle interno de
+// estoque/PDV) ou também na Vitrine pública do GuiaZap. Útil pra item de
+// código interno (carne, batata, ração a granel...) que não faz sentido
+// vender pelos clientes do GuiaZap, só controlar o estoque dele aqui.
+async function empAlternarVisibilidadeGuiazap(produtoId, estaSoGerenciamento){
+  const novoValor = !!estaSoGerenciamento; // se hoje tá só gerenciamento, vai virar visível (true)
+  const mensagem = novoValor
+    ? 'Esse produto vai aparecer também na Vitrine pública do GuiaZap, pros clientes verem e comprarem. Confirma?'
+    : 'Esse produto vai deixar de aparecer na Vitrine pública do GuiaZap — fica só no controle interno do gerenciamento. Confirma?';
+  if(!confirm(mensagem)) return;
+
+  const { error } = await supabaseClientEmp.from('produtos').update({ visivel_guiazap: novoValor }).eq('id', produtoId);
+  if(error){ alert('Erro ao mudar a visibilidade: ' + error.message); return; }
+  empCarregarEstoque();
+}
+
+async function empDefinirSenhaGerencial(){
+  const senha = document.getElementById('emp-pdv-senha-nova').value.trim();
+  if(!/^\d{4,6}$/.test(senha)){ alert('A senha precisa ter de 4 a 6 números.'); return; }
+  if(!confirm('Confirma a troca da senha gerencial do PDV? Quem souber essa senha consegue cancelar/devolver vendas.')) return;
+
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/pdv-senha-gerencial', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'definir', profissionalId: empEmpresaAtual, novaSenha: senha })
+  });
+  const resultado = await resp.json();
+  if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra salvar a senha')); return; }
+  document.getElementById('emp-pdv-senha-nova').value = '';
+  alert('Senha gerencial do PDV atualizada.');
+}
+
+// ============ CAIXAS / PDV (cada frente de venda com ID próprio) ============
+
+let empCaixasPdv = [];
+
+async function empCarregarCaixasPdv(){
+  const { data } = await supabaseClientEmp.from('empresa_caixas_pdv').select('id, nome, ativo, created_at').eq('profissional_id', empEmpresaAtual).order('created_at');
+  empCaixasPdv = data || [];
+  empRenderCaixasPdv();
+}
+
+function empRenderCaixasPdv(){
+  const container = document.getElementById('emp-lista-caixas-pdv');
+  if(!empCaixasPdv.length){ container.innerHTML = '<div class="emp-vazio">Nenhum caixa criado ainda.</div>'; return; }
+  container.innerHTML = empCaixasPdv.map(c => `<div class="emp-item">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${empEscapar(c.nome)}</div>
+      <div class="emp-item-meta">${c.ativo ? '<span class="emp-tag">ativo</span>' : '<span class="emp-tag alerta">desativado</span>'}</div>
+    </div>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empRenovarCodigoCaixaPdv('${c.id}', '${empEscapar(c.nome).replace(/'/g, "\\'")}')" title="Gerar novo código">🔑</button>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empAlternarCaixaPdv('${c.id}')" title="${c.ativo ? 'Desativar' : 'Reativar'}">${c.ativo ? '⏸️' : '▶️'}</button>
+  </div>`).join('');
+}
+
+async function empCriarCaixaPdv(){
+  const nome = document.getElementById('emp-novo-caixa-nome').value.trim();
+  if(!nome){ alert('Dá um nome pro caixa (ex: "Caixa 1").'); return; }
+
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/pdv-senha-gerencial', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'criarCaixaPdv', profissionalId: empEmpresaAtual, nomeCaixa: nome })
+  });
+  const resultado = await resp.json();
+  if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra criar o caixa')); return; }
+
+  document.getElementById('emp-novo-caixa-nome').value = '';
+  empMostrarCodigoAcesso(nome, resultado.codigo);
+  empCarregarCaixasPdv();
+}
+
+async function empRenovarCodigoCaixaPdv(caixaPdvId, nome){
+  if(!confirm(`Gerar um código novo pro "${nome}"? O código antigo desse caixa para de funcionar na hora.`)) return;
+
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/pdv-senha-gerencial', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'renovarCodigoCaixaPdv', profissionalId: empEmpresaAtual, caixaPdvId })
+  });
+  const resultado = await resp.json();
+  if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra gerar o código')); return; }
+  empMostrarCodigoAcesso(nome, resultado.codigo);
+}
+
+async function empAlternarCaixaPdv(caixaPdvId){
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const resp = await fetch('/.netlify/functions/pdv-senha-gerencial', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'alternarCaixaPdv', profissionalId: empEmpresaAtual, caixaPdvId })
+  });
+  if(!resp.ok){ const r = await resp.json(); alert('Erro: ' + (r.error || 'não deu pra mudar o caixa')); return; }
+  empCarregarCaixasPdv();
+}
+
+function empMostrarCodigoAcesso(nomeCaixa, codigo){
+  const linkPronto = `${window.location.origin}/pdv.html?empresa=${empEmpresaAtual}&codigo=${codigo}`;
+  document.getElementById('emp-codigo-acesso-resultado').innerHTML = `
+    <div class="emp-vazio" style="text-align:left; padding:10px 0 0;">
+      <strong>${empEscapar(nomeCaixa)} — código:</strong> ${empEscapar(codigo)}<br>
+      Digite esse código na tela inicial do PDV nesse terminal — só precisa fazer isso uma vez por computador/tablet desse caixa.<br><br>
+      <strong>Ou abra esse link pronto direto no terminal</strong> (configura sozinho):<br>
+      <input type="text" readonly value="${empEscapar(linkPronto)}" style="width:100%; margin-top:4px; font-size:0.78rem;" onclick="this.select()">
+    </div>`;
+}
+
+// ============ VALIDADE E DESCARTE DE PERECÍVEIS ============
+
+async function empDefinirValidade(produtoId, validadeAtual){
+  const texto = prompt('Validade desse lote (dd/mm/aaaa):', validadeAtual ? empDataParaBr(validadeAtual) : '');
+  if(texto === null) return;
+  if(!texto.trim()){
+    await supabaseClientEmp.from('produtos').update({ data_validade: null }).eq('id', produtoId);
+    empCarregarEstoque();
+    return;
+  }
+  const partes = texto.trim().split('/');
+  if(partes.length !== 3){ alert('Data inválida — usa o formato dd/mm/aaaa.'); return; }
+  const [d, m, a] = partes;
+  const iso = `${a.padStart(4,'20')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  if(isNaN(new Date(iso).getTime())){ alert('Data inválida.'); return; }
+
+  const { error } = await supabaseClientEmp.from('produtos').update({ data_validade: iso }).eq('id', produtoId);
+  if(error){ alert('Erro ao salvar validade: ' + error.message); return; }
+  empCarregarEstoque();
+}
+
+function empDataParaBr(iso){
+  if(!iso) return '';
+  const [a, m, d] = iso.split('-');
+  return `${d}/${m}/${a}`;
+}
+
+// Registra descarte de um produto perecível (venceu, estragou, quebrou
+// etc): baixa do estoque + lança como DESPESA no caixa (categoria
+// "Desperdício/Perda"), pra entrar no relatório de perdas/economia —
+// nunca fica "invisível", vira custo rastreado igual qualquer outro.
+async function empDescartarProduto(produtoId, nomeProduto, quantidadeAtual, precoUnitario){
+  const texto = prompt(`Descartar "${nomeProduto}" — quantidade:`, '1');
+  const quantidade = empParseValor(texto);
+  if(!quantidade || quantidade <= 0) return;
+  if(quantidade > Number(quantidadeAtual || 0)){
+    if(!confirm(`Só tem ${Number(quantidadeAtual || 0)} em estoque — descartar ${quantidade} mesmo assim?`)) return;
+  }
+
+  const motivo = prompt('Motivo do descarte (ex: vencido, estragado, quebrado):', 'vencido');
+  if(motivo === null) return;
+
+  const precoBase = parseFloat(String(precoUnitario || '').replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
+  const valorPerdaTexto = prompt('Valor perdido nesse descarte (R$):', precoBase ? (precoBase * quantidade).toFixed(2) : '');
+  const valorPerda = empParseValor(valorPerdaTexto) || 0;
+
+  const novaQtd = Math.max(0, Number(quantidadeAtual || 0) - quantidade);
+  await supabaseClientEmp.from('produtos').update({ quantidade: novaQtd }).eq('id', produtoId);
+  await supabaseClientEmp.from('empresa_estoque_movimentos').insert({
+    produto_id: produtoId, filial_id: empFilialAtual || null, tipo: 'saida', quantidade, motivo: `descarte: ${motivo || 'sem motivo informado'}`
+  });
+  if(valorPerda > 0){
+    await supabaseClientEmp.from('empresa_caixa').insert({
+      profissional_id: empEmpresaAtual, filial_id: empFilialAtual || null, tipo: 'despesa', categoria: 'Desperdício/Perda',
+      descricao: `Descarte — ${nomeProduto} (${quantidade}) — ${motivo || 'sem motivo informado'}`, valor: valorPerda
+    });
+  }
+  alert('Descarte registrado.');
+  empCarregarEstoque();
 }
 
 async function empMovimentarEstoque(produtoId, tipo){
@@ -1424,11 +1930,44 @@ async function empMovimentarEstoque(produtoId, tipo){
   empCarregarEstoque();
 }
 
+// ============ NOTA / CUPOM FISCAL (emissão real — conta própria do empresário no provedor) ============
+
+async function empCarregarConfigNotaFiscal(){
+  const { data } = await supabaseClientEmp.from('profissionais').select('regime_tributario, nf_ativa, nf_modelo, nf_ambiente, nf_token').eq('id', empEmpresaAtual).maybeSingle();
+  if(!data) return;
+  document.getElementById('emp-nf-modelo').value = data.nf_modelo || 'nfce';
+  document.getElementById('emp-nf-regime').value = data.regime_tributario || 'simples_nacional';
+  document.getElementById('emp-nf-ambiente').value = data.nf_ambiente || 'homologacao';
+  document.getElementById('emp-nf-ativa').checked = !!data.nf_ativa;
+  // O token nunca volta pro campo por segurança — só mostra que já tem um salvo.
+  document.getElementById('emp-nf-token').placeholder = data.nf_token ? 'Já tem um token salvo — preenche aqui só se quiser trocar' : 'Token de acesso da conta no provedor (Focus NFe)';
+}
+
+async function empSalvarConfigNotaFiscal(){
+  const modelo = document.getElementById('emp-nf-modelo').value;
+  const regime = document.getElementById('emp-nf-regime').value;
+  const ambiente = document.getElementById('emp-nf-ambiente').value;
+  const ativa = document.getElementById('emp-nf-ativa').checked;
+  const tokenNovo = document.getElementById('emp-nf-token').value.trim();
+
+  if(ambiente === 'producao' && !confirm('Confirma mudar pra PRODUÇÃO? A partir daí a nota/cupom emitido tem valor fiscal de verdade. Só faz isso depois de validar em homologação com seu contador.')) return;
+  if(ativa && ambiente === 'homologacao' && !confirm('Ativar a emissão automática agora vai gerar uma nota de TESTE (homologação, sem valor fiscal) a cada venda do PDV. Confirma?')) return;
+
+  const payload = { regime_tributario: regime, nf_modelo: modelo, nf_ambiente: ambiente, nf_ativa: ativa };
+  if(tokenNovo) payload.nf_token = tokenNovo;
+
+  const { error } = await supabaseClientEmp.from('profissionais').update(payload).eq('id', empEmpresaAtual);
+  if(error){ alert('Erro ao salvar: ' + error.message); return; }
+  document.getElementById('emp-nf-token').value = '';
+  await empCarregarConfigNotaFiscal();
+  alert('Configuração da nota fiscal salva.');
+}
+
 // ============ OFERTA DA SEMANA (broadcast pro GuiaPapo) ============
 
 async function empCarregarOferta(){
   document.getElementById('emp-oferta-produtos').innerHTML = '<div class="emp-vazio">Carregando produtos...</div>';
-  const { data } = await supabaseClientEmp.from('produtos').select('id, nome, preco').eq('profissional_id', empEmpresaAtual).eq('disponivel_venda', true).order('nome');
+  const { data } = await supabaseClientEmp.from('produtos').select('id, nome, preco').eq('profissional_id', empEmpresaAtual).eq('disponivel_venda', true).neq('visivel_guiazap', false).order('nome');
   const produtos = data || [];
   const container = document.getElementById('emp-oferta-produtos');
   if(!produtos.length){
@@ -1563,6 +2102,153 @@ async function empGerarExcelContabilidade(){
     btn.disabled = false;
     btn.textContent = '📊 Gerar Excel (Vendas / Compras / Financeiro)';
   }
+}
+
+// ============ RELATÓRIOS (hoje / semana / mês / período) ============
+
+function empPeriodoParaDatas(periodo){
+  const hoje = new Date();
+  const fmt = d => d.toISOString().slice(0, 10);
+  if(periodo === 'hoje') return { inicio: fmt(hoje), fim: fmt(hoje), rotulo: 'Hoje' };
+  if(periodo === 'semana'){
+    const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - 6);
+    return { inicio: fmt(inicio), fim: fmt(hoje), rotulo: 'Últimos 7 dias' };
+  }
+  if(periodo === 'periodo'){
+    const di = document.getElementById('emp-rel-data-inicio').value;
+    const dfim = document.getElementById('emp-rel-data-fim').value;
+    if(!di || !dfim) return null;
+    return { inicio: di, fim: dfim, rotulo: 'Período personalizado' };
+  }
+  // 'mes' (padrão) — mês corrente inteiro.
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  return { inicio: fmt(inicio), fim: fmt(hoje), rotulo: 'Esse mês' };
+}
+
+async function empCarregarRelatorio(periodo){
+  ['hoje', 'semana', 'mes', 'periodo'].forEach(p => {
+    document.getElementById(`emp-rel-btn-${p}`).className = p === periodo ? 'emp-btn' : 'emp-btn secundario';
+  });
+  document.getElementById('emp-rel-periodo-custom').style.display = periodo === 'periodo' ? 'flex' : 'none';
+
+  const datas = empPeriodoParaDatas(periodo);
+  const corpo = document.getElementById('emp-rel-corpo');
+  if(!datas){ corpo.innerHTML = '<div class="emp-vazio">Escolhe as duas datas do período e clica em "Aplicar".</div>'; return; }
+  corpo.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+
+  let queryCaixa = supabaseClientEmp.from('empresa_caixa').select('tipo, categoria, valor, descricao, eh_retirada_socio, status_pagamento, forma_pagamento, parcelas')
+    .eq('profissional_id', empEmpresaAtual).gte('data', datas.inicio).lte('data', datas.fim);
+  if(empFilialAtual) queryCaixa = queryCaixa.eq('filial_id', empFilialAtual);
+
+  let queryPedidos = supabaseClientEmp.from('empresa_pedidos').select('id, valor_total, status, caixa_pdv_id')
+    .eq('profissional_id', empEmpresaAtual).eq('status', 'concluido').gte('data', datas.inicio).lte('data', datas.fim);
+  if(empFilialAtual) queryPedidos = queryPedidos.eq('filial_id', empFilialAtual);
+
+  const queryCaixasPdv = supabaseClientEmp.from('empresa_caixas_pdv').select('id, nome').eq('profissional_id', empEmpresaAtual);
+  const queryFechamentos = supabaseClientEmp.from('empresa_fechamentos_caixa').select('caixa_pdv_id, valor_esperado, valor_contado, diferenca, periodo_fim')
+    .eq('profissional_id', empEmpresaAtual).gte('periodo_fim', datas.inicio).lte('periodo_fim', datas.fim + 'T23:59:59');
+
+  let queryItens = supabaseClientEmp.from('empresa_pedido_itens').select('nome_item, quantidade, empresa_pedidos!inner(profissional_id, filial_id, data, status)')
+    .eq('empresa_pedidos.profissional_id', empEmpresaAtual).eq('empresa_pedidos.status', 'concluido')
+    .gte('empresa_pedidos.data', datas.inicio).lte('empresa_pedidos.data', datas.fim);
+  if(empFilialAtual) queryItens = queryItens.eq('empresa_pedidos.filial_id', empFilialAtual);
+
+  const [{ data: lancamentos }, { data: pedidos }, { data: itens }, { data: caixasPdv }, { data: fechamentos }] = await Promise.all([queryCaixa, queryPedidos, queryItens, queryCaixasPdv, queryFechamentos]);
+
+  const efetivados = (lancamentos || []).filter(l => l.status_pagamento !== 'pendente');
+  const receita = efetivados.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  const despesa = efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const saldo = receita - despesa;
+  const numVendas = (pedidos || []).length;
+  const ticketMedio = numVendas ? (pedidos.reduce((s, p) => s + Number(p.valor_total), 0) / numVendas) : 0;
+
+  const porCategoria = {};
+  efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).forEach(l => {
+    porCategoria[l.categoria] = (porCategoria[l.categoria] || 0) + Number(l.valor);
+  });
+  const categoriasOrdenadas = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const porItem = {};
+  (itens || []).forEach(i => { porItem[i.nome_item] = (porItem[i.nome_item] || 0) + Number(i.quantidade || 0); });
+  const rankingItens = Object.entries(porItem).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const eLucro = saldo >= 0;
+
+  // "Relatório de economia" — isola o que é DESPERDÍCIO/PERDA (produto
+  // descartado por vencimento, estrago etc) dentro de todas as despesas
+  // já categorizadas (limpeza, pessoal, aluguel, o que for) — pra mostrar
+  // quanto dá pra economizar reduzindo perda, sem precisar de outra tela.
+  const desperdicios = efetivados.filter(l => l.tipo === 'despesa' && l.categoria === 'Desperdício/Perda');
+  const totalDesperdicio = desperdicios.reduce((s, l) => s + Number(l.valor), 0);
+  const percentualDesperdicio = despesa > 0 ? (totalDesperdicio / despesa * 100) : 0;
+  const desperdiciosOrdenados = [...desperdicios].sort((a, b) => Number(b.valor) - Number(a.valor)).slice(0, 8);
+
+  // Por caixa/terminal — quanto cada frente de venda vendeu, e o
+  // histórico de furo/sobra (conferência) de cada uma nesse período.
+  const nomeCaixaPorId = {};
+  (caixasPdv || []).forEach(c => { nomeCaixaPorId[c.id] = c.nome; });
+  const porCaixa = {};
+  (pedidos || []).forEach(p => {
+    const chave = p.caixa_pdv_id || '__sem_caixa__';
+    if(!porCaixa[chave]) porCaixa[chave] = { total: 0, vendas: 0 };
+    porCaixa[chave].total += Number(p.valor_total);
+    porCaixa[chave].vendas += 1;
+  });
+  const caixasOrdenados = Object.entries(porCaixa).sort((a, b) => b[1].total - a[1].total);
+  const fechamentosOrdenados = [...(fechamentos || [])].sort((a, b) => new Date(b.periodo_fim) - new Date(a.periodo_fim));
+
+  const rotuloFormaPagamento = {
+    dinheiro: 'Dinheiro', pix: 'Pix', cartao_debito: 'Cartão débito',
+    cartao_credito_avista: 'Cartão crédito à vista', cartao_credito_parcelado: 'Cartão crédito parcelado',
+    cartao_credito: 'Cartão crédito', fiado: 'Fiado/promissória'
+  };
+  const porFormaPagamento = {};
+  efetivados.filter(l => l.tipo === 'receita' && l.forma_pagamento).forEach(l => {
+    const rotulo = rotuloFormaPagamento[l.forma_pagamento] || l.forma_pagamento;
+    porFormaPagamento[rotulo] = (porFormaPagamento[rotulo] || 0) + Number(l.valor);
+  });
+  const formasPagamentoOrdenadas = Object.entries(porFormaPagamento).sort((a, b) => b[1] - a[1]);
+
+  corpo.innerHTML = `
+    <div class="emp-vazio" style="padding:0 0 10px; text-align:left; font-weight:700; color:#555;">${empEscapar(datas.rotulo)} (${new Date(datas.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(datas.fim + 'T12:00:00').toLocaleDateString('pt-BR')})</div>
+    <div class="emp-totais">
+      <div class="emp-card-total receita"><div class="emp-label">Entradas</div><div class="emp-valor">${empFmt(receita)}</div></div>
+      <div class="emp-card-total despesa"><div class="emp-label">Saídas</div><div class="emp-valor">${empFmt(despesa)}</div></div>
+      <div class="emp-card-total ${eLucro ? 'receita' : 'despesa'}"><div class="emp-label">${eLucro ? '✅ Lucro' : '⚠️ Prejuízo'}</div><div class="emp-valor">${empFmt(Math.abs(saldo))}</div></div>
+    </div>
+    <div class="emp-totais">
+      <div class="emp-card-total saldo"><div class="emp-label">Vendas concluídas</div><div class="emp-valor">${numVendas}</div></div>
+      <div class="emp-card-total saldo"><div class="emp-label">Ticket médio</div><div class="emp-valor">${empFmt(ticketMedio)}</div></div>
+      <div class="emp-card-total saldo"><div class="emp-label">Lançamentos</div><div class="emp-valor">${(lancamentos || []).length}</div></div>
+    </div>
+    <div class="emp-card">
+      <h3>🏆 Mais vendidos no período</h3>
+      ${rankingItens.length ? rankingItens.map(([nome, qtd], i) => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${i + 1}º ${empEscapar(nome)}</div></div><div class="emp-item-valor">${qtd}</div></div>`).join('') : '<div class="emp-vazio">Nenhuma venda com item nesse período.</div>'}
+    </div>
+    <div class="emp-card">
+      <h3>📊 Despesas por categoria</h3>
+      ${categoriasOrdenadas.length ? categoriasOrdenadas.map(([cat, v]) => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(cat)}</div></div><div class="emp-item-valor despesa">${empFmt(v)}</div></div>`).join('') : '<div class="emp-vazio">Nenhuma despesa nesse período.</div>'}
+    </div>
+    <div class="emp-card">
+      <h3>💸 Desperdício e economia</h3>
+      ${totalDesperdicio > 0 ? `
+        <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Total perdido com descarte (vencido, estragado, quebrado...) nesse período: <strong style="color:#a4402f;">${empFmt(totalDesperdicio)}</strong>${despesa > 0 ? ` — ${percentualDesperdicio.toFixed(1)}% de todas as despesas.` : ''} Reduzindo esse desperdício, dá pra economizar até esse valor.</div>
+        ${desperdiciosOrdenados.map(l => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(l.descricao || 'Descarte')}</div></div><div class="emp-item-valor despesa">${empFmt(l.valor)}</div></div>`).join('')}
+      ` : '<div class="emp-vazio">Nenhum descarte registrado nesse período — usa o botão 🗑️ na aba Estoque quando precisar jogar algo fora.</div>'}
+    </div>
+    <div class="emp-card">
+      <h3>💳 Vendas por forma de pagamento</h3>
+      ${formasPagamentoOrdenadas.length ? formasPagamentoOrdenadas.map(([forma, v]) => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(forma)}</div></div><div class="emp-item-valor receita">${empFmt(v)}</div></div>`).join('') : '<div class="emp-vazio">Nenhuma venda com forma de pagamento registrada nesse período.</div>'}
+    </div>
+    <div class="emp-card">
+      <h3>🖥️ Por caixa/terminal</h3>
+      ${caixasOrdenados.length ? caixasOrdenados.map(([id, dados]) => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(nomeCaixaPorId[id] || 'Sem caixa definido')}</div><div class="emp-item-meta">${dados.vendas} venda${dados.vendas !== 1 ? 's' : ''}</div></div><div class="emp-item-valor receita">${empFmt(dados.total)}</div></div>`).join('') : '<div class="emp-vazio">Nenhuma venda por caixa nesse período.</div>'}
+      <h3 style="margin-top:14px;">🔍 Fechamentos (furo/sobra)</h3>
+      ${fechamentosOrdenados.length ? fechamentosOrdenados.map(f => {
+        const furo = Number(f.diferenca) < 0;
+        return `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(nomeCaixaPorId[f.caixa_pdv_id] || 'Caixa')}</div><div class="emp-item-meta">${new Date(f.periodo_fim).toLocaleString('pt-BR')} · esperado ${empFmt(f.valor_esperado)} · contado ${empFmt(f.valor_contado)}</div></div><div class="emp-item-valor ${furo ? 'despesa' : 'receita'}">${furo ? '⚠️ furo ' : '✅ sobra '}${empFmt(Math.abs(f.diferenca))}</div></div>`;
+      }).join('') : '<div class="emp-vazio">Nenhum fechamento de caixa registrado nesse período — feche o caixa no PDV no fim do turno pra conferir.</div>'}
+    </div>
+  `;
 }
 
 initEmpresa();

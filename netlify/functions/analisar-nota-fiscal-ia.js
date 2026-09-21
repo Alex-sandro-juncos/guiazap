@@ -26,9 +26,21 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { imagemBase64, mediaType, profissionalId, propriedadeId, modulo } = JSON.parse(event.body || '{}');
-    if (!imagemBase64) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'imagemBase64 é obrigatório' }) };
+    const { imagemBase64, mediaType, imagens, profissionalId, propriedadeId, modulo } = JSON.parse(event.body || '{}');
+    // Aceita uma lista de fotos da MESMA nota (ex: uma foto geral + uma
+    // foto mais de perto dos itens/totais, quando a letra fica pequena
+    // demais numa foto só) — "imagens" é o formato novo, mas continua
+    // aceitando o formato antigo de uma imagem só (imagemBase64/mediaType)
+    // pra não quebrar chamada de versão antiga do app.
+    const listaImagens = Array.isArray(imagens) && imagens.length
+      ? imagens
+      : (imagemBase64 ? [{ imagemBase64, mediaType }] : []);
+    if (!listaImagens.length) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'imagemBase64 (ou imagens) é obrigatório' }) };
+    }
+    const LIMITE_FOTOS_POR_NOTA = 4;
+    if (listaImagens.length > LIMITE_FOTOS_POR_NOTA) {
+      return { statusCode: 400, body: JSON.stringify({ error: `Máximo de ${LIMITE_FOTOS_POR_NOTA} fotos por nota.` }) };
     }
     const moduloFinal = modulo === 'agro' || modulo === 'lar' ? modulo : 'empresa';
     if (moduloFinal === 'empresa' && !profissionalId) {
@@ -111,7 +123,7 @@ exports.handler = async function (event) {
       return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada no Netlify' }) };
     }
 
-    const promptSistema = `Você é um assistente que lê fotos de notas fiscais, cupons fiscais, recibos e comprovantes de compra/venda, e extrai os dados pra lançar num sistema financeiro.
+    const promptSistema = `Você é um assistente que lê fotos de notas fiscais (DANFE, NFC-e, cupom fiscal), recibos e comprovantes de compra/venda, e extrai os dados pra lançar num sistema financeiro.
 
 Responda APENAS com um JSON válido (sem texto antes ou depois, sem markdown, sem crases), seguindo exatamente este formato:
 
@@ -120,15 +132,28 @@ Responda APENAS com um JSON válido (sem texto antes ou depois, sem markdown, se
   "valor": "string no formato brasileiro, ex: 245,90 (o valor TOTAL da nota, sem R$)",
   "valor_imposto": "string no formato brasileiro, ex: 12,30, ou null se não tiver imposto destacado visível na nota (ICMS, ISS etc)",
   "descricao": "descrição curta do que foi comprado/vendido, ex: 'Farinha de trigo e açúcar' ou o nome do estabelecimento se não der pra identificar os itens",
-  "categoria": "categoria sugerida em uma palavra ou expressão curta, ex: 'fornecedor', 'combustível', 'manutenção', 'insumo', 'aluguel', 'material de escritório' — sua melhor sugestão com base no que a nota mostra",
+  "categoria": "categoria sugerida em uma palavra ou expressão curta, com base na classificação abaixo quando der pra identificar (ex: 'revenda', 'uso e consumo', 'combustível', 'insumo agrícola', 'manutenção', 'aluguel', 'material de escritório')",
+  "classificacao": "'revenda' (mercadoria comprada pra revender), 'uso_consumo' (material/insumo que a empresa usa, não revende), 'combustivel', 'insumo_agro' (defensivo, semente, fertilizante — nota de propriedade rural), ou 'outro' quando não der pra classificar com confiança",
   "fornecedor": "nome do estabelecimento/emitente da nota, ou null se não conseguir ler",
+  "cnpj_emitente": "CNPJ de quem emitiu a nota, no formato como aparece (ex: 11.222.333/0001-44), ou null se não conseguir ler",
+  "numero_nota": "número da nota fiscal/cupom, ou null se não conseguir ler",
   "data": "data da nota no formato YYYY-MM-DD, ou null se não conseguir ler com certeza"
 }
 
 Regras importantes:
 - Nunca invente um valor que você não consegue ler com certeza — nesse caso, use null nesse campo específico.
 - "valor" é o valor TOTAL pago/recebido, não um item avulso.
+- Se receber MAIS DE UMA foto, elas podem ser: (a) partes DIFERENTES da mesma nota — ex: uma foto do topo com CNPJ/data/cabeçalho, outra do meio com a lista de itens, outra do rodapé com o valor total — porque a nota inteira não coube legível numa foto só; ou (b) a mesma parte vista mais de perto, pra letra pequena ficar legível. Em qualquer um dos casos, é a MESMA nota: junte o que aparecer em CADA foto (um campo pode estar visível só numa delas) e devolva um único JSON combinado com tudo que conseguir ler somando as fotos — nunca devolva mais de um resultado nem ignore uma foto por ela não ter o valor total, por exemplo.
 - Se a imagem não for claramente uma nota fiscal/recibo/comprovante de compra ou venda, devolva {"erro": "não parece ser uma nota fiscal ou comprovante"} no lugar do JSON acima.`;
+
+    const blocosImagem = listaImagens.map(img =>
+      img.mediaType === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: img.imagemBase64 } }
+        : { type: 'image', source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.imagemBase64 } }
+    );
+    const textoInstrucao = listaImagens.length > 1
+      ? `Essas ${listaImagens.length} fotos são da MESMA nota/comprovante — podem ser partes diferentes dela (cada foto pegou um pedaço, porque não coube inteira e legível numa foto só) ou a mesma parte mais de perto. Leia todas, junte o que aparecer em cada uma e extraia os dados no formato JSON pedido, combinando tudo num resultado só.`
+      : 'Leia essa nota/comprovante e extraia os dados no formato JSON pedido.';
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -144,12 +169,7 @@ Regras importantes:
         messages: [
           {
             role: 'user',
-            content: [
-              (mediaType === 'application/pdf'
-                ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imagemBase64 } }
-                : { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imagemBase64 } }),
-              { type: 'text', text: 'Leia essa nota/comprovante e extraia os dados no formato JSON pedido.' }
-            ]
+            content: [...blocosImagem, { type: 'text', text: textoInstrucao }]
           }
         ]
       })

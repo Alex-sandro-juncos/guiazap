@@ -457,7 +457,7 @@ async function loadEntries(){
   // Carrega uma versão bem leve dos produtos (só o necessário pra busca),
   // pra permitir encontrar uma empresa pela marca/categoria dos produtos
   // dela, mesmo sem abrir a Vitrine
-  supabaseClient.from('produtos').select('id, profissional_id, nome, marca, categoria, categorias_extra, preco').then(({ data: produtosLeves }) => {
+  supabaseClient.from('produtos').select('id, profissional_id, nome, marca, categoria, categorias_extra, preco').neq('visivel_guiazap', false).then(({ data: produtosLeves }) => {
     produtosParaBuscaPrincipal = produtosLeves || [];
     render();
   });
@@ -2015,6 +2015,7 @@ async function loadProdutosDestaque(){
   const { data, error } = await supabaseClient
     .from('produtos')
     .select('*, profissionais(id, name, whatsapp, status_pagamento, plano, user_id)')
+    .neq('visivel_guiazap', false)
     .order('created_at', { ascending: false })
     .limit(50);
 

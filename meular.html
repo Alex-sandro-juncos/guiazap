@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body.lar-pagina { background: #f7f5f0; }
   .lar-topo {
@@ -177,19 +178,31 @@
     </div>
 
     <div class="lar-form-add">
+      <h3>📊 Importar lançamentos de planilha</h3>
+      <div class="lar-vazio" style="padding:0 0 10px; text-align:left; font-size:0.8rem;">Já tem o histórico numa planilha? Sobe o arquivo — funciona com colunas <b>Data, Tipo, Categoria, Descrição, Valor</b> (nomes parecidos também servem). Nada entra automático: você confere antes de importar.</div>
+      <label style="display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:16px 8px; cursor:pointer; margin-bottom:8px;">
+        <div style="font-size:1.5rem;">📁</div>
+        <div style="font-weight:700; color:#3b6ea5; font-size:0.82rem; margin-top:2px;">Toque pra escolher a planilha (.xlsx ou .csv)</div>
+        <input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="larProcessarPlanilhaLancamentos(event)">
+      </label>
+      <div id="lar-planilha-resultado"></div>
+    </div>
+
+    <div class="lar-form-add">
       <h3>Novo lançamento</h3>
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
           <div style="font-size:1.3rem;">📷</div>
           <div style="font-weight:700; color:#3b6ea5; font-size:0.76rem; margin-top:2px;">Lançar por foto</div>
-          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="larProcessarFotoNota(event)">
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="larAdicionarFotoNota(event)">
         </label>
         <label style="flex:1; display:block; text-align:center; background:#f7f5f0; border:1.5px dashed #ccc; border-radius:10px; padding:12px 8px; cursor:pointer;">
           <div style="font-size:1.3rem;">🖼️</div>
           <div style="font-weight:700; color:#3b6ea5; font-size:0.76rem; margin-top:2px;">Galeria / PDF</div>
-          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="larProcessarFotoNota(event)">
+          <input type="file" accept="image/*,application/pdf" multiple style="display:none;" onchange="larAdicionarFotoNota(event)">
         </label>
       </div>
+      <div id="lar-nota-fotos-fila"></div>
       <div id="lar-nota-ia-status"></div>
       <div class="lar-form-linha">
         <select id="lar-novo-tipo">
@@ -473,11 +486,56 @@ async function larApagarLancamento(id){
 // Lançar por foto — mesmo recurso do módulo Empresa: a IA só LÊ e
 // PREENCHE o formulário, nunca lança sozinha. Confere antes de clicar
 // em "Adicionar".
-async function larProcessarFotoNota(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  event.target.value = '';
+// Fila de fotos da MESMA nota — quando a letra fica pequena demais numa
+// foto só, dá pra tirar mais de uma (geral + de perto) antes de mandar
+// tudo junto pra IA ler de uma vez.
+let larNotaFotosFila = [];
 
+function larRenderFilaFotosNota(){
+  const container = document.getElementById('lar-nota-fotos-fila');
+  if(!larNotaFotosFila.length){ container.innerHTML = ''; return; }
+  container.innerHTML = `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+    ${larNotaFotosFila.map((f, i) => `<div style="position:relative;">
+      ${f.mediaType === 'application/pdf'
+        ? '<div style="width:52px; height:52px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">📄</div>'
+        : `<img src="data:${f.mediaType};base64,${f.imagemBase64}" style="width:52px; height:52px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">`}
+      <button type="button" onclick="larRemoverFotoNota(${i})" style="position:absolute; top:-6px; right:-6px; background:#a4402f; color:white; border:none; border-radius:50%; width:20px; height:20px; font-size:0.7rem; cursor:pointer;">✖</button>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex; gap:8px; margin-bottom:10px;">
+    <button type="button" class="lar-btn-add" onclick="larAnalisarFotosNota()" style="flex:1;">🔍 Analisar ${larNotaFotosFila.length} foto${larNotaFotosFila.length > 1 ? 's' : ''}</button>
+    <button type="button" onclick="larLimparFotosNota()" style="padding:0 14px; border-radius:8px; border:1px solid #ccc; background:#eee;">Limpar</button>
+  </div>`;
+}
+
+function larAdicionarFotoNota(event){
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if(!files.length) return;
+  const LIMITE = 4;
+  files.forEach(file => {
+    if(larNotaFotosFila.length >= LIMITE) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      larNotaFotosFila.push({ imagemBase64: reader.result.split(',')[1], mediaType: file.type || 'image/jpeg' });
+      larRenderFilaFotosNota();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function larRemoverFotoNota(i){
+  larNotaFotosFila.splice(i, 1);
+  larRenderFilaFotosNota();
+}
+
+function larLimparFotosNota(){
+  larNotaFotosFila = [];
+  larRenderFilaFotosNota();
+}
+
+async function larAnalisarFotosNota(){
+  if(!larNotaFotosFila.length) return;
   const status = document.getElementById('lar-nota-ia-status');
   status.innerHTML = `<div style="text-align:center; padding:14px; background:#eaf1f8; border-radius:10px; margin-bottom:10px;">
     <div style="font-size:1.3rem;">✨</div>
@@ -485,23 +543,16 @@ async function larProcessarFotoNota(event){
   </div>`;
 
   try{
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
     const { data: { session } } = await supabaseClientLar.auth.getSession();
     const resp = await fetch('/.netlify/functions/analisar-nota-fiscal-ia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ imagemBase64: base64, mediaType: file.type || 'image/jpeg', modulo: 'lar' })
+      body: JSON.stringify({ imagens: larNotaFotosFila, modulo: 'lar' })
     });
     const dados = await resp.json();
 
     if(!resp.ok || dados.error){
-      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${larEscapar(dados.error || 'Erro ao ler a nota')}. Tenta com uma foto mais nítida ou preenche na mão.</div>`;
+      status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ ${larEscapar(dados.error || 'Erro ao ler a nota')}. Tenta tirar mais uma foto mais de perto ou preenche na mão.</div>`;
       return;
     }
 
@@ -512,6 +563,8 @@ async function larProcessarFotoNota(event){
 
     status.innerHTML = `<div style="padding:10px; background:#e8f5e9; border-radius:10px; font-size:0.8rem; color:#2a7a2a; margin-bottom:4px;">✅ Li a nota e preenchi o formulário abaixo — <b>confere os dados</b> (principalmente o valor) antes de clicar em "Adicionar".</div>`;
     document.getElementById('lar-novo-valor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    larNotaFotosFila = [];
+    larRenderFilaFotosNota();
   } catch(e){
     console.error(e);
     status.innerHTML = `<div style="text-align:center; padding:10px; color:#a4402f; font-size:0.82rem;">⚠️ Erro ao processar a imagem. Tenta de novo ou preenche na mão.</div>`;
@@ -549,6 +602,124 @@ async function larAdicionarLancamento(){
   document.getElementById('lar-novo-descricao').value = '';
   document.getElementById('lar-novo-categoria').value = '';
   document.getElementById('lar-nota-ia-status').innerHTML = '';
+  larCarregarLancamentos();
+}
+
+// ============ IMPORTAR LANÇAMENTOS DE PLANILHA ============
+
+let larLancamentosDaPlanilha = [];
+
+function larAcharColunaPlanilha(linha, opcoes){
+  const chaves = Object.keys(linha);
+  for(const opcao of opcoes){
+    const achada = chaves.find(k => k.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') === opcao);
+    if(achada) return linha[achada];
+  }
+  return '';
+}
+
+function larParseDataPlanilha(valor){
+  if(!valor) return new Date().toISOString().slice(0, 10);
+  if(typeof valor === 'number'){
+    const data = XLSX.SSF.parse_date_code(valor);
+    if(data) return `${data.y}-${String(data.m).padStart(2,'0')}-${String(data.d).padStart(2,'0')}`;
+  }
+  const texto = String(valor).trim();
+  const brMatch = texto.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(brMatch){
+    let [, d, m, y] = brMatch;
+    if(y.length === 2) y = '20' + y;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  const isoMatch = texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2,'0')}-${isoMatch[3].padStart(2,'0')}`;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function larParseValorPlanilha(texto){
+  const limpo = String(texto || '').replace('R$', '').replace(/[^\d,.-]/g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return !isNaN(n) ? n : null;
+}
+
+function larProcessarPlanilhaLancamentos(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = '';
+
+  const resultado = document.getElementById('lar-planilha-resultado');
+  resultado.innerHTML = '<div class="lar-vazio">Lendo a planilha...</div>';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const dados = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(dados, { type: 'array' });
+      const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+      const linhas = XLSX.utils.sheet_to_json(primeiraAba, { defval: '' });
+
+      if(!linhas.length){
+        resultado.innerHTML = '<div class="lar-vazio">A planilha está vazia.</div>';
+        return;
+      }
+
+      larLancamentosDaPlanilha = linhas.map(linha => {
+        const tipoTexto = String(larAcharColunaPlanilha(linha, ['tipo']) || '').trim().toLowerCase();
+        const tipo = ['receita', 'entrada', 'credito', 'crédito'].some(t => tipoTexto.includes(t)) ? 'receita' : 'despesa';
+        return {
+          data: larParseDataPlanilha(larAcharColunaPlanilha(linha, ['data'])),
+          tipo,
+          categoria: String(larAcharColunaPlanilha(linha, ['categoria']) || '').trim(),
+          descricao: String(larAcharColunaPlanilha(linha, ['descricao', 'descrição', 'historico', 'histórico']) || '').trim(),
+          valor: larParseValorPlanilha(larAcharColunaPlanilha(linha, ['valor', 'valor total', 'valor (r$)', 'r$'])),
+          selecionado: true
+        };
+      }).filter(l => l.descricao && l.valor && l.valor > 0);
+
+      if(!larLancamentosDaPlanilha.length){
+        resultado.innerHTML = '<div class="lar-vazio">Não encontrei nenhuma linha com descrição e valor válidos. Confere as colunas "Descrição" e "Valor".</div>';
+        return;
+      }
+      larRenderPlanilhaLancamentos();
+    } catch(err){
+      console.error(err);
+      resultado.innerHTML = '<div class="lar-vazio">Erro ao ler a planilha. Confere se é um arquivo .xlsx ou .csv válido.</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function larRenderPlanilhaLancamentos(){
+  const resultado = document.getElementById('lar-planilha-resultado');
+  const selecionados = larLancamentosDaPlanilha.filter(l => l.selecionado).length;
+  resultado.innerHTML = `
+    <div class="lar-vazio" style="padding:0 0 8px; text-align:left; font-weight:700; color:#555; font-size:0.82rem;">Encontrei ${larLancamentosDaPlanilha.length} lançamento(s) — desmarca o que não quer importar:</div>
+    <div style="max-height:280px; overflow-y:auto; margin-bottom:10px;">
+      ${larLancamentosDaPlanilha.map((l, i) => `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:0.82rem;">
+        <input type="checkbox" ${l.selecionado ? 'checked' : ''} onchange="larLancamentosDaPlanilha[${i}].selecionado = this.checked; larRenderPlanilhaLancamentos();" style="width:auto; flex-shrink:0;">
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${larEscapar(l.descricao)} <span style="color:#999;">— ${larEscapar(l.categoria || 'sem categoria')} · ${new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
+        <b style="color:${l.tipo === 'receita' ? '#2a7a2a' : '#a4402f'};">${l.tipo === 'receita' ? '+' : '-'}R$ ${l.valor.toFixed(2).replace('.', ',')}</b>
+      </label>`).join('')}
+    </div>
+    <button type="button" class="lar-btn-add" onclick="larImportarLancamentosDaPlanilha()">✅ Importar ${selecionados} lançamento${selecionados !== 1 ? 's' : ''}</button>
+    <span id="lar-planilha-msg" style="display:block; text-align:center; font-size:0.8rem; margin-top:8px;"></span>
+  `;
+}
+
+async function larImportarLancamentosDaPlanilha(){
+  const msg = document.getElementById('lar-planilha-msg');
+  const selecionados = larLancamentosDaPlanilha.filter(l => l.selecionado);
+  if(!selecionados.length){ msg.textContent = 'Seleciona pelo menos um lançamento.'; return; }
+
+  msg.textContent = 'Importando...';
+  const { error } = await supabaseClientLar.from('lar_lancamentos').insert(selecionados.map(l => ({
+    tipo: l.tipo, descricao: l.descricao, valor: l.valor, categoria: l.categoria || null, data: l.data
+  })));
+
+  if(error){ msg.textContent = 'Erro ao importar: ' + error.message; return; }
+  msg.textContent = `✅ ${selecionados.length} lançamento(s) importado(s)!`;
+  larLancamentosDaPlanilha = [];
+  setTimeout(() => { document.getElementById('lar-planilha-resultado').innerHTML = ''; }, 2500);
   larCarregarLancamentos();
 }
 

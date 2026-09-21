@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDV — Caixa | GuiaZap</title>
+<meta name="description" content="Ponto de venda pro balcão/caixa da empresa — leitor de código de barras, código interno pra produto a granel, e venda rápida.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  body.emp-pagina { background: #f7f5f0; }
+  * { box-sizing: border-box; }
+  .emp-topo {
+    background: linear-gradient(90deg, #6a3fb5, #4d2c8a);
+    color: white;
+    padding: 16px 15px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .emp-topo a.emp-voltar { color: white; text-decoration: none; font-size: 1.3rem; line-height: 1; opacity: 0.9; }
+  .emp-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .emp-conteudo { max-width: 620px; margin: 0 auto; padding: 16px 15px 60px; }
+
+  .emp-select { padding: 9px 12px; border-radius: 10px; border: 1px solid #e5e0d5; background: white; font-size: 0.86rem; }
+  .emp-topo-linha { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+
+  .emp-card { background: white; border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  .emp-card h3 { font-size: 0.95rem; margin: 0 0 10px; }
+  .emp-linha { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .emp-linha select, .emp-linha input { flex: 1; min-width: 120px; padding: 9px 10px; border-radius: 8px; border: 1px solid #e5e0d5; font-size: 0.88rem; }
+  .emp-btn { padding: 10px 16px; min-height: 42px; border-radius: 8px; border: none; background: #6a3fb5; color: white; font-weight: 700; cursor: pointer; font-size: 0.88rem; }
+  .emp-btn:disabled { opacity: 0.6; }
+  .emp-btn.full { width: 100%; }
+  .emp-btn.secundario { background: #eee; color: #444; }
+  .emp-btn.emp-btn-icone { padding: 0; width: 42px; min-height: 42px; flex-shrink: 0; font-size: 1.1rem; }
+
+  .emp-item { background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .emp-item-info { flex: 1; min-width: 0; }
+  .emp-item-nome { font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emp-item-meta { font-size: 0.74rem; color: #999; margin-top: 2px; }
+  .emp-item-valor { font-weight: 800; font-size: 0.9rem; white-space: nowrap; }
+  .emp-item-valor.receita { color: #2a7a2a; }
+  .emp-item-valor.despesa { color: #a4402f; }
+  .emp-item-apagar { background: none; border: none; color: #bbb; cursor: pointer; font-size: 1.15rem; padding: 8px; min-width: 38px; min-height: 38px; flex-shrink: 0; }
+  .emp-tag { display: inline-block; font-size: 0.66rem; font-weight: 700; color: #6a3fb5; background: #f1eaf9; border-radius: 20px; padding: 2px 9px; text-transform: uppercase; }
+  .emp-tag.alerta { color: #a4402f; background: #fbe9e5; }
+  .emp-vazio { text-align: center; color: #888; padding: 26px 10px; font-size: 0.9rem; }
+
+  /* Input de leitura — o alvo principal da tela, sempre focado, pra
+     receber tanto o leitor físico de código de barras (que "digita"
+     rápido + Enter) quanto digitação manual do código. */
+  #pdv-scan-input {
+    width: 100%;
+    padding: 16px 14px;
+    font-size: 1.15rem;
+    border-radius: 12px;
+    border: 2px solid #6a3fb5;
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  #pdv-scan-status { text-align: center; font-size: 0.8rem; color: #888; min-height: 18px; margin-bottom: 10px; }
+  #pdv-scan-status.erro { color: #a4402f; font-weight: 700; }
+  #pdv-scan-status.ok { color: #2a7a2a; font-weight: 700; }
+
+  #pdv-busca-resultados .emp-item { cursor: pointer; }
+
+  .pdv-total-card { background: #6a3fb5; color: white; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px; }
+  .pdv-total-card .pdv-total-label { font-size: 0.78rem; opacity: 0.85; text-transform: uppercase; font-weight: 700; }
+  .pdv-total-card .pdv-total-valor { font-size: 2rem; font-weight: 800; margin-top: 4px; }
+
+  @media (max-width: 640px){
+    .emp-conteudo { padding: 12px 10px 60px; }
+    .emp-linha select, .emp-linha input { font-size: 16px; min-height: 42px; }
+    .emp-item { flex-wrap: wrap; }
+    .emp-btn { font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body class="emp-pagina">
+
+<div class="emp-topo">
+  <h1>🖥️ PDV<span id="pdv-nome-caixa-topo"></span></h1>
+</div>
+
+<div class="emp-conteudo">
+  <div id="pdv-gate" class="emp-card" style="display:none;">
+    <h3>🔑 Acesso do caixa</h3>
+    <p style="font-size:0.85rem; color:#666; margin-top:0;">Pede pro dono/gerente o código de acesso do caixa (aba Estoque &gt; "Acesso do caixa" no Gerenciamento). Esse código só abre o PDV pra vender — não dá acesso ao Gerenciamento.</p>
+    <div class="emp-linha">
+      <input type="text" id="pdv-gate-empresa" placeholder="Código da empresa (ID)">
+    </div>
+    <div class="emp-linha">
+      <input type="text" id="pdv-gate-codigo" placeholder="Código de acesso do caixa" style="text-transform:uppercase;">
+    </div>
+    <div id="pdv-gate-msg" style="font-size:0.82rem; color:#a4402f; margin-bottom:8px;"></div>
+    <button type="button" class="emp-btn full" onclick="pdvEntrarComCodigo()">Entrar</button>
+  </div>
+
+  <div class="emp-topo-linha">
+    <select id="pdv-select-filial" class="emp-select" style="display:none;"><option value="">Todas as filiais</option></select>
+    <button type="button" class="emp-btn secundario emp-btn-icone" id="pdv-sair-btn" style="display:none;" onclick="pdvSairDoTerminal()" title="Trocar código / sair">🔓</button>
+  </div>
+
+  <div id="pdv-corpo" style="display:none;">
+    <input type="text" id="pdv-scan-input" placeholder="Passa o leitor ou digita o código e Enter" autocomplete="off" inputmode="text">
+    <div id="pdv-scan-status"></div>
+
+    <div class="emp-card">
+      <h3>🔎 Ou busca por nome</h3>
+      <input type="text" id="pdv-busca-nome" placeholder="Nome do produto...">
+      <div id="pdv-busca-resultados"></div>
+    </div>
+
+    <div class="emp-card">
+      <h3>🛒 Carrinho</h3>
+      <div id="pdv-carrinho-lista"><div class="emp-vazio">Nenhum item ainda — escaneia ou busca um produto.</div></div>
+      <button type="button" class="emp-btn secundario full" onclick="pdvAdicionarItemAvulso()" style="margin-top:4px;">➕ Item avulso (sem código)</button>
+    </div>
+
+    <div class="pdv-total-card">
+      <div class="pdv-total-label">Total da venda</div>
+      <div class="pdv-total-valor" id="pdv-total-valor">R$ 0,00</div>
+    </div>
+
+    <div class="emp-card">
+      <div class="emp-linha">
+        <select id="pdv-cliente"><option value="">Cliente (opcional)</option></select>
+        <select id="pdv-pagamento" onchange="pdvAoMudarPagamento()">
+          <option value="">Forma de pagamento</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="pix">Pix</option>
+          <option value="cartao_debito">Cartão débito</option>
+          <option value="cartao_credito_avista">Cartão crédito à vista</option>
+          <option value="cartao_credito_parcelado">Cartão crédito parcelado</option>
+          <option value="fiado">Fiado / promissória (na conta do cliente)</option>
+        </select>
+      </div>
+      <div class="emp-linha" id="pdv-linha-parcelas" style="display:none;">
+        <select id="pdv-parcelas">
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+          <option value="4">4x</option>
+          <option value="5">5x</option>
+          <option value="6">6x</option>
+          <option value="7">7x</option>
+          <option value="8">8x</option>
+          <option value="9">9x</option>
+          <option value="10">10x</option>
+          <option value="11">11x</option>
+          <option value="12">12x</option>
+        </select>
+      </div>
+      <div id="pdv-aviso-fiado" class="emp-vazio" style="display:none; padding:4px 0; text-align:left; color:#a4402f; font-size:0.78rem;">⚠️ Fiado/promissória precisa de um cliente selecionado — vira uma conta a receber.</div>
+      <div class="emp-linha">
+        <input type="text" id="pdv-cpf-cnpj-cliente" placeholder="CPF/CNPJ na nota (opcional)" inputmode="numeric">
+      </div>
+      <button type="button" class="emp-btn full" id="pdv-finalizar-btn" onclick="pdvFinalizarVenda()" style="font-size:1.05rem; padding:14px;">✅ Finalizar venda</button>
+    </div>
+
+    <div class="emp-card">
+      <h3>📋 Vendas de hoje</h3>
+      <div id="pdv-vendas-hoje"><div class="emp-vazio">Carregando...</div></div>
+    </div>
+
+    <div class="emp-card">
+      <h3>🔍 Fechar caixa (conferência)</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">No fim do turno, conta o dinheiro da gaveta e digita aqui — o sistema compara com o que esperava receber em dinheiro e mostra se faltou (furo) ou sobrou. Precisa da senha gerencial.</div>
+      <button type="button" class="emp-btn secundario full" onclick="pdvFecharCaixa()">Fechar caixa agora</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let pdvProfissionalId = null;
+let pdvCodigoAcesso = null;
+let pdvEmpresaNome = '';
+let pdvCaixaNome = '';
+let pdvFiliais = [];
+let pdvFilialAtual = '';
+let pdvClientes = [];
+let pdvCarrinho = []; // { produtoId, nome, quantidade, valorUnitario, unidadeMedida }
+
+function pdvEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function pdvFmt(v){
+  return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
+}
+function pdvParseValor(texto){
+  const limpo = (texto || '').replace(/[^\d,.-]/g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return !isNaN(n) ? n : null;
+}
+
+// Toda chamada ao servidor manda o código de acesso do caixa junto — é
+// esse código (não login de verdade) que autoriza as operações do PDV.
+async function pdvChamar(action, extra){
+  const resp = await fetch('/.netlify/functions/pdv-operacao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, profissionalId: pdvProfissionalId, codigoAcesso: pdvCodigoAcesso, ...extra })
+  });
+  const dados = await resp.json();
+  if(!resp.ok){
+    if(resp.status === 401 || resp.status === 403){
+      // Código errado/revogado — desloga desse terminal e pede de novo.
+      pdvSairDoTerminal(dados.error);
+      throw new Error(dados.error || 'acesso negado');
+    }
+    throw new Error(dados.error || 'erro na operação');
+  }
+  return dados;
+}
+
+// ============ ENTRADA NO TERMINAL (código de acesso, sem login) ============
+
+function initPdv(){
+  // Um link pronto (empresa.html gera) pode trazer ?empresa=ID&codigo=XXX
+  // — usa uma vez pra configurar esse terminal e tira da URL, pra não
+  // deixar o código visível no histórico do navegador.
+  const params = new URLSearchParams(window.location.search);
+  const empresaUrl = params.get('empresa');
+  const codigoUrl = params.get('codigo');
+  if(empresaUrl && codigoUrl){
+    localStorage.setItem('pdv_profissional_id', empresaUrl);
+    localStorage.setItem('pdv_codigo_acesso', codigoUrl);
+    window.history.replaceState({}, '', 'pdv.html');
+  }
+
+  pdvProfissionalId = localStorage.getItem('pdv_profissional_id');
+  pdvCodigoAcesso = localStorage.getItem('pdv_codigo_acesso');
+
+  if(pdvProfissionalId && pdvCodigoAcesso){
+    pdvIniciarSessao();
+  } else {
+    document.getElementById('pdv-gate').style.display = 'block';
+  }
+}
+
+async function pdvEntrarComCodigo(){
+  const empresaId = document.getElementById('pdv-gate-empresa').value.trim();
+  const codigo = document.getElementById('pdv-gate-codigo').value.trim().toUpperCase();
+  const msg = document.getElementById('pdv-gate-msg');
+  if(!empresaId || !codigo){ msg.textContent = 'Preenche os dois campos.'; return; }
+
+  pdvProfissionalId = empresaId;
+  pdvCodigoAcesso = codigo;
+  msg.textContent = 'Verificando...';
+  msg.style.color = '#666';
+
+  try{
+    await pdvChamar('bootstrap');
+    localStorage.setItem('pdv_profissional_id', empresaId);
+    localStorage.setItem('pdv_codigo_acesso', codigo);
+    document.getElementById('pdv-gate').style.display = 'none';
+    pdvIniciarSessao();
+  } catch(e){
+    msg.textContent = e.message;
+    msg.style.color = '#a4402f';
+    pdvProfissionalId = null;
+    pdvCodigoAcesso = null;
+  }
+}
+
+function pdvSairDoTerminal(motivo){
+  localStorage.removeItem('pdv_profissional_id');
+  localStorage.removeItem('pdv_codigo_acesso');
+  pdvProfissionalId = null;
+  pdvCodigoAcesso = null;
+  document.getElementById('pdv-corpo').style.display = 'none';
+  document.getElementById('pdv-select-filial').style.display = 'none';
+  document.getElementById('pdv-sair-btn').style.display = 'none';
+  document.getElementById('pdv-gate').style.display = 'block';
+  document.getElementById('pdv-gate-msg').textContent = motivo || '';
+  document.getElementById('pdv-gate-msg').style.color = '#a4402f';
+}
+
+async function pdvIniciarSessao(){
+  let bootstrap;
+  try{
+    bootstrap = await pdvChamar('bootstrap');
+  } catch(e){
+    return; // pdvChamar já tratou (código errado joga de volta pro gate)
+  }
+
+  pdvEmpresaNome = bootstrap.empresaNome;
+  pdvCaixaNome = bootstrap.caixaNome || '';
+  pdvFiliais = bootstrap.filiais || [];
+  pdvClientes = bootstrap.clientes || [];
+  document.getElementById('pdv-nome-caixa-topo').textContent = pdvCaixaNome ? ` — ${pdvCaixaNome}` : '';
+
+  const selectFilial = document.getElementById('pdv-select-filial');
+  if(pdvFiliais.length){
+    selectFilial.innerHTML = '<option value="">Todas as filiais</option>' + pdvFiliais.map(f => `<option value="${f.id}">${pdvEscapar(f.nome)}</option>`).join('');
+    selectFilial.style.display = 'block';
+    selectFilial.onchange = () => { pdvFilialAtual = selectFilial.value; };
+  }
+  document.getElementById('pdv-sair-btn').style.display = 'inline-block';
+
+  document.getElementById('pdv-cliente').innerHTML = '<option value="">Cliente (opcional)</option>' + pdvClientes.map(c => `<option value="${c.id}">${pdvEscapar(c.nome)}</option>`).join('');
+
+  document.getElementById('pdv-corpo').style.display = 'block';
+  pdvCarrinho = [];
+  pdvRenderCarrinho();
+  await pdvCarregarVendasHoje();
+
+  const scanInput = document.getElementById('pdv-scan-input');
+  scanInput.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      pdvProcessarCodigo(scanInput.value.trim());
+      scanInput.value = '';
+    }
+  });
+  scanInput.focus();
+  // Mantém o input de leitura sempre focado — o leitor físico de código
+  // de barras funciona "digitando" no elemento que estiver em foco, então
+  // se a pessoa clicar em outro lugar da tela sem querer, volta sozinho.
+  document.addEventListener('click', e => {
+    if(e.target.closest('input, select, button, textarea, a')) return;
+    scanInput.focus();
+  });
+
+  let buscaTimeout;
+  document.getElementById('pdv-busca-nome').addEventListener('input', e => {
+    clearTimeout(buscaTimeout);
+    const termo = e.target.value.trim();
+    if(!termo){ document.getElementById('pdv-busca-resultados').innerHTML = ''; return; }
+    buscaTimeout = setTimeout(() => pdvBuscarPorNome(termo), 350);
+  });
+}
+
+// ============ LEITURA / BUSCA DE PRODUTO ============
+
+function pdvMostrarStatus(msg, tipo){
+  const el = document.getElementById('pdv-scan-status');
+  el.textContent = msg;
+  el.className = tipo || '';
+  if(msg) setTimeout(() => { if(el.textContent === msg) { el.textContent = ''; el.className = ''; } }, 4000);
+}
+
+async function pdvProcessarCodigo(codigoBruto){
+  const codigo = (codigoBruto || '').trim();
+  if(!codigo) return;
+  // Leitor de código de barras às vezes manda caractere de controle junto
+  // — mantém só letra/número/traço, que é o que um código de barras ou
+  // código interno gerado pelo sistema usa.
+  const codigoLimpo = codigo.replace(/[^a-zA-Z0-9-]/g, '');
+  if(!codigoLimpo){ pdvMostrarStatus('Código inválido.', 'erro'); return; }
+
+  let resultado;
+  try{ resultado = await pdvChamar('produtoPorCodigo', { codigo: codigoLimpo }); }
+  catch(e){ pdvMostrarStatus(e.message, 'erro'); return; }
+
+  if(!resultado.produto){
+    pdvMostrarStatus(`Nenhum produto com o código "${codigoLimpo}" — cadastra na Vitrine/Estoque ou gera um código interno.`, 'erro');
+    return;
+  }
+  pdvAdicionarAoCarrinho(resultado.produto);
+}
+
+async function pdvBuscarPorNome(termo){
+  const container = document.getElementById('pdv-busca-resultados');
+  let resultado;
+  try{ resultado = await pdvChamar('produtosPorNome', { termo }); }
+  catch(e){ container.innerHTML = `<div class="emp-vazio" style="padding:10px;">${pdvEscapar(e.message)}</div>`; return; }
+  const produtos = resultado.produtos || [];
+  if(!produtos.length){ container.innerHTML = '<div class="emp-vazio" style="padding:10px;">Nada encontrado.</div>'; return; }
+  container.innerHTML = produtos.map((p, i) => `<div class="emp-item" onclick="pdvAdicionarAoCarrinhoPorIndice(${i})">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${pdvEscapar(p.nome)}</div>
+      <div class="emp-item-meta">Estoque: ${Number(p.quantidade || 0)}${p.codigo_barras || p.codigo_interno ? ` · ${pdvEscapar(p.codigo_barras || p.codigo_interno)}` : ''}</div>
+    </div>
+    <div class="emp-item-valor">${p.preco ? pdvFmt(p.preco) : ''}</div>
+  </div>`).join('');
+  window._pdvBuscaResultados = produtos;
+}
+
+function pdvAdicionarAoCarrinhoPorIndice(i){
+  const produto = (window._pdvBuscaResultados || [])[i];
+  if(!produto) return;
+  pdvAdicionarAoCarrinho(produto);
+  document.getElementById('pdv-busca-nome').value = '';
+  document.getElementById('pdv-busca-resultados').innerHTML = '';
+}
+
+function pdvAdicionarAoCarrinho(produto){
+  const precoBase = pdvParseValor(String(produto.preco || '0')) || 0;
+
+  // Produto vendido por peso/volume (carne, ração a granel, etc) — pede
+  // a quantidade na hora, porque cada venda tem um peso diferente.
+  if(produto.unidade_medida === 'peso' || produto.unidade_medida === 'litro'){
+    const unidadeLabel = produto.unidade_medida === 'peso' ? 'kg' : 'L';
+    const texto = prompt(`${produto.nome} — quantidade em ${unidadeLabel}:`);
+    const quantidade = pdvParseValor(texto);
+    if(!quantidade || quantidade <= 0) return;
+    pdvCarrinho.push({
+      produtoId: produto.id, nome: `${produto.nome} (${quantidade}${unidadeLabel})`,
+      quantidade, valorUnitario: precoBase, unidadeMedida: produto.unidade_medida
+    });
+  } else {
+    // Item por unidade — se já tá no carrinho, só soma +1 em vez de
+    // duplicar a linha.
+    const existente = pdvCarrinho.find(i => i.produtoId === produto.id);
+    if(existente){
+      existente.quantidade += 1;
+    } else {
+      pdvCarrinho.push({ produtoId: produto.id, nome: produto.nome, quantidade: 1, valorUnitario: precoBase, unidadeMedida: produto.unidade_medida });
+    }
+  }
+  pdvMostrarStatus(`✅ ${produto.nome} adicionado.`, 'ok');
+  pdvRenderCarrinho();
+}
+
+function pdvAdicionarItemAvulso(){
+  const nome = prompt('Nome do item (sem código/produto cadastrado):');
+  if(!nome) return;
+  const valorTexto = prompt('Valor unitário:');
+  const valor = pdvParseValor(valorTexto);
+  if(!valor || valor <= 0){ alert('Valor inválido.'); return; }
+  pdvCarrinho.push({ produtoId: null, nome: nome.trim(), quantidade: 1, valorUnitario: valor, unidadeMedida: null });
+  pdvRenderCarrinho();
+}
+
+function pdvRenderCarrinho(){
+  const container = document.getElementById('pdv-carrinho-lista');
+  if(!pdvCarrinho.length){
+    container.innerHTML = '<div class="emp-vazio">Nenhum item ainda — escaneia ou busca um produto.</div>';
+  } else {
+    container.innerHTML = pdvCarrinho.map((item, i) => `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${pdvEscapar(item.nome)}</div>
+        <div class="emp-item-meta">${item.unidadeMedida === 'peso' || item.unidadeMedida === 'litro' ? '' : `${item.quantidade}x `}${pdvFmt(item.valorUnitario)}</div>
+      </div>
+      <div class="emp-item-valor receita">${pdvFmt(item.quantidade * item.valorUnitario)}</div>
+      <button type="button" class="emp-item-apagar" onclick="pdvRemoverItem(${i})" title="Remover">🗑️</button>
+    </div>`).join('');
+  }
+  const total = pdvCarrinho.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
+  document.getElementById('pdv-total-valor').textContent = pdvFmt(total);
+}
+
+function pdvRemoverItem(i){
+  pdvCarrinho.splice(i, 1);
+  pdvRenderCarrinho();
+}
+
+// ============ FINALIZAR VENDA ============
+
+function pdvAoMudarPagamento(){
+  const forma = document.getElementById('pdv-pagamento').value;
+  document.getElementById('pdv-linha-parcelas').style.display = forma === 'cartao_credito_parcelado' ? 'flex' : 'none';
+  document.getElementById('pdv-aviso-fiado').style.display = forma === 'fiado' ? 'block' : 'none';
+}
+
+async function pdvFinalizarVenda(){
+  if(!pdvCarrinho.length){ alert('Carrinho vazio.'); return; }
+  const clienteId = document.getElementById('pdv-cliente').value || null;
+  const formaPagamento = document.getElementById('pdv-pagamento').value || null;
+  const parcelas = formaPagamento === 'cartao_credito_parcelado' ? Number(document.getElementById('pdv-parcelas').value) : null;
+  const cpfCnpjCliente = document.getElementById('pdv-cpf-cnpj-cliente').value.trim() || null;
+  const valorTotal = pdvCarrinho.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
+
+  if(formaPagamento === 'fiado' && !clienteId){
+    alert('Fiado/promissória precisa de um cliente selecionado — vira uma conta a receber ligada a ele.');
+    return;
+  }
+
+  const btn = document.getElementById('pdv-finalizar-btn');
+  btn.disabled = true; btn.textContent = 'Finalizando...';
+
+  let resultado;
+  try{
+    resultado = await pdvChamar('finalizarVenda', {
+      itens: pdvCarrinho, clienteId, formaPagamento, parcelas, cpfCnpjCliente, filialId: pdvFilialAtual || null
+    });
+  } catch(e){
+    btn.disabled = false; btn.textContent = '✅ Finalizar venda';
+    alert('Erro ao salvar a venda: ' + e.message);
+    return;
+  }
+
+  btn.disabled = false; btn.textContent = '✅ Finalizar venda';
+  let msgNota = '';
+  const nf = resultado.notaFiscal;
+  if(nf && nf.motivo !== 'emissao_nao_ativada'){
+    if(nf.ok && nf.status === 'autorizado') msgNota = ' · 🧾 nota fiscal emitida';
+    else if(nf.ok && nf.status === 'processando_autorizacao') msgNota = ' · ⏳ nota fiscal em processamento';
+    else msgNota = ' · ⚠️ nota fiscal: ' + (nf.erro || nf.motivo || 'falha ao emitir — confira em Empresa > Nota fiscal');
+  }
+  pdvMostrarStatus(`✅ Venda de ${pdvFmt(valorTotal)} finalizada${formaPagamento === 'fiado' ? ' (fiado — virou conta a receber)' : ''}!${msgNota}`, 'ok');
+  pdvOferecerImpressao(resultado.pedidoId, pdvCarrinho, valorTotal, formaPagamento);
+  pdvCarrinho = [];
+  pdvRenderCarrinho();
+  document.getElementById('pdv-pagamento').value = '';
+  document.getElementById('pdv-cliente').value = '';
+  document.getElementById('pdv-cpf-cnpj-cliente').value = '';
+  pdvAoMudarPagamento();
+  await pdvCarregarVendasHoje();
+  document.getElementById('pdv-scan-input').focus();
+}
+
+// ============ COMPROVANTE (recibo pro cliente) ============
+
+function pdvOferecerImpressao(pedidoId, itens, valorTotal, formaPagamento){
+  const container = document.getElementById('pdv-scan-status');
+  container.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'emp-btn secundario full';
+  btn.style.marginTop = '4px';
+  btn.textContent = '🖨️ Imprimir comprovante dessa venda';
+  btn.onclick = () => pdvImprimirComprovante(pedidoId, itens, valorTotal, formaPagamento);
+  container.appendChild(btn);
+}
+
+async function pdvImprimirComprovanteDoPedido(pedidoId){
+  let resultado;
+  try{ resultado = await pdvChamar('dadosParaImprimir', { pedidoId }); }
+  catch(e){ alert(e.message); return; }
+  const pedido = resultado.pedido;
+  const itens = resultado.itens || [];
+  pdvImprimirComprovante(pedidoId, itens.map(i => ({ nome: i.nome_item, quantidade: i.quantidade, valorUnitario: i.valor_unitario })), pedido.valor_total, pedido.forma_pagamento, pedido.created_at);
+}
+
+function pdvImprimirComprovante(pedidoId, itens, valorTotal, formaPagamento, criadoEm){
+  const nomeEmpresa = pdvEmpresaNome || 'GuiaZap';
+  const dataHora = new Date(criadoEm || Date.now()).toLocaleString('pt-BR');
+  const linhasItens = itens.map(i => `
+    <tr>
+      <td>${pdvEscapar(i.nome)}</td>
+      <td style="text-align:right;">${pdvFmt(i.quantidade * i.valorUnitario)}</td>
+    </tr>`).join('');
+
+  const janela = window.open('', '_blank', 'width=380,height=600');
+  if(!janela){ alert('O navegador bloqueou a janela de impressão — permite pop-up pra esse site e tenta de novo.'); return; }
+  janela.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprovante</title>
+    <style>
+      body { font-family: monospace; font-size: 13px; padding: 12px; max-width: 320px; margin: 0 auto; }
+      h2 { text-align: center; font-size: 15px; margin: 0 0 4px; }
+      .pdv-print-linha { text-align: center; font-size: 11px; color: #444; margin-bottom: 10px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      td { padding: 2px 0; border-bottom: 1px dashed #ccc; }
+      .pdv-print-total { font-weight: bold; font-size: 15px; display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 6px; }
+      .pdv-print-rodape { text-align: center; font-size: 10px; color: #888; margin-top: 14px; }
+    </style>
+    </head><body>
+      <h2>${pdvEscapar(nomeEmpresa)}</h2>
+      <div class="pdv-print-linha">${dataHora}${formaPagamento ? ' · ' + pdvEscapar(formaPagamento) : ''}</div>
+      <table>${linhasItens}</table>
+      <div class="pdv-print-total"><span>TOTAL</span><span>${pdvFmt(valorTotal)}</span></div>
+      <div class="pdv-print-rodape">Comprovante não fiscal — controle interno via GuiaZap</div>
+      <script>window.onload = () => window.print();<\/script>
+    </body></html>`);
+  janela.document.close();
+}
+
+// ============ VENDAS DE HOJE / CANCELAMENTO ============
+
+async function pdvCarregarVendasHoje(){
+  const container = document.getElementById('pdv-vendas-hoje');
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  let resultado;
+  try{ resultado = await pdvChamar('vendasHoje'); }
+  catch(e){ container.innerHTML = `<div class="emp-vazio">${pdvEscapar(e.message)}</div>`; return; }
+  const pedidos = resultado.pedidos || [];
+  if(!pedidos.length){ container.innerHTML = '<div class="emp-vazio">Nenhuma venda hoje ainda.</div>'; return; }
+  container.innerHTML = pedidos.map(p => {
+    const hora = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const cancelado = p.status === 'cancelado';
+    return `<div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${hora}${p.forma_pagamento ? ` · ${pdvEscapar(p.forma_pagamento)}` : ''}</div>
+        <div class="emp-item-meta">${cancelado ? '<span class="emp-tag alerta">cancelada/devolvida</span>' : `<span class="emp-tag">${pdvEscapar(p.origem)}</span>`}</div>
+      </div>
+      <div class="emp-item-valor ${cancelado ? '' : 'receita'}" style="${cancelado ? 'text-decoration:line-through; color:#999;' : ''}">${pdvFmt(p.valor_total)}</div>
+      ${!cancelado ? `<button type="button" class="emp-item-apagar" onclick="pdvImprimirComprovanteDoPedido('${p.id}')" title="Reimprimir comprovante">🖨️</button>` : ''}
+      ${!cancelado ? `<button type="button" class="emp-item-apagar" onclick="pdvCancelarVenda('${p.id}')" title="Cancelar/devolver">↩️</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function pdvCancelarVenda(pedidoId){
+  if(!confirm('Cancelar/devolver essa venda? Isso estorna o valor do caixa e devolve os itens pro estoque. Precisa da senha gerencial.')) return;
+  const senha = prompt('Senha gerencial:');
+  if(!senha) return;
+
+  try{
+    await pdvChamar('cancelarVenda', { pedidoId, senha });
+  } catch(e){
+    alert(e.message);
+    return;
+  }
+
+  alert('Venda cancelada/devolvida.');
+  await pdvCarregarVendasHoje();
+}
+
+// ============ FECHAR CAIXA (conferência — furo/sobra) ============
+
+async function pdvFecharCaixa(){
+  const valorTexto = prompt('Quanto tem de dinheiro na gaveta agora (contado na mão)?');
+  const valorContado = pdvParseValor(valorTexto);
+  if(valorContado === null || valorContado < 0){ alert('Valor inválido.'); return; }
+  const senha = prompt('Senha gerencial:');
+  if(!senha) return;
+
+  let resultado;
+  try{
+    resultado = await pdvChamar('fecharCaixa', { senha, valorContado });
+  } catch(e){
+    alert(e.message);
+    return;
+  }
+
+  const furo = resultado.diferenca < 0;
+  const msg = furo
+    ? `⚠️ FURO de ${pdvFmt(Math.abs(resultado.diferenca))}\n\nEsperado em dinheiro: ${pdvFmt(resultado.valorEsperado)}\nContado: ${pdvFmt(resultado.valorContado)}`
+    : `✅ Sobra de ${pdvFmt(Math.abs(resultado.diferenca))}\n\nEsperado em dinheiro: ${pdvFmt(resultado.valorEsperado)}\nContado: ${pdvFmt(resultado.valorContado)}`;
+  alert(msg);
+}
+
+initPdv();
+</script>
+</body>
+</html>

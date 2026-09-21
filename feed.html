@@ -86,7 +86,7 @@ async function initFeed(){
 
   const [{ data: stories }, { data: produtos }] = await Promise.all([
     supabaseClientFeed.from('stories').select('*, profissionais(name)').in('profissional_id', idsSeguindo).order('created_at', { ascending: false }),
-    supabaseClientFeed.from('produtos').select('*, profissionais(name)').in('profissional_id', idsSeguindo).order('created_at', { ascending: false }).limit(30)
+    supabaseClientFeed.from('produtos').select('*, profissionais(name)').in('profissional_id', idsSeguindo).neq('visivel_guiazap', false).order('created_at', { ascending: false }).limit(30)
   ]);
 
   const itensFeed = [];

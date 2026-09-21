@@ -21,6 +21,10 @@
 //    resto desse arquivo; o "conselho" com opinião da IA continua só
 //    sob demanda, no chat (zeca-chat.js), pra não gerar custo de API
 //    toda semana pra empresa nenhuma pedir.
+// 6. Conta a receber/a pagar (empresa_caixa.status_pagamento = 'pendente')
+//    já vencida (data_vencimento no passado) — lembrete pra cobrar o
+//    cliente ou pagar o fornecedor antes que acumule. Roda toda semana
+//    junto com o resto, não é um cron separado.
 //
 // Só manda push pra quem JÁ usou o recurso antes (nunca pra quem nunca
 // usou) — isso é lembrete de continuidade, não propaganda/onboarding.
@@ -45,7 +49,7 @@ module.exports.handler = async function () {
     const seteDiasAtrasData = seteDiasAtras.toISOString().slice(0, 10); // AAAA-MM-DD, pro filtro de "data" (date, não timestamp)
     const seteDiasAtrasISO = seteDiasAtras.toISOString();
 
-    const resultado = { financeiro: 0, zeca: 0, estoqueBaixo: 0, compraParada: 0, resumoSemanal: 0 };
+    const resultado = { financeiro: 0, zeca: 0, estoqueBaixo: 0, compraParada: 0, resumoSemanal: 0, contaVencida: 0 };
 
     // Quem desligou os avisos proativos (lembretes_ativados = false) —
     // busca uma vez só aqui no início e usa pra filtrar TODOS os 5 envios
@@ -256,6 +260,98 @@ module.exports.handler = async function () {
         enviados++;
       }
       resultado.resumoSemanal = enviados;
+    }
+
+    // ---------- 6. Conta a receber/a pagar vencida (módulo Empresa) ----------
+    const hojeData = new Date().toISOString().slice(0, 10);
+    const vencidasResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/empresa_caixa?status_pagamento=eq.pendente&data_vencimento=lt.${hojeData}&select=profissional_id,tipo`,
+      { headers }
+    );
+    const vencidas = vencidasResp.ok ? await vencidasResp.json() : [];
+    const porEmpresaVencida = {}; // profissional_id -> { aReceber, aPagar }
+    vencidas.forEach(l => {
+      if (!porEmpresaVencida[l.profissional_id]) porEmpresaVencida[l.profissional_id] = { aReceber: 0, aPagar: 0 };
+      porEmpresaVencida[l.profissional_id][l.tipo === 'receita' ? 'aReceber' : 'aPagar']++;
+    });
+    const idsEmpresaVencida = Object.keys(porEmpresaVencida);
+
+    if (idsEmpresaVencida.length > 0) {
+      const profRespVencida = await fetch(
+        `${SUPABASE_URL}/rest/v1/profissionais?id=in.(${idsEmpresaVencida.join(',')})&status_pagamento=eq.ativo&select=id,user_id`,
+        { headers }
+      );
+      const profsVencida = profRespVencida.ok ? await profRespVencida.json() : [];
+
+      let enviadosVencida = 0;
+      for (const prof of profsVencida) {
+        if (!prof.user_id || idsOptOut.has(prof.user_id)) continue;
+        const { aReceber, aPagar } = porEmpresaVencida[prof.id];
+        const partes = [];
+        if (aReceber > 0) partes.push(`${aReceber} a receber`);
+        if (aPagar > 0) partes.push(`${aPagar} a pagar`);
+        if (!partes.length) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            titulo: '⚠️ Conta vencida no caixa',
+            mensagem: `Tem ${partes.join(' e ')} vencida(s) no caixa da empresa. Dá uma olhada e marca como pago o que já resolveu.`,
+            url: '/empresa.html',
+            userIds: [prof.user_id],
+            tipo: 'zeca_lembrete'
+          })
+        });
+        enviadosVencida++;
+      }
+      resultado.contaVencida = enviadosVencida;
+    }
+
+    // ---------- 7. Produto perecível perto de vencer (módulo Empresa) ----------
+    const emTresDias = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const vencendoResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/produtos?data_validade=not.is.null&data_validade=lte.${emTresDias}&select=profissional_id,nome,data_validade`,
+      { headers }
+    );
+    const vencendo = vencendoResp.ok ? await vencendoResp.json() : [];
+    const porEmpresaVencendo = {}; // profissional_id -> [nome, ...]
+    vencendo.forEach(p => {
+      if (!porEmpresaVencendo[p.profissional_id]) porEmpresaVencendo[p.profissional_id] = [];
+      porEmpresaVencendo[p.profissional_id].push(p.nome);
+    });
+    const idsEmpresaVencendo = Object.keys(porEmpresaVencendo);
+
+    resultado.produtoVencendo = 0;
+    if (idsEmpresaVencendo.length > 0) {
+      const profRespVencendo = await fetch(
+        `${SUPABASE_URL}/rest/v1/profissionais?id=in.(${idsEmpresaVencendo.join(',')})&status_pagamento=eq.ativo&select=id,user_id`,
+        { headers }
+      );
+      const profsVencendo = profRespVencendo.ok ? await profRespVencendo.json() : [];
+
+      let enviadosVencendo = 0;
+      for (const prof of profsVencendo) {
+        if (!prof.user_id || idsOptOut.has(prof.user_id)) continue;
+        const nomes = porEmpresaVencendo[prof.id];
+        const listaTexto = nomes.slice(0, 3).join(', ') + (nomes.length > 3 ? ` e mais ${nomes.length - 3}` : '');
+
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            titulo: '⏰ Produto perto de vencer',
+            mensagem: `${listaTexto} — vencendo em até 3 dias. Dá uma olhada no Estoque antes de virar perda.`,
+            url: '/empresa.html',
+            userIds: [prof.user_id],
+            tipo: 'zeca_lembrete'
+          })
+        });
+        enviadosVencendo++;
+      }
+      resultado.produtoVencendo = enviadosVencendo;
     }
 
     return { statusCode: 200, body: JSON.stringify(resultado) };

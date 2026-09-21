@@ -527,6 +527,11 @@ Content-Type: application/json
     </div>
   </div>
   <div class="field">
+    <label for="p-codigo-fiscal">Código fiscal / NCM (opcional)</label>
+    <input id="p-codigo-fiscal" placeholder="Ex: 2106.90.90 — só preenche se seu contador já te passou esse código">
+    <label class="foto-ou">Pedido por alguns sistemas da Receita/contador quando a empresa emite nota fiscal de verdade. Não preenche sozinho — se você não sabe, deixa em branco e pergunta pro seu contador quando for emitir nota.</label>
+  </div>
+  <div class="field">
     <label for="p-marca">Marca (opcional)</label>
     <input id="p-marca" placeholder="Ex: Nestlé, marca própria...">
   </div>
@@ -630,6 +635,17 @@ Content-Type: application/json
       <span>🛒 Este produto está à venda (permite adicionar ao carrinho)</span>
     </label>
     <label class="foto-ou">Desmarque se for só um item de exposição/portfólio (ex: trabalhos já feitos, modelos de referência) — nesse caso não aparece botão de comprar, só a foto e descrição.</label>
+  </div>
+  <div class="field">
+    <label>Onde esse produto aparece</label>
+    <label class="foto-ou" style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;">
+      <input type="radio" name="p-visivel-guiazap" id="p-visivel-guiazap-ambos" value="ambos" checked style="margin-top:3px;">
+      <span>🌐 No gerenciamento e no GuiaZap — clientes veem e podem comprar na Vitrine pública.</span>
+    </label>
+    <label class="foto-ou" style="display:flex; align-items:flex-start; gap:8px;">
+      <input type="radio" name="p-visivel-guiazap" id="p-visivel-guiazap-interno" value="interno" style="margin-top:3px;">
+      <span>🏪 Só no gerenciamento — controle interno de estoque (ex: código interno de carne, batata, ração a granel), não aparece pros clientes no GuiaZap.</span>
+    </label>
   </div>
   <div class="field">
     <label class="checkbox-18mais">
