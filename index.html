@@ -123,6 +123,17 @@
       🔑 Seu código do Papo: <b id="meu-codigo-inline-valor" style="letter-spacing:1px;"></b>
       <br><span style="font-size:0.68rem; color:#6b46c1;">Compartilhe pra outras pessoas te adicionarem no chat sem precisar de e-mail ou telefone</span>
     </div>
+    <!-- Acesso direto aos gerenciadores (Meu Lar / Meu Agro / Empresa / Financeiro)
+         fora de qualquer conversa do Zeca — antes só dava pra chegar neles
+         clicando num link dentro do chat (zeca.html), o que a pessoa só
+         achava se estivesse conversando. Fica sempre visível pra quem tá
+         logado, direto no topo do site. -->
+    <div style="display:flex; flex-wrap:wrap; gap:6px; width:100%; margin-top:4px;">
+      <a href="meular.html" class="btn-auth-outline-header" style="text-decoration:none; display:inline-block;">🏠 Meu Lar</a>
+      <a href="meuagro.html" class="btn-auth-outline-header" style="text-decoration:none; display:inline-block;">🌱 Meu Agro</a>
+      <a href="empresa.html" class="btn-auth-outline-header" style="text-decoration:none; display:inline-block;">🏢 Gerenciar empresa</a>
+      <a href="financeiro.html" class="btn-auth-outline-header" style="text-decoration:none; display:inline-block;">💰 Financeiro</a>
+    </div>
     <div>
       <button type="button" class="btn-auth-outline-header" id="btn-ver-minha-empresa" style="display:none;" onclick="verMinhaEmpresa()">🏢 Ver minha empresa</button>
       <button type="button" class="btn-auth-outline-header" onclick="mostrarLinkIndicacao()">🎁 Indique e ganhe</button>
@@ -687,6 +698,7 @@
     <div id="zeca-mensagens"></div>
     <div class="zeca-rodape">
       <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem ou .zip">📎</button>
+      <button type="button" id="zeca-camera" class="zeca-mic-btn" onclick="_abrirCameraZeca()" title="Tirar foto ou vídeo com a câmera">📷</button>
       <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
       <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
       <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
@@ -694,7 +706,7 @@
   </div>
 
 <script src="js/modo-escuro.js"></script>
-<script src="js/zeca.js"></script>
+<script src="js/zeca.js?v=20260921"></script>
 <script src="js/notificacoes.js"></script>
 <script src="config.js"></script>
 <script src="js/captura-erros.js"></script>

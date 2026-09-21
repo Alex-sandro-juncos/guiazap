@@ -926,12 +926,13 @@ document.addEventListener('DOMContentLoaded', function(){
     <div id="zeca-mensagens"></div>
     <div class="zeca-rodape">
       <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-camera" class="zeca-mic-btn" onclick="_abrirCameraZeca()" title="Tirar foto ou vídeo com a câmera">📷</button>
       <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
       <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
       <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
     </div>
   </div>
 
-<script src="js/zeca.js"></script>
+<script src="js/zeca.js?v=20260921"></script>
 </body>
 </html>

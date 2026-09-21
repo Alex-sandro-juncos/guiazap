@@ -7,9 +7,15 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  body.zeca-pagina { margin: 0; height: 100vh; overflow: hidden; }
+  body.zeca-pagina {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: #f7f5f0;
+  }
+
   .zeca-pagina-topo {
-    background: #f59e0b;
+    background: linear-gradient(90deg, #f59e0b, #e58e00);
     color: white;
     padding: 14px 16px;
     display: flex;
@@ -21,12 +27,43 @@
     text-decoration: none;
     font-size: 1.3rem;
     line-height: 1;
+    opacity: 0.9;
   }
-  .zeca-pagina-topo div { font-weight: 800; }
+  .zeca-pagina-topo div.zeca-pagina-titulo { font-weight: 800; }
   .zeca-pagina-topo small { display: block; font-weight: 400; font-size: 0.72rem; opacity: 0.9; }
+  .zeca-pagina-topo .zeca-pagina-acoes {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .zeca-pagina-pro {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.5);
+    color: white;
+    text-decoration: none;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .zeca-pagina-topo button.zeca-pagina-historico {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
 
   /* Reaproveita o painel do widget, só que ocupando a tela inteira em
-     vez de ser uma caixa flutuante no canto */
+     vez de ser uma caixa flutuante no canto, com um layout de conversa
+     em coluna centralizada (mais parecido com um app de chat de verdade
+     do que a caixinha estreita do widget). */
   #painel-zeca {
     display: flex !important;
     position: static !important;
@@ -34,17 +71,183 @@
     height: calc(100vh - 58px) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    background: transparent !important;
   }
   #painel-zeca .zeca-cabecalho { display: none; } /* já tem o topo da página fazendo esse papel */
   .btn-zeca-flutuante, .btn-chat-flutuante { display: none !important; }
+
+  /* Área de mensagens: coluna central com respiro, em vez da caixinha
+     apertada de 360px do widget flutuante */
+  #zeca-mensagens {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 16px 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background: transparent;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+
+  .zeca-msg {
+    max-width: 100%;
+    font-size: 0.98rem;
+    line-height: 1.55;
+  }
+
+  /* Mensagem do Zeca: sem bolha, texto corrido com um avatarzinho "Z" do
+     lado — como uma resposta de assistente de verdade, não um balão de
+     WhatsApp espremido */
+  .zeca-msg-zeca {
+    background: none;
+    box-shadow: none;
+    align-self: stretch;
+    border-radius: 0;
+    padding: 0 0 0 40px;
+    position: relative;
+    color: #2a2a2a;
+    white-space: pre-wrap;
+  }
+  .zeca-msg-zeca::before {
+    content: "Z";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f59e0b, #e58e00);
+    color: white;
+    font-weight: 800;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Mensagem da pessoa: continua bolha, alinhada à direita — deixa claro
+     quem falou o quê numa conversa mais longa */
+  .zeca-msg-pessoa {
+    background: #f59e0b;
+    color: white;
+    align-self: flex-end;
+    border-radius: 16px;
+    border-bottom-right-radius: 4px;
+    padding: 10px 16px;
+    max-width: 78%;
+    white-space: pre-wrap;
+  }
+
+  .zeca-link-pdf { margin-left: 40px; }
+  .zeca-resultados { margin-left: 40px; max-width: calc(100% - 40px); }
+
+  /* Barra de digitar: pílula flutuante centralizada, fixa embaixo, em vez
+     da barra colada na borda do painel */
+  #painel-zeca .zeca-rodape {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    border-top: none;
+    background: linear-gradient(180deg, rgba(247,245,240,0), #f7f5f0 35%);
+    gap: 0;
+  }
+  .zeca-rodape-pilula {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 720px;
+    background: white;
+    border: 1px solid #e5e0d5;
+    border-radius: 28px;
+    padding: 6px 8px 6px 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.1);
+  }
+  #zeca-input {
+    flex: 1;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 4px;
+    font-size: 0.95rem;
+    outline: none;
+  }
+  #zeca-enviar {
+    background: #f59e0b;
+    color: white;
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  /* Boas-vindas: título grande, sem parecer só mais uma mensagem de chat,
+     igual tela inicial de um assistente de verdade */
+  .zeca-hero {
+    max-width: 720px;
+    margin: 6vh auto 8px;
+    padding: 0 16px;
+    text-align: center;
+  }
+  .zeca-hero h1 {
+    font-size: 1.7rem;
+    margin: 0 0 6px;
+    color: #1c1c1c;
+  }
+  .zeca-hero p {
+    color: #777;
+    font-size: 0.92rem;
+    margin: 0;
+  }
+  .zeca-sugestoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 720px;
+    margin: 18px auto 0;
+    padding: 0 16px;
+  }
+  .zeca-chip-sugestao {
+    background: white;
+    border: 1px solid #e5e0d5;
+    color: #444;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 9px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .zeca-chip-sugestao:hover { border-color: #f59e0b; color: #a4600a; }
+
+  @media (max-width: 640px) {
+    .zeca-msg-pessoa { max-width: 88%; }
+    .zeca-pagina-pro { display: none; } /* some no celular pra não apertar o topo — continua no menu/pacotes.html */
+  }
 </style>
 </head>
 <body class="zeca-pagina">
 
 <div class="zeca-pagina-topo">
   <a href="index.html" class="zeca-voltar" title="Voltar ao GuiaZap">←</a>
-  <div>Zeca <small>a IA do GuiaZap</small></div>
-  <button type="button" onclick="abrirListaConversasZeca()" title="Conversas salvas" style="margin-left:auto; background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; cursor:pointer;">☰</button>
+  <div class="zeca-pagina-titulo">Zeca <small>a IA do GuiaZap</small></div>
+  <div class="zeca-pagina-acoes">
+    <a href="financeiro.html" class="zeca-pagina-pro">💰 Financeiro</a>
+    <a href="meular.html" class="zeca-pagina-pro">🏠 Meu Lar</a>
+    <a href="meuagro.html" class="zeca-pagina-pro">🌱 Meu Agro</a>
+    <a href="empresa.html" class="zeca-pagina-pro">🏢 Empresa</a>
+    <a href="pacotes.html" class="zeca-pagina-pro">⚡ Zeca PRO</a>
+    <button type="button" class="zeca-pagina-historico" onclick="abrirListaConversasZeca()" title="Conversas salvas">☰</button>
+  </div>
 </div>
 
 <div id="painel-zeca">
@@ -52,23 +255,68 @@
     <div>Zeca <small>a IA do GuiaZap</small></div>
     <button type="button" class="zeca-fechar" onclick="toggleZeca()">✕</button>
   </div>
+
+  <div id="zeca-hero" class="zeca-hero">
+    <h1>Oi! Eu sou o Zeca 👋</h1>
+    <p>Posso achar um profissional aqui perto, criar ou editar foto/áudio/vídeo (Stories, Reels, vídeo pro YouTube), tirar dúvida do GuiaZap, ou só bater um papo.</p>
+  </div>
+  <div id="zeca-sugestoes" class="zeca-sugestoes">
+    <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Achar um profissional aqui perto de mim')">📍 Achar um profissional aqui perto</button>
+    <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quero criar uma imagem pra postar')">🖼️ Gerar uma imagem</button>
+    <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como transformar um vídeo em Story?')">🎬 Deixar um vídeo em formato Story</button>
+    <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quais são os planos do GuiaZap?')">💳 Ver os planos</button>
+  </div>
+
   <div id="zeca-mensagens"></div>
+
   <div class="zeca-rodape">
-    <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+    <div class="zeca-rodape-pilula">
+      <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem, áudio, vídeo ou .zip">📎</button>
+      <button type="button" id="zeca-camera" class="zeca-mic-btn" onclick="_abrirCameraZeca()" title="Tirar foto ou vídeo com a câmera">📷</button>
       <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
-    <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
-    <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+      <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
+      <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
+    </div>
   </div>
 </div>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
-<script src="js/zeca.js"></script>
+<script src="js/zeca.js?v=20260921"></script>
 <script>
   // Nessa página o painel já começa aberto (não tem botão flutuante
-  // escondendo ele) — só marca como aberto e manda a mensagem de boas-vindas
+  // escondendo ele) — só marca como aberto.
   _zecaAberto = true;
-  _adicionarMensagemZeca('zeca', 'Oi! Eu sou o Zeca 👋 Pode perguntar qualquer coisa — achar empresa aqui perto, gerar uma imagem, tirar dúvida do GuiaZap, ou até código e conhecimento geral.');
+  _zecaInicializarDragDrop();
+
+  // A tela de boas-vindas (título + sugestões) some assim que a
+  // conversa de verdade começa — enviar mensagem, clicar numa sugestão,
+  // ou já vir com uma conversa salva de outra página — pra não competir
+  // com as mensagens indo pra cima.
+  function _zecaEsconderHero(){
+    const hero = document.getElementById('zeca-hero');
+    const sugestoes = document.getElementById('zeca-sugestoes');
+    if(hero) hero.style.display = 'none';
+    if(sugestoes) sugestoes.style.display = 'none';
+  }
+  function _zecaUsarSugestao(texto){
+    document.getElementById('zeca-input').value = texto;
+    enviarMensagemZeca();
+  }
+  const _zecaEnviarOriginalPagina = enviarMensagemZeca;
+  enviarMensagemZeca = function(){
+    _zecaEsconderHero();
+    return _zecaEnviarOriginalPagina.apply(this, arguments);
+  };
+
+  // Se a pessoa veio de outra página no meio de uma conversa já salva
+  // (memória ativada), carrega ela em silêncio em vez de mostrar o hero
+  // — mesmo comportamento de continuidade que o widget já tinha.
+  const _zecaConversaSessaoInicial = _zecaLerConversaDaSessao();
+  if(_zecaConversaSessaoInicial){
+    _zecaEsconderHero();
+    carregarConversaZeca(_zecaConversaSessaoInicial, true);
+  }
 </script>
 </body>
 </html>

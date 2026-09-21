@@ -191,6 +191,26 @@
     <p style="font-size:0.78rem; color:#555; text-align:center;">O botão pra solicitar aparece direto no seu cadastro, depois de fazer login.</p>
   </div>
 
+  <div class="card-pacote destaque" style="border-color:#7c3aed; box-shadow:0 4px 14px rgba(124,58,237,0.3); background:linear-gradient(180deg, #f5f0ff, var(--cinza-card) 40%); position:relative;">
+    <span class="selo-recomendado" style="background:#7c3aed;">⚡ EXTRA — QUALQUER PACOTE</span>
+    <h2>⚡ Zeca PRO</h2>
+    <div class="preco">R$ 70<span>/mês</span></div>
+    <ul>
+      <li>Disponível pra qualquer pacote (Contato, Completo, Premium, Vendas ou Corridas e Fretes)</li>
+      <li>🚀 Muito mais uso por dia do Zeca: conversa livre, código e toda a edição de áudio/vídeo (cortar, juntar, formato pra Story/Reels/YouTube, e por aí vai)</li>
+      <li>🖼️ Mais gerações de imagem por semana</li>
+      <li>Selo "⚡ Zeca PRO" no seu cadastro</li>
+      <li>Pra quem usa o Zeca todo dia pra criar conteúdo e esbarra no limite diário com frequência</li>
+    </ul>
+    <!-- TROCAR o href abaixo pelo link de assinatura recorrente de R$70 do
+         Mercado Pago assim que ele existir (mesmo processo dos outros
+         pacotes) — até lá, fica com o alerta pra não vender algo que não
+         está pronto pra cobrar. -->
+    <a href="javascript:alert('Ainda não tá pronto pra assinar — em breve!')" class="btn-escolher btn-zeca-pro" style="background:#7c3aed;">Assinar Zeca PRO</a>
+    <p style="font-size:0.72rem; color:#888; margin-top:8px; text-align:center;">⏳ Após pagar, pode levar até 15 minutos pra ativar automaticamente.</p>
+    <p style="font-size:0.72rem; color:#888; margin-top:4px; text-align:center;">📍 É um extra por cima do seu pacote atual — não troca nem cancela o que você já tem.</p>
+  </div>
+
   <a href="index.html" class="voltar">← Voltar ao GuiaZap</a>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
@@ -338,7 +358,7 @@ async function processarComandoVozPacotes(texto){
   }
 
   if(t.includes('ler pacote') || t.includes('quais sao os pacotes') || t.includes('quais são os pacotes')){
-    falarVozPacotes('Tem o Contato, grátis. Completo por 10 reais o mês, com Banco de Talentos. Premium por 25, com selo dourado e seguidores. Vendas por 40, com vitrine e carrinho. E Corridas e Fretes por 10, pra entregadores.');
+    falarVozPacotes('Tem o Contato, grátis. Completo por 10 reais o mês, com Banco de Talentos. Premium por 25, com selo dourado e seguidores. Vendas por 40, com vitrine e carrinho. Corridas e Fretes por 10, pra entregadores. E o Zeca Pro, por 70, um extra que dá muito mais uso do Zeca por dia, pra qualquer pacote.');
     return;
   }
 
@@ -393,12 +413,13 @@ if(localStorage.getItem('retomarModoVozAoCarregar') === '1' || (typeof modoVozPe
     <div id="zeca-mensagens"></div>
     <div class="zeca-rodape">
       <button type="button" id="zeca-anexo" class="zeca-mic-btn" onclick="_abrirSeletorImagemZeca()" title="Anexar imagem">📎</button>
+      <button type="button" id="zeca-camera" class="zeca-mic-btn" onclick="_abrirCameraZeca()" title="Tirar foto ou vídeo com a câmera">📷</button>
       <button type="button" id="zeca-mic" class="zeca-mic-btn" onclick="toggleMicZeca()" title="Falar com o Zeca">🎙️</button>
       <input type="text" id="zeca-input" placeholder="Pergunta pro Zeca..." onkeydown="if(event.key==='Enter') enviarMensagemZeca()" onpaste="_zecaColarImagem(event)">
       <button type="button" id="zeca-enviar" onclick="enviarMensagemZeca()">➤</button>
     </div>
   </div>
 
-<script src="js/zeca.js"></script>
+<script src="js/zeca.js?v=20260921"></script>
 </body>
 </html>
