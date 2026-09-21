@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel — GuiaZap</title>
+<meta name="description" content="Resumo rápido da empresa: vendas de hoje, saldo de caixa, estoque baixo e contas a vencer, com atalhos pro resto do Gerenciamento.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<style>
+  body.ger-pagina { background: #f7f5f0; }
+  .ger-topo {
+    background: linear-gradient(90deg, #6a3fb5, #4d2c8a);
+    color: white;
+    padding: 16px 15px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ger-topo a.ger-voltar { color: white; text-decoration: none; font-size: 1.3rem; line-height: 1; opacity: 0.9; }
+  .ger-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .ger-conteudo { max-width: 760px; margin: 0 auto; padding: 16px 15px 60px; }
+  * { box-sizing: border-box; }
+
+  .ger-select {
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #e5e0d5;
+    background: white;
+    font-size: 0.86rem;
+  }
+  .ger-topo-linha { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+
+  .ger-saudacao { font-size: 0.9rem; color: #555; margin: 0 0 14px; }
+
+  .ger-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .ger-card {
+    background: white;
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .ger-card:active { transform: scale(0.98); }
+  .ger-card .ger-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #999; }
+  .ger-card .ger-valor { font-size: 1.35rem; font-weight: 800; margin-top: 4px; color: #1c1c1c; }
+  .ger-card .ger-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
+  .ger-card.alerta .ger-valor { color: #a4402f; }
+  .ger-card.ok .ger-valor { color: #2a7a2a; }
+  .ger-card.full { grid-column: 1 / -1; }
+
+  .ger-secao-titulo { font-size: 0.82rem; font-weight: 700; color: #6a3fb5; text-transform: uppercase; margin: 18px 0 8px; }
+
+  .ger-lista-item {
+    background: white;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .ger-lista-item .ger-item-info { flex: 1; min-width: 0; }
+  .ger-lista-item .ger-item-nome { font-size: 0.88rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ger-lista-item .ger-item-meta { font-size: 0.72rem; color: #a4402f; margin-top: 2px; }
+  .ger-lista-item .ger-item-valor { font-weight: 800; font-size: 0.86rem; white-space: nowrap; }
+
+  .ger-atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .ger-atalho {
+    flex: 1;
+    min-width: 90px;
+    text-align: center;
+    background: white;
+    border-radius: 12px;
+    padding: 12px 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    text-decoration: none;
+    color: #444;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+  .ger-atalho .ger-atalho-emoji { font-size: 1.3rem; display: block; margin-bottom: 4px; }
+
+  .ger-vazio { text-align: center; color: #999; padding: 20px 10px; font-size: 0.85rem; }
+  .ger-zeca-dica { text-align: center; font-size: 0.8rem; color: #777; margin-top: 20px; }
+  .ger-zeca-dica a { color: #6a3fb5; font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body class="ger-pagina">
+
+<div class="ger-topo">
+  <a href="index.html" class="ger-voltar" title="Voltar">←</a>
+  <h1>📊 Painel</h1>
+</div>
+<div class="gz-cross-nav">
+  <a href="empresa.html">🏢 Ver tudo (Empresa)</a>
+  <a href="pdv.html">🖥️ Abrir PDV</a>
+  <a href="zeca.html">💬 Falar com o Zeca</a>
+</div>
+
+<div class="ger-conteudo">
+  <div class="ger-topo-linha">
+    <select id="ger-select-empresa" class="ger-select" style="display:none;"></select>
+  </div>
+
+  <p class="ger-saudacao" id="ger-saudacao">Carregando...</p>
+
+  <div id="ger-conteudo-principal" style="display:none;">
+    <div class="ger-cards">
+      <a href="empresa.html#aba=caixa" class="ger-card ok">
+        <div class="ger-label">Vendas hoje</div>
+        <div class="ger-valor" id="ger-vendas-hoje">R$ 0,00</div>
+        <div class="ger-sub" id="ger-vendas-hoje-qtd">0 venda(s)</div>
+      </a>
+      <a href="empresa.html#aba=caixa" class="ger-card">
+        <div class="ger-label">Saldo de caixa</div>
+        <div class="ger-valor" id="ger-saldo-caixa">R$ 0,00</div>
+        <div class="ger-sub">últimos lançamentos</div>
+      </a>
+      <a href="empresa.html#aba=estoque" class="ger-card" id="ger-card-estoque-baixo">
+        <div class="ger-label">Estoque baixo</div>
+        <div class="ger-valor" id="ger-estoque-baixo-qtd">0</div>
+        <div class="ger-sub">produto(s)</div>
+      </a>
+      <a href="empresa.html#aba=caixa" class="ger-card" id="ger-card-a-pagar">
+        <div class="ger-label">A pagar (7 dias)</div>
+        <div class="ger-valor" id="ger-a-pagar-valor">R$ 0,00</div>
+        <div class="ger-sub" id="ger-a-pagar-qtd">0 conta(s)</div>
+      </a>
+    </div>
+
+    <div id="ger-secao-vencimentos" style="display:none;">
+      <div class="ger-secao-titulo">⚠️ Contas vencidas ou vencendo em 7 dias</div>
+      <div id="ger-lista-vencimentos"></div>
+    </div>
+
+    <div id="ger-secao-validade" style="display:none;">
+      <div class="ger-secao-titulo">⏰ Produtos perto de vencer</div>
+      <div id="ger-lista-validade"></div>
+    </div>
+
+    <div class="ger-secao-titulo">Atalhos</div>
+    <div class="ger-atalhos">
+      <a href="empresa.html#aba=pedidos" class="ger-atalho"><span class="ger-atalho-emoji">🧾</span>Pedidos</a>
+      <a href="empresa.html#aba=estoque" class="ger-atalho"><span class="ger-atalho-emoji">📊</span>Estoque</a>
+      <a href="empresa.html#aba=clientes" class="ger-atalho"><span class="ger-atalho-emoji">👤</span>Clientes</a>
+      <a href="empresa.html#aba=relatorios" class="ger-atalho"><span class="ger-atalho-emoji">📈</span>Relatórios</a>
+    </div>
+  </div>
+
+  <div class="ger-zeca-dica">💬 Peça um resumo mais completo pro <a href="zeca.html">Zeca</a> — "como tá minha empresa hoje?".</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientGer = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let gerUsuario = null;
+let gerEmpresaAtual = null;
+
+function gerEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function gerFmt(v){
+  return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
+}
+
+async function initGerenciar(){
+  const { data: { session } } = await supabaseClientGer.auth.getSession();
+  if(!session){
+    document.getElementById('ger-saudacao').innerHTML = '🔒 Faça login na <a href="index.html">página inicial</a> pra ver o painel.';
+    return;
+  }
+  gerUsuario = session.user;
+
+  // Mesma regra do empresa.html: painel completo é exclusivo de quem tem
+  // o pacote Vendas — reaproveita a checagem, não duplica lógica de preço.
+  const { data: empresasTodas } = await supabaseClientGer.from('profissionais').select('id, name, plano').eq('user_id', gerUsuario.id).eq('status_pagamento', 'ativo');
+  const empresasVendas = (empresasTodas || []).filter(e => e.plano === 'vendas');
+  if(!empresasVendas.length){
+    document.getElementById('ger-saudacao').innerHTML = 'O Painel é exclusivo do pacote <strong>Vendas</strong>. <a href="pacotes.html">Veja os pacotes</a> pra fazer upgrade, ou acesse o <a href="empresa.html">Gerenciamento</a> se já tiver outro pacote.';
+    return;
+  }
+
+  if(empresasVendas.length > 1){
+    const select = document.getElementById('ger-select-empresa');
+    select.innerHTML = empresasVendas.map(e => `<option value="${e.id}">${gerEscapar(e.name)}</option>`).join('');
+    select.style.display = 'block';
+    select.onchange = () => { gerEmpresaAtual = select.value; gerCarregarPainel(); };
+  }
+  gerEmpresaAtual = empresasVendas[0].id;
+
+  const nomeEmpresa = empresasVendas.find(e => e.id === gerEmpresaAtual).name;
+  document.getElementById('ger-saudacao').textContent = `Resumo de ${nomeEmpresa}, hoje.`;
+  document.getElementById('ger-conteudo-principal').style.display = 'block';
+
+  await gerCarregarPainel();
+}
+
+async function gerCarregarPainel(){
+  await Promise.all([
+    gerCarregarVendasHoje(),
+    gerCarregarCaixa(),
+    gerCarregarEstoque()
+  ]);
+}
+
+// Vendas de hoje — soma o que já é receita de verdade (não pendente),
+// lançada hoje. Mesma regra do empRenderCaixaTotais em empresa.html.
+async function gerCarregarVendasHoje(){
+  const hoje = new Date().toISOString().slice(0, 10);
+  const { data } = await supabaseClientGer.from('empresa_caixa')
+    .select('valor')
+    .eq('profissional_id', gerEmpresaAtual)
+    .eq('tipo', 'receita')
+    .neq('status_pagamento', 'pendente')
+    .eq('data', hoje);
+  const lancamentos = data || [];
+  const total = lancamentos.reduce((s, l) => s + Number(l.valor), 0);
+  document.getElementById('ger-vendas-hoje').textContent = gerFmt(total);
+  document.getElementById('ger-vendas-hoje-qtd').textContent = `${lancamentos.length} lançamento(s)`;
+}
+
+// Caixa — pega os últimos lançamentos (mesmo limite do empresa.html) pra
+// calcular saldo e as contas a vencer nos próximos 7 dias.
+async function gerCarregarCaixa(){
+  const { data } = await supabaseClientGer.from('empresa_caixa')
+    .select('descricao, tipo, valor, status_pagamento, eh_retirada_socio, data_vencimento')
+    .eq('profissional_id', gerEmpresaAtual)
+    .order('data', { ascending: false })
+    .limit(200);
+  const lancamentos = data || [];
+
+  const efetivados = lancamentos.filter(l => l.status_pagamento !== 'pendente');
+  const totalReceita = efetivados.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  const totalDespesaOperacional = efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const totalRetiradas = efetivados.filter(l => l.tipo === 'despesa' && l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  document.getElementById('ger-saldo-caixa').textContent = gerFmt(totalReceita - totalDespesaOperacional - totalRetiradas);
+
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const aVencer = lancamentos.filter(l => l.status_pagamento === 'pendente' && l.tipo === 'despesa' && l.data_vencimento && l.data_vencimento <= em7dias);
+  const totalAPagar = aVencer.reduce((s, l) => s + Number(l.valor), 0);
+  document.getElementById('ger-a-pagar-valor').textContent = gerFmt(totalAPagar);
+  document.getElementById('ger-a-pagar-qtd').textContent = `${aVencer.length} conta(s)`;
+  document.getElementById('ger-card-a-pagar').classList.toggle('alerta', aVencer.some(l => l.data_vencimento < hojeStr));
+
+  const secaoVencimentos = document.getElementById('ger-secao-vencimentos');
+  if(aVencer.length){
+    secaoVencimentos.style.display = 'block';
+    const ordenados = [...aVencer].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento));
+    document.getElementById('ger-lista-vencimentos').innerHTML = ordenados.map(l => {
+      const vencido = l.data_vencimento < hojeStr;
+      const dataFmt = new Date(l.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
+      return `<div class="ger-lista-item">
+        <div class="ger-item-info">
+          <div class="ger-item-nome">${gerEscapar(l.descricao)}</div>
+          <div class="ger-item-meta">${vencido ? '⚠️ vencido — ' : 'vence '}${dataFmt}</div>
+        </div>
+        <div class="ger-item-valor">${gerFmt(l.valor)}</div>
+      </div>`;
+    }).join('');
+  } else {
+    secaoVencimentos.style.display = 'none';
+  }
+}
+
+// Estoque — quantos produtos estão no mínimo ou abaixo, e quais vencem
+// nos próximos 3 dias (mesma regra do empRenderEstoque em empresa.html).
+async function gerCarregarEstoque(){
+  const { data } = await supabaseClientGer.from('produtos')
+    .select('nome, quantidade, estoque_minimo, data_validade')
+    .eq('profissional_id', gerEmpresaAtual);
+  const produtos = data || [];
+
+  const baixos = produtos.filter(p => p.estoque_minimo && Number(p.quantidade) <= Number(p.estoque_minimo));
+  document.getElementById('ger-estoque-baixo-qtd').textContent = baixos.length;
+  document.getElementById('ger-card-estoque-baixo').classList.toggle('alerta', baixos.length > 0);
+
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const perto = produtos
+    .filter(p => p.data_validade)
+    .map(p => ({ ...p, dias: Math.ceil((new Date(p.data_validade + 'T00:00:00') - new Date(hojeISO + 'T00:00:00')) / 86400000) }))
+    .filter(p => p.dias <= 3)
+    .sort((a, b) => a.dias - b.dias);
+
+  const secaoValidade = document.getElementById('ger-secao-validade');
+  if(perto.length){
+    secaoValidade.style.display = 'block';
+    document.getElementById('ger-lista-validade').innerHTML = perto.map(p => `
+      <div class="ger-lista-item">
+        <div class="ger-item-info">
+          <div class="ger-item-nome">${gerEscapar(p.nome)}</div>
+          <div class="ger-item-meta">${p.dias < 0 ? `vencido há ${Math.abs(p.dias)}d` : p.dias === 0 ? 'vence hoje' : `vence em ${p.dias}d`}</div>
+        </div>
+        <div class="ger-item-valor">${Number(p.quantidade || 0)} un.</div>
+      </div>
+    `).join('');
+  } else {
+    secaoValidade.style.display = 'none';
+  }
+}
+
+initGerenciar();
+</script>
+<script src="js/modo-escuro.js"></script>
+</body>
+</html>

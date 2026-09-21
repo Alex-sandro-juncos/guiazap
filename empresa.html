@@ -157,6 +157,7 @@
   <h1>🏢 Minha Empresa</h1>
 </div>
 <div class="gz-cross-nav">
+  <a href="gerenciar.html">📊 Painel</a>
   <a href="meular.html">🏠 Meu Lar</a>
   <a href="meuagro.html">🌱 Meu Agro</a>
   <a href="financeiro.html">💰 Financeiro</a>
@@ -183,6 +184,7 @@
     <button type="button" class="emp-aba" data-aba="oferta" onclick="empTrocarAba('oferta')">📢 Oferta</button>
     <button type="button" class="emp-aba" data-aba="documentos" onclick="empTrocarAba('documentos')">📁 Documentos</button>
     <button type="button" class="emp-aba" data-aba="relatorios" onclick="empTrocarAba('relatorios')">📈 Relatórios</button>
+    <button type="button" class="emp-aba" data-aba="matriz" onclick="empTrocarAba('matriz')">🏢 Matriz</button>
   </div>
 
   <!-- CAIXA -->
@@ -482,6 +484,10 @@
       </div>
       <button type="button" class="emp-btn full" id="emp-contab-btn" onclick="empPrepararContabilidade()">Gerar PDF pra contabilidade</button>
       <button type="button" class="emp-btn secundario full" id="emp-contab-excel-btn" onclick="empGerarExcelContabilidade()" style="margin-top:8px;">📊 Gerar Excel (Vendas / Compras / Financeiro)</button>
+      <div class="emp-linha" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+        <input type="email" id="emp-contab-email-contador" placeholder="E-mail do contador">
+      </div>
+      <button type="button" class="emp-btn secundario full" id="emp-contab-email-btn" onclick="empEnviarContabilidadeEmail()">📧 Enviar PDF e Excel por e-mail pro contador</button>
     </div>
   </div>
 
@@ -500,6 +506,41 @@
     </div>
 
     <div id="emp-rel-corpo"><div class="emp-vazio">Carregando...</div></div>
+  </div>
+
+  <!-- MATRIZ / FILIAIS (cada filial = cadastro/CNPJ/assinatura própria) -->
+  <div id="emp-secao-matriz" style="display:none;">
+    <div class="emp-card">
+      <h3>🏢 Filiais com assinatura própria</h3>
+      <div class="emp-vazio" style="padding:0 0 10px; text-align:left;">Diferente do botão "+ Filial" lá em cima (que é só uma etiqueta grátis pra organizar dados dentro desta MESMA assinatura), aqui é pra quando cada unidade virou um cadastro/CNPJ separado, com assinatura própria — mas você (dono) continua vendo tudo junto daqui, como se fosse a própria empresa. Só empresas que você mesmo já cadastrou nesse login podem virar filial.</div>
+      <div class="emp-linha">
+        <select id="emp-matriz-select-vincular"><option value="">Escolher empresa pra vincular como filial...</option></select>
+        <input type="text" id="emp-matriz-regiao-nova" placeholder="Região (opcional, ex: Sul, SP capital...)" style="max-width:200px;">
+      </div>
+      <button type="button" class="emp-btn full" onclick="empVincularFilial()">Vincular como filial desta matriz</button>
+      <div id="emp-matriz-lista-filiais" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="emp-card" id="emp-matriz-card-visao" style="display:none;">
+      <h3>📊 Visão consolidada</h3>
+      <div class="emp-linha">
+        <select id="emp-matriz-modo" onchange="empAoMudarModoMatriz()">
+          <option value="todas">Todas as filiais (+ esta empresa)</option>
+          <option value="regiao">Por região</option>
+          <option value="selecionadas">Selecionar filiais específicas</option>
+        </select>
+      </div>
+      <div class="emp-linha" id="emp-matriz-regiao-filtro-linha" style="display:none;">
+        <select id="emp-matriz-regiao-filtro"></select>
+      </div>
+      <div id="emp-matriz-checkboxes-linha" style="display:none; flex-direction:column; gap:6px; margin:6px 0;"></div>
+      <div class="emp-linha" style="margin:10px 0;">
+        <button type="button" class="emp-btn secundario" id="emp-matriz-rel-btn-hoje" onclick="empCarregarVisaoMatriz('hoje')" style="flex:1;">Hoje</button>
+        <button type="button" class="emp-btn secundario" id="emp-matriz-rel-btn-semana" onclick="empCarregarVisaoMatriz('semana')" style="flex:1;">Semana</button>
+        <button type="button" class="emp-btn" id="emp-matriz-rel-btn-mes" onclick="empCarregarVisaoMatriz('mes')" style="flex:1;">Mês</button>
+      </div>
+      <div id="emp-matriz-rel-corpo"><div class="emp-vazio">Escolhe o filtro e o período.</div></div>
+    </div>
   </div>
 
   <div class="emp-zeca-dica">💬 Peça conselhos e resumos pro <a href="zeca.html">Zeca</a> em cima desses dados — "como tá minha empresa esse mês?".</div>
@@ -546,10 +587,18 @@ async function initEmpresa(){
   }
   empUsuario = session.user;
 
-  const { data: empresas } = await supabaseClientEmp.from('profissionais').select('id, name').eq('user_id', empUsuario.id).eq('status_pagamento', 'ativo');
-  empEmpresas = empresas || [];
-  if(!empEmpresas.length){
+  const { data: empresasTodas } = await supabaseClientEmp.from('profissionais').select('id, name, matriz_id, regiao, plano').eq('user_id', empUsuario.id).eq('status_pagamento', 'ativo');
+  const todasAtivas = empresasTodas || [];
+  if(!todasAtivas.length){
     document.querySelector('.emp-conteudo').innerHTML = '<div class="emp-vazio">Você ainda não tem uma empresa ativa cadastrada.</div>';
+    return;
+  }
+  // O gerenciamento completo (caixa, estoque, PDV, nota fiscal...) é
+  // exclusivo de quem tem o pacote Vendas — empresas em pacotes mais
+  // baratos (Completo/Premium) não entram aqui.
+  empEmpresas = todasAtivas.filter(e => e.plano === 'vendas');
+  if(!empEmpresas.length){
+    document.querySelector('.emp-conteudo').innerHTML = '<div class="emp-vazio">O Gerenciamento de Empresa (caixa, estoque, PDV, nota fiscal...) é exclusivo do pacote <strong>Vendas</strong>. <a href="pacotes.html">Veja os pacotes</a> pra fazer upgrade.</div>';
     return;
   }
   if(empEmpresas.length > 1){
@@ -565,11 +614,24 @@ async function initEmpresa(){
   };
   await empCarregarFiliais();
   await empRecarregarTudo();
+
+  // Permite abrir direto numa aba específica via link (ex: vindo do
+  // gerenciar.html, "empresa.html#aba=estoque") — sem isso, todo link de
+  // fora sempre cai na aba Caixa e a pessoa precisa clicar de novo.
+  const abaPeloHash = (location.hash.match(/aba=([a-z]+)/) || [])[1];
+  if(abaPeloHash && document.getElementById('emp-secao-' + abaPeloHash)){
+    empTrocarAba(abaPeloHash);
+  }
 }
 
 async function empRecarregarTudo(){
   await Promise.all([empCarregarClientes(), empCarregarFornecedores(), empCarregarColaboradores()]);
   empCarregarAbaAtual();
+  try{
+    const emailSalvo = localStorage.getItem('gz-email-contador-' + empEmpresaAtual);
+    const campoEmail = document.getElementById('emp-contab-email-contador');
+    if(emailSalvo && campoEmail && !campoEmail.value) campoEmail.value = emailSalvo;
+  }catch(e){}
 }
 
 async function empCarregarFiliais(){
@@ -590,7 +652,7 @@ async function empNovaFilial(){
 function empTrocarAba(aba){
   empAbaAtual = aba;
   document.querySelectorAll('.emp-aba').forEach(b => b.classList.toggle('ativa', b.dataset.aba === aba));
-  ['caixa','pedidos','clientes','fornecedores','compras','equipe','estoque','oferta','documentos','relatorios'].forEach(a => {
+  ['caixa','pedidos','clientes','fornecedores','compras','equipe','estoque','oferta','documentos','relatorios','matriz'].forEach(a => {
     document.getElementById('emp-secao-' + a).style.display = a === aba ? '' : 'none';
   });
   empCarregarAbaAtual();
@@ -607,6 +669,7 @@ function empCarregarAbaAtual(){
   if(empAbaAtual === 'oferta') empCarregarOferta();
   if(empAbaAtual === 'documentos') empCarregarDocumentos();
   if(empAbaAtual === 'relatorios') empCarregarRelatorio('mes');
+  if(empAbaAtual === 'matriz') empCarregarMatriz();
 }
 
 // ============ CAIXA ============
@@ -1933,14 +1996,20 @@ async function empMovimentarEstoque(produtoId, tipo){
 // ============ NOTA / CUPOM FISCAL (emissão real — conta própria do empresário no provedor) ============
 
 async function empCarregarConfigNotaFiscal(){
-  const { data } = await supabaseClientEmp.from('profissionais').select('regime_tributario, nf_ativa, nf_modelo, nf_ambiente, nf_token').eq('id', empEmpresaAtual).maybeSingle();
+  // O token vive numa tabela separada (profissionais_fiscal_config), não
+  // em "profissionais" — que tem leitura pública (sustenta o diretório do
+  // GuiaZap) e nunca pode carregar uma credencial de API de verdade.
+  const [{ data }, { data: tokenData }] = await Promise.all([
+    supabaseClientEmp.from('profissionais').select('regime_tributario, nf_ativa, nf_modelo, nf_ambiente').eq('id', empEmpresaAtual).maybeSingle(),
+    supabaseClientEmp.from('profissionais_fiscal_config').select('nf_token').eq('profissional_id', empEmpresaAtual).maybeSingle()
+  ]);
   if(!data) return;
   document.getElementById('emp-nf-modelo').value = data.nf_modelo || 'nfce';
   document.getElementById('emp-nf-regime').value = data.regime_tributario || 'simples_nacional';
   document.getElementById('emp-nf-ambiente').value = data.nf_ambiente || 'homologacao';
   document.getElementById('emp-nf-ativa').checked = !!data.nf_ativa;
   // O token nunca volta pro campo por segurança — só mostra que já tem um salvo.
-  document.getElementById('emp-nf-token').placeholder = data.nf_token ? 'Já tem um token salvo — preenche aqui só se quiser trocar' : 'Token de acesso da conta no provedor (Focus NFe)';
+  document.getElementById('emp-nf-token').placeholder = (tokenData && tokenData.nf_token) ? 'Já tem um token salvo — preenche aqui só se quiser trocar' : 'Token de acesso da conta no provedor (Focus NFe)';
 }
 
 async function empSalvarConfigNotaFiscal(){
@@ -1954,10 +2023,15 @@ async function empSalvarConfigNotaFiscal(){
   if(ativa && ambiente === 'homologacao' && !confirm('Ativar a emissão automática agora vai gerar uma nota de TESTE (homologação, sem valor fiscal) a cada venda do PDV. Confirma?')) return;
 
   const payload = { regime_tributario: regime, nf_modelo: modelo, nf_ambiente: ambiente, nf_ativa: ativa };
-  if(tokenNovo) payload.nf_token = tokenNovo;
 
   const { error } = await supabaseClientEmp.from('profissionais').update(payload).eq('id', empEmpresaAtual);
   if(error){ alert('Erro ao salvar: ' + error.message); return; }
+
+  if(tokenNovo){
+    const { error: erroToken } = await supabaseClientEmp.from('profissionais_fiscal_config').upsert({ profissional_id: empEmpresaAtual, nf_token: tokenNovo });
+    if(erroToken){ alert('Salvei o resto, mas o token deu erro: ' + erroToken.message); return; }
+  }
+
   document.getElementById('emp-nf-token').value = '';
   await empCarregarConfigNotaFiscal();
   alert('Configuração da nota fiscal salva.');
@@ -2104,6 +2178,45 @@ async function empGerarExcelContabilidade(){
   }
 }
 
+async function empEnviarContabilidadeEmail(){
+  const campoEmail = document.getElementById('emp-contab-email-contador');
+  const emailContador = campoEmail.value.trim();
+  if(!emailContador || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailContador)){
+    alert('Digita um e-mail válido do contador.');
+    return;
+  }
+
+  const mesTexto = document.getElementById('emp-contab-mes').value;
+  const mes = mesTexto ? parseInt(mesTexto, 10) : null;
+  const anoTexto = document.getElementById('emp-contab-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+
+  const btn = document.getElementById('emp-contab-email-btn');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  try{
+    const { data: { session } } = await supabaseClientEmp.auth.getSession();
+    const resp = await fetch('/.netlify/functions/enviar-contabilidade-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId: empEmpresaAtual, ano, mes, emailContador })
+    });
+    const dados = await resp.json().catch(() => ({}));
+    if(!resp.ok || dados.error){
+      alert(dados.error || 'Não consegui enviar o e-mail pro contador agora.');
+      return;
+    }
+    try{ localStorage.setItem('gz-email-contador-' + empEmpresaAtual, emailContador); }catch(e){}
+    alert('Enviado! O PDF e o Excel foram pro e-mail do contador.');
+  } catch(e){
+    console.error(e);
+    alert('Deu erro enviando o pacote pro contador. Tenta de novo?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📧 Enviar PDF e Excel por e-mail pro contador';
+  }
+}
+
 // ============ RELATÓRIOS (hoje / semana / mês / período) ============
 
 function empPeriodoParaDatas(periodo){
@@ -2140,7 +2253,7 @@ async function empCarregarRelatorio(periodo){
     .eq('profissional_id', empEmpresaAtual).gte('data', datas.inicio).lte('data', datas.fim);
   if(empFilialAtual) queryCaixa = queryCaixa.eq('filial_id', empFilialAtual);
 
-  let queryPedidos = supabaseClientEmp.from('empresa_pedidos').select('id, valor_total, status, caixa_pdv_id')
+  let queryPedidos = supabaseClientEmp.from('empresa_pedidos').select('id, valor_total, status, caixa_pdv_id, created_at, nf_status, nf_numero, nf_erro, nf_url_danfe')
     .eq('profissional_id', empEmpresaAtual).eq('status', 'concluido').gte('data', datas.inicio).lte('data', datas.fim);
   if(empFilialAtual) queryPedidos = queryPedidos.eq('filial_id', empFilialAtual);
 
@@ -2172,6 +2285,11 @@ async function empCarregarRelatorio(periodo){
   (itens || []).forEach(i => { porItem[i.nome_item] = (porItem[i.nome_item] || 0) + Number(i.quantidade || 0); });
   const rankingItens = Object.entries(porItem).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const eLucro = saldo >= 0;
+
+  // Notas fiscais emitidas/tentadas nesse período — só entra quem tem
+  // algum status (emissão fiscal não é obrigatória, então a maioria das
+  // vendas de quem não ativou isso nem aparece aqui).
+  const notasFiscais = (pedidos || []).filter(p => p.nf_status && p.nf_status !== 'nao_emitida').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   // "Relatório de economia" — isola o que é DESPERDÍCIO/PERDA (produto
   // descartado por vencimento, estrago etc) dentro de todas as despesas
@@ -2247,6 +2365,213 @@ async function empCarregarRelatorio(periodo){
         const furo = Number(f.diferenca) < 0;
         return `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(nomeCaixaPorId[f.caixa_pdv_id] || 'Caixa')}</div><div class="emp-item-meta">${new Date(f.periodo_fim).toLocaleString('pt-BR')} · esperado ${empFmt(f.valor_esperado)} · contado ${empFmt(f.valor_contado)}</div></div><div class="emp-item-valor ${furo ? 'despesa' : 'receita'}">${furo ? '⚠️ furo ' : '✅ sobra '}${empFmt(Math.abs(f.diferenca))}</div></div>`;
       }).join('') : '<div class="emp-vazio">Nenhum fechamento de caixa registrado nesse período — feche o caixa no PDV no fim do turno pra conferir.</div>'}
+    </div>
+    <div class="emp-card">
+      <h3>🧾 Notas fiscais do período</h3>
+      ${notasFiscais.length ? notasFiscais.map(p => {
+        const hora = new Date(p.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        let tag = '';
+        if(p.nf_status === 'emitida') tag = '<span class="emp-tag">🧾 emitida' + (p.nf_numero ? ' nº ' + empEscapar(p.nf_numero) : '') + '</span>';
+        else if(p.nf_status === 'emitindo') tag = '<span class="emp-tag">⏳ processando</span>';
+        else if(p.nf_status === 'erro') tag = `<span class="emp-tag alerta" title="${empEscapar(p.nf_erro || '').replace(/"/g, '&quot;')}">⚠️ erro</span>`;
+        return `<div class="emp-item">
+          <div class="emp-item-info"><div class="emp-item-nome">${hora}</div><div class="emp-item-meta">${tag}</div></div>
+          <div class="emp-item-valor">${empFmt(p.valor_total)}</div>
+          ${p.nf_url_danfe ? `<a class="emp-btn secundario emp-btn-icone" href="${empEscapar(p.nf_url_danfe)}" target="_blank" title="Ver DANFE/nota">🔗</a>` : ''}
+          ${(p.nf_status === 'erro' || p.nf_status === 'emitindo') ? `<button type="button" class="emp-btn secundario emp-btn-icone" onclick="empReemitirNotaDono('${p.id}', '${p.nf_status}')" title="${p.nf_status === 'erro' ? 'Tentar emitir de novo' : 'Consultar status'}">🔁</button>` : ''}
+        </div>`;
+      }).join('') : '<div class="emp-vazio">Nenhuma nota fiscal emitida ou tentada nesse período.</div>'}
+    </div>
+  `;
+}
+
+async function empReemitirNotaDono(pedidoId, nfStatusAtual){
+  const { data: { session } } = await supabaseClientEmp.auth.getSession();
+  const acaoFocus = nfStatusAtual === 'emitindo' ? 'consultar' : 'emitir';
+  try{
+    const resp = await fetch('/.netlify/functions/emitir-nota-fiscal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: acaoFocus, profissionalId: empEmpresaAtual, pedidoId })
+    });
+    const resultado = await resp.json();
+    if(!resp.ok){ alert('Erro: ' + (resultado.error || 'não deu pra tentar de novo')); return; }
+    if(resultado.ok && resultado.status === 'autorizado') alert('Nota emitida com sucesso!');
+    else if(resultado.ok && resultado.status === 'processando_autorizacao') alert('Ainda processando no provedor — tenta de novo em alguns segundos.');
+    else if(!resultado.ok) alert('Erro na nota: ' + (resultado.erro || resultado.motivo || 'falha desconhecida'));
+  } catch(e){
+    alert('Erro: ' + e.message);
+  }
+  await empCarregarRelatorio(document.querySelector('#emp-secao-relatorios .emp-btn:not(.secundario)')?.id.replace('emp-rel-btn-', '') || 'mes');
+}
+
+// ============ MATRIZ / FILIAIS (cada filial = cadastro/CNPJ/assinatura própria) ============
+// Diferente de empresa_filiais (etiqueta grátis dentro de UMA assinatura),
+// isso liga vários registros DIFERENTES de "profissionais" (cada um com
+// seu status_pagamento/plano próprio) numa árvore matriz→filiais — sempre
+// dentro do MESMO login/user_id, então a RLS por user_id já existente
+// continua garantindo que só o dono de verdade mexe nisso.
+
+let empMatrizFiliais = [];
+
+async function empCarregarMatriz(){
+  const { data } = await supabaseClientEmp.from('profissionais').select('id, name, regiao, status_pagamento, plano, documento').eq('matriz_id', empEmpresaAtual).order('name');
+  empMatrizFiliais = data || [];
+  empRenderFiliaisVinculadas();
+  empPreencherSelectVincularFilial();
+  empPreencherFiltroRegiaoMatriz();
+  document.getElementById('emp-matriz-card-visao').style.display = empMatrizFiliais.length ? '' : 'none';
+}
+
+function empRenderFiliaisVinculadas(){
+  const container = document.getElementById('emp-matriz-lista-filiais');
+  if(!empMatrizFiliais.length){ container.innerHTML = '<div class="emp-vazio">Nenhuma filial vinculada ainda — essa empresa ainda não é uma matriz.</div>'; return; }
+  container.innerHTML = empMatrizFiliais.map(f => `<div class="emp-item">
+    <div class="emp-item-info">
+      <div class="emp-item-nome">${empEscapar(f.name)}</div>
+      <div class="emp-item-meta">${f.regiao ? `<span class="emp-tag">${empEscapar(f.regiao)}</span> ` : ''}<span class="emp-tag${f.status_pagamento === 'ativo' ? '' : ' alerta'}">${f.status_pagamento === 'ativo' ? 'assinatura ativa' : 'assinatura ' + empEscapar(f.status_pagamento || 'inativa')}</span></div>
+    </div>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empEntrarComoFilial('${f.id}')" title="Entrar nessa empresa">↪️</button>
+    <button type="button" class="emp-btn secundario emp-btn-icone" onclick="empDesvincularFilial('${f.id}', '${empEscapar(f.name).replace(/'/g, "\\'")}')" title="Desvincular da matriz">✂️</button>
+  </div>`).join('');
+}
+
+function empPreencherSelectVincularFilial(){
+  const jaVinculadas = new Set(empMatrizFiliais.map(f => f.id));
+  const candidatas = empEmpresas.filter(e => e.id !== empEmpresaAtual && !e.matriz_id && !jaVinculadas.has(e.id));
+  const select = document.getElementById('emp-matriz-select-vincular');
+  select.innerHTML = '<option value="">Escolher empresa pra vincular como filial...</option>' + candidatas.map(e => `<option value="${e.id}">${empEscapar(e.name)}</option>`).join('');
+}
+
+function empPreencherFiltroRegiaoMatriz(){
+  const regioes = [...new Set(empMatrizFiliais.map(f => f.regiao).filter(Boolean))];
+  const select = document.getElementById('emp-matriz-regiao-filtro');
+  select.innerHTML = regioes.length ? regioes.map(r => `<option value="${empEscapar(r)}">${empEscapar(r)}</option>`).join('') : '<option value="">Nenhuma filial com região definida</option>';
+
+  const checkContainer = document.getElementById('emp-matriz-checkboxes-linha');
+  checkContainer.innerHTML = [{ id: empEmpresaAtual, name: '(esta empresa)' }, ...empMatrizFiliais].map(f =>
+    `<label style="display:flex; align-items:center; gap:8px; font-size:0.9rem;"><input type="checkbox" class="emp-matriz-checkbox" value="${f.id}" checked style="width:auto;"> ${empEscapar(f.name)}</label>`
+  ).join('');
+}
+
+function empAoMudarModoMatriz(){
+  const modo = document.getElementById('emp-matriz-modo').value;
+  document.getElementById('emp-matriz-regiao-filtro-linha').style.display = modo === 'regiao' ? 'flex' : 'none';
+  document.getElementById('emp-matriz-checkboxes-linha').style.display = modo === 'selecionadas' ? 'flex' : 'none';
+}
+
+async function empVincularFilial(){
+  const filialId = document.getElementById('emp-matriz-select-vincular').value;
+  if(!filialId){ alert('Escolhe uma empresa pra vincular.'); return; }
+  const regiao = document.getElementById('emp-matriz-regiao-nova').value.trim() || null;
+  if(!confirm('Vincular essa empresa como filial desta matriz? Ela continua com assinatura própria — isso só liga os relatórios pra você ver junto.')) return;
+
+  const { error } = await supabaseClientEmp.from('profissionais').update({ matriz_id: empEmpresaAtual, regiao }).eq('id', filialId);
+  if(error){ alert('Erro: ' + error.message); return; }
+  document.getElementById('emp-matriz-regiao-nova').value = '';
+  await empCarregarMatriz();
+}
+
+async function empDesvincularFilial(filialId, nome){
+  if(!confirm(`Desvincular "${nome}" desta matriz? Ela continua existindo normalmente, só para de aparecer na visão consolidada.`)) return;
+  const { error } = await supabaseClientEmp.from('profissionais').update({ matriz_id: null }).eq('id', filialId);
+  if(error){ alert('Erro: ' + error.message); return; }
+  await empCarregarMatriz();
+}
+
+function empEntrarComoFilial(filialId){
+  // Reconfere na hora — se a filial caiu do pacote Vendas ou a assinatura
+  // dela venceu DEPOIS de vinculada, não deixa entrar mesmo assim.
+  const filial = empMatrizFiliais.find(f => f.id === filialId);
+  if(!filial || filial.plano !== 'vendas' || filial.status_pagamento !== 'ativo'){
+    alert('Essa filial não está mais no pacote Vendas com assinatura ativa — não dá pra gerenciar ela por aqui até regularizar.');
+    return;
+  }
+  empEmpresaAtual = filialId;
+  const select = document.getElementById('emp-select-empresa');
+  if(select) select.value = filialId;
+  empTrocarAba('caixa');
+  empCarregarFiliais();
+  empRecarregarTudo();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function empCarregarVisaoMatriz(periodo){
+  ['hoje', 'semana', 'mes'].forEach(p => {
+    document.getElementById(`emp-matriz-rel-btn-${p}`).className = p === periodo ? 'emp-btn' : 'emp-btn secundario';
+  });
+
+  const modo = document.getElementById('emp-matriz-modo').value;
+  let idsAlvo = [];
+  if(modo === 'todas'){
+    idsAlvo = [empEmpresaAtual, ...empMatrizFiliais.map(f => f.id)];
+  } else if(modo === 'regiao'){
+    const regiaoEscolhida = document.getElementById('emp-matriz-regiao-filtro').value;
+    idsAlvo = empMatrizFiliais.filter(f => f.regiao === regiaoEscolhida).map(f => f.id);
+  } else {
+    idsAlvo = [...document.querySelectorAll('.emp-matriz-checkbox:checked')].map(c => c.value);
+  }
+
+  const corpo = document.getElementById('emp-matriz-rel-corpo');
+  if(!idsAlvo.length){ corpo.innerHTML = '<div class="emp-vazio">Nenhuma empresa nesse filtro.</div>'; return; }
+  corpo.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+
+  const datas = empPeriodoParaDatas(periodo);
+  const listaIds = idsAlvo.join(',');
+  const nomesPorId = {};
+  [{ id: empEmpresaAtual, name: '(esta empresa)' }, ...empMatrizFiliais].forEach(f => { nomesPorId[f.id] = f.name; });
+
+  const [{ data: lancamentos }, { data: pedidos }] = await Promise.all([
+    supabaseClientEmp.from('empresa_caixa').select('profissional_id, tipo, categoria, valor, eh_retirada_socio, status_pagamento').in('profissional_id', idsAlvo).gte('data', datas.inicio).lte('data', datas.fim),
+    supabaseClientEmp.from('empresa_pedidos').select('id, profissional_id, valor_total').eq('status', 'concluido').in('profissional_id', idsAlvo).gte('data', datas.inicio).lte('data', datas.fim)
+  ]);
+
+  const efetivados = (lancamentos || []).filter(l => l.status_pagamento !== 'pendente');
+  const receitaTotal = efetivados.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  const despesaTotal = efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).reduce((s, l) => s + Number(l.valor), 0);
+  const saldoTotal = receitaTotal - despesaTotal;
+  const numVendas = (pedidos || []).length;
+  const ticketMedio = numVendas ? (pedidos.reduce((s, p) => s + Number(p.valor_total), 0) / numVendas) : 0;
+
+  const porCategoria = {};
+  efetivados.filter(l => l.tipo === 'despesa' && !l.eh_retirada_socio).forEach(l => {
+    porCategoria[l.categoria] = (porCategoria[l.categoria] || 0) + Number(l.valor);
+  });
+  const categoriasOrdenadas = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  // Quebra isolada por empresa — pra ver cada filial separada dentro do total.
+  const porEmpresa = {};
+  idsAlvo.forEach(id => { porEmpresa[id] = { receita: 0, despesa: 0, vendas: 0 }; });
+  efetivados.forEach(l => {
+    if(!porEmpresa[l.profissional_id]) return;
+    if(l.tipo === 'receita') porEmpresa[l.profissional_id].receita += Number(l.valor);
+    else if(!l.eh_retirada_socio) porEmpresa[l.profissional_id].despesa += Number(l.valor);
+  });
+  (pedidos || []).forEach(p => { if(porEmpresa[p.profissional_id]) porEmpresa[p.profissional_id].vendas++; });
+
+  const eLucro = saldoTotal >= 0;
+  corpo.innerHTML = `
+    <div class="emp-totais" style="margin-bottom:16px;">
+      <div class="emp-card-total receita"><div class="emp-label">Receitas</div><div class="emp-valor">${empFmt(receitaTotal)}</div></div>
+      <div class="emp-card-total despesa"><div class="emp-label">Despesas</div><div class="emp-valor">${empFmt(despesaTotal)}</div></div>
+      <div class="emp-card-total ${eLucro ? 'receita' : 'despesa'}"><div class="emp-label">${eLucro ? '✅ Lucro' : '⚠️ Prejuízo'}</div><div class="emp-valor">${empFmt(Math.abs(saldoTotal))}</div></div>
+    </div>
+    <div class="emp-totais" style="margin-bottom:16px;">
+      <div class="emp-card-total saldo"><div class="emp-label">Vendas concluídas</div><div class="emp-valor">${numVendas}</div></div>
+      <div class="emp-card-total saldo"><div class="emp-label">Ticket médio</div><div class="emp-valor">${empFmt(ticketMedio)}</div></div>
+      <div class="emp-card-total saldo"><div class="emp-label">Empresas no filtro</div><div class="emp-valor">${idsAlvo.length}</div></div>
+    </div>
+    <div class="emp-card">
+      <h3>🏢 Por empresa (isolado)</h3>
+      ${idsAlvo.map(id => {
+        const d = porEmpresa[id];
+        const s = d.receita - d.despesa;
+        return `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(nomesPorId[id] || id)}</div><div class="emp-item-meta">${d.vendas} venda${d.vendas !== 1 ? 's' : ''} · receita ${empFmt(d.receita)} · despesa ${empFmt(d.despesa)}</div></div><div class="emp-item-valor ${s >= 0 ? 'receita' : 'despesa'}">${empFmt(s)}</div></div>`;
+      }).join('')}
+    </div>
+    <div class="emp-card">
+      <h3>📊 Despesas por categoria (consolidado)</h3>
+      ${categoriasOrdenadas.length ? categoriasOrdenadas.map(([cat, v]) => `<div class="emp-item"><div class="emp-item-info"><div class="emp-item-nome">${empEscapar(cat)}</div></div><div class="emp-item-valor despesa">${empFmt(v)}</div></div>`).join('') : '<div class="emp-vazio">Nenhuma despesa nesse período.</div>'}
     </div>
   `;
 }

@@ -14,8 +14,31 @@ exports.handler = async function (event) {
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const headers = { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` };
+
+    // ⚠️ SEGURANÇA: antes, "remetenteUserId" vinha cru do corpo da
+    // requisição, sem checar se era mesmo quem estava logado — dava pra
+    // qualquer pessoa logada forjar uma notificação push "de" outra pessoa
+    // (nome errado) com um texto qualquer, pra qualquer conversa que
+    // soubesse o id, sem nunca ter mandado mensagem nenhuma de verdade.
+    // Agora confere o token de quem chamou e exige que bata com
+    // remetenteUserId antes de mandar qualquer coisa.
+    const tokenChamador = (event.headers.authorization || event.headers.Authorization || '').replace('Bearer ', '');
+    if (!tokenChamador) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'não autenticado' }) };
+    }
+    const usuarioResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${tokenChamador}` }
+    });
+    if (!usuarioResp.ok) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
+    }
+    const usuarioChamador = await usuarioResp.json();
+    if (usuarioChamador.id !== remetenteUserId) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'remetenteUserId não bate com quem está logado' }) };
+    }
 
     // Descobre quem são os dois participantes dessa conversa (sem embed —
     // relação conversas↔profissionais dá erro 400 quando combinada assim)
@@ -37,6 +60,19 @@ exports.handler = async function (event) {
       );
       const empresas = await empresaResp.json();
       empresa = empresas[0] || null;
+    }
+
+    // Além de "remetenteUserId é mesmo quem está logado", confere também
+    // que essa pessoa É UM DOS DOIS participantes reais dessa conversa —
+    // senão qualquer pessoa logada (com sua própria conta de verdade)
+    // conseguia escolher qualquer conversaId de outras duas pessoas e
+    // empurrar uma notificação falsa pra um dos dois, sem nunca ter
+    // participado daquela conversa.
+    const souParticipante = usuarioChamador.id === conversa.visitante_user_id
+      || usuarioChamador.id === conversa.usuario2_id
+      || (empresa && usuarioChamador.id === empresa.user_id);
+    if (!souParticipante) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'você não participa dessa conversa' }) };
     }
 
     let destinatarioUserId;
@@ -92,7 +128,7 @@ exports.handler = async function (event) {
     // Manda a notificação push (reaproveita a função que já existe)
     await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
       body: JSON.stringify({
         titulo: `💬 Nova mensagem de ${nomeRemetente}`,
         mensagem: texto.slice(0, 100),

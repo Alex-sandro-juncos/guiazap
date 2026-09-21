@@ -497,16 +497,19 @@ async function notificarMotoboysDisponiveis(pedido, todasAsCidades){
     }).then(({ error }) => { if(error) console.error('erro ao notificar motoboy', error); });
   }
 
-  fetch('/.netlify/functions/enviar-push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      titulo: '🛵 Nova entrega disponível!',
-      mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
-      url: '/corridas.html',
-      userIds: destinatarios.map(m => m.user_id)
-    })
-  }).catch(e => console.error('erro ao notificar motoboys', e));
+  {
+    const { data: { session: sessaoNotifCorrida } } = await supabaseClientPedidos.auth.getSession();
+    fetch('/.netlify/functions/enviar-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifCorrida ? sessaoNotifCorrida.access_token : ''}` },
+      body: JSON.stringify({
+        titulo: '🛵 Nova entrega disponível!',
+        mensagem: `Corrida de R$ ${Number(pedido.taxa_entrega).toFixed(2).replace('.', ',')} esperando`,
+        url: '/corridas.html',
+        userIds: destinatarios.map(m => m.user_id)
+      })
+    }).catch(e => console.error('erro ao notificar motoboys', e));
+  }
 }
 
 async function avisarTodosMotoboys(pedidoId){

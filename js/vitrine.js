@@ -795,6 +795,8 @@ function fecharFormProduto(){
   document.getElementById('p-nome').value = '';
   document.getElementById('p-marca').value = '';
   document.getElementById('p-codigo-fiscal').value = '';
+  document.getElementById('p-cfop').value = '';
+  document.getElementById('p-csosn-cst').value = '';
   document.getElementById('p-categoria').value = '';
   document.getElementById('p-descricao').value = '';
   document.getElementById('p-unidade-medida').value = 'unidade';
@@ -912,6 +914,8 @@ function editarProduto(id){
   document.getElementById('p-nome').value = p.nome;
   document.getElementById('p-marca').value = p.marca || '';
   document.getElementById('p-codigo-fiscal').value = p.codigo_fiscal || '';
+  document.getElementById('p-cfop').value = p.cfop || '';
+  document.getElementById('p-csosn-cst').value = p.csosn_cst || '';
   document.getElementById('p-categoria').value = p.categoria || '';
   document.getElementById('p-descricao').value = p.descricao || '';
   document.getElementById('p-unidade-medida').value = p.unidade_medida || 'unidade';
@@ -1157,6 +1161,8 @@ async function salvarProduto(e){
     nome: document.getElementById('p-nome').value.trim(),
     marca: document.getElementById('p-marca').value.trim() || null,
     codigo_fiscal: document.getElementById('p-codigo-fiscal').value.trim() || null,
+    cfop: document.getElementById('p-cfop').value.trim() || null,
+    csosn_cst: document.getElementById('p-csosn-cst').value.trim() || null,
     descricao: document.getElementById('p-descricao').value.trim() || null,
     categoria: document.getElementById('p-categoria').value.trim() || null,
     unidade_medida: document.getElementById('p-unidade-medida').value,
@@ -1201,9 +1207,10 @@ async function salvarProduto(e){
 
   // Se for produto NOVO (não edição) numa empresa Premium, avisa quem segue por e-mail e push
   if(!id){
+    const { data: { session: sessaoNotif } } = await supabaseClientV.auth.getSession();
     fetch('/.netlify/functions/notificar-seguidores', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotif ? sessaoNotif.access_token : ''}` },
       body: JSON.stringify({
         profissionalId: payload.profissional_id,
         tipo: 'produto',
@@ -1214,7 +1221,7 @@ async function salvarProduto(e){
 
     fetch('/.netlify/functions/enviar-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotif ? sessaoNotif.access_token : ''}` },
       body: JSON.stringify({
         titulo: '🛍️ Novidade de quem você segue!',
         mensagem: payload.nome,

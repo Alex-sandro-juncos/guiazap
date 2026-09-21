@@ -2765,9 +2765,10 @@ async function salvarStory(e){
   // e-mail e por notificação push (não trava a tela esperando)
   const quiseNotificar = document.getElementById('story-notificar-seguidores').checked;
   if(quiseNotificar){
+    const { data: { session: sessaoNotif } } = await supabaseClient.auth.getSession();
     fetch('/.netlify/functions/notificar-seguidores', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotif ? sessaoNotif.access_token : ''}` },
       body: JSON.stringify({
         profissionalId: payload.profissional_id,
         tipo: 'story',
@@ -2778,7 +2779,7 @@ async function salvarStory(e){
 
     fetch('/.netlify/functions/enviar-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotif ? sessaoNotif.access_token : ''}` },
       body: JSON.stringify({
         titulo: '📸 Novidade de quem você segue!',
         mensagem: payload.texto || payload.produto_nome || 'Confira a novidade nova',

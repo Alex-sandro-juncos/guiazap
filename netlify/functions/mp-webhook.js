@@ -42,9 +42,26 @@ function assinaturaValida(headers, dataId){
   });
   if(!ts || !v1) return false;
 
+  // ts muito velho (ou "do futuro") não é o Mercado Pago demorando — é
+  // alguém reenviando (replay) um aviso antigo que capturou em algum lugar.
+  const tsNumero = Number(ts);
+  if(!tsNumero || Math.abs(Date.now() - tsNumero) > 5 * 60 * 1000){
+    console.error('Webhook do MP recusado: timestamp fora da janela de 5 minutos (possível replay).');
+    return false;
+  }
+
   const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
   const hashCalculado = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
-  return hashCalculado === v1;
+
+  // Comparação normal (===) vaza quanto tempo levou pra achar a primeira
+  // letra diferente — dá pra, em teoria, adivinhar o hash certo byte a
+  // byte medindo o tempo de resposta. timingSafeEqual sempre compara tudo,
+  // não importa onde a diferença está. Os dois precisam ter o MESMO
+  // tamanho antes de comparar, senão a função já dá erro sozinha.
+  const bufA = Buffer.from(hashCalculado, 'utf8');
+  const bufB = Buffer.from(v1, 'utf8');
+  if(bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 async function enviarEmail(destinatario, assunto, html){
@@ -255,6 +272,32 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: 'créditos extras do Zeca processados' };
       }
 
+      // Zeca PRO (R$70/mês, valor fixo — é uma ASSINATURA recorrente, mas
+      // é um EXTRA que empilha em cima do pacote normal, não troca o
+      // "plano" de ninguém. Por isso não entra na lógica de planoPago lá
+      // embaixo — só liga a flag zeca_pro_ativo em cima do(s) cadastro(s)
+      // já ATIVO(s) desse e-mail (precisa já ter um pacote pago ou o
+      // Contato ativo pra ter em que empilhar).
+      const VALOR_ZECA_PRO = 70;
+      if (proximoDe(valorPago, VALOR_ZECA_PRO)) {
+        const marcados = await atualizarSupabase(
+          `user_email=eq.${encodeURIComponent(payerEmail)}&status_pagamento=eq.ativo`,
+          { zeca_pro_ativo: true }
+        );
+        if (marcados && marcados.length > 0) {
+          await enviarEmail(
+            payerEmail,
+            'Zeca PRO ativado — GuiaZap',
+            `<p>Olá!</p>
+             <p>Seu pagamento do <b>Zeca PRO</b> foi confirmado — o limite diário de uso do Zeca (conversa livre, código, edição de áudio/vídeo) e o limite semanal de geração de imagem já estão bem maiores no seu cadastro.</p>
+             <p>Acesse <a href="https://guiazap.shop">guiazap.shop</a> e aproveita.</p>`
+          );
+        } else {
+          console.error('pagamento do Zeca PRO aprovado, mas não achei cadastro ATIVO com esse e-mail pra empilhar:', payerEmail);
+        }
+        return { statusCode: 200, body: `Zeca PRO processado, ${marcados ? marcados.length : 0} cadastro(s) atualizado(s)` };
+      }
+
       // Pagamento do Selo Verificado (R$15, valor fixo — não é assinatura de plano)
       // CORRIGIDO: a checagem anterior (>= 15 && < 10) era matematicamente
       // impossível e nunca disparava — pagamentos do Selo caíam por engano na
@@ -283,7 +326,7 @@ exports.handler = async function (event) {
       const emailFiltro = `user_email=eq.${encodeURIComponent(payerEmail)}`;
       const ativadoNovo = await atualizarSupabase(
         `${emailFiltro}&status_pagamento=eq.pendente`,
-        { status_pagamento: 'ativo', plano: planoPago }
+        { status_pagamento: 'ativo', plano: planoPago, zeca_plano_pago: true }
       );
 
       // Caso 2: se o valor pago foi de um plano mais alto, faz upgrade de qualquer
@@ -292,17 +335,17 @@ exports.handler = async function (event) {
       if (planoPago === 'completo') {
         upgradeFeito = await atualizarSupabase(
           `${emailFiltro}&status_pagamento=eq.ativo&plano=eq.basico`,
-          { plano: 'completo' }
+          { plano: 'completo', zeca_plano_pago: true }
         );
       } else if (planoPago === 'premium') {
         upgradeFeito = await atualizarSupabase(
           `${emailFiltro}&status_pagamento=eq.ativo&plano=in.(basico,completo)`,
-          { plano: 'premium' }
+          { plano: 'premium', zeca_plano_pago: true }
         );
       } else if (planoPago === 'vendas') {
         upgradeFeito = await atualizarSupabase(
           `${emailFiltro}&status_pagamento=eq.ativo&plano=in.(basico,completo,premium)`,
-          { plano: 'vendas' }
+          { plano: 'vendas', zeca_plano_pago: true }
         );
       }
 
@@ -399,12 +442,37 @@ exports.handler = async function (event) {
       const idPlanoEntregadorSub = process.env.MP_PLANO_ID_ENTREGADOR;
       const ehPlanoEntregador = idPlanoEntregadorSub && subscription.preapproval_plan_id === idPlanoEntregadorSub;
 
+      // Zeca PRO (R$70/mês) é uma assinatura À PARTE do pacote normal —
+      // tratada aqui ANTES da lógica genérica de baixo, porque cancelar o
+      // Zeca PRO nunca pode desativar o cadastro inteiro (a lógica genérica
+      // do "else" abaixo desativaria TODOS os cadastros ativos desse
+      // e-mail, o que apagaria o pacote normal da empresa por engano).
+      const idPlanoZecaPro = process.env.MP_PLANO_ID_ZECAPRO;
+      const ehZecaPro = idPlanoZecaPro && subscription.preapproval_plan_id === idPlanoZecaPro;
+      if (ehZecaPro) {
+        if (status === 'authorized') {
+          const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.ativo`, { zeca_pro_ativo: true });
+          return { statusCode: 200, body: `Zeca PRO (re)ativado: ${JSON.stringify(updated)}` };
+        }
+        const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.ativo`, { zeca_pro_ativo: false });
+        await enviarEmail(
+          payerEmail,
+          'Zeca PRO desativado — GuiaZap',
+          `<p>Olá!</p>
+           <p>Sua assinatura do <b>Zeca PRO</b> foi ${status === 'cancelled' ? 'cancelada' : 'pausada'} — o limite diário/semanal do Zeca voltou ao normal do seu pacote. O resto do seu cadastro continua ativo, normalmente.</p>
+           <p>Se foi engano, acesse <a href="https://guiazap.shop/pacotes.html">guiazap.shop/pacotes.html</a> pra assinar de novo.</p>`
+        );
+        return { statusCode: 200, body: `Zeca PRO desativado por status "${status}": ${JSON.stringify(updated)}` };
+      }
+
       if (status === 'authorized') {
+        // Assinatura autorizada de verdade no Mercado Pago (mesmo com 1º mês
+        // grátis da campanha) — conta como plano pago pro limite do Zeca.
         const camposAtivar = ehCampanha100
-          ? { status_pagamento: 'ativo', plano: 'premium' }
+          ? { status_pagamento: 'ativo', plano: 'premium', zeca_plano_pago: true }
           : ehPlanoEntregador
-            ? { status_pagamento: 'ativo', plano: 'entregador' }
-            : { status_pagamento: 'ativo' };
+            ? { status_pagamento: 'ativo', plano: 'entregador', zeca_plano_pago: true }
+            : { status_pagamento: 'ativo', zeca_plano_pago: true };
         const updated = await atualizarSupabase(`${emailFiltro}&status_pagamento=eq.pendente`, camposAtivar);
 
         // Se for a campanha, registra o resgate (só se ainda não passou de 100)

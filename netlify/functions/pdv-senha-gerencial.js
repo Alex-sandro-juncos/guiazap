@@ -14,20 +14,21 @@
 //   é necessariamente o dono) — o que importa é acertar a senha.
 
 const crypto = require('crypto');
+const { exigirPepper } = require('./pepper-seguranca-helper');
 
 // Código de acesso é POR CAIXA/TERMINAL (não mais um só pra empresa
 // inteira) — assim uma empresa tipo supermercado com vários caixas
 // físicos consegue saber depois qual caixa vendeu o quê, e cada um pode
 // fechar/conferir separado.
 function hashCodigoAcesso(codigo, profissionalId, caixaPdvId){
-  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  const pepper = exigirPepper();
   return crypto.createHash('sha256').update(pepper + ':pdvcodigo:' + codigo + ':' + profissionalId + ':' + caixaPdvId).digest('hex');
 }
 
 function hashSenha(senha, profissionalId){
   // Pepper só existe nas variáveis de ambiente do servidor — reaproveita
   // o mesmo segredo do PIN de login rápido, é o mesmo tipo de proteção.
-  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  const pepper = exigirPepper();
   return crypto.createHash('sha256').update(pepper + ':pdv:' + senha + ':' + profissionalId).digest('hex');
 }
 

@@ -83,7 +83,7 @@ module.exports.handler = async function () {
       if (userIdsFinanceiro.length > 0) {
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '📊 O Zeca lembrou do teu Financeiro',
             mensagem: 'Faz uns dias que não tem lançamento novo. Bora colocar em dia? É só falar com o Zeca.',
@@ -126,7 +126,7 @@ module.exports.handler = async function () {
     if (userIdsZecaSumido.length > 0) {
       await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
         body: JSON.stringify({
           titulo: '👋 O Zeca sentiu sua falta',
           mensagem: 'Faz um tempinho que a gente não conversa. Se rolou alguma novidade, me conta!',
@@ -159,7 +159,7 @@ module.exports.handler = async function () {
       if (userIdsEstoque.length > 0) {
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '📦 Estoque baixo',
             mensagem: 'Tem produto batendo no mínimo do estoque. Dá uma olhada na aba Estoque da Empresa.',
@@ -192,7 +192,7 @@ module.exports.handler = async function () {
       if (userIdsCompra.length > 0) {
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '🛒 Pedido de compra parado',
             mensagem: 'Tem pedido pro fornecedor há mais de 5 dias sem ser marcado como recebido. Vale a pena cobrar.',
@@ -248,7 +248,7 @@ module.exports.handler = async function () {
         // eslint-disable-next-line no-await-in-loop
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '📈 Resumo da tua semana',
             mensagem: mensagemResumo,
@@ -295,7 +295,7 @@ module.exports.handler = async function () {
         // eslint-disable-next-line no-await-in-loop
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '⚠️ Conta vencida no caixa',
             mensagem: `Tem ${partes.join(' e ')} vencida(s) no caixa da empresa. Dá uma olhada e marca como pago o que já resolveu.`,
@@ -340,7 +340,7 @@ module.exports.handler = async function () {
         // eslint-disable-next-line no-await-in-loop
         await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
           body: JSON.stringify({
             titulo: '⏰ Produto perto de vencer',
             mensagem: `${listaTexto} — vencendo em até 3 dias. Dá uma olhada no Estoque antes de virar perda.`,

@@ -2796,11 +2796,13 @@ async function enviarQualquerMensagem(payload){
     : payload.tipo === 'sticker' ? '🏷️ Figurinha'
     : 'Nova mensagem';
 
-  fetch('/.netlify/functions/notificar-nova-mensagem', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: resumoParaNotificacao })
-  }).catch(e => console.error('erro ao notificar nova mensagem', e));
+  supabaseClientChat.auth.getSession().then(({ data: { session: sessaoNotifMsg } }) => {
+    fetch('/.netlify/functions/notificar-nova-mensagem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifMsg ? sessaoNotifMsg.access_token : ''}` },
+      body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: resumoParaNotificacao })
+    }).catch(e => console.error('erro ao notificar nova mensagem', e));
+  });
 
   // Se a mensagem que acabei de mandar era o endereço que o robô de
   // atendimento automático estava esperando, chama a função que calcula o
@@ -2932,10 +2934,12 @@ async function iniciarLocalizacaoTempoRealChat(minutos){
 
     _msgIdLocalizacaoTempoRealChat = data.id;
     await supabaseClientChat.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', conversaAtual);
-    fetch('/.netlify/functions/notificar-nova-mensagem', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: '📍 Localização em tempo real' })
-    }).catch(e => console.error(e));
+    supabaseClientChat.auth.getSession().then(({ data: { session: sessaoNotifLoc } }) => {
+      fetch('/.netlify/functions/notificar-nova-mensagem', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifLoc ? sessaoNotifLoc.access_token : ''}` },
+        body: JSON.stringify({ conversaId: conversaAtual, remetenteUserId: currentUserChat.id, texto: '📍 Localização em tempo real' })
+      }).catch(e => console.error(e));
+    });
 
     _watchIdLocalizacaoTempoRealChat = navigator.geolocation.watchPosition(async (posNova) => {
       if(!_msgIdLocalizacaoTempoRealChat) return;
@@ -3718,9 +3722,10 @@ async function iniciarChamadaInterna(comVideo){
 
   // Avisa por notificação push também, caso a pessoa não esteja com o chat
   // aberto agora — não toca como telefone de verdade, mas ajuda a avisar
+  const { data: { session: sessaoNotifChamada } } = await supabaseClientChat.auth.getSession();
   fetch('/.netlify/functions/enviar-push', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifChamada ? sessaoNotifChamada.access_token : ''}` },
     body: JSON.stringify({
       titulo: `${comVideo ? '📹' : '📞'} Chamada de ${meuNome}`,
       mensagem: 'Toque pra atender no GuiaZap',

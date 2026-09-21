@@ -16,13 +16,14 @@
 // não autoriza sozinho desfazer uma venda ou fechar a conferência.
 
 const crypto = require('crypto');
+const { exigirPepper } = require('./pepper-seguranca-helper');
 
 function hashCodigoAcesso(codigo, profissionalId, caixaPdvId){
-  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  const pepper = exigirPepper();
   return crypto.createHash('sha256').update(pepper + ':pdvcodigo:' + codigo + ':' + profissionalId + ':' + caixaPdvId).digest('hex');
 }
 function hashSenhaGerencial(senha, profissionalId){
-  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  const pepper = exigirPepper();
   return crypto.createHash('sha256').update(pepper + ':pdv:' + senha + ':' + profissionalId).digest('hex');
 }
 
@@ -46,11 +47,15 @@ exports.handler = async function (event) {
       'Content-Type': 'application/json'
     };
 
-    const empResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=id,name&status_pagamento=eq.ativo`, { headers });
+    const empResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=id,name,plano&status_pagamento=eq.ativo`, { headers });
     const empData = empResp.ok ? await empResp.json() : [];
     const empresa = empData[0];
     if (!empresa) {
       return { statusCode: 403, body: JSON.stringify({ error: 'empresa não encontrada ou inativa' }) };
+    }
+    // PDV é exclusivo do pacote Vendas.
+    if (empresa.plano !== 'vendas') {
+      return { statusCode: 403, body: JSON.stringify({ error: 'O PDV é exclusivo do pacote Vendas — peça pro dono da empresa fazer upgrade em pacotes.html.' }) };
     }
 
     // Acha QUAL caixa/terminal esse código pertence — testa o código
@@ -95,14 +100,19 @@ exports.handler = async function (event) {
     // ---------- VENDAS DE HOJE (só desse caixa/terminal) ----------
     if (action === 'vendasHoje') {
       const hoje = new Date().toISOString().slice(0, 10);
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?profissional_id=eq.${profissionalId}&caixa_pdv_id=eq.${caixaPdvId}&data=eq.${hoje}&select=id,valor_total,forma_pagamento,status,created_at,origem&order=created_at.desc&limit=50`, { headers });
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?profissional_id=eq.${profissionalId}&caixa_pdv_id=eq.${caixaPdvId}&data=eq.${hoje}&select=id,valor_total,forma_pagamento,status,created_at,origem,nf_status,nf_erro,nf_url_danfe&order=created_at.desc&limit=50`, { headers });
       const data = resp.ok ? await resp.json() : [];
       return { statusCode: 200, body: JSON.stringify({ pedidos: data }) };
     }
 
     if (action === 'dadosParaImprimir') {
+      // ⚠️ SEGURANÇA: sem o "profissional_id=eq." aqui, qualquer caixa de
+      // QUALQUER empresa (basta ter um código de acesso válido pra alguma
+      // empresa, nem precisa ser a mesma) conseguia imprimir o cupom de
+      // uma venda de OUTRA empresa só sabendo/adivinhando o pedidoId —
+      // vazando total, forma de pagamento e itens de outra empresa.
       const [pedidoResp, itensResp] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${body.pedidoId}&select=valor_total,forma_pagamento,created_at`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${body.pedidoId}&profissional_id=eq.${profissionalId}&select=valor_total,forma_pagamento,created_at`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/empresa_pedido_itens?pedido_id=eq.${body.pedidoId}&select=nome_item,quantidade,valor_unitario,valor_total`, { headers })
       ]);
       const pedidoData = pedidoResp.ok ? await pedidoResp.json() : [];
@@ -166,13 +176,21 @@ exports.handler = async function (event) {
 
       for (const item of itens) {
         if (!item.produtoId) continue;
+        // ⚠️ SEGURANÇA: sempre filtra por "profissional_id=eq." também —
+        // sem isso, um operador de PDV de uma empresa pequena conseguia
+        // mandar o produtoId de OUTRA empresa (ex: um concorrente maior) e
+        // essa function baixava o estoque de verdade da empresa errada,
+        // registrando o movimento no nome dela. Se o produto não pertence
+        // a essa empresa, a busca não acha nada e o item é ignorado (sem
+        // mexer em estoque de ninguém).
         // eslint-disable-next-line no-await-in-loop
-        const prodResp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}&select=quantidade`, { headers });
+        const prodResp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}&profissional_id=eq.${profissionalId}&select=quantidade`, { headers });
         // eslint-disable-next-line no-await-in-loop
         const prodData = prodResp.ok ? await prodResp.json() : [];
-        const novaQtd = Math.max(0, Number((prodData[0] && prodData[0].quantidade) || 0) - Number(item.quantidade));
+        if (!prodData[0]) continue;
+        const novaQtd = Math.max(0, Number(prodData[0].quantidade || 0) - Number(item.quantidade));
         // eslint-disable-next-line no-await-in-loop
-        await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}`, { method: 'PATCH', headers, body: JSON.stringify({ quantidade: novaQtd }) });
+        await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}&profissional_id=eq.${profissionalId}`, { method: 'PATCH', headers, body: JSON.stringify({ quantidade: novaQtd }) });
         // eslint-disable-next-line no-await-in-loop
         await fetch(`${SUPABASE_URL}/rest/v1/empresa_estoque_movimentos`, {
           method: 'POST', headers,
@@ -204,6 +222,38 @@ exports.handler = async function (event) {
       return { statusCode: 200, body: JSON.stringify({ ok: true, pedidoId, valorTotal, notaFiscal }) };
     }
 
+    // ---------- REEMITIR NOTA (tentar de novo uma nota que deu erro, ou consultar uma que ficou "emitindo") ----------
+    if (action === 'reemitirNota') {
+      const { pedidoId } = body;
+      if (!pedidoId) return { statusCode: 400, body: JSON.stringify({ error: 'pedidoId é obrigatório' }) };
+
+      const pedidoResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}&profissional_id=eq.${profissionalId}&caixa_pdv_id=eq.${caixaPdvId}&select=id,nf_status`, { headers });
+      const pedidoData = pedidoResp.ok ? await pedidoResp.json() : [];
+      const pedido = pedidoData[0];
+      if (!pedido) return { statusCode: 404, body: JSON.stringify({ error: 'venda não encontrada nesse caixa' }) };
+
+      const baseUrlInterno = process.env.URL || process.env.DEPLOY_URL;
+      if (!baseUrlInterno) return { statusCode: 500, body: JSON.stringify({ error: 'não deu pra falar com a emissão de nota agora' }) };
+
+      // Se ainda está "emitindo" (processando assíncrono no provedor), só
+      // consulta o status de novo. Se deu erro (ou nunca foi emitida),
+      // tenta emitir de novo do zero.
+      const acaoFocus = pedido.nf_status === 'emitindo' ? 'consultar' : 'emitir';
+      let notaFiscal;
+      try {
+        const respNota = await fetch(`${baseUrlInterno}/.netlify/functions/emitir-nota-fiscal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
+          body: JSON.stringify({ action: acaoFocus, profissionalId, pedidoId })
+        });
+        notaFiscal = await respNota.json();
+      } catch (erroNota) {
+        return { statusCode: 502, body: JSON.stringify({ error: 'não deu pra falar com o provedor de emissão' }) };
+      }
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, notaFiscal }) };
+    }
+
     // ---------- CANCELAR / DEVOLVER (exige senha gerencial) ----------
     if (action === 'cancelarVenda') {
       const { pedidoId, senha } = body;
@@ -232,7 +282,13 @@ exports.handler = async function (event) {
         method: 'PATCH', headers, body: JSON.stringify({ pdv_senha_tentativas_erradas: 0, pdv_senha_bloqueada_ate: null })
       });
 
-      const pedidoResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}&select=id,valor_total,cliente_id,filial_id,caixa_pdv_id`, { headers });
+      // ⚠️ SEGURANÇA: sempre filtra também por "profissional_id=eq." — sem
+      // isso, quem soubesse (ou adivinhasse) o pedidoId de uma venda de
+      // OUTRA empresa conseguia cancelar/estornar essa venda usando só a
+      // senha gerencial da PRÓPRIA empresa (a senha é validada acima, mas
+      // contra o profissionalId de quem chamou — nunca contra o dono real
+      // do pedido). Isso mexia em caixa e estoque de outra empresa.
+      const pedidoResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}&profissional_id=eq.${profissionalId}&select=id,valor_total,cliente_id,filial_id,caixa_pdv_id`, { headers });
       const pedidoData = pedidoResp.ok ? await pedidoResp.json() : [];
       const pedido = pedidoData[0];
       if (!pedido) return { statusCode: 404, body: JSON.stringify({ error: 'venda não encontrada' }) };
@@ -251,13 +307,17 @@ exports.handler = async function (event) {
       const itens = itensResp.ok ? await itensResp.json() : [];
       for (const item of itens) {
         if (!item.produto_id) continue;
+        // Mesma trava de dono aplicada em finalizarVenda — o pedido já foi
+        // confirmado acima como sendo dessa empresa, mas reforça aqui
+        // também (defesa em profundidade, mesmo padrão do resto do PDV).
         // eslint-disable-next-line no-await-in-loop
-        const prodResp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produto_id}&select=quantidade`, { headers });
+        const prodResp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produto_id}&profissional_id=eq.${profissionalId}&select=quantidade`, { headers });
         // eslint-disable-next-line no-await-in-loop
         const prodData = prodResp.ok ? await prodResp.json() : [];
-        const novaQtd = Number((prodData[0] && prodData[0].quantidade) || 0) + Number(item.quantidade);
+        if (!prodData[0]) continue;
+        const novaQtd = Number(prodData[0].quantidade || 0) + Number(item.quantidade);
         // eslint-disable-next-line no-await-in-loop
-        await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produto_id}`, { method: 'PATCH', headers, body: JSON.stringify({ quantidade: novaQtd }) });
+        await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produto_id}&profissional_id=eq.${profissionalId}`, { method: 'PATCH', headers, body: JSON.stringify({ quantidade: novaQtd }) });
         // eslint-disable-next-line no-await-in-loop
         await fetch(`${SUPABASE_URL}/rest/v1/empresa_estoque_movimentos`, {
           method: 'POST', headers,

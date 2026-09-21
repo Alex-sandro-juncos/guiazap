@@ -519,11 +519,13 @@ async function enviarChamadoParaProfissional(profissionalId, texto, nomeEntregad
   });
   if(erroCorrida) console.error('erro ao criar registro de corrida:', erroCorrida);
 
-  fetch('/.netlify/functions/notificar-nova-mensagem', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversaId, remetenteUserId: currentUserFrete.id, texto: '📦 Novo chamado de frete' })
-  }).catch(e => console.error(e));
+  supabaseClientFrete.auth.getSession().then(({ data: { session: sessaoNotifFrete } }) => {
+    fetch('/.netlify/functions/notificar-nova-mensagem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifFrete ? sessaoNotifFrete.access_token : ''}` },
+      body: JSON.stringify({ conversaId, remetenteUserId: currentUserFrete.id, texto: '📦 Novo chamado de frete' })
+    }).catch(e => console.error(e));
+  });
 
   return conversaId;
 }

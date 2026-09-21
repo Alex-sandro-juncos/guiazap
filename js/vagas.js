@@ -190,16 +190,19 @@ async function salvarVaga(e){
   await loadVagas();
   setTimeout(fecharFormVaga, 1200);
 
-  fetch('/.netlify/functions/enviar-push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      titulo: '💼 Nova vaga no GuiaZap!',
-      mensagem: payload.titulo,
-      url: '/vagas.html',
-      userIds: 'todos'
-    })
-  }).catch(err => console.error('erro ao enviar push', err));
+  {
+    const { data: { session: sessaoNotifVaga } } = await supabaseClientVagas.auth.getSession();
+    fetch('/.netlify/functions/enviar-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessaoNotifVaga ? sessaoNotifVaga.access_token : ''}` },
+      body: JSON.stringify({
+        titulo: '💼 Nova vaga no GuiaZap!',
+        mensagem: payload.titulo,
+        url: '/vagas.html',
+        userIds: 'todos'
+      })
+    }).catch(err => console.error('erro ao enviar push', err));
+  }
 
   return false;
 }

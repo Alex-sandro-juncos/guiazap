@@ -60,10 +60,20 @@ exports.handler = async function (event) {
       if (!donoData[0]) return { statusCode: 403, body: JSON.stringify({ error: 'essa empresa não é sua' }) };
     }
 
-    const empResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=id,name,documento,regime_tributario,nf_ativa,nf_modelo,nf_provedor,nf_token,nf_ambiente`, { headers });
+    // O token fica numa tabela separada (profissionais_fiscal_config), não
+    // em "profissionais" — essa tabela tem leitura PÚBLICA (é o que
+    // sustenta o diretório do GuiaZap), então uma credencial de API de
+    // verdade nunca pode morar lá. Aqui usamos service_role, que ignora
+    // RLS e enxerga as duas tabelas igual.
+    const [empResp, tokenResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${profissionalId}&select=id,name,documento,regime_tributario,nf_ativa,nf_modelo,nf_provedor,nf_ambiente`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/profissionais_fiscal_config?profissional_id=eq.${profissionalId}&select=nf_token`, { headers })
+    ]);
     const empData = empResp.ok ? await empResp.json() : [];
     const empresa = empData[0];
     if (!empresa) return { statusCode: 404, body: JSON.stringify({ error: 'empresa não encontrada' }) };
+    const tokenData = tokenResp.ok ? await tokenResp.json() : [];
+    empresa.nf_token = tokenData[0] && tokenData[0].nf_token;
 
     if (!empresa.nf_ativa || !empresa.nf_token) {
       // Não é erro — só não tem emissão fiscal configurada. Quem chamou

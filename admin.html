@@ -85,6 +85,23 @@ function escapeHtmlAdmin(str){
   d.textContent = str || '';
   return d.innerHTML;
 }
+// Pra colocar um texto (nome da empresa/produto) dentro de um argumento de
+// onclick="...('texto')" com segurança. Não basta escapar só a aspa simples
+// (como o código antigo fazia): um nome com aspa DUPLA fechava o atributo
+// onclick="..." mais cedo do que devia, e o resto virava HTML de verdade
+// dentro da tag do botão (ex: um <img onerror=...> novo colado ali) — dava
+// pra qualquer empresa que se cadastrasse (nome é livre, sem validação de
+// caracteres) rodar código no navegador de quem tá logado como admin. Aqui
+// primeiro escapa barra invertida, depois aspa simples (pro JS não quebrar a
+// string), e só then escapa a aspa dupla como entidade HTML (pro atributo
+// onclick="..." também não quebrar).
+function escapeAttrAdmin(str){
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, ' ');
+}
 
 let dadosAdmin = null;
 let abaAtual = 'feedback';
@@ -559,29 +576,29 @@ function renderAdmin(){
     if(abaAtual === 'empresas'){
       const ativo = item.status_pagamento === 'ativo';
       return `<div class="admin-item">
-        <div class="tipo">${item.verificado ? '✅ ' : ''}${item.name} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${item.status_pagamento}, plano ${item.plano})</span></div>
-        <div class="meta">${item.cat} · ${item.cidade}/${item.estado} · ${item.user_email || ''}</div>
+        <div class="tipo">${item.verificado ? '✅ ' : ''}${escapeHtmlAdmin(item.name)} <span style="font-weight:400; color:#888; font-size:0.75rem;">(${escapeHtmlAdmin(item.status_pagamento)}, plano ${escapeHtmlAdmin(item.plano)})</span></div>
+        <div class="meta">${escapeHtmlAdmin(item.cat)} · ${escapeHtmlAdmin(item.cidade)}/${escapeHtmlAdmin(item.estado)} · ${escapeHtmlAdmin(item.user_email || '')}</div>
         <div class="admin-acoes">
           ${ativo
-            ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Suspender</button>`
-            : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Ativar agora</button>
-               <button class="admin-btn-link" onclick="enviarLinkAtivacao('${item.id}', '${item.name.replace(/'/g,"\\'")}')">Enviar link p/ empresa ativar</button>`}
+            ? `<button class="admin-btn-suspender" onclick="executarAcaoAdmin('suspender', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Suspender</button>`
+            : `<button class="admin-btn-ativar" onclick="executarAcaoAdmin('ativar', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Ativar agora</button>
+               <button class="admin-btn-link" onclick="enviarLinkAtivacao('${item.id}', '${escapeAttrAdmin(item.name)}')">Enviar link p/ empresa ativar</button>`}
           ${item.verificado
-            ? `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('desverificar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover selo ✅</button>`
-            : `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('verificar', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Marcar como verificado</button>`}
+            ? `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('desverificar', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Remover selo ✅</button>`
+            : `<button class="admin-btn-verificar" onclick="executarAcaoAdmin('verificar', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Marcar como verificado</button>`}
           ${item.plano === 'completo'
-            ? `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Básico</button>`
-            : `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Completo</button>`}
+            ? `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Mudar p/ Básico</button>`
+            : `<button class="admin-btn-plano" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Mudar p/ Completo</button>`}
           ${item.plano === 'premium'
-            ? `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Premium</button>`
-            : `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Mudar p/ Premium</button>`}
+            ? `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_completo', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Remover Premium</button>`
+            : `<button class="admin-btn-plano" style="background:#6b46c1;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Mudar p/ Premium</button>`}
           ${item.plano === 'vendas'
-            ? `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Vendas</button>`
-            : `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_vendas', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">💼 Mudar p/ Vendas</button>`}
+            ? `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_premium', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Remover Vendas</button>`
+            : `<button class="admin-btn-plano" style="background:#0f766e;" onclick="executarAcaoAdmin('plano_vendas', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">💼 Mudar p/ Vendas</button>`}
           ${item.plano === 'entregador'
-            ? `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Remover Corridas e Fretes</button>`
-            : `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_entregador', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">🛵 Mudar p/ Corridas e Fretes</button>`}
-          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${item.name.replace(/'/g,"\\'")}')">Excluir</button>
+            ? `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_basico', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Remover Corridas e Fretes</button>`
+            : `<button class="admin-btn-plano" style="background:#1c1c1c;" onclick="executarAcaoAdmin('plano_entregador', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">🛵 Mudar p/ Corridas e Fretes</button>`}
+          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'profissionais', '${item.id}', '${escapeAttrAdmin(item.name)}')">Excluir</button>
         </div>
       </div>`;
     }
@@ -590,7 +607,7 @@ function renderAdmin(){
         <div class="tipo">${escapeHtmlAdmin(item.nome)}</div>
         <div class="meta">${escapeHtmlAdmin(item.marca || '')} ${item.categoria ? '· ' + escapeHtmlAdmin(item.categoria) : ''} ${item.preco ? '· R$ ' + escapeHtmlAdmin(item.preco) : ''}</div>
         <div class="admin-acoes">
-          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'produtos', '${item.id}', '${item.nome.replace(/'/g,"\\'")}')">Excluir</button>
+          <button class="admin-btn-excluir" onclick="executarAcaoAdmin('excluir', 'produtos', '${item.id}', '${escapeAttrAdmin(item.nome)}')">Excluir</button>
         </div>
       </div>`;
     }

@@ -1,97 +1,111 @@
-// Confere se o PIN falado pelo usuário bate com o PIN dele guardado (nunca
-// compara texto puro — refaz o hash e compara). Usado como trava de
-// segurança antes de qualquer pagamento gerado pelo modo voz da Vitrine.
-//
-// ⚠️ SEGURANÇA: bloqueia por 15 minutos depois de 5 tentativas erradas,
-// igual o PIN de login — sem isso, um PIN de 4-6 números pode ser
-// adivinhado por tentativa e erro sem limite algum.
-
 const crypto = require('crypto');
+const { exigirPepper } = require('./pepper-seguranca-helper');
 
 function hashPin(pin, userId){
   // O "pepper" é um segredo que só existe nas variáveis de ambiente do
   // servidor, nunca no banco de dados — mesmo que a tabela de PINs vaze
   // inteira, quem pegar o vazamento não consegue testar PIN por PIN
-  // offline sem também ter essa chave (que não sai do Netlify).
-  const pepper = process.env.PIN_PEPPER_SECRET || '';
+  // offline sem também ter essa chave (que não sai do Netlify). Se a
+  // variável não estiver configurada, exigirPepper() recusa em vez de
+  // deixar rodar com pepper vazio (ver pepper-seguranca-helper.js).
+  const pepper = exigirPepper();
   return crypto.createHash('sha256').update(pepper + ':' + pin + ':' + userId).digest('hex');
 }
 
 exports.handler = async function (event) {
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Content-Type': 'application/json'
+  };
   try {
+    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors, body: '' };
     if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: JSON.stringify({ error: 'method not allowed' }) };
+      return { statusCode: 405, headers: cors, body: JSON.stringify({ error: 'method not allowed' }) };
     }
 
-    const { pin } = JSON.parse(event.body || '{}');
-    if (!pin) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'pin é obrigatório' }) };
+    const body = JSON.parse(event.body || '{}');
+    const pin = body.pin;
+    if (!pin || !/^\d{4,6}$/.test(pin)) {
+      return { statusCode: 400, headers: cors, body: JSON.stringify({ error: 'PIN precisa ter de 4 a 6 números' }) };
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    const tokenUsuario = (event.headers.authorization || event.headers.Authorization || '').replace('Bearer ', '');
-    if (!tokenUsuario) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'não autenticado' }) };
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'servidor sem SUPABASE_URL/ANON_KEY' }) };
     }
+
+    const rawAuth = event.headers.authorization || event.headers.Authorization || body.access_token || '';
+    const tokenUsuario = String(rawAuth).replace(/^Bearer\s+/i, '').trim();
+    if (!tokenUsuario) {
+      return { statusCode: 401, headers: cors, body: JSON.stringify({ error: 'não autenticado' }) };
+    }
+
     const usuarioResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${tokenUsuario}` }
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + tokenUsuario }
     });
     if (!usuarioResp.ok) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
+      const detalhe = await usuarioResp.text();
+      console.error('auth/user falhou', usuarioResp.status, detalhe);
+      return { statusCode: 401, headers: cors, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
     }
     const usuario = await usuarioResp.json();
+    if (!usuario || !usuario.id) {
+      return { statusCode: 401, headers: cors, body: JSON.stringify({ error: 'sessão inválida ou expirada' }) };
+    }
 
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'servidor sem SERVICE_ROLE' }) };
+    }
+
+    const hash = hashPin(pin, usuario.id);
     const headers = {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
       'Content-Type': 'application/json'
     };
 
-    const perfilResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}&select=pin_voz_hash,pin_voz_tentativas_erradas,pin_voz_bloqueado_ate`, { headers });
-    const perfilData = await perfilResp.json();
-
-    if (!perfilData[0] || !perfilData[0].pin_voz_hash) {
-      return { statusCode: 200, body: JSON.stringify({ valido: false, motivo: 'sem_pin_cadastrado' }) };
+    // Confere PRIMEIRO se já existe uma linha pra esse usuário, em vez de
+    // torcer pra um INSERT com "merge-duplicates" dar certo sozinho — isso
+    // só funciona direito se a coluna user_id tiver uma restrição de
+    // "único" configurada no banco, o que não dá pra garantir daqui. Assim
+    // fica à prova de erro, não importa como a tabela foi configurada.
+    const existeResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}&select=user_id`, { headers });
+    if (!existeResp.ok) {
+      const txt = await existeResp.text();
+      console.error('erro ao conferir perfil existente', existeResp.status, txt);
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'não deu pra checar o perfil no banco' }) };
     }
+    const existentes = await existeResp.json();
 
-    const perfil = perfilData[0];
-
-    // Confere se está bloqueado por muitas tentativas erradas
-    if (perfil.pin_voz_bloqueado_ate && new Date(perfil.pin_voz_bloqueado_ate) > new Date()) {
-      const minutosRestantes = Math.ceil((new Date(perfil.pin_voz_bloqueado_ate) - new Date()) / 60000);
-      return { statusCode: 429, body: JSON.stringify({ valido: false, motivo: 'bloqueado', mensagem: `Muitas tentativas erradas. Tenta de novo em ${minutosRestantes} minuto(s).` }) };
-    }
-
-    const hashDigitado = hashPin(pin, usuario.id);
-    const valido = hashDigitado === perfil.pin_voz_hash;
-
-    if (!valido) {
-      const novasTentativas = (perfil.pin_voz_tentativas_erradas || 0) + 1;
-      const bloquear = novasTentativas >= 5;
-      await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
+    let opResp;
+    if (existentes.length > 0) {
+      // Já existe — atualiza só o PIN, sem mexer no resto do perfil
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({
-          pin_voz_tentativas_erradas: novasTentativas,
-          pin_voz_bloqueado_ate: bloquear ? new Date(Date.now() + 15 * 60000).toISOString() : null
-        })
+        body: JSON.stringify({ pin_voz_hash: hash })
       });
-      return { statusCode: 200, body: JSON.stringify({ valido: false, motivo: bloquear ? 'bloqueado' : 'pin_errado', mensagem: bloquear ? 'PIN errado muitas vezes. Bloqueado por 15 minutos.' : null }) };
+    } else {
+      // Não existe ainda — cria a linha
+      opResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: usuario.id, pin_voz_hash: hash })
+      });
     }
 
-    // PIN certo — zera as tentativas
-    await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${usuario.id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ pin_voz_tentativas_erradas: 0, pin_voz_bloqueado_ate: null })
-    });
+    if (!opResp.ok) {
+      const txt = await opResp.text();
+      console.error('salvar pin falhou', opResp.status, txt);
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'não deu pra salvar o PIN no banco: ' + txt }) };
+    }
 
-    return { statusCode: 200, body: JSON.stringify({ valido: true }) };
+    return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true }) };
   } catch (err) {
     console.error(err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'erro ao conferir PIN' }) };
+    return { statusCode: 500, headers: cors, body: JSON.stringify({ error: 'erro ao definir PIN' }) };
   }
 };

@@ -37,6 +37,133 @@ function assinaturaValida(headers, dataId){
   return hashCalculado === v1;
 }
 
+// Junta um pedido real do GuiaPapo (tabela "pedidos") com o módulo
+// Empresa: cadastra/reaproveita o cliente, registra o pedido, lança a
+// receita no caixa e baixa o estoque de cada produto vendido. Roda só
+// se a empresa tiver as tabelas do módulo Empresa (sql-empresa-zeca.sql)
+// — se não tiver, os inserts simplesmente falham/retornam vazio e a
+// função sai quieta, sem quebrar nada do fluxo de pedido em si.
+// "preco" nos itens do carrinho vem como TEXTO com vírgula decimal (ex:
+// "23,00", igual é salvo em produtos.preco) — Number("23,00") vira NaN, tem
+// que tratar a vírgula antes, mesmo parsing já usado em precoTextoParaNumeroV
+// (js/vitrine.js), reaproveitado aqui porque esse arquivo roda no servidor.
+function _precoTextoParaNumero(precoTexto) {
+  if (!precoTexto) return 0;
+  let limpo = String(precoTexto).replace(/[^0-9,.]/g, '');
+  if (limpo.includes(',')) limpo = limpo.replace(/\./g, '').replace(',', '.');
+  return parseFloat(limpo) || 0;
+}
+
+async function _sincronizarPedidoComEmpresa({ pedido, pedidoId, SUPABASE_URL, headers }) {
+  // Idempotência: se o Mercado Pago reenviar o aviso, o índice único em
+  // empresa_pedidos.pedido_guiapapo_id impede duplicar — mas confere
+  // antes também, pra nem tentar de novo à toa.
+  const jaSincResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?pedido_guiapapo_id=eq.${pedidoId}&select=id&limit=1`, { headers });
+  const jaSinc = jaSincResp.ok ? await jaSincResp.json() : [];
+  if (jaSinc.length) return;
+
+  // 1. Acha ou cria o cliente no CRM da empresa, ligado à conta real de
+  // quem comprou (cliente_user_id) — repete pedido, reaproveita o mesmo
+  // cadastro em vez de duplicar.
+  let clienteId = null;
+  if (pedido.cliente_user_id) {
+    const clienteExistenteResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/empresa_clientes?profissional_id=eq.${pedido.profissional_id}&cliente_user_id=eq.${pedido.cliente_user_id}&select=id&limit=1`,
+      { headers }
+    );
+    const clienteExistente = clienteExistenteResp.ok ? await clienteExistenteResp.json() : [];
+    if (clienteExistente[0]) {
+      clienteId = clienteExistente[0].id;
+    } else {
+      const perfilResp = await fetch(`${SUPABASE_URL}/rest/v1/perfis_usuario?user_id=eq.${pedido.cliente_user_id}&select=nome_exibicao`, { headers });
+      const perfilData = perfilResp.ok ? await perfilResp.json() : [];
+      const nomeCliente = (perfilData[0] && perfilData[0].nome_exibicao) || 'Cliente do GuiaPapo';
+      const criarClienteResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_clientes`, {
+        method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify({ profissional_id: pedido.profissional_id, cliente_user_id: pedido.cliente_user_id, nome: nomeCliente, endereco: pedido.endereco_entrega || null })
+      });
+      const clienteCriado = criarClienteResp.ok ? await criarClienteResp.json() : [];
+      if (clienteCriado[0]) clienteId = clienteCriado[0].id;
+    }
+  }
+
+  // 2. Registra o pedido no painel, já como "concluído" (o dinheiro já
+  // caiu — o status de entrega em si continua controlado em pedidos.html,
+  // esse aqui é só o espelho financeiro/histórico no módulo Empresa).
+  const criarPedidoEmpResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos`, {
+    method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({
+      profissional_id: pedido.profissional_id,
+      cliente_id: clienteId,
+      status: 'concluido',
+      valor_total: pedido.total,
+      forma_pagamento: 'mercado_pago',
+      origem: 'guiapapo',
+      pedido_guiapapo_id: pedidoId
+    })
+  });
+  const pedidoEmpCriado = criarPedidoEmpResp.ok ? await criarPedidoEmpResp.json() : [];
+  const pedidoEmpId = pedidoEmpCriado[0] ? pedidoEmpCriado[0].id : null;
+
+  // 3. Itens do pedido — agrupa por produto (o carrinho manda uma linha
+  // por unidade, então junta pra virar "quantidade: 2" em vez de duas
+  // linhas de quantidade 1) e cria os itens + baixa o estoque de quem
+  // tem produto_id (item avulso sem produto cadastrado só não baixa).
+  const itensPedido = pedido.itens || [];
+  const itensAgrupados = {};
+  itensPedido.forEach((item) => {
+    const chave = item.id || item.nome;
+    if (!itensAgrupados[chave]) itensAgrupados[chave] = { produtoId: item.id || null, nome: item.nome, preco: _precoTextoParaNumero(item.preco), quantidade: 0 };
+    itensAgrupados[chave].quantidade += 1;
+  });
+
+  if (pedidoEmpId) {
+    const itensParaInserir = Object.values(itensAgrupados).map((i) => ({
+      pedido_id: pedidoEmpId,
+      produto_id: i.produtoId,
+      nome_item: i.nome,
+      quantidade: i.quantidade,
+      valor_unitario: i.preco,
+      valor_total: i.preco * i.quantidade
+    }));
+    if (itensParaInserir.length) {
+      await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedido_itens`, { method: 'POST', headers, body: JSON.stringify(itensParaInserir) });
+    }
+  }
+
+  // 4. Baixa o estoque de cada produto vendido (só quem tem produto_id —
+  // item avulso digitado na hora não tem estoque pra controlar).
+  for (const item of Object.values(itensAgrupados)) {
+    if (!item.produtoId) continue;
+    const produtoResp = await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}&select=quantidade`, { headers });
+    const produtoData = produtoResp.ok ? await produtoResp.json() : [];
+    if (!produtoData[0]) continue;
+    const novaQtd = Math.max(0, Number(produtoData[0].quantidade || 0) - item.quantidade);
+    await fetch(`${SUPABASE_URL}/rest/v1/produtos?id=eq.${item.produtoId}`, { method: 'PATCH', headers, body: JSON.stringify({ quantidade: novaQtd }) });
+    await fetch(`${SUPABASE_URL}/rest/v1/empresa_estoque_movimentos`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ produto_id: item.produtoId, tipo: 'saida', quantidade: item.quantidade, motivo: 'venda pelo GuiaPapo', pedido_id: pedidoEmpId })
+    });
+  }
+
+  // 5. Lança a receita no caixa — número vem direto do pedido real
+  // (nunca recalculado/estimado), é o mesmo total que o Mercado Pago
+  // confirmou como pago.
+  await fetch(`${SUPABASE_URL}/rest/v1/empresa_caixa`, {
+    method: 'POST', headers,
+    body: JSON.stringify({
+      profissional_id: pedido.profissional_id,
+      tipo: 'receita',
+      categoria: 'venda',
+      descricao: `Pedido pelo GuiaPapo — ${Object.values(itensAgrupados).map((i) => i.nome).join(', ')}`.slice(0, 200),
+      valor: pedido.total,
+      forma_pagamento: 'pix/cartão (Mercado Pago)',
+      cliente_id: clienteId,
+      pedido_id: pedidoEmpId
+    })
+  });
+}
+
 exports.handler = async function (event) {
   try {
     const body = JSON.parse(event.body || '{}');
@@ -105,6 +232,17 @@ exports.handler = async function (event) {
       body: JSON.stringify({ status: 'aguardando_confirmacao', pago_em: new Date().toISOString(), mp_payment_id: String(paymentId) })
     });
 
+    // 3b. Sincroniza com o Gerenciamento (módulo Empresa) — assim um
+    // pedido de verdade, pago pelo GuiaPapo, já aparece sozinho no caixa,
+    // no estoque e no cadastro de clientes do painel, sem a empresa ter
+    // que lançar nada na mão. Nunca falha o webhook por causa disso (é
+    // um "bônus" — o pedido em si já foi confirmado no passo 3 acima).
+    try {
+      await _sincronizarPedidoComEmpresa({ pedido, pedidoId, SUPABASE_URL, headers });
+    } catch (erroSync) {
+      console.error('erro ao sincronizar pedido com o módulo Empresa (não bloqueia o pedido):', erroSync);
+    }
+
     // 4. Avisa a empresa automaticamente no Papo
     const donoResp = await fetch(`${SUPABASE_URL}/rest/v1/profissionais?id=eq.${pedido.profissional_id}&select=user_id`, { headers });
     const donoData = await donoResp.json();
@@ -134,7 +272,7 @@ exports.handler = async function (event) {
       const SITE_URL = process.env.URL || 'https://guiazap.shop';
       await fetch(`${SITE_URL}/.netlify/functions/enviar-push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
         body: JSON.stringify({
           titulo: '🎉 Pedido pago!',
           mensagem: `Novo pedido de R$ ${Number(pedido.total).toFixed(2).replace('.', ',')} já foi pago — pode preparar.`,
