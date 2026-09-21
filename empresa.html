@@ -215,6 +215,10 @@
 
   <!-- PEDIDOS -->
   <div id="emp-secao-pedidos" style="display:none;">
+    <div class="emp-card" id="emp-mais-vendidos-card">
+      <h3>🏆 Mais vendidos (últimos 30 dias)</h3>
+      <div id="emp-mais-vendidos">Carregando...</div>
+    </div>
     <div class="emp-card">
       <h3>Novo pedido</h3>
       <div class="emp-linha">
@@ -646,6 +650,44 @@ async function empCarregarPedidos(){
   const { data } = await query;
   empPedidos = data || [];
   empRenderPedidos();
+  empCarregarMaisVendidos();
+}
+
+// "Mais vendidos" direto no painel (sem precisar perguntar pro Zeca) —
+// junta empresa_pedido_itens com empresa_pedidos (pra filtrar por empresa,
+// filial e período) e soma a quantidade por nome_item, mesma lógica que
+// o Zeca já usa no chat (acao_empresa "mais_vendidos").
+async function empCarregarMaisVendidos(){
+  const container = document.getElementById('emp-mais-vendidos');
+  const hoje = new Date();
+  const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - 30);
+  const dataInicio = inicio.toISOString().slice(0, 10);
+  const dataFim = hoje.toISOString().slice(0, 10);
+
+  let query = supabaseClientEmp
+    .from('empresa_pedido_itens')
+    .select('nome_item, quantidade, empresa_pedidos!inner(profissional_id, filial_id, data)')
+    .eq('empresa_pedidos.profissional_id', empEmpresaAtual)
+    .gte('empresa_pedidos.data', dataInicio)
+    .lte('empresa_pedidos.data', dataFim);
+  if(empFilialAtual) query = query.eq('empresa_pedidos.filial_id', empFilialAtual);
+
+  const { data, error } = await query;
+  if(error){ container.innerHTML = '<div class="emp-vazio">Não deu pra carregar agora.</div>'; return; }
+  if(!data || !data.length){ container.innerHTML = '<div class="emp-vazio">Nenhuma venda com item registrada nos últimos 30 dias.</div>'; return; }
+
+  const somaPorItem = {};
+  data.forEach(i => { somaPorItem[i.nome_item] = (somaPorItem[i.nome_item] || 0) + Number(i.quantidade || 0); });
+  const ranking = Object.entries(somaPorItem).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  container.innerHTML = ranking.map(([nome, qtd], i) => `
+    <div class="emp-item">
+      <div class="emp-item-info">
+        <div class="emp-item-nome">${i + 1}º · ${empEscapar(nome)}</div>
+      </div>
+      <div class="emp-item-valor">${qtd % 1 === 0 ? qtd : qtd.toFixed(2)}</div>
+    </div>
+  `).join('');
 }
 
 function empRenderPedidos(){
