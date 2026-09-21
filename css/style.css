@@ -1684,3 +1684,30 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
   outline: 3px dashed #f59e0b;
   outline-offset: -6px;
 }
+
+/* Navegação entre os gerenciadores (Meu Lar / Meu Agro / Empresa /
+   Financeiro) — cada um desses módulos só tinha um "← Voltar" pra
+   index.html, então pra ir de um pro outro a pessoa precisava voltar
+   pra home toda vez. Essa faixinha fica logo abaixo do topo colorido
+   de cada página, com link pros outros 3 módulos (nunca pro próprio,
+   pra não linkar a página em que já está). */
+.gz-cross-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 15px;
+  background: white;
+  border-bottom: 1px solid #eee;
+}
+.gz-cross-nav a {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #555;
+  background: #f7f5f0;
+  border: 1px solid #e5e0d5;
+  padding: 6px 12px;
+  border-radius: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gz-cross-nav a:hover { border-color: #999; color: #222; }
