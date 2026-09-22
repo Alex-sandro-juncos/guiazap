@@ -2182,6 +2182,8 @@ Responda APENAS com um JSON válido: {"resposta": "sua resposta completa aqui"}$
       // Mesmo esquema do gerar_imagem: a checagem de limite de verdade
       // acontece dentro do gerar-audio-zeca.js quando o front-end chamar
       // ele — aqui só sinaliza a intenção e repassa o que foi entendido.
+      // Se vier junto uma imagem, também sinaliza pra montar vídeo depois
+      // (áudio + imagem usando FFmpeg via Cloudinary/Mux ou local).
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -2192,7 +2194,9 @@ Responda APENAS com um JSON válido: {"resposta": "sua resposta completa aqui"}$
           voz2Pedida: decisao.voz2_pedida || null,
           duracaoAudio: decisao.duracao_audio || null,
           velocidadeAudio: decisao.velocidade_audio || null,
-          resposta: decisao.formato_audio === 'dialogo' ? 'Bora, escrevendo e gravando esse diálogo...' : 'Bora, escrevendo e gravando esse áudio...'
+          temImagem: !!imagem,
+          imagemParaVideo: imagem ? { data: imagem.data, mimeType: imagem.mimeType } : null,
+          resposta: decisao.formato_audio === 'dialogo' ? 'Bora, escrevendo, gravando esse diálogo e montando o vídeo...' : 'Bora, escrevendo, gravando esse áudio e montando o vídeo...'
         })
       };
     }
