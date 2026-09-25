@@ -23,6 +23,17 @@
 const CSOSN_PADRAO_SIMPLES = '102'; // "tributada pelo Simples Nacional sem permissão de crédito" — padrão comum de varejo, mas o contador pode ajustar por produto
 const CST_PADRAO_NORMAL = '00'; // "tributada integralmente" — idem, padrão genérico
 
+// A Focus NFe devolve caminho_danfe/caminho_xml_nota_fiscal como caminho
+// RELATIVO (ex: "/arquivos/.../nota.pdf"), não como link pronto pra abrir
+// — precisa colar na frente o domínio de homologação/produção. Sem isso o
+// botão "Ver DANFE" salva um link quebrado (era exatamente o que
+// acontecia antes: guardava focusData.caminho_danfe puro).
+function _montarUrlFocus(baseUrl, caminho) {
+  if (!caminho) return null;
+  if (/^https?:\/\//i.test(caminho)) return caminho; // já veio como URL completa (não é o padrão documentado, mas por segurança)
+  return baseUrl + (caminho.startsWith('/') ? caminho : '/' + caminho);
+}
+
 exports.handler = async function (event) {
   try {
     if (event.httpMethod !== 'POST') {
@@ -172,11 +183,13 @@ exports.handler = async function (event) {
       }
 
       if (focusData.status === 'autorizado') {
+        const urlDanfeAbsoluta = _montarUrlFocus(baseUrl, focusData.caminho_danfe) || focusData.url || null;
+        const urlXmlAbsoluta = _montarUrlFocus(baseUrl, focusData.caminho_xml_nota_fiscal);
         await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}`, {
           method: 'PATCH', headers,
-          body: JSON.stringify({ nf_status: 'emitida', nf_numero: focusData.numero || null, nf_chave: focusData.chave_nfe || null, nf_url_danfe: focusData.caminho_danfe || focusData.url || null, nf_erro: null })
+          body: JSON.stringify({ nf_status: 'emitida', nf_numero: focusData.numero || null, nf_chave: focusData.chave_nfe || null, nf_url_danfe: urlDanfeAbsoluta, nf_caminho_xml: urlXmlAbsoluta, nf_erro: null })
         });
-        return { statusCode: 200, body: JSON.stringify({ ok: true, status: 'emitida', numero: focusData.numero, urlDanfe: focusData.caminho_danfe || focusData.url }) };
+        return { statusCode: 200, body: JSON.stringify({ ok: true, status: 'emitida', numero: focusData.numero, urlDanfe: urlDanfeAbsoluta }) };
       }
 
       if (focusData.status === 'processando_autorizacao') {
@@ -201,17 +214,20 @@ exports.handler = async function (event) {
         return { statusCode: 502, body: JSON.stringify({ error: 'erro ao contatar o provedor de emissão' }) };
       }
 
+      let urlDanfeAbsolutaConsulta = null;
       if (focusData.status === 'autorizado') {
+        urlDanfeAbsolutaConsulta = _montarUrlFocus(baseUrl, focusData.caminho_danfe) || focusData.url || null;
+        const urlXmlAbsolutaConsulta = _montarUrlFocus(baseUrl, focusData.caminho_xml_nota_fiscal);
         await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}`, {
           method: 'PATCH', headers,
-          body: JSON.stringify({ nf_status: 'emitida', nf_numero: focusData.numero || null, nf_chave: focusData.chave_nfe || null, nf_url_danfe: focusData.caminho_danfe || focusData.url || null, nf_erro: null })
+          body: JSON.stringify({ nf_status: 'emitida', nf_numero: focusData.numero || null, nf_chave: focusData.chave_nfe || null, nf_url_danfe: urlDanfeAbsolutaConsulta, nf_caminho_xml: urlXmlAbsolutaConsulta, nf_erro: null })
         });
       } else if (focusData.status && focusData.status !== 'processando_autorizacao') {
         const mensagemErro = focusData.mensagem_sefaz || focusData.mensagem || 'Erro desconhecido na emissão.';
         await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos?id=eq.${pedidoId}`, { method: 'PATCH', headers, body: JSON.stringify({ nf_status: 'erro', nf_erro: String(mensagemErro).slice(0, 500) }) });
       }
 
-      return { statusCode: 200, body: JSON.stringify({ ok: true, status: focusData.status, numero: focusData.numero, urlDanfe: focusData.caminho_danfe || focusData.url }) };
+      return { statusCode: 200, body: JSON.stringify({ ok: true, status: focusData.status, numero: focusData.numero, urlDanfe: urlDanfeAbsolutaConsulta }) };
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: 'action inválida' }) };

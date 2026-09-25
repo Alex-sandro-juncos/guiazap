@@ -229,6 +229,28 @@
   }
   .zeca-chip-sugestao:hover { border-color: #f59e0b; color: #a4600a; }
 
+  .zeca-ver-tudo-btn {
+    display: block;
+    margin: 14px auto 0;
+    background: none;
+    border: none;
+    color: #a4600a;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .zeca-catalogo {
+    max-width: 720px;
+    margin: 10px auto 0;
+    padding: 0 16px;
+    display: none;
+  }
+  .zeca-catalogo-grupo { margin-bottom: 12px; }
+  .zeca-catalogo-grupo h4 { font-size: 0.76rem; text-transform: uppercase; color: #999; margin: 0 0 6px; text-align: center; }
+  .zeca-catalogo-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .zeca-catalogo-chips .zeca-chip-sugestao { font-size: 0.78rem; padding: 7px 12px; }
+
   @media (max-width: 640px) {
     .zeca-msg-pessoa { max-width: 88%; }
     .zeca-pagina-pro { display: none; } /* some no celular pra não apertar o topo — continua no menu/pacotes.html */
@@ -266,6 +288,43 @@
     <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como transformar um vídeo em Story?')">🎬 Deixar um vídeo em formato Story</button>
     <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quais são os planos do GuiaZap?')">💳 Ver os planos</button>
   </div>
+  <button type="button" class="zeca-ver-tudo-btn" id="zeca-ver-tudo-btn" onclick="_zecaAlternarCatalogo()">📋 Ver tudo que dá pra me pedir</button>
+  <div id="zeca-catalogo" class="zeca-catalogo">
+    <div class="zeca-catalogo-grupo">
+      <h4>🏢 Empresa (caixa, estoque, vendas)</h4>
+      <div class="zeca-catalogo-chips">
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como tá o caixa da minha empresa esse mês?')">Como tá o caixa esse mês?</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quais produtos tão com estoque baixo?')">Estoque baixo</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quais são os produtos mais vendidos?')">Mais vendidos</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Me prepara os dados de contabilidade desse mês')">Preparar contabilidade</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Tenho alguma conta a pagar ou a receber vencendo?')">Contas a vencer</button>
+      </div>
+    </div>
+    <div class="zeca-catalogo-grupo">
+      <h4>🌱 Agro</h4>
+      <div class="zeca-catalogo-chips">
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como tá o financeiro da minha safra?')">Financeiro da safra</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Registra uma aplicação de defensivo num talhão')">Registrar aplicação</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Quanto já produzi essa safra?')">Produção da safra</button>
+      </div>
+    </div>
+    <div class="zeca-catalogo-grupo">
+      <h4>🏠 Lar</h4>
+      <div class="zeca-catalogo-chips">
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Lança uma despesa de casa')">Lançar despesa de casa</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como tô gastando esse mês em casa?')">Gastos do mês</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Manda foto de um comprovante que eu já lanço')">Lançar por foto do comprovante</button>
+      </div>
+    </div>
+    <div class="zeca-catalogo-grupo">
+      <h4>💬 Geral</h4>
+      <div class="zeca-catalogo-chips">
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Me dá conselho sobre um problema financeiro')">Pedir conselho</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Gera um áudio pra eu postar')">Gerar áudio</button>
+        <button type="button" class="zeca-chip-sugestao" onclick="_zecaUsarSugestao('Como funciona o Mercado Atacado entre empresas?')">Mercado Atacado</button>
+      </div>
+    </div>
+  </div>
 
   <div id="zeca-mensagens"></div>
 
@@ -282,7 +341,7 @@
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
-<script src="js/zeca.js?v=20260921"></script>
+<script src="js/zeca.js?v=20260925"></script>
 <script>
   // Nessa página o painel já começa aberto (não tem botão flutuante
   // escondendo ele) — só marca como aberto.
@@ -296,8 +355,23 @@
   function _zecaEsconderHero(){
     const hero = document.getElementById('zeca-hero');
     const sugestoes = document.getElementById('zeca-sugestoes');
+    const verTudoBtn = document.getElementById('zeca-ver-tudo-btn');
+    const catalogo = document.getElementById('zeca-catalogo');
     if(hero) hero.style.display = 'none';
     if(sugestoes) sugestoes.style.display = 'none';
+    if(verTudoBtn) verTudoBtn.style.display = 'none';
+    if(catalogo) catalogo.style.display = 'none';
+  }
+  // "Catálogo" — atalho pra descobrir tudo que o Zeca sabe fazer sem
+  // precisar já saber o que perguntar. Só mostra/esconde chips que já
+  // existiam de outro jeito (sugestões da tela inicial) — nenhum dado
+  // novo, nenhuma chamada nova, só descoberta.
+  function _zecaAlternarCatalogo(){
+    const catalogo = document.getElementById('zeca-catalogo');
+    const btn = document.getElementById('zeca-ver-tudo-btn');
+    const abrindo = catalogo.style.display !== 'block';
+    catalogo.style.display = abrindo ? 'block' : 'none';
+    btn.textContent = abrindo ? '📋 Esconder' : '📋 Ver tudo que dá pra me pedir';
   }
   function _zecaUsarSugestao(texto){
     document.getElementById('zeca-input').value = texto;

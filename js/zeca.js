@@ -134,6 +134,28 @@ function _zecaMensagemBoasVindas(){
   _adicionarMensagemZeca('zeca', 'Oi! Eu sou o Zeca 👋 Posso te ajudar a achar um profissional ou empresa aqui perto, gerar ou editar foto/áudio/vídeo, ou tirar dúvida sobre como o GuiaZap funciona. Manda a pergunta (ou arrasta um arquivo aqui pro painel)!');
 }
 
+// Bug conhecido de celular (principalmente Android/WebView): o painel do
+// Zeca é "position:fixed" centralizado, mas quando o teclado do celular
+// FECHA (ex: depois de mandar uma pergunta e o teclado sumir sozinho, ou
+// a pessoa apertar "voltar"), vários navegadores não repintam elementos
+// fixed na hora — o painel fica "grudado" torto/cortado até algum outro
+// evento forçar o navegador a recalcular o layout. Esse forceRepintarZeca
+// força esse recálculo (some e volta o mesmo pixel de padding, o que é
+// inofensivo e invisível, mas obriga o navegador a repaginar o elemento)
+// toda vez que a altura visível da tela muda — que é exatamente quando o
+// teclado abre ou fecha.
+function _zecaForcarRepintura(){
+  const painel = document.getElementById('painel-zeca');
+  if(!painel || painel.style.display === 'none') return;
+  painel.style.transform = 'translateZ(0)';
+  requestAnimationFrame(() => { painel.style.transform = ''; });
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', _zecaForcarRepintura);
+} else {
+  window.addEventListener('resize', _zecaForcarRepintura);
+}
+
 function toggleZeca(){
   _zecaAberto = !_zecaAberto;
   const painel = document.getElementById('painel-zeca');
@@ -1408,8 +1430,16 @@ function _abrirSeletorImagemZeca(){
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*,video/*,audio/*,.zip,.pdf,application/pdf';
+  input.style.display = 'none';
+  // Alguns navegadores (principalmente no celular, depois de atualização)
+  // só disparam o seletor/câmera de verdade se o <input> estiver de fato
+  // no DOM na hora do .click() — um input criado solto (nunca anexado)
+  // pode simplesmente não abrir nada, sem erro nenhum no console. Por
+  // segurança, anexa no body antes de clicar e remove depois de usar.
+  document.body.appendChild(input);
   input.onchange = async () => {
     const arquivo = input.files[0];
+    input.remove();
     if(!arquivo) return;
     await _zecaProcessarArquivoAnexado(arquivo);
   };
@@ -1429,8 +1459,14 @@ function _abrirCameraZeca(){
   input.type = 'file';
   input.accept = 'image/*,video/*';
   input.capture = 'environment';
+  input.style.display = 'none';
+  // Mesmo motivo do comentário em _abrirSeletorImagemZeca: input solto
+  // (nunca anexado ao DOM) pode simplesmente não abrir nada em alguns
+  // navegadores/celulares — anexa antes de clicar, remove depois.
+  document.body.appendChild(input);
   input.onchange = async () => {
     const arquivo = input.files[0];
+    input.remove();
     if(!arquivo) return;
     await _zecaProcessarArquivoAnexado(arquivo);
   };

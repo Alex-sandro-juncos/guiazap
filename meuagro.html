@@ -150,6 +150,10 @@
   <select id="agro-select-propriedade" class="agro-select" style="display:none;" onchange="agroTrocarPropriedade()"></select>
   <select id="agro-select-safra" class="agro-select" onchange="agroTrocarSafra()"></select>
 
+  <div style="margin-bottom:10px;">
+    <button type="button" class="agro-secao-btn" id="agro-modo-simples-btn" onclick="agroAlternarModoSimples()" style="width:auto;">🎯 Modo simples</button>
+  </div>
+
   <div class="agro-secoes">
     <button type="button" class="agro-secao-btn ativa" data-secao="financas" onclick="agroTrocarSecao('financas')">💰 Finanças</button>
     <button type="button" class="agro-secao-btn" data-secao="producao" onclick="agroTrocarSecao('producao')">🌾 Produção</button>
@@ -360,6 +364,7 @@ async function initAgro(){
   agroPropriedadeAtual = agroPropriedades[0].id;
   await agroCarregarSafras();
   await agroCarregarLancamentos();
+  agroAplicarModoSimples();
 }
 
 async function agroCarregarSafras(){
@@ -398,6 +403,31 @@ function agroTrocarSecao(secao){
   if(secao === 'bens' && !agroBens.length) agroCarregarBens();
   if(secao === 'talhoes' && !agroTalhoes.length) agroCarregarTalhoes();
   if(secao === 'documentos') agroCarregarDocumentos();
+}
+
+// "Modo simples" — mesma preferência (localStorage) usada em empresa.html:
+// esconde as seções menos usadas no dia a dia (Bens/Talhões/Documentos,
+// que costumam ser cadastro pontual, não uso diário) deixando só
+// Finanças e Produção visíveis. Só esconde/mostra botões já existentes,
+// não muda dado nem comportamento por baixo.
+const AGRO_SECOES_AVANCADAS = ['bens', 'talhoes', 'documentos'];
+function agroModoSimplesAtivo(){
+  try{ return localStorage.getItem('gz-modo-simples') === '1'; }catch(e){ return false; }
+}
+function agroAplicarModoSimples(){
+  const ativo = agroModoSimplesAtivo();
+  document.querySelectorAll('.agro-secao-btn[data-secao]').forEach(btn => {
+    if(AGRO_SECOES_AVANCADAS.includes(btn.dataset.secao)) btn.style.display = ativo ? 'none' : '';
+  });
+  const botao = document.getElementById('agro-modo-simples-btn');
+  if(botao) botao.textContent = ativo ? '🎯 Modo simples (ativo) — ver tudo' : '🎯 Modo simples';
+  const secaoAtivaBtn = document.querySelector('.agro-secao-btn.ativa');
+  if(ativo && secaoAtivaBtn && AGRO_SECOES_AVANCADAS.includes(secaoAtivaBtn.dataset.secao)) agroTrocarSecao('financas');
+}
+function agroAlternarModoSimples(){
+  const ativoAgora = agroModoSimplesAtivo();
+  try{ localStorage.setItem('gz-modo-simples', ativoAgora ? '0' : '1'); }catch(e){}
+  agroAplicarModoSimples();
 }
 
 function agroTrocarPeriodo(periodo){
@@ -1034,9 +1064,34 @@ function agroRenderTalhoes(){
       <div class="agro-lista-desc">${agroEscapar(t.nome)}</div>
       <div class="agro-lista-meta">${t.area_hectares ? t.area_hectares + ' ha' : 'área não informada'}</div>
     </div>
+    ${(t.latitude && t.longitude)
+      ? `<a class="agro-lista-apagar" href="https://www.google.com/maps?q=${t.latitude},${t.longitude}" target="_blank" title="Ver localização no mapa" style="color:#2a6a9a; text-decoration:none;">📍</a>`
+      : `<button type="button" class="agro-lista-apagar" onclick="agroMarcarLocalizacaoTalhao('${t.id}')" title="Marcar localização (precisa estar no talhão, com GPS ligado)" style="color:#999;">📍</button>`
+    }
     <button type="button" class="agro-lista-apagar" onclick="agroEditarTalhao('${t.id}')" title="Editar" style="color:#4a7a2a;">✏️</button>
     <button type="button" class="agro-lista-apagar" onclick="agroApagarTalhao('${t.id}')" title="Desativar">🗑️</button>
   </div>`).join('');
+}
+
+// Localização do talhão (item novo) — jeito mais prático: um toque no
+// celular, parado no talhão, pega a posição de GPS do aparelho e salva
+// como "o ponto" desse talhão (mesmo padrão de geolocalização já usado
+// em vitrine.js/app.js/chat.html — navigator.geolocation +
+// link pronto do Google Maps, sem precisar de biblioteca de mapa nova).
+// Não desenha polígono/cerca — é só um pino, mas já resolve "onde fica
+// esse talhão" sem precisar abrir outro app pra anotar coordenada.
+function agroMarcarLocalizacaoTalhao(id){
+  if(!navigator.geolocation){ alert('Esse navegador não suporta GPS.'); return; }
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { error } = await supabaseClientAgro.from('agro_talhoes').update({
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude
+    }).eq('id', id);
+    if(error){ alert('Erro ao salvar a localização: ' + error.message); return; }
+    agroCarregarTalhoes();
+  }, (erroGps) => {
+    alert('Não consegui pegar o GPS agora — confere se deu permissão de localização pro navegador e tenta de novo.');
+  }, { enableHighAccuracy: true, timeout: 15000 });
 }
 
 async function agroEditarTalhao(id){

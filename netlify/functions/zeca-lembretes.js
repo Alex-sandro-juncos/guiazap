@@ -25,6 +25,12 @@
 //    já vencida (data_vencimento no passado) — lembrete pra cobrar o
 //    cliente ou pagar o fornecedor antes que acumule. Roda toda semana
 //    junto com o resto, não é um cron separado.
+// 7. Produto perecível perto de vencer.
+// 8. Novo match no Mercado Atacado: oferta/demanda ativa de uma empresa
+//    que combina (nome parecido) com uma publicação NOVA (últimos 7 dias)
+//    do lado oposto, de outra empresa — mesma comparação simples por
+//    texto (sem IA) usada na tela na hora de publicar, só que rodando
+//    toda semana pra quem não fica voltando lá sozinho conferir.
 //
 // Só manda push pra quem JÁ usou o recurso antes (nunca pra quem nunca
 // usou) — isso é lembrete de continuidade, não propaganda/onboarding.
@@ -352,6 +358,76 @@ module.exports.handler = async function () {
         enviadosVencendo++;
       }
       resultado.produtoVencendo = enviadosVencendo;
+    }
+
+    // ---------- 8. Novo match no Mercado Atacado ----------
+    const [ofertasAtivasResp, demandasAtivasResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/mercado_ofertas?ativo=eq.true&select=profissional_id,nome_produto,created_at`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/mercado_demandas?ativo=eq.true&select=profissional_id,nome_produto,created_at`, { headers })
+    ]);
+    const ofertasAtivas = ofertasAtivasResp.ok ? await ofertasAtivasResp.json() : [];
+    const demandasAtivas = demandasAtivasResp.ok ? await demandasAtivasResp.json() : [];
+
+    const _mercNormaliza = t => (t || '').toLowerCase().trim();
+    const _mercCombina = (a, b) => {
+      const na = _mercNormaliza(a);
+      const nb = _mercNormaliza(b);
+      return !!na && !!nb && (na.includes(nb) || nb.includes(na));
+    };
+
+    // profissional_id -> Set de nomes do lado oposto que deram match novo
+    const matchesPorEmpresa = {};
+    demandasAtivas
+      .filter(d => d.created_at >= seteDiasAtrasISO)
+      .forEach(demandaNova => {
+        ofertasAtivas
+          .filter(o => o.profissional_id !== demandaNova.profissional_id && _mercCombina(o.nome_produto, demandaNova.nome_produto))
+          .forEach(oferta => {
+            if (!matchesPorEmpresa[oferta.profissional_id]) matchesPorEmpresa[oferta.profissional_id] = new Set();
+            matchesPorEmpresa[oferta.profissional_id].add(demandaNova.nome_produto);
+          });
+      });
+    ofertasAtivas
+      .filter(o => o.created_at >= seteDiasAtrasISO)
+      .forEach(ofertaNova => {
+        demandasAtivas
+          .filter(d => d.profissional_id !== ofertaNova.profissional_id && _mercCombina(d.nome_produto, ofertaNova.nome_produto))
+          .forEach(demanda => {
+            if (!matchesPorEmpresa[demanda.profissional_id]) matchesPorEmpresa[demanda.profissional_id] = new Set();
+            matchesPorEmpresa[demanda.profissional_id].add(ofertaNova.nome_produto);
+          });
+      });
+
+    const idsEmpresaMatch = Object.keys(matchesPorEmpresa);
+    resultado.mercadoMatch = 0;
+    if (idsEmpresaMatch.length > 0) {
+      const profRespMatch = await fetch(
+        `${SUPABASE_URL}/rest/v1/profissionais?id=in.(${idsEmpresaMatch.join(',')})&status_pagamento=eq.ativo&plano=eq.vendas&select=id,user_id`,
+        { headers }
+      );
+      const profsMatch = profRespMatch.ok ? await profRespMatch.json() : [];
+
+      let enviadosMatch = 0;
+      for (const prof of profsMatch) {
+        if (!prof.user_id || idsOptOut.has(prof.user_id)) continue;
+        const nomes = [...matchesPorEmpresa[prof.id]];
+        const listaTexto = nomes.slice(0, 3).join(', ') + (nomes.length > 3 ? ` e mais ${nomes.length - 3}` : '');
+
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(`${process.env.URL || 'https://guiazap.shop'}/.netlify/functions/enviar-push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_FUNCTIONS_SECRET || '' },
+          body: JSON.stringify({
+            titulo: '🤝 Novo match no Mercado Atacado',
+            mensagem: `Apareceu publicação nova combinando com "${listaTexto}". Dá uma olhada no Mercado Atacado.`,
+            url: '/mercado-atacado.html',
+            userIds: [prof.user_id],
+            tipo: 'zeca_lembrete'
+          })
+        });
+        enviadosMatch++;
+      }
+      resultado.mercadoMatch = enviadosMatch;
     }
 
     return { statusCode: 200, body: JSON.stringify(resultado) };

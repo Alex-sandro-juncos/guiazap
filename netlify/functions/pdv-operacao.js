@@ -153,7 +153,7 @@ exports.handler = async function (event) {
       const rotuloPagamento = {
         dinheiro: 'dinheiro', pix: 'Pix', cartao_debito: 'cartão débito',
         cartao_credito_avista: 'cartão crédito à vista', cartao_credito_parcelado: `cartão crédito ${parcelas || '?'}x`,
-        fiado: 'fiado/promissória'
+        boleto: 'boleto', fiado: 'fiado/promissória'
       }[formaPagamento] || formaPagamento || '';
 
       const pedidoResp = await fetch(`${SUPABASE_URL}/rest/v1/empresa_pedidos`, {

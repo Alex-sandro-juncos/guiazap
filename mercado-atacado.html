@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mercado Atacado — GuiaZap</title>
+<meta name="description" content="Marketplace atacado/varejo entre empresas do GuiaZap: publique oferta ou demanda e feche negócio direto pelo WhatsApp.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<style>
+  body.emp-pagina { background: #f7f5f0; }
+  .emp-topo { background: linear-gradient(90deg, #6a3fb5, #4d2c8a); color: white; padding: 16px 15px 18px; display: flex; align-items: center; gap: 10px; }
+  .emp-topo a.emp-voltar { color: white; text-decoration: none; font-size: 1.3rem; line-height: 1; opacity: 0.9; }
+  .emp-topo h1 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .emp-conteudo { max-width: 760px; margin: 0 auto; padding: 16px 15px 60px; }
+  * { box-sizing: border-box; }
+  .emp-select { padding: 9px 12px; border-radius: 10px; border: 1px solid #e5e0d5; background: white; font-size: 0.86rem; }
+  .emp-topo-linha { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .emp-abas { display: flex; gap: 6px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
+  .emp-aba { flex-shrink: 0; padding: 9px 14px; border-radius: 20px; border: 1px solid #e5e0d5; background: white; font-size: 0.82rem; font-weight: 700; color: #555; cursor: pointer; }
+  .emp-aba.ativa { background: #6a3fb5; color: white; border-color: #6a3fb5; }
+  .emp-card { background: white; border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  .emp-card h3 { font-size: 0.95rem; margin: 0 0 10px; }
+  .emp-linha { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .emp-linha select, .emp-linha input, .emp-linha textarea { flex: 1; min-width: 120px; padding: 9px 10px; border-radius: 8px; border: 1px solid #e5e0d5; font-size: 0.88rem; font-family: inherit; }
+  .emp-btn { padding: 10px 16px; min-height: 42px; border-radius: 8px; border: none; background: #6a3fb5; color: white; font-weight: 700; cursor: pointer; font-size: 0.88rem; }
+  .emp-btn:disabled { opacity: 0.6; }
+  .emp-btn.full { width: 100%; }
+  .emp-btn.secundario { background: #eee; color: #444; }
+  .emp-btn.whats { background: #2a9d4a; }
+  .emp-item { background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .emp-item-nome { font-size: 0.92rem; font-weight: 700; }
+  .emp-item-meta { font-size: 0.76rem; color: #999; margin-top: 2px; }
+  .emp-item-desc { font-size: 0.82rem; color: #555; margin-top: 4px; }
+  .emp-item-acoes { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .emp-item-acoes .emp-btn { padding: 7px 12px; min-height: 34px; font-size: 0.8rem; }
+  .emp-tag { display: inline-block; font-size: 0.66rem; font-weight: 700; color: #6a3fb5; background: #f1eaf9; border-radius: 20px; padding: 2px 9px; text-transform: uppercase; }
+  .emp-tag.inativa { color: #999; background: #eee; }
+  .emp-vazio { text-align: center; color: #888; padding: 26px 10px; font-size: 0.9rem; }
+  .emp-aviso { background: #fff7e0; border: 1px solid #f0dca0; border-radius: 10px; padding: 10px 12px; font-size: 0.78rem; color: #7a5c00; margin-bottom: 16px; }
+  .emp-match { background: #eef8ee; border: 1px solid #cde8cd; border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+  .emp-match h4 { margin: 0 0 6px; font-size: 0.8rem; color: #2a7a2a; }
+  @media (max-width: 640px){
+    .emp-conteudo { padding: 12px 10px 60px; }
+    .emp-linha select, .emp-linha input, .emp-linha textarea { font-size: 16px; min-height: 42px; }
+    .emp-aba { padding: 10px 14px; font-size: 0.85rem; }
+  }
+</style>
+</head>
+<body class="emp-pagina">
+
+<div class="emp-topo">
+  <a href="empresa.html" class="emp-voltar" title="Voltar">←</a>
+  <h1>🤝 Mercado Atacado</h1>
+</div>
+<div class="gz-cross-nav">
+  <a href="empresa.html">🏢 Minha Empresa</a>
+  <a href="gerenciar.html">📊 Painel</a>
+  <a href="zeca.html">💬 Falar com o Zeca</a>
+</div>
+
+<div class="emp-conteudo">
+  <div id="merc-carregando" class="emp-vazio">Carregando...</div>
+
+  <div id="merc-app" style="display:none;">
+    <div class="emp-aviso">
+      💡 O GuiaZap só ajuda a <b>achar</b> quem tem o que sua empresa precisa (ou quem precisa do que sua empresa tem sobrando). O combinado e o pagamento (dinheiro, pix, boleto, etc.) você fecha direto com a outra empresa, do seu jeito — não tem repasse automático de dinheiro nem emissão de boleto de verdade por aqui.
+    </div>
+
+    <div class="emp-topo-linha">
+      <select id="merc-select-empresa" class="emp-select" style="display:none;"></select>
+    </div>
+
+    <div class="emp-abas">
+      <button type="button" class="emp-aba ativa" data-aba="minhas-ofertas" onclick="mercTrocarAba('minhas-ofertas')">📤 Minhas ofertas</button>
+      <button type="button" class="emp-aba" data-aba="minhas-demandas" onclick="mercTrocarAba('minhas-demandas')">📥 Minhas demandas</button>
+      <button type="button" class="emp-aba" data-aba="buscar-ofertas" onclick="mercTrocarAba('buscar-ofertas')">🔎 Buscar ofertas</button>
+      <button type="button" class="emp-aba" data-aba="buscar-demandas" onclick="mercTrocarAba('buscar-demandas')">🔎 Buscar demandas</button>
+    </div>
+
+    <!-- MINHAS OFERTAS -->
+    <div id="merc-secao-minhas-ofertas">
+      <div class="emp-card">
+        <h3>Nova oferta (o que você tem pra vender por atacado)</h3>
+        <div class="emp-linha">
+          <input type="text" id="merc-oferta-produto" placeholder="Produto (ex: Arroz tipo 1)">
+        </div>
+        <div class="emp-linha">
+          <input type="text" id="merc-oferta-qtd" placeholder="Qtd mínima (ex: 50)">
+          <input type="text" id="merc-oferta-unidade" placeholder="Unidade (ex: saco 5kg)">
+        </div>
+        <div class="emp-linha">
+          <input type="text" id="merc-oferta-preco" placeholder="Preço unitário (opcional)">
+        </div>
+        <div class="emp-linha">
+          <textarea id="merc-oferta-descricao" rows="2" placeholder="Detalhes (opcional)"></textarea>
+        </div>
+        <button type="button" class="emp-btn full" onclick="mercCriarOferta()">Publicar oferta</button>
+        <div id="merc-oferta-match"></div>
+      </div>
+      <div id="merc-lista-minhas-ofertas"></div>
+    </div>
+
+    <!-- MINHAS DEMANDAS -->
+    <div id="merc-secao-minhas-demandas" style="display:none;">
+      <div class="emp-card">
+        <h3>Nova demanda (o que você precisa comprar por atacado)</h3>
+        <div class="emp-linha">
+          <input type="text" id="merc-demanda-produto" placeholder="Produto (ex: Arroz tipo 1)">
+        </div>
+        <div class="emp-linha">
+          <input type="text" id="merc-demanda-qtd" placeholder="Qtd desejada (ex: 50)">
+          <input type="text" id="merc-demanda-unidade" placeholder="Unidade (ex: saco 5kg)">
+        </div>
+        <div class="emp-linha">
+          <input type="text" id="merc-demanda-preco" placeholder="Preço máximo (opcional)">
+        </div>
+        <div class="emp-linha">
+          <textarea id="merc-demanda-descricao" rows="2" placeholder="Detalhes (opcional)"></textarea>
+        </div>
+        <button type="button" class="emp-btn full" onclick="mercCriarDemanda()">Publicar demanda</button>
+        <div id="merc-demanda-match"></div>
+      </div>
+      <div id="merc-lista-minhas-demandas"></div>
+    </div>
+
+    <!-- BUSCAR OFERTAS -->
+    <div id="merc-secao-buscar-ofertas" style="display:none;">
+      <div class="emp-card">
+        <div class="emp-linha">
+          <input type="text" id="merc-busca-ofertas" placeholder="Buscar produto..." oninput="mercBuscarOfertas()">
+        </div>
+      </div>
+      <div id="merc-lista-buscar-ofertas"></div>
+    </div>
+
+    <!-- BUSCAR DEMANDAS -->
+    <div id="merc-secao-buscar-demandas" style="display:none;">
+      <div class="emp-card">
+        <div class="emp-linha">
+          <input type="text" id="merc-busca-demandas" placeholder="Buscar produto..." oninput="mercBuscarDemandas()">
+        </div>
+      </div>
+      <div id="merc-lista-buscar-demandas"></div>
+    </div>
+  </div>
+
+  <div id="merc-sem-acesso" style="display:none;" class="emp-vazio"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const supabaseClientMerc = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let mercUsuario = null;
+let mercEmpresas = [];
+let mercEmpresaAtual = null;
+let mercAbaAtual = 'minhas-ofertas';
+
+function mercEscapar(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function mercFmt(v){
+  if(v === null || v === undefined || v === '') return '';
+  return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
+}
+function mercParseNum(texto){
+  const limpo = (texto || '').replace(/[^\d,.-]/g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return !isNaN(n) ? n : null;
+}
+function mercLinkWhats(whatsapp, nomeEmpresa, produto){
+  const numero = (whatsapp || '').replace(/\D/g, '');
+  if(!numero) return '';
+  const msg = `Olá! Vi sua publicação de "${produto}" no Mercado Atacado do GuiaZap e tenho interesse.`;
+  return `https://wa.me/55${numero}?text=${encodeURIComponent(msg)}`;
+}
+
+async function initMercado(){
+  const { data: { session } } = await supabaseClientMerc.auth.getSession();
+  if(!session){
+    document.getElementById('merc-carregando').style.display = 'none';
+    const semAcesso = document.getElementById('merc-sem-acesso');
+    semAcesso.style.display = 'block';
+    semAcesso.innerHTML = '🔒 Faça login na <a href="index.html">página inicial</a> pra usar o Mercado Atacado.';
+    return;
+  }
+  mercUsuario = session.user;
+
+  const { data: empresasVendas } = await supabaseClientMerc.from('profissionais')
+    .select('id, name, whatsapp').eq('user_id', mercUsuario.id).eq('status_pagamento', 'ativo').eq('plano', 'vendas');
+  mercEmpresas = empresasVendas || [];
+
+  document.getElementById('merc-carregando').style.display = 'none';
+  if(!mercEmpresas.length){
+    const semAcesso = document.getElementById('merc-sem-acesso');
+    semAcesso.style.display = 'block';
+    semAcesso.innerHTML = 'O Mercado Atacado é exclusivo do <b>pacote Vendas</b> — dá uma olhada em <a href="pacotes.html">pacotes.html</a> se quiser fazer upgrade.';
+    return;
+  }
+
+  mercEmpresaAtual = mercEmpresas[0].id;
+  const seletor = document.getElementById('merc-select-empresa');
+  if(mercEmpresas.length > 1){
+    seletor.style.display = '';
+    seletor.innerHTML = mercEmpresas.map(e => `<option value="${e.id}">${mercEscapar(e.name)}</option>`).join('');
+    seletor.onchange = () => { mercEmpresaAtual = seletor.value; mercCarregarAbaAtual(); };
+  }
+
+  document.getElementById('merc-app').style.display = 'block';
+  mercCarregarAbaAtual();
+}
+
+function mercTrocarAba(aba){
+  mercAbaAtual = aba;
+  document.querySelectorAll('.emp-aba').forEach(b => b.classList.toggle('ativa', b.dataset.aba === aba));
+  ['minhas-ofertas', 'minhas-demandas', 'buscar-ofertas', 'buscar-demandas'].forEach(a => {
+    document.getElementById('merc-secao-' + a).style.display = (a === aba) ? 'block' : 'none';
+  });
+  mercCarregarAbaAtual();
+}
+
+function mercCarregarAbaAtual(){
+  if(mercAbaAtual === 'minhas-ofertas') mercCarregarMinhasOfertas();
+  else if(mercAbaAtual === 'minhas-demandas') mercCarregarMinhasDemandas();
+  else if(mercAbaAtual === 'buscar-ofertas') mercBuscarOfertas();
+  else if(mercAbaAtual === 'buscar-demandas') mercBuscarDemandas();
+}
+
+// ---------- MINHAS OFERTAS ----------
+async function mercCarregarMinhasOfertas(){
+  const container = document.getElementById('merc-lista-minhas-ofertas');
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  const { data } = await supabaseClientMerc.from('mercado_ofertas').select('*').eq('profissional_id', mercEmpresaAtual).order('created_at', { ascending: false });
+  const ofertas = data || [];
+  if(!ofertas.length){ container.innerHTML = '<div class="emp-vazio">Você ainda não publicou nenhuma oferta.</div>'; return; }
+  container.innerHTML = ofertas.map(o => `
+    <div class="emp-item">
+      <div class="emp-item-nome">${mercEscapar(o.nome_produto)} <span class="emp-tag ${o.ativo ? '' : 'inativa'}">${o.ativo ? 'ativa' : 'pausada'}</span></div>
+      <div class="emp-item-meta">${o.quantidade_minima ? 'Mín: ' + o.quantidade_minima + ' ' + mercEscapar(o.unidade_medida || '') : ''} ${o.preco_unitario ? ' · ' + mercFmt(o.preco_unitario) : ''}</div>
+      ${o.descricao ? `<div class="emp-item-desc">${mercEscapar(o.descricao)}</div>` : ''}
+      <div class="emp-item-acoes">
+        <button type="button" class="emp-btn secundario" onclick="mercAlternarAtiva('mercado_ofertas', '${o.id}', ${o.ativo}, mercCarregarMinhasOfertas)">${o.ativo ? 'Pausar' : 'Reativar'}</button>
+        <button type="button" class="emp-btn secundario" onclick="mercApagar('mercado_ofertas', '${o.id}', mercCarregarMinhasOfertas)">Apagar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function mercCriarOferta(){
+  const nomeProduto = document.getElementById('merc-oferta-produto').value.trim();
+  if(!nomeProduto){ alert('Digita o nome do produto.'); return; }
+  const quantidadeMinima = mercParseNum(document.getElementById('merc-oferta-qtd').value);
+  const unidadeMedida = document.getElementById('merc-oferta-unidade').value.trim() || null;
+  const precoUnitario = mercParseNum(document.getElementById('merc-oferta-preco').value);
+  const descricao = document.getElementById('merc-oferta-descricao').value.trim() || null;
+
+  const { error } = await supabaseClientMerc.from('mercado_ofertas').insert({
+    profissional_id: mercEmpresaAtual, nome_produto: nomeProduto, quantidade_minima: quantidadeMinima,
+    unidade_medida: unidadeMedida, preco_unitario: precoUnitario, descricao
+  });
+  if(error){ alert('Erro ao publicar: ' + error.message); return; }
+
+  document.getElementById('merc-oferta-produto').value = '';
+  document.getElementById('merc-oferta-qtd').value = '';
+  document.getElementById('merc-oferta-unidade').value = '';
+  document.getElementById('merc-oferta-preco').value = '';
+  document.getElementById('merc-oferta-descricao').value = '';
+
+  await mercMostrarMatch('mercado_demandas', nomeProduto, 'merc-oferta-match', 'compradores interessados nisso');
+  mercCarregarMinhasOfertas();
+}
+
+// ---------- MINHAS DEMANDAS ----------
+async function mercCarregarMinhasDemandas(){
+  const container = document.getElementById('merc-lista-minhas-demandas');
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  const { data } = await supabaseClientMerc.from('mercado_demandas').select('*').eq('profissional_id', mercEmpresaAtual).order('created_at', { ascending: false });
+  const demandas = data || [];
+  if(!demandas.length){ container.innerHTML = '<div class="emp-vazio">Você ainda não publicou nenhuma demanda.</div>'; return; }
+  container.innerHTML = demandas.map(d => `
+    <div class="emp-item">
+      <div class="emp-item-nome">${mercEscapar(d.nome_produto)} <span class="emp-tag ${d.ativo ? '' : 'inativa'}">${d.ativo ? 'ativa' : 'pausada'}</span></div>
+      <div class="emp-item-meta">${d.quantidade_desejada ? 'Qtd: ' + d.quantidade_desejada + ' ' + mercEscapar(d.unidade_medida || '') : ''} ${d.preco_maximo ? ' · até ' + mercFmt(d.preco_maximo) : ''}</div>
+      ${d.descricao ? `<div class="emp-item-desc">${mercEscapar(d.descricao)}</div>` : ''}
+      <div class="emp-item-acoes">
+        <button type="button" class="emp-btn secundario" onclick="mercAlternarAtiva('mercado_demandas', '${d.id}', ${d.ativo}, mercCarregarMinhasDemandas)">${d.ativo ? 'Pausar' : 'Reativar'}</button>
+        <button type="button" class="emp-btn secundario" onclick="mercApagar('mercado_demandas', '${d.id}', mercCarregarMinhasDemandas)">Apagar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function mercCriarDemanda(){
+  const nomeProduto = document.getElementById('merc-demanda-produto').value.trim();
+  if(!nomeProduto){ alert('Digita o nome do produto.'); return; }
+  const quantidadeDesejada = mercParseNum(document.getElementById('merc-demanda-qtd').value);
+  const unidadeMedida = document.getElementById('merc-demanda-unidade').value.trim() || null;
+  const precoMaximo = mercParseNum(document.getElementById('merc-demanda-preco').value);
+  const descricao = document.getElementById('merc-demanda-descricao').value.trim() || null;
+
+  const { error } = await supabaseClientMerc.from('mercado_demandas').insert({
+    profissional_id: mercEmpresaAtual, nome_produto: nomeProduto, quantidade_desejada: quantidadeDesejada,
+    unidade_medida: unidadeMedida, preco_maximo: precoMaximo, descricao
+  });
+  if(error){ alert('Erro ao publicar: ' + error.message); return; }
+
+  document.getElementById('merc-demanda-produto').value = '';
+  document.getElementById('merc-demanda-qtd').value = '';
+  document.getElementById('merc-demanda-unidade').value = '';
+  document.getElementById('merc-demanda-preco').value = '';
+  document.getElementById('merc-demanda-descricao').value = '';
+
+  await mercMostrarMatch('mercado_ofertas', nomeProduto, 'merc-demanda-match', 'fornecedores com isso disponível');
+  mercCarregarMinhasDemandas();
+}
+
+// ---------- MATCH AUTOMÁTICO (busca simples por nome parecido, do lado oposto) ----------
+async function mercMostrarMatch(tabela, nomeProduto, elementoId, tituloAchados){
+  const el = document.getElementById(elementoId);
+  el.innerHTML = '';
+  const termo = nomeProduto.trim();
+  if(!termo) return;
+  const { data } = await supabaseClientMerc.from(tabela)
+    .select('*, profissionais(name, whatsapp)')
+    .ilike('nome_produto', `%${termo}%`)
+    .eq('ativo', true)
+    .neq('profissional_id', mercEmpresaAtual)
+    .limit(5);
+  const achados = data || [];
+  if(!achados.length) return;
+  el.innerHTML = `
+    <div class="emp-match">
+      <h4>🎯 Achamos ${achados.length} ${tituloAchados}!</h4>
+      ${achados.map(a => mercCardResultado(a, tabela === 'mercado_demandas')).join('')}
+    </div>
+  `;
+}
+
+// ---------- BUSCAR OFERTAS / DEMANDAS (de outras empresas) ----------
+function mercCardResultado(item, ehDemanda){
+  const empresa = item.profissionais || {};
+  const link = mercLinkWhats(empresa.whatsapp, empresa.name, item.nome_produto);
+  const qtdLinha = ehDemanda
+    ? (item.quantidade_desejada ? 'Qtd: ' + item.quantidade_desejada + ' ' + mercEscapar(item.unidade_medida || '') : '')
+    : (item.quantidade_minima ? 'Mín: ' + item.quantidade_minima + ' ' + mercEscapar(item.unidade_medida || '') : '');
+  const precoLinha = ehDemanda
+    ? (item.preco_maximo ? 'até ' + mercFmt(item.preco_maximo) : '')
+    : (item.preco_unitario ? mercFmt(item.preco_unitario) : '');
+  return `
+    <div class="emp-item">
+      <div class="emp-item-nome">${mercEscapar(item.nome_produto)}</div>
+      <div class="emp-item-meta">${mercEscapar(empresa.name || 'Empresa')} ${qtdLinha ? ' · ' + qtdLinha : ''} ${precoLinha ? ' · ' + precoLinha : ''}</div>
+      ${item.descricao ? `<div class="emp-item-desc">${mercEscapar(item.descricao)}</div>` : ''}
+      ${link ? `<div class="emp-item-acoes"><a href="${link}" target="_blank" rel="noopener" class="emp-btn whats" style="text-decoration:none; display:inline-block;">💬 Chamar no WhatsApp</a></div>` : ''}
+    </div>
+  `;
+}
+
+async function mercBuscarOfertas(){
+  const container = document.getElementById('merc-lista-buscar-ofertas');
+  const termo = document.getElementById('merc-busca-ofertas').value.trim();
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  let query = supabaseClientMerc.from('mercado_ofertas').select('*, profissionais(name, whatsapp)').eq('ativo', true).neq('profissional_id', mercEmpresaAtual).order('created_at', { ascending: false }).limit(60);
+  if(termo) query = query.ilike('nome_produto', `%${termo}%`);
+  const { data } = await query;
+  const ofertas = data || [];
+  container.innerHTML = ofertas.length
+    ? ofertas.map(o => mercCardResultado(o, false)).join('')
+    : '<div class="emp-vazio">Nenhuma oferta encontrada.</div>';
+}
+
+async function mercBuscarDemandas(){
+  const container = document.getElementById('merc-lista-buscar-demandas');
+  const termo = document.getElementById('merc-busca-demandas').value.trim();
+  container.innerHTML = '<div class="emp-vazio">Carregando...</div>';
+  let query = supabaseClientMerc.from('mercado_demandas').select('*, profissionais(name, whatsapp)').eq('ativo', true).neq('profissional_id', mercEmpresaAtual).order('created_at', { ascending: false }).limit(60);
+  if(termo) query = query.ilike('nome_produto', `%${termo}%`);
+  const { data } = await query;
+  const demandas = data || [];
+  container.innerHTML = demandas.length
+    ? demandas.map(d => mercCardResultado(d, true)).join('')
+    : '<div class="emp-vazio">Nenhuma demanda encontrada.</div>';
+}
+
+// ---------- AÇÕES (pausar/reativar/apagar) ----------
+async function mercAlternarAtiva(tabela, id, ativoAtual, callbackRecarregar){
+  await supabaseClientMerc.from(tabela).update({ ativo: !ativoAtual }).eq('id', id).eq('profissional_id', mercEmpresaAtual);
+  callbackRecarregar();
+}
+async function mercApagar(tabela, id, callbackRecarregar){
+  if(!confirm('Apagar essa publicação?')) return;
+  await supabaseClientMerc.from(tabela).delete().eq('id', id).eq('profissional_id', mercEmpresaAtual);
+  callbackRecarregar();
+}
+
+initMercado();
+</script>
+
+</body>
+</html>

@@ -161,6 +161,7 @@
   <a href="meular.html">🏠 Meu Lar</a>
   <a href="meuagro.html">🌱 Meu Agro</a>
   <a href="financeiro.html">💰 Financeiro</a>
+  <a href="mercado-atacado.html">🤝 Mercado Atacado</a>
   <a href="zeca.html">💬 Falar com o Zeca</a>
 </div>
 
@@ -545,6 +546,7 @@
         <input type="email" id="emp-contab-email-contador" placeholder="E-mail do contador">
       </div>
       <button type="button" class="emp-btn secundario full" id="emp-contab-email-btn" onclick="empEnviarContabilidadeEmail()">📧 Enviar PDF e Excel por e-mail pro contador</button>
+      <button type="button" class="emp-btn secundario full" id="emp-contab-zip-xml-btn" onclick="empGerarZipNotasXml()" style="margin-top:8px;">🗜️ Zip com os XML das notas fiscais do mês</button>
     </div>
   </div>
 
@@ -2503,6 +2505,49 @@ async function empGerarExcelContabilidade(){
   }
 }
 
+async function empGerarZipNotasXml(){
+  const mesTexto = document.getElementById('emp-contab-mes').value;
+  if(!mesTexto){
+    alert('Escolhe um mês específico (o zip é sempre de um mês só, não dá ano inteiro).');
+    return;
+  }
+  const mes = parseInt(mesTexto, 10);
+  const anoTexto = document.getElementById('emp-contab-ano').value.trim();
+  const ano = anoTexto ? parseInt(anoTexto, 10) : new Date().getFullYear();
+
+  const btn = document.getElementById('emp-contab-zip-xml-btn');
+  btn.disabled = true;
+  btn.textContent = 'Juntando os XML...';
+  try{
+    const { data: { session } } = await supabaseClientEmp.auth.getSession();
+    const resp = await fetch('/.netlify/functions/gerar-zip-notas-xml', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profissionalId: empEmpresaAtual, ano, mes })
+    });
+    if(!resp.ok){
+      const dados = await resp.json().catch(() => ({}));
+      alert(dados.error || 'Não consegui gerar o zip agora.');
+      return;
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notas-xml-${ano}-${String(mes).padStart(2,'0')}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error(e);
+    alert('Deu erro gerando o zip. Tenta de novo?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗜️ Zip com os XML das notas fiscais do mês';
+  }
+}
+
 async function empEnviarContabilidadeEmail(){
   const campoEmail = document.getElementById('emp-contab-email-contador');
   const emailContador = campoEmail.value.trim();
@@ -2642,7 +2687,7 @@ async function empCarregarRelatorio(periodo){
   const rotuloFormaPagamento = {
     dinheiro: 'Dinheiro', pix: 'Pix', cartao_debito: 'Cartão débito',
     cartao_credito_avista: 'Cartão crédito à vista', cartao_credito_parcelado: 'Cartão crédito parcelado',
-    cartao_credito: 'Cartão crédito', fiado: 'Fiado/promissória'
+    cartao_credito: 'Cartão crédito', boleto: 'Boleto', fiado: 'Fiado/promissória'
   };
   const porFormaPagamento = {};
   efetivados.filter(l => l.tipo === 'receita' && l.forma_pagamento).forEach(l => {
