@@ -432,7 +432,7 @@ async function extrairTextoDoPdf(base64Pdf, semLimiteBaixo) {
 // do GEMINI_MODELO_VIDEO logo abaixo: se o Google aposentar esse modelo
 // (já aconteceu com o gemini-2.0-flash usado pra vídeo — ver comentário
 // lá), dá pra trocar direto no Netlify sem precisar mexer em código.
-const GEMINI_MODELO_IMAGEM_VISAO = process.env.GEMINI_MODEL_IMAGEM_VISAO || 'gemini-2.0-flash-lite';
+const GEMINI_MODELO_IMAGEM_VISAO = process.env.GEMINI_MODEL_IMAGEM_VISAO || 'gemini-3.6-flash';
 
 async function analisarImagemComGemini(base64Imagem, mimeType, pergunta) {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
