@@ -1447,17 +1447,26 @@ function _abrirSeletorImagemZeca(){
 }
 
 // Botão da câmera (📷) — abre direto a câmera do celular pra tirar foto
-// ou gravar vídeo na hora, em vez de precisar escolher da galeria. O
-// atributo "capture" é isso: no celular, o navegador já abre a câmera
-// (traseira, por causa do "environment") em vez do seletor de arquivo
-// normal. Em computador sem câmera de verdade acessível assim, ele é
-// ignorado e cai no seletor de arquivo comum — não é o Zeca "vendo"
-// sua câmera ao vivo, é só um atalho pra tirar a foto/vídeo na hora e
-// mandar como arquivo, igual qualquer anexo.
+// na hora, em vez de precisar escolher da galeria. O atributo "capture"
+// é isso: no celular, o navegador já abre a câmera (traseira, por causa
+// do "environment") em vez do seletor de arquivo normal. Em computador
+// sem câmera de verdade acessível assim, ele é ignorado e cai no
+// seletor de arquivo comum — não é o Zeca "vendo" sua câmera ao vivo, é
+// só um atalho pra tirar a foto na hora e mandar como arquivo, igual
+// qualquer anexo.
+//
+// IMPORTANTE (bug real, descoberto pelo Alex testando no celular): o
+// accept tinha "image/*,video/*" junto — e o Chrome no Android, quando
+// o campo aceita DOIS tipos ao mesmo tempo, simplesmente ignora o
+// "capture" e mostra o seletor de galeria normal em vez de abrir a
+// câmera. Só funciona de abrir a câmera direto quando o campo aceita
+// UM tipo só. Por isso esse botão agora é só foto (accept="image/*") —
+// pra gravar vídeo, usa o clipe 📎 (abre a galeria, que no Android
+// também tem a opção de gravar um vídeo novo na hora, dentro dela).
 function _abrirCameraZeca(){
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,video/*';
+  input.accept = 'image/*';
   input.capture = 'environment';
   input.style.display = 'none';
   // Mesmo motivo do comentário em _abrirSeletorImagemZeca: input solto
