@@ -1592,6 +1592,11 @@ body.dark-mode .btn-modo-escuro-solto { background: #333; color: #f0d020; border
 }
 #zeca-input {
   flex: 1;
+  /* Sem isso, um <input> nunca encolhe menos que sua largura padrão do
+     navegador (~170-200px) mesmo dentro de um flex container — em
+     painéis estreitos (celular pequeno), isso empurra o campo (e o
+     botão de enviar ➤ depois dele) pra fora da tela, cortado. */
+  min-width: 0;
   border: 1px solid #ddd;
   border-radius: 20px;
   padding: 10px 16px;
