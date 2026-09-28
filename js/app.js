@@ -895,6 +895,10 @@ async function openForm(entry){
   if(!currentUser) return;
   const form = document.getElementById('cadastro-form');
   form.classList.add('open');
+  // O formulário fica lá em cima da página, longe de onde o card fica
+  // depois de rolar/buscar — sem isso, clicar em "Editar" (✎) abre o
+  // formulário fora da tela e parece que o botão não fez nada.
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.getElementById('form-msg').textContent = '';
   document.getElementById('edit-id').value = entry ? entry.id : '';
   document.getElementById('f-name').value = entry ? entry.name : '';
