@@ -342,16 +342,20 @@ async function initAgro(){
   }
   agroUsuario = session.user;
 
-  let { data: propriedades } = await supabaseClientAgro.from('agro_propriedades').select('id, nome').eq('user_id', agroUsuario.id).order('created_at');
+  let { data: propriedades, error: agroErroLer } = await supabaseClientAgro.from('agro_propriedades').select('id, nome').eq('user_id', agroUsuario.id).order('created_at');
+  if(agroErroLer) console.error('Meu Agro — erro ao ler agro_propriedades:', agroErroLer);
+  let agroErroCriar = null;
   if(!propriedades || !propriedades.length){
     // Mesma regra do Zeca no chat: cria a propriedade padrão na primeira vez,
     // pra não travar quem só quer ver a tela sem nunca ter mandado mensagem.
-    const { data: criada } = await supabaseClientAgro.from('agro_propriedades').insert({ nome: 'Minha Propriedade' }).select('id, nome');
+    const { data: criada, error: erroCriar } = await supabaseClientAgro.from('agro_propriedades').insert({ nome: 'Minha Propriedade' }).select('id, nome');
+    if(erroCriar){ agroErroCriar = erroCriar; console.error('Meu Agro — erro ao criar propriedade:', erroCriar); }
     propriedades = criada || [];
   }
   agroPropriedades = propriedades || [];
   if(!agroPropriedades.length){
-    document.querySelector('.agro-conteudo').innerHTML = '<div class="agro-vazio">Não consegui acessar o Agro agora. Tenta de novo mais tarde.</div>';
+    const detalheAgro = (agroErroCriar && agroErroCriar.message) || (agroErroLer && agroErroLer.message) || '';
+    document.querySelector('.agro-conteudo').innerHTML = '<div class="agro-vazio">Não consegui acessar o Agro agora. Tenta de novo mais tarde.' + (detalheAgro ? '<br><small style="color:#a4402f;">Detalhe técnico: ' + agroEscapar(detalheAgro) + '</small>' : '') + '</div>';
     return;
   }
 
