@@ -646,10 +646,11 @@ async function initEmpresa(){
   }
   empUsuario = session.user;
 
-  const { data: empresasTodas } = await supabaseClientEmp.from('profissionais').select('id, name, matriz_id, regiao, plano').eq('user_id', empUsuario.id).eq('status_pagamento', 'ativo');
+  const { data: empresasTodas, error: empErroLer } = await supabaseClientEmp.from('profissionais').select('id, name, matriz_id, regiao, plano').eq('user_id', empUsuario.id).eq('status_pagamento', 'ativo');
+  if(empErroLer) console.error('Empresa — erro ao ler profissionais:', empErroLer);
   const todasAtivas = empresasTodas || [];
   if(!todasAtivas.length){
-    document.querySelector('.emp-conteudo').innerHTML = '<div class="emp-vazio">Você ainda não tem uma empresa ativa cadastrada.</div>';
+    document.querySelector('.emp-conteudo').innerHTML = '<div class="emp-vazio">Você ainda não tem uma empresa ativa cadastrada.' + (empErroLer ? '<br><small style="color:#a4402f;">Detalhe técnico: ' + String(empErroLer.message || '').replace(/</g, '&lt;') + '</small>' : '') + '</div>';
     return;
   }
   // O gerenciamento completo (caixa, estoque, PDV, nota fiscal...) é
