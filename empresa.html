@@ -2786,7 +2786,7 @@ async function empReemitirNotaDono(pedidoId, nfStatusAtual){
 let empMatrizFiliais = [];
 
 async function empCarregarMatriz(){
-  const { data } = await supabaseClientEmp.from('profissionais').select('id, name, regiao, status_pagamento, plano, documento').eq('matriz_id', empEmpresaAtual).order('name');
+  const { data } = await supabaseClientEmp.from('profissionais').select('id, name, regiao, status_pagamento, plano').eq('matriz_id', empEmpresaAtual).order('name');
   empMatrizFiliais = data || [];
   empRenderFiliaisVinculadas();
   empPreencherSelectVincularFilial();
