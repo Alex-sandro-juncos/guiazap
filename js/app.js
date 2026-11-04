@@ -1302,17 +1302,6 @@ async function saveEntry(e){
   if(id){
     ({ error } = await supabaseClient.from('profissionais').update(payload).eq('id', id));
   } else {
-    const { data: existentes } = await supabaseClient.rpc('verificar_documento_duplicado', {
-      doc: payload.documento,
-      uf: payload.estado,
-      cid: payload.cidade,
-      bai: payload.bairro
-    });
-
-    if(existentes && existentes.length > 0){
-      msg.textContent = 'Ja existe um cadastro com esse CNPJ/CPF neste endereco (' + existentes[0].name + '). Edite esse cadastro e adicione o contato em "Outros contatos", em vez de criar um novo.';
-      return false;
-    }
 
     payload.user_id = currentUser.id;
     payload.user_email = currentUser.email;
