@@ -1273,7 +1273,7 @@ async function saveEntry(e){
     payload.longitude = parseFloat(lngManual);
     payload.localizacao_confirmada_manualmente = true;
   }
-  if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro || !payload.whatsapp) return false;
+  if(!payload.name || !payload.documento || !payload.cat || !payload.estado || !payload.cidade || !payload.bairro){ document.getElementById("form-msg").textContent = "Preencha nome, CPF/CNPJ, categoria, estado, cidade e bairro."; return false; }
   if(planoAtualDoCadastro === 'entregador'){
     const temMoto = document.getElementById('f-veiculo-tipo-moto').checked;
     const temCarro = document.getElementById('f-veiculo-tipo-carro').checked;
