@@ -561,6 +561,7 @@
     </div>
     <div class="aviso-bloqueio-box" id="aviso-bloqueio-box" style="display:none; margin:10px 0 0;"></div>
     <div class="aviso-salvar-contato-box" id="aviso-salvar-contato-box" style="display:none; margin:10px 0 0;"></div>
+    <div id="aviso-codigo-frete-box" style="display:none; margin:10px 0 0; background:#fff3cd; color:#7c4a03; border-radius:10px; padding:10px 12px; font-size:0.85rem; font-weight:700;"></div>
     <div class="chat-mensagens" id="chat-mensagens"></div>
 
     <div class="painel-flutuante" id="painel-emoji">
@@ -1703,6 +1704,23 @@ function normalizarBuscaChat(str){
   return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+// Frete chamado direto: quem chamou vê aqui o código de 4 dígitos que precisa
+// passar pro entregador na hora de receber. O entregador não consegue ler
+// esse código — só quem chamou o frete (a regra fica no banco).
+async function mostrarCodigoFreteConversa(conversaId){
+  const box = document.getElementById('aviso-codigo-frete-box');
+  if(!box) return;
+  box.style.display = 'none';
+  box.textContent = '';
+  try{
+    const { data, error } = await supabaseClientChat.rpc('codigo_frete_da_conversa', { p_conversa: conversaId });
+    if(error || !data || conversaAtual !== conversaId) return;
+    box.innerHTML = '🔑 Código de confirmação do seu frete: <span style="font-size:1.15rem; letter-spacing:2px;"></span><br><span style="font-weight:600; font-size:0.78rem;">Só passe esse código pro entregador quando receber a entrega.</span>';
+    box.querySelector('span').textContent = data;
+    box.style.display = 'block';
+  } catch(e){ console.error(e); }
+}
+
 async function abrirConversa(conversaId){
   conversaAtual = conversaId;
   avisoSalvarContatoFechadoNestaConversa = false;
@@ -1754,6 +1772,7 @@ async function abrirConversa(conversaId){
 
   await verificarBloqueioConversaAtual();
   await montarAreaSalvarContato();
+  mostrarCodigoFreteConversa(conversaId);
 
   await carregarMensagens(conversaId);
 

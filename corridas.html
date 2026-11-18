@@ -282,7 +282,7 @@ function cardCorrida(c){
   } else if(c.status === 'aceita'){
     const btnEntregar = c.pedido
       ? `<button type="button" class="btn-corrida entregue" onclick="confirmarEntregaComCodigo('${c.id}')">🏁 Confirmar entrega com código</button>`
-      : `<button type="button" class="btn-corrida entregue" onclick="responderCorrida('${c.id}', 'entreguei')">🏁 Marcar como entregue</button>`;
+      : `<button type="button" class="btn-corrida entregue" onclick="confirmarEntregaFrete('${c.id}')">🏁 Confirmar entrega</button>`;
     const compartilhandoEssa = _compartilhandoLocalizacaoCorridaId === c.id;
     botoes = `
       <div class="card-corrida-acoes">
@@ -353,6 +353,13 @@ async function responderCorrida(corridaId, palavra){
   await supabaseClientCorridas.from('conversas').update({ ultima_mensagem_em: new Date().toISOString() }).eq('id', corrida.conversa_id);
 
   setTimeout(carregarCorridas, 800);
+}
+
+async function confirmarEntregaFrete(corridaId){
+  const codigo = prompt('Digite o código de 4 dígitos que quem chamou o frete te passou.\n(Frete antigo, sem código? Deixe em branco e toque em OK.)');
+  if(codigo === null) return;
+  const limpo = codigo.trim();
+  await responderCorrida(corridaId, limpo || 'entreguei');
 }
 
 async function confirmarEntregaComCodigo(corridaId){
